@@ -11,6 +11,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `@handover/cli` no longer exports a root entry; only `@handover/cli/bin` remains.
 - Internal only: large core, route and test files are split into smaller modules. No
   public import, route or behaviour changes.
+- The published `@handover/ui` package no longer contains test fixtures.
 - Saving right after a publish no longer reads GitHub's branch from before that publish, which
   could report the file as missing or as changed in the repository.
 - Canvas reads the page's structure in one pass, so pages with thousands of annotated fields

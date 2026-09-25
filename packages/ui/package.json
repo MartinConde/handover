@@ -6,6 +6,7 @@
   "files": [
     "src",
     "!src/**/*.test.ts",
+    "!src/**/*[Ff]ixture*",
     "build.ts"
   ],
   "scripts": {

@@ -1,5 +1,6 @@
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
+import { q } from '../test-helpers.fixture.js';
 import Library from './Library.svelte';
 import { type LibraryItem, uploadFile, uploadImage } from './upload.js';
 
@@ -82,11 +83,6 @@ afterEach(() => {
   presets = [];
 });
 
-const q = <T extends Element>(sel: string) => {
-  const el = document.body.querySelector<T>(sel);
-  if (!el) throw new Error(`${sel} missing`);
-  return el;
-};
 const click = (sel: string) => {
   q<HTMLElement>(sel).click();
   flushSync();

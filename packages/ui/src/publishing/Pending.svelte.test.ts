@@ -1,6 +1,7 @@
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
 import type { UiLocale } from '../i18n.js';
+import { deferred } from '../test-helpers.fixture.js';
 import Pending from './Pending.svelte';
 
 // Not testing Select all / none: they set the same state a checkbox does.
@@ -78,12 +79,6 @@ const q = <T extends Element>(root: ParentNode, sel: string) => root.querySelect
 const boxes = (root: ParentNode) =>
   Array.from(root.querySelectorAll<HTMLInputElement>('.change-row .lead input'));
 const tick = () => new Promise((r) => setTimeout(r, 0));
-
-const deferred = <T>() => {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((done) => (resolve = done));
-  return { promise, resolve };
-};
 
 test('the drawer counts the pending entries and lists one row per entry', () => {
   const root = show();

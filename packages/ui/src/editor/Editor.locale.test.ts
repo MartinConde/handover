@@ -1,5 +1,6 @@
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
+import { deferred } from '../test-helpers.fixture.js';
 import EditorLocaleFixture from './EditorLocaleFixture.svelte';
 
 let app: ReturnType<typeof mount>;
@@ -10,12 +11,6 @@ afterEach(() => {
   document.body.innerHTML = '';
   vi.unstubAllGlobals();
 });
-
-const deferred = <T>() => {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((done) => (resolve = done));
-  return { promise, resolve };
-};
 
 const q = <T extends Element>(selector: string) => document.body.querySelector<T>(selector);
 const qa = <T extends Element>(selector: string) =>

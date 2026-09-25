@@ -1,5 +1,6 @@
 import type { Drift, Form } from '@handover/core';
 import { expect, test, vi } from 'vitest';
+import { deferred } from '../test-helpers.fixture.js';
 import { createEntrySession } from './entry-session.svelte';
 
 const form: Form = {
@@ -27,14 +28,6 @@ const drift: Drift = {
   in: ['de'],
   expected: ['en', 'de'],
   values: { de: ['Third'] },
-};
-
-const deferred = <T>() => {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((done) => {
-    resolve = done;
-  });
-  return { promise, resolve };
 };
 
 test('every changed session command reports editing activity from one shared boundary', () => {

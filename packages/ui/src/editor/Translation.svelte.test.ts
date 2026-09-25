@@ -1,6 +1,7 @@
 import type { Field } from '@handover/core';
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
+import { deferred } from '../test-helpers.fixture.js';
 import { createEntrySession } from './entry-session.svelte';
 import Translation from './Translation.svelte';
 import TranslationLocaleFixture from './TranslationLocaleFixture.svelte';
@@ -96,14 +97,6 @@ test('a translation made from a language that is no longer the source says so in
     'Aus Französisch übersetzt — die Ausgangssprache ist jetzt Englisch',
   );
 });
-
-const deferred = <T>() => {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((done) => {
-    resolve = done;
-  });
-  return { promise, resolve };
-};
 
 test('an edit remains in the entry session after its locale pane is unmounted', () => {
   const fields = [

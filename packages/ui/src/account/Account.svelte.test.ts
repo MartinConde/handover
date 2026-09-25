@@ -1,5 +1,6 @@
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
+import { settle } from '../test-helpers.fixture.js';
 import Account from './Account.svelte';
 
 let app: ReturnType<typeof mount>;
@@ -45,10 +46,6 @@ const click = (root: HTMLElement, label: string) => {
   );
   if (!button) throw new Error(`No button labelled ${label}`);
   button.click();
-};
-const settle = async () => {
-  await new Promise((r) => setTimeout(r, 0));
-  flushSync();
 };
 const text = (root: HTMLElement) => root.textContent?.replace(/\s+/g, ' ') ?? '';
 const type = (root: HTMLElement, id: string, value: string) => {

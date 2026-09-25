@@ -1,15 +1,8 @@
 import { afterEach, expect, test, vi } from 'vitest';
+import { deferred } from '../test-helpers.fixture.js';
 import { classifyDraftSaveRefusal, type SaveState, saveCoordinator, saveLane } from './save';
 
 afterEach(() => vi.useRealTimers());
-
-function deferred<T>() {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((done) => {
-    resolve = done;
-  });
-  return { promise, resolve };
-}
 
 function editor(write: (snapshot: string) => Promise<boolean>, lane = saveLane()) {
   let current = 'opened';

@@ -1,6 +1,7 @@
 import { type Drift, type Field, LOCK_TTL } from '@handover/core';
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
+import { deferred } from '../test-helpers.fixture.js';
 import Editor from './Editor.svelte';
 import { SIX, sixLanguageRows, sixLanguages } from './six-languages.fixture';
 
@@ -94,9 +95,6 @@ afterEach(() => {
   localStorage.clear();
   document.body.innerHTML = '';
 });
-
-// jsdom has no layout, so nothing scrolls; the count still has to move focus.
-Element.prototype.scrollIntoView = () => {};
 
 const $ = <T extends Element>(root: ParentNode, sel: string) => root.querySelector<T>(sel);
 const $$ = <T extends Element>(root: ParentNode, sel: string) =>
@@ -200,13 +198,6 @@ const type = (root: ParentNode, sel: string, value: string) => {
   flushSync();
 };
 const tick = () => new Promise((r) => setTimeout(r, 0));
-const deferred = <T>() => {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((done) => {
-    resolve = done;
-  });
-  return { promise, resolve };
-};
 // The tab token lives in session storage, so pinning it makes the request bodies below literal.
 sessionStorage.setItem('handover-tab', 'tab-1');
 // Every editor takes the lock on open; any other answer shape reads as somebody else holding it.

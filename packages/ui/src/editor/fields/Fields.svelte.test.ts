@@ -4,6 +4,7 @@ import type { Field, ResolvedSeo, WordPart } from '@handover/core';
 import { parseEntry, stringifyEntry } from '@handover/core';
 import { flushSync, mount, tick, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
+import { q } from '../../test-helpers.fixture.js';
 import { createEntrySession } from '../entry-session.svelte';
 import Fields from './Fields.svelte';
 
@@ -123,11 +124,6 @@ const pickRow = (path: string) => {
 };
 const roundTrip = () => parseEntry('default', stringifyEntry('default', $state.snapshot(root)));
 
-const q = <T extends Element>(sel: string) => {
-  const el = document.body.querySelector<T>(sel);
-  if (!el) throw new Error(`${sel} missing`);
-  return el;
-};
 const fire = (sel: string, event: string, set: (el: HTMLInputElement) => void) => {
   const el = q<HTMLInputElement>(sel);
   set(el);

@@ -1,6 +1,7 @@
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
 import type { UiLocale } from '../i18n.js';
+import { q, settle } from '../test-helpers.fixture.js';
 import Redirects from './Redirects.svelte';
 
 type Rule = {
@@ -69,12 +70,6 @@ const show = async () => {
   return document.body;
 };
 
-// The screen loads the table and the picker's list before it draws either.
-const settle = async () => {
-  await new Promise((r) => setTimeout(r, 0));
-  flushSync();
-};
-
 afterEach(() => {
   unmount(app);
   vi.unstubAllGlobals();
@@ -84,11 +79,6 @@ afterEach(() => {
   live = { status: 404, redirected: false, url: `${location.origin}/summer-offer` };
 });
 
-const q = <T extends Element>(sel: string) => {
-  const el = document.body.querySelector<T>(sel);
-  if (!el) throw new Error(`${sel} missing`);
-  return el;
-};
 const all = (sel: string) => Array.from(document.body.querySelectorAll(sel));
 const click = (sel: string) => {
   q<HTMLElement>(sel).click();

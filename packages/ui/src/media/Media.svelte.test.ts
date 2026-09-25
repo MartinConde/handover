@@ -1,5 +1,6 @@
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
+import { deferred, q } from '../test-helpers.fixture.js';
 import Media from './Media.svelte';
 import { type MediaItem, uploadImage } from './upload.js';
 
@@ -54,22 +55,11 @@ const open = async (media: MediaItem[], preset: Record<string, unknown> = {}, ma
   flushSync();
 };
 
-const deferred = <T>() => {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((done) => (resolve = done));
-  return { promise, resolve };
-};
 afterEach(() => {
   unmount(app);
   vi.unstubAllGlobals();
   vi.clearAllMocks();
 });
-
-const q = <T extends Element>(sel: string) => {
-  const el = document.body.querySelector<T>(sel);
-  if (!el) throw new Error(`${sel} missing`);
-  return el;
-};
 
 test('the picker is modal and cycles Tab from its last action to its search', async () => {
   await open([item({ filename: 'front-of-house.jpg' })]);

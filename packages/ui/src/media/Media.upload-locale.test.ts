@@ -1,5 +1,6 @@
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
+import { deferred, q } from '../test-helpers.fixture.js';
 import MediaLocaleFixture from './MediaLocaleFixture.svelte';
 import type { MediaItem } from './upload.js';
 
@@ -11,17 +12,6 @@ const item = (id: string, filename: string): MediaItem => ({
   width: 1600,
   height: 900,
 });
-const deferred = <T>() => {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((done) => (resolve = done));
-  return { promise, resolve };
-};
-const q = <T extends Element>(selector: string) => {
-  const element = document.body.querySelector<T>(selector);
-  if (!element) throw new Error(`${selector} missing`);
-  return element;
-};
-
 let app: ReturnType<typeof mount>;
 afterEach(() => {
   unmount(app);

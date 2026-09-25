@@ -1,5 +1,6 @@
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
+import { deferred, q } from '../test-helpers.fixture.js';
 import LibraryLocaleFixture from './LibraryLocaleFixture.svelte';
 import type { LibraryItem } from './upload.js';
 
@@ -19,16 +20,6 @@ const item = (id: string, filename: string, over: Partial<LibraryItem> = {}): Li
   uses: [],
   ...over,
 });
-const deferred = <T>() => {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((done) => (resolve = done));
-  return { promise, resolve };
-};
-const q = <T extends Element>(selector: string) => {
-  const element = document.body.querySelector<T>(selector);
-  if (!element) throw new Error(`${selector} missing`);
-  return element;
-};
 const change = (element: HTMLInputElement | HTMLTextAreaElement, value: string) => {
   element.value = value;
   element.dispatchEvent(new Event('input', { bubbles: true }));

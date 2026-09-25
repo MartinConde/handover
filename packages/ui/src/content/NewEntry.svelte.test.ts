@@ -1,6 +1,7 @@
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
 import type { UiLocale } from '../i18n.js';
+import { deferred, settle } from '../test-helpers.fixture.js';
 import NewEntry from './NewEntry.svelte';
 
 let app: ReturnType<typeof mount>;
@@ -9,17 +10,6 @@ afterEach(() => {
   unmount(app);
   vi.unstubAllGlobals();
 });
-
-const settle = async () => {
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  flushSync();
-};
-
-const deferred = <T>() => {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((done) => (resolve = done));
-  return { promise, resolve };
-};
 
 test('creation is a modal keyboard boundary with a predictable first control', async () => {
   vi.stubGlobal(

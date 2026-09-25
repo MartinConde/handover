@@ -1,5 +1,6 @@
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
+import { settle } from '../test-helpers.fixture.js';
 import Login, { type LoginMethods } from './Login.svelte';
 
 let app: ReturnType<typeof mount>;
@@ -35,10 +36,6 @@ const click = (root: HTMLElement, label: string) => {
   );
   if (!button) throw new Error(`No button labelled ${label}`);
   button.click();
-};
-const settle = async () => {
-  await new Promise((r) => setTimeout(r, 0));
-  flushSync();
 };
 const text = (root: HTMLElement) => root.textContent?.replace(/\s+/g, ' ') ?? '';
 /** Fill a field the way a person does, so `required` is satisfied when the form submits. */

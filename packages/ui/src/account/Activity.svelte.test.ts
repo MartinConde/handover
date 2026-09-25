@@ -1,5 +1,6 @@
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
+import { settle } from '../test-helpers.fixture.js';
 import Activity from './Activity.svelte';
 
 let app: ReturnType<typeof mount>;
@@ -68,10 +69,6 @@ const show = async (role: 'owner' | 'editor' = 'owner', uiLocale: 'en' | 'de' = 
   flushSync();
   await settle();
   return document.body;
-};
-const settle = async () => {
-  await new Promise((r) => setTimeout(r, 0));
-  flushSync();
 };
 const text = (root: ParentNode) => root.textContent?.replace(/\s+/g, ' ').trim() ?? '';
 const sentences = (root: ParentNode) => Array.from(root.querySelectorAll('.said')).map(text);

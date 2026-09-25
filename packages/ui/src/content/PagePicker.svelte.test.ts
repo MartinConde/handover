@@ -2,6 +2,7 @@ import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
 import { invalidateEntryDirectory, type PickEntry } from '../entry-directory.js';
 import type { UiLocale } from '../i18n.js';
+import { q } from '../test-helpers.fixture.js';
 import PagePicker from './PagePicker.svelte';
 
 // Testing: what the list is filtered and grouped by, that the keyboard walks it without a pointer.
@@ -67,11 +68,6 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-const q = <T extends Element>(sel: string) => {
-  const el = document.body.querySelector<T>(sel);
-  if (!el) throw new Error(`${sel} missing`);
-  return el;
-};
 const rows = () => Array.from(document.querySelectorAll<HTMLButtonElement>('.picker-list button'));
 const titles = () => rows().map((b) => b.querySelector('span')?.textContent);
 const press = (key: string) => {

@@ -1,12 +1,8 @@
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
+import { q } from '../test-helpers.fixture.js';
 import CropFocalLocaleFixture from './CropFocalLocaleFixture.svelte';
 
-const q = <T extends Element>(selector: string) => {
-  const element = document.body.querySelector<T>(selector);
-  if (!element) throw new Error(`${selector} missing`);
-  return element;
-};
 const click = (selector: string) => {
   q<HTMLButtonElement>(selector).click();
   flushSync();

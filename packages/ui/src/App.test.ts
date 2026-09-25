@@ -4,6 +4,7 @@ import App from './App.svelte';
 import { SIX, sixLanguageRows, sixLanguages } from './editor/six-languages.fixture';
 import { type CollectionLabels, rememberUiLocale, type UiLocale } from './i18n.js';
 import Screen from './shell/screen.fixture.svelte';
+import { settle } from './test-helpers.fixture.js';
 
 let app: ReturnType<typeof mount>;
 const session = (role: 'owner' | 'editor' = 'owner') => ({
@@ -1432,11 +1433,6 @@ test('the problem count crosses to the SEO tab and lands on the field it is coun
   expect(location.pathname).toBe('/admin/c/listings/structured/seo');
   expect(document.activeElement?.id).toBe('f-seo.title');
 });
-
-const settle = async () => {
-  await new Promise((r) => setTimeout(r, 0));
-  flushSync();
-};
 
 // The live region holds the state in words, not the counter that ticks beside it.
 test('a running build says so in words, inside a live region', async () => {

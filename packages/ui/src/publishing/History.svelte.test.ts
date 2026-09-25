@@ -1,6 +1,7 @@
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
 import type { UiMessage } from '../errors.js';
+import { deferred, q, settle } from '../test-helpers.fixture.js';
 import History from './History.svelte';
 
 // Not testing: the per-field diff, which is Diff.svelte's own, or the tab that mounts this.
@@ -78,11 +79,6 @@ const show = async (locales = ['en', 'de'], drafted = false, uiLocale: 'en' | 'd
   return document.body;
 };
 
-const settle = async () => {
-  await new Promise((r) => setTimeout(r, 0));
-  flushSync();
-};
-
 afterEach(() => {
   unmount(app);
   vi.unstubAllGlobals();
@@ -98,11 +94,6 @@ afterEach(() => {
   Object.assign(props, { locales: ['en', 'de'], drafted: false, uiLocale: 'en' });
 });
 
-const q = <T extends Element>(sel: string) => {
-  const el = document.body.querySelector<T>(sel);
-  if (!el) throw new Error(`${sel} missing`);
-  return el;
-};
 const all = (sel: string) => Array.from(document.body.querySelectorAll(sel));
 const click = async (el: Element) => {
   (el as HTMLElement).click();
@@ -113,14 +104,6 @@ const rows = () =>
     row.querySelector('.summary')?.textContent?.trim(),
     row.querySelector('.sub')?.textContent?.trim().replace(/\s+/g, ' '),
   ]);
-
-const deferred = <T>() => {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((done) => {
-    resolve = done;
-  });
-  return { promise, resolve };
-};
 
 const diff = (after: string) =>
   Response.json({

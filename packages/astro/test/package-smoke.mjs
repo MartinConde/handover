@@ -94,8 +94,11 @@ try {
     'package/src/paraglide/messages.js',
   ])
     if (!uiFiles.includes(path)) throw new Error(`@handover/ui archive does not contain ${path}`);
-  const uiTests = uiFiles.filter((path) => /package\/src\/.*\.test\.ts$/.test(path));
-  if (uiTests.length) throw new Error(`@handover/ui archive contains tests: ${uiTests.join(', ')}`);
+  const uiTests = uiFiles.filter((path) =>
+    /package\/src\/(.*\.test\.ts|.*[Ff]ixture[^/]*)$/.test(path),
+  );
+  if (uiTests.length)
+    throw new Error(`@handover/ui archive contains tests or fixtures: ${uiTests.join(', ')}`);
 
   const astroVersion = json(join(root, 'node_modules/astro/package.json')).version;
   const svelteVersion = json(join(root, 'node_modules/svelte/package.json')).version;
