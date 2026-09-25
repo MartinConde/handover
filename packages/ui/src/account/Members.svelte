@@ -1,6 +1,6 @@
 <script lang="ts">
 import type { Member as CoreMember } from '@handover/core';
-import { messageText, responseMessage, type UiMessage } from '../errors.js';
+import { messageDetail, messageText, responseMessage, type UiMessage } from '../errors.js';
 import { formatRelativeTime, messageOptions, type UiLocale } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
 import { request as fetch, sitePath, uncertainResponse } from '../request.js';
@@ -319,7 +319,7 @@ async function remove() {
             {m.members_owner({}, options)} <span class="desc">{m.members_owner_description({}, options)}</span>
           </label>
         </fieldset>
-        {#if error}<p class="notice notice-danger" role="alert">{text(error)}{#if error.detail}<span class="technical-detail">{m.common_technical_detail({ detail: error.detail }, options)}</span>{/if}</p>{/if}
+        {#if error}<p class="notice notice-danger" role="alert">{text(error)}{#if error.detail}<span class="technical-detail">{messageDetail(error, uiLocale)}</span>{/if}</p>{/if}
         <div class="actions">
           <button class="btn" type="button" disabled={busy} onclick={close}>{m.common_cancel({}, options)}</button>
           <button class="btn btn-primary" type="submit" disabled={busy}>
@@ -348,7 +348,7 @@ async function remove() {
             {m.members_owner({}, options)} <span class="desc">{m.members_owner_description({}, options)}</span>
           </label>
         </fieldset>
-        {#if error}<p class="notice notice-danger" role="alert">{text(error)}{#if error.detail}<span class="technical-detail">{m.common_technical_detail({ detail: error.detail }, options)}</span>{/if}</p>{/if}
+        {#if error}<p class="notice notice-danger" role="alert">{text(error)}{#if error.detail}<span class="technical-detail">{messageDetail(error, uiLocale)}</span>{/if}</p>{/if}
         <div class="actions">
           <button class="btn" type="button" disabled={busy} onclick={close}>{m.common_cancel({}, options)}</button>
           <button class="btn btn-primary" type="submit" disabled={busy}>{m.members_save({}, options)}</button>
@@ -381,7 +381,7 @@ async function remove() {
           <p>{m.members_remove_drafts({}, options)}</p>
         {/if}
       </div>
-      {#if error}<p class="notice notice-danger" role="alert">{text(error)}{#if error.detail}<span class="technical-detail">{m.common_technical_detail({ detail: error.detail }, options)}</span>{/if}</p>{/if}
+      {#if error}<p class="notice notice-danger" role="alert">{text(error)}{#if error.detail}<span class="technical-detail">{messageDetail(error, uiLocale)}</span>{/if}</p>{/if}
       <div class="actions">
         <button class="btn" type="button" disabled={busy} onclick={close}>{m.common_cancel({}, options)}</button>
         <button class="btn btn-danger" type="button" disabled={busy} onclick={remove}>

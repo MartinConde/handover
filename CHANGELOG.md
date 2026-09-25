@@ -57,8 +57,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   shell's own reads, and drop tests that others already cover.
 - Internal: five admin UI locale test fixtures are gone; those tests switch the interface
   language through the component's own prop.
-- Internal: the admin UI tests share one `settle`, the Editor setup and a fetch router for the
-  shell's own reads, and drop tests that others already cover.
+- Internal: the admin UI words a failure's status and technical detail in one place.
 - `@handover/core`: `setEntryStatus` no longer takes a `deps` argument, and `claimResource` no
   longer takes `windowMs`; the window is always one hour.
 - `@handover/core`: `clearPublished` now requires the deployment's git client as its fourth

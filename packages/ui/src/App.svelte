@@ -14,6 +14,7 @@ import type { CreatedAll } from './editor/Editor.svelte';
 import type { EditorEntry } from './editor/entry-payload';
 import SourceRecovery, { type SourceProblem } from './editor/SourceRecovery.svelte';
 import { invalidateEntryDirectory } from './entry-directory.js';
+import { messageDetail } from './errors.js';
 import {
   type CollectionLabels,
   collectionName,
@@ -674,7 +675,7 @@ const initial = $derived(
     </div>
   {/if}
   {#if revertError}
-    <div class="banner banner-warn" role="alert">{text(revertError)}{#if revertError.detail}<span class="technical-detail">{m.common_technical_detail({ detail: revertError.detail }, options)}</span>{/if}</div>
+    <div class="banner banner-warn" role="alert">{text(revertError)}{#if revertError.detail}<span class="technical-detail">{messageDetail(revertError, uiLocale)}</span>{/if}</div>
   {/if}
   <aside class={['sidebar', { 'is-open': menu }]} aria-label={m.shell_main_navigation({}, options)} inert={drawer}>
     <a class="site-name" href={sitePath(`/admin`)}><span class="site-mark" aria-hidden="true">H</span><span class="nav-text">Handover<span class="workspace-label">{m.shell_content_workspace({}, options)}</span></span></a>
@@ -897,7 +898,7 @@ const initial = $derived(
           </main>
         {:else}
           {@const failure = entryFailure(error)}
-          <main class="main"><p class="notice notice-danger" role="alert">{text(failure)}{#if failure.detail}<span class="technical-detail">{m.common_technical_detail({ detail: failure.detail }, options)}</span>{/if}</p></main>
+          <main class="main"><p class="notice notice-danger" role="alert">{text(failure)}{#if failure.detail}<span class="technical-detail">{messageDetail(failure, uiLocale)}</span>{/if}</p></main>
         {/if}
       {/await}
     {:else if listRoute}

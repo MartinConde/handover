@@ -1,7 +1,7 @@
 <script lang="ts">
 import type { DiffGroup, Labels } from '@handover/core';
 import { onDestroy } from 'svelte';
-import { messageText, responseMessage, type UiMessage } from '../errors.js';
+import { messageLine, responseMessage, type UiMessage } from '../errors.js';
 import { collectionName, formatFieldTime, messageOptions, type UiLocale } from '../i18n.js';
 import { coordinateEntryPublish, coordinateEntryReplacement } from '../navigate';
 import * as m from '../paraglide/messages.js';
@@ -97,16 +97,7 @@ onDestroy(() => {
 
 let busy = $state(false);
 let error = $state<UiMessage>();
-const errorText = $derived(
-  error
-    ? [
-        messageText(error, uiLocale),
-        error.detail ? m.common_technical_detail({ detail: error.detail }, options) : '',
-      ]
-        .filter(Boolean)
-        .join(' ')
-    : '',
-);
+const errorText = $derived(error ? messageLine(error, uiLocale) : '');
 let published = $state(0);
 /** The commit this drawer made, which is what Revert is of. */
 let committed = $state('');

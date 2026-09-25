@@ -7,7 +7,7 @@ import {
   type WordPart,
 } from '@handover/core';
 import type { Snippet } from 'svelte';
-import { messageText, responseMessage, type UiMessage } from '../errors.js';
+import { messageDetail, messageText, responseMessage, type UiMessage } from '../errors.js';
 import { formatLanguageName, messageOptions, type UiLocale } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
 import { request as fetch, uncertainResponse } from '../request.js';
@@ -263,9 +263,7 @@ function paneKey(event: KeyboardEvent) {
 }
 
 const failureText = $derived(fillFailure ? messageText(fillFailure, uiLocale) : '');
-const failureDetail = $derived(
-  fillFailure?.detail ? m.common_technical_detail({ detail: fillFailure.detail }, options) : '',
-);
+const failureDetail = $derived(fillFailure ? messageDetail(fillFailure, uiLocale) : '');
 </script>
 
 <svelte:window

@@ -196,6 +196,11 @@ export function messageText(message: UiMessage, locale: UiLocale): string {
   const validation = validationText(message, locale);
   if (validation) return validation;
   const options = messageOptions(locale);
+  // Status 0 is no answer at all, so it gets the plain message.
+  const withStatus = (
+    plain: (inputs: Record<string, never>, opts: typeof options) => string,
+    status: (inputs: { status: number }, opts: typeof options) => string,
+  ) => (message.status ? status({ status: message.status }, options) : plain({}, options));
   switch (message.code) {
     case 'CONNECTION_LOST':
       return m.common_connection_lost({}, options);
@@ -259,37 +264,21 @@ export function messageText(message: UiMessage, locale: UiLocale): string {
     case 'USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL':
       return m.members_already_exists({}, options);
     case 'MEMBER_LIST_FAILED':
-      return message.status
-        ? m.members_load_failed_status({ status: message.status }, options)
-        : m.members_load_failed({}, options);
+      return withStatus(m.members_load_failed, m.members_load_failed_status);
     case 'MEMBER_INVITE_FAILED':
-      return message.status
-        ? m.members_invite_failed_status({ status: message.status }, options)
-        : m.members_invite_failed({}, options);
+      return withStatus(m.members_invite_failed, m.members_invite_failed_status);
     case 'MEMBER_ROLE_FAILED':
-      return message.status
-        ? m.members_role_failed_status({ status: message.status }, options)
-        : m.members_role_failed({}, options);
+      return withStatus(m.members_role_failed, m.members_role_failed_status);
     case 'MEMBER_REMOVE_FAILED':
-      return message.status
-        ? m.members_remove_failed_status({ status: message.status }, options)
-        : m.members_remove_failed({}, options);
+      return withStatus(m.members_remove_failed, m.members_remove_failed_status);
     case 'ENTRY_LIST_LOAD_FAILED':
-      return message.status
-        ? m.entry_list_load_failed_status({ status: message.status }, options)
-        : m.entry_list_load_failed({}, options);
+      return withStatus(m.entry_list_load_failed, m.entry_list_load_failed_status);
     case 'ENTRY_DELETED_LOAD_FAILED':
-      return message.status
-        ? m.entry_deleted_load_failed_status({ status: message.status }, options)
-        : m.entry_deleted_load_failed({}, options);
+      return withStatus(m.entry_deleted_load_failed, m.entry_deleted_load_failed_status);
     case 'ENTRY_ACTION_FAILED':
-      return message.status
-        ? m.entry_action_failed_status({ status: message.status }, options)
-        : m.entry_action_failed({}, options);
+      return withStatus(m.entry_action_failed, m.entry_action_failed_status);
     case 'ENTRY_CREATE_FAILED':
-      return message.status
-        ? m.new_entry_create_failed_status({ status: message.status }, options)
-        : m.new_entry_create_failed({}, options);
+      return withStatus(m.new_entry_create_failed, m.new_entry_create_failed_status);
     case 'ENTRY_CREATE_UNCONFIRMED':
       return m.new_entry_create_unconfirmed({}, options);
     case 'ENTRY_ADDRESS_TOO_LONG':
@@ -353,17 +342,11 @@ export function messageText(message: UiMessage, locale: UiLocale): string {
     case 'REDIRECT_MANAGED':
       return m.redirect_managed_error({}, options);
     case 'REDIRECT_LOAD_FAILED':
-      return message.status
-        ? m.redirect_load_failed_status({ status: message.status }, options)
-        : m.redirect_load_failed({}, options);
+      return withStatus(m.redirect_load_failed, m.redirect_load_failed_status);
     case 'REDIRECT_SAVE_FAILED':
-      return message.status
-        ? m.redirect_save_failed_status({ status: message.status }, options)
-        : m.redirect_save_failed({}, options);
+      return withStatus(m.redirect_save_failed, m.redirect_save_failed_status);
     case 'REDIRECT_DELETE_FAILED':
-      return message.status
-        ? m.redirect_delete_failed_status({ status: message.status }, options)
-        : m.redirect_delete_failed({}, options);
+      return withStatus(m.redirect_delete_failed, m.redirect_delete_failed_status);
     case 'REDIRECT_FROM_REQUIRED':
       return m.redirect_validation_from_required({}, options);
     case 'REDIRECT_FROM_ABSOLUTE':
@@ -397,9 +380,7 @@ export function messageText(message: UiMessage, locale: UiLocale): string {
     case 'PUBLISH_ENTRY_RELOAD_FAILED':
       return m.publish_entry_reload_failed({}, options);
     case 'PUBLISH_FAILED':
-      return message.status
-        ? m.publish_failed_status({ status: message.status }, options)
-        : m.publish_failed({}, options);
+      return withStatus(m.publish_failed, m.publish_failed_status);
     case 'PUBLISH_INCOMPLETE':
       return m.publish_incomplete({ count: message.count ?? 0 }, options);
     case 'PUBLISH_DRIFT':
@@ -444,9 +425,7 @@ export function messageText(message: UiMessage, locale: UiLocale): string {
         options,
       );
     case 'HISTORY_LOAD_FAILED':
-      return message.status
-        ? m.history_load_failed_status({ status: message.status }, options)
-        : m.history_load_failed({}, options);
+      return withStatus(m.history_load_failed, m.history_load_failed_status);
     case 'HISTORY_DIFF_FAILED':
       return m.history_diff_failed({}, options);
     case 'HISTORY_RESTORE_SAVE_FAILED':
@@ -456,13 +435,9 @@ export function messageText(message: UiMessage, locale: UiLocale): string {
     case 'HISTORY_RESTORE_RELOAD_FAILED':
       return m.history_restore_reload_failed({}, options);
     case 'HISTORY_RESTORE_FAILED':
-      return message.status
-        ? m.history_restore_failed_status({ status: message.status }, options)
-        : m.history_restore_failed({}, options);
+      return withStatus(m.history_restore_failed, m.history_restore_failed_status);
     case 'CONFLICT_LOAD_FAILED':
-      return message.status
-        ? m.conflict_load_failed_status({ status: message.status }, options)
-        : m.conflict_load_failed({}, options);
+      return withStatus(m.conflict_load_failed, m.conflict_load_failed_status);
     case 'CONFLICT_SETTLED':
       return m.conflict_settled({}, options);
     case 'CONFLICT_CHANGED':
@@ -476,9 +451,7 @@ export function messageText(message: UiMessage, locale: UiLocale): string {
     case 'CONFLICT_UNCONFIRMED':
       return m.conflict_unconfirmed({}, options);
     case 'CONFLICT_RESOLVE_FAILED':
-      return message.status
-        ? m.conflict_resolve_failed_status({ status: message.status }, options)
-        : m.conflict_resolve_failed({}, options);
+      return withStatus(m.conflict_resolve_failed, m.conflict_resolve_failed_status);
     case 'EDITOR_HOLD_FAILED':
       return m.editor_hold_failed({}, options);
     case 'EDITOR_LOCK_TAKE_FAILED':
@@ -490,17 +463,13 @@ export function messageText(message: UiMessage, locale: UiLocale): string {
     case 'EDITOR_SAVE_REVISION':
       return m.editor_save_revision({}, options);
     case 'TRANSLATION_FAILED':
-      return message.status
-        ? m.translation_failed_status({ status: message.status }, options)
-        : m.translation_failed({}, options);
+      return withStatus(m.translation_failed, m.translation_failed_status);
     case 'TRANSLATION_UNCONFIRMED':
       return m.translation_unconfirmed({}, options);
     case 'TRANSLATION_STALE':
       return m.translation_stale({}, options);
     case 'TRANSLATION_CREATE_FAILED':
-      return message.status
-        ? m.translation_create_failed_status({ status: message.status }, options)
-        : m.translation_create_failed({}, options);
+      return withStatus(m.translation_create_failed, m.translation_create_failed_status);
     case 'TRANSLATION_CREATE_UNCONFIRMED':
       return m.translation_create_unconfirmed({}, options);
     case 'TRANSLATION_CREATED_FILL_FAILED':
@@ -508,23 +477,23 @@ export function messageText(message: UiMessage, locale: UiLocale): string {
     case 'TRANSLATION_CREATED_FILL_UNCONFIRMED':
       return m.translation_created_fill_unconfirmed({}, options);
     case 'MEDIA_UPLOAD_DECLARATION_FAILED':
-      return message.status
-        ? m.media_upload_declaration_failed_status({ status: message.status }, options)
-        : m.media_upload_declaration_failed({}, options);
+      return withStatus(
+        m.media_upload_declaration_failed,
+        m.media_upload_declaration_failed_status,
+      );
     case 'MEDIA_UPLOAD_DECLARATION_UNCONFIRMED':
       return m.media_upload_declaration_unconfirmed({}, options);
     case 'MEDIA_UPLOAD_DECLARATION_INVALID':
       return m.media_upload_declaration_invalid({}, options);
     case 'MEDIA_UPLOAD_BUCKET_FAILED':
-      return message.status
-        ? m.media_upload_bucket_failed_status({ status: message.status }, options)
-        : m.media_upload_bucket_failed({}, options);
+      return withStatus(m.media_upload_bucket_failed, m.media_upload_bucket_failed_status);
     case 'MEDIA_UPLOAD_BUCKET_UNCONFIRMED':
       return m.media_upload_bucket_unconfirmed({}, options);
     case 'MEDIA_UPLOAD_CONFIRMATION_FAILED':
-      return message.status
-        ? m.media_upload_confirmation_failed_status({ status: message.status }, options)
-        : m.media_upload_confirmation_failed({}, options);
+      return withStatus(
+        m.media_upload_confirmation_failed,
+        m.media_upload_confirmation_failed_status,
+      );
     case 'MEDIA_UPLOAD_CONFIRMATION_UNCONFIRMED':
       return m.media_upload_confirmation_unconfirmed({}, options);
     case 'MEDIA_UPLOAD_CONFIRMATION_INVALID':
@@ -534,15 +503,11 @@ export function messageText(message: UiMessage, locale: UiLocale): string {
     case 'MEDIA_UPLOAD_FAILED':
       return m.media_upload_failed({}, options);
     case 'MEDIA_LIBRARY_READ_FAILED':
-      return message.status
-        ? m.media_library_read_failed_status({ status: message.status }, options)
-        : m.media_library_read_failed({}, options);
+      return withStatus(m.media_library_read_failed, m.media_library_read_failed_status);
     case 'MEDIA_LIBRARY_READ_INVALID':
       return m.media_library_read_invalid({}, options);
     case 'MEDIA_METADATA_FAILED':
-      return message.status
-        ? m.media_library_metadata_failed_status({ status: message.status }, options)
-        : m.media_library_metadata_failed({}, options);
+      return withStatus(m.media_library_metadata_failed, m.media_library_metadata_failed_status);
     case 'MEDIA_METADATA_UNCONFIRMED':
       return m.media_library_metadata_unconfirmed({}, options);
     case 'MEDIA_METADATA_INVALID':
@@ -556,17 +521,13 @@ export function messageText(message: UiMessage, locale: UiLocale): string {
     case 'MEDIA_PUBLISHED_IN_USE':
       return m.media_library_delete_published_in_use({ count: message.count ?? 0 }, options);
     case 'MEDIA_DELETE_FAILED':
-      return message.status
-        ? m.media_library_delete_failed_status({ status: message.status }, options)
-        : m.media_library_delete_failed({}, options);
+      return withStatus(m.media_library_delete_failed, m.media_library_delete_failed_status);
     case 'MEDIA_DELETE_UNCONFIRMED':
       return m.media_library_delete_unconfirmed({}, options);
     case 'MEDIA_DELETE_INVALID':
       return m.media_library_delete_invalid({}, options);
     case 'CROP_SOURCE_FAILED':
-      return message.status
-        ? m.crop_source_failed_status({ status: message.status }, options)
-        : m.crop_source_failed({}, options);
+      return withStatus(m.crop_source_failed, m.crop_source_failed_status);
     case 'CROP_RENDER_FAILED':
       return m.crop_render_failed({}, options);
     case 'CROP_FAILED':
@@ -575,6 +536,14 @@ export function messageText(message: UiMessage, locale: UiLocale): string {
       return m.common_unknown_error({}, options);
   }
 }
+
+export const messageDetail = (message: Pick<UiMessage, 'detail'>, locale: UiLocale) =>
+  message.detail
+    ? m.common_technical_detail({ detail: message.detail }, messageOptions(locale))
+    : '';
+
+export const messageLine = (message: UiMessage, locale: UiLocale) =>
+  [messageText(message, locale), messageDetail(message, locale)].filter(Boolean).join(' ');
 
 /** A descriptor marks Handover-owned validation; unmarked schema prose stays authored. */
 export function problemText(problem: UiProblem, locale: UiLocale): string {

@@ -1,6 +1,6 @@
 <script lang="ts">
 import type { PickEntry } from '../entry-directory.js';
-import { messageText, type UiMessage } from '../errors.js';
+import { messageLine, type UiMessage } from '../errors.js';
 import { collectionName, messageOptions, type UiLocale } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
 import Modal from '../shared/Modal.svelte';
@@ -51,16 +51,7 @@ let {
 } = $props();
 const options = $derived(messageOptions(uiLocale));
 const errorText = $derived(
-  typeof error === 'string'
-    ? error
-    : error
-      ? [
-          messageText(error, uiLocale),
-          error.detail ? m.common_technical_detail({ detail: error.detail }, options) : '',
-        ]
-          .filter(Boolean)
-          .join(' ')
-      : '',
+  typeof error === 'string' ? error : error ? messageLine(error, uiLocale) : '',
 );
 
 const singular = $derived(collectionName(collection, uiLocale, 'singular'));

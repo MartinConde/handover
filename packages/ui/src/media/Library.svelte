@@ -2,7 +2,7 @@
 import type { Labels, Preset } from '@handover/core';
 import { ParaglideMessage } from '@inlang/paraglide-js-svelte';
 import { tick } from 'svelte';
-import { messageText, responseMessage, type UiMessage } from '../errors.js';
+import { messageDetail, messageText, responseMessage, type UiMessage } from '../errors.js';
 import { formatMediaDate, messageOptions, type UiLocale } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
 import { request as fetch, sitePath, uncertainResponse } from '../request.js';
@@ -65,8 +65,6 @@ let trigger = $state<HTMLElement>();
 let readEpoch = 0;
 const options = $derived(messageOptions(uiLocale));
 const textOf = (message: UiMessage) => messageText(message, uiLocale);
-const detailOf = (message: UiMessage) =>
-  message.detail ? m.common_technical_detail({ detail: message.detail }, options) : '';
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -498,7 +496,7 @@ const queueText = (state: QueueState) => {
   {#if failure}
     <div class="notice notice-danger library-failure" role="alert">
       <p>{textOf(failure.message)}</p>
-      {#if detailOf(failure.message)}<p class="detail">{detailOf(failure.message)}</p>{/if}
+      {#if messageDetail(failure.message, uiLocale)}<p class="detail">{messageDetail(failure.message, uiLocale)}</p>{/if}
       {#if failure.recovery}
         <button class="btn btn-sm" type="button" disabled={deleting} onclick={() => failure?.recovery === 'read' ? retryRead() : failure?.recovery === 'reload' ? retryRead(true) : remove()}>
           {failure.recovery === 'reload' ? m.media_library_reload({}, options) : failure.recovery === 'delete' ? m.media_library_retry_delete({}, options) : m.common_retry({}, options)}
@@ -509,7 +507,7 @@ const queueText = (state: QueueState) => {
   {#each Object.entries(metadataFailures) as [id, metadataFailure] (id)}
     <div class="notice notice-danger metadata-failure" role="alert">
       <p>{textOf(metadataFailure.message)}</p>
-      {#if detailOf(metadataFailure.message)}<p class="detail">{detailOf(metadataFailure.message)}</p>{/if}
+      {#if messageDetail(metadataFailure.message, uiLocale)}<p class="detail">{messageDetail(metadataFailure.message, uiLocale)}</p>{/if}
       {#if metadataFailure.recovery}
         <button class="btn btn-sm" type="button" onclick={() => metadataFailure.recovery === 'reload' ? retryRead(true) : retryMetadata(id)}>
           {metadataFailure.recovery === 'reload' ? m.media_library_reload({}, options) : m.media_library_retry_metadata({ filename: metadataFailure.name }, options)}
@@ -538,7 +536,7 @@ const queueText = (state: QueueState) => {
             <li class="upload-row">
               <span class="name">{row.name}</span>
               <span class={['state', { 'is-failed': row.failed }]} role={row.failed ? 'alert' : undefined} aria-live={row.failed ? undefined : 'polite'}>{queueText(row.state)}</span>
-              {#if typeof row.state !== 'string' && detailOf(row.state)}<span class="detail">{detailOf(row.state)}</span>{/if}
+              {#if typeof row.state !== 'string' && messageDetail(row.state, uiLocale)}<span class="detail">{messageDetail(row.state, uiLocale)}</span>{/if}
             </li>
           {/each}
         </ul>

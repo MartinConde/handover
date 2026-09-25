@@ -26,7 +26,7 @@ import CanvasWorkspace from '../canvas/CanvasWorkspace.svelte';
 import type { CanvasRenderRequest } from '../canvas/canvas-renderer';
 import OffsiteDialog, { type Target } from '../content/Offsite.svelte';
 import { invalidateEntryDirectory } from '../entry-directory.js';
-import { messageText, responseMessage } from '../errors.js';
+import { messageDetail, messageText, responseMessage } from '../errors.js';
 import { formatExactTime, formatLanguageName, messageOptions, type UiLocale } from '../i18n.js';
 import {
   guardEntryActions,
@@ -130,8 +130,6 @@ let {
 } = $props();
 const options = $derived(messageOptions(uiLocale));
 const feedbackText = (message: UiMessage) => messageText(message, uiLocale);
-const feedbackDetail = (message: UiMessage) =>
-  message.detail ? m.common_technical_detail({ detail: message.detail }, options) : '';
 async function retainedFailure(response: Response, fallback: string): Promise<UiMessage> {
   const message = await responseMessage(response, fallback);
   if (
@@ -1469,9 +1467,9 @@ async function saveAddress() {
 {/snippet}
 
 <main class={['main main-editor', { 'is-canvas-fullscreen': mode === 'canvas' }]} style:--entry-header-h={`${headerHeight}px`}>
-  {#if actionFailed && !renaming && !deleting && !offing}<p class="notice notice-danger" role="alert">{feedbackText(actionFailed)} {feedbackDetail(actionFailed)}</p>{/if}
-  {#if holdFailed}<p class="notice notice-danger" role="alert">{feedbackText(holdFailed)} {feedbackDetail(holdFailed)}</p>{/if}
-  {#if saveError}<p class="notice notice-danger" role="alert">{feedbackText(saveError)} {feedbackDetail(saveError)} <button class="btn-link" type="button" onclick={() => flush()}>{m.editor_save_retry({}, options)}</button></p>{/if}
+  {#if actionFailed && !renaming && !deleting && !offing}<p class="notice notice-danger" role="alert">{feedbackText(actionFailed)} {messageDetail(actionFailed, uiLocale)}</p>{/if}
+  {#if holdFailed}<p class="notice notice-danger" role="alert">{feedbackText(holdFailed)} {messageDetail(holdFailed, uiLocale)}</p>{/if}
+  {#if saveError}<p class="notice notice-danger" role="alert">{feedbackText(saveError)} {messageDetail(saveError, uiLocale)} <button class="btn-link" type="button" onclick={() => flush()}>{m.editor_save_retry({}, options)}</button></p>{/if}
   {#each entry.offerProblems ?? [] as problem (problem)}
     <div class="lock-banner is-offer">
       This entry's file says something its languages contradict — {problem}. Fix it in the
@@ -1538,7 +1536,7 @@ async function saveAddress() {
         {/each}
       </ul>
       {#if createdAll.failed && !(createdAll.failed.unconfirmed && !reportedHere)}
-        <p>{feedbackText(createdAll.failed.message)} {feedbackDetail(createdAll.failed.message)}</p>
+        <p>{feedbackText(createdAll.failed.message)} {messageDetail(createdAll.failed.message, uiLocale)}</p>
       {/if}
       <button class="btn-link" type="button" onclick={() => oncreatedall?.(undefined)}>{m.editor_created_all_dismiss({}, options)}</button>
     </div>
@@ -1571,7 +1569,7 @@ async function saveAddress() {
                     <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 5 10 10m0-10L5 15" /></svg>
                   </button>
                 </span>
-                {#if addressFailed}<span class="mode is-bad">{feedbackText(addressFailed)} {feedbackDetail(addressFailed)}</span>{/if}
+                {#if addressFailed}<span class="mode is-bad">{feedbackText(addressFailed)} {messageDetail(addressFailed, uiLocale)}</span>{/if}
               {:else}
                 <button
                   class="btn-link url slug-edit"
@@ -1700,7 +1698,7 @@ async function saveAddress() {
         {#if hiddenRedirect}{m.editor_hidden_redirecting({ address: hiddenRedirect }, options)}{:else}{m.editor_hidden_not_found({}, options)}{/if}
       </p>
     {/if}
-    {#if statusFailed}<p class="subline is-bad" role="alert">{feedbackText(statusFailed)} {feedbackDetail(statusFailed)}</p>{/if}
+    {#if statusFailed}<p class="subline is-bad" role="alert">{feedbackText(statusFailed)} {messageDetail(statusFailed, uiLocale)}</p>{/if}
     <div class="workspace-toolbar">
       <div class="toolbar-start">
         <!-- A global has no SEO or versions of its own: no dead section controls. -->
@@ -1894,7 +1892,7 @@ async function saveAddress() {
               </div>
             {/if}
             {#if actionFailed}
-              <div class="notice notice-danger" role="alert">{feedbackText(actionFailed)} {feedbackDetail(actionFailed)}</div>
+              <div class="notice notice-danger" role="alert">{feedbackText(actionFailed)} {messageDetail(actionFailed, uiLocale)}</div>
             {/if}
             {#if createAllFailure}
               <div class="notice notice-danger" role="alert">
@@ -1905,7 +1903,7 @@ async function saveAddress() {
               </div>
             {/if}
             {#if localeFailure?.locale === shown}
-              <div class="notice notice-danger" role="alert">{feedbackText(localeFailure.message)} {feedbackDetail(localeFailure.message)}</div>
+              <div class="notice notice-danger" role="alert">{feedbackText(localeFailure.message)} {messageDetail(localeFailure.message, uiLocale)}</div>
             {/if}
           </div>
         </section>
@@ -2049,7 +2047,7 @@ async function saveAddress() {
               {m.entry_list_saved_as({}, options)} <span class="filename">{willBe}</span>. {m.entry_list_rename_hint({}, options)}
             </p>
           </div>
-          {#if actionFailed}<div class="notice notice-danger" role="alert">{feedbackText(actionFailed)} {feedbackDetail(actionFailed)}</div>{/if}
+          {#if actionFailed}<div class="notice notice-danger" role="alert">{feedbackText(actionFailed)} {messageDetail(actionFailed, uiLocale)}</div>{/if}
           <div class="actions">
             <button class="btn" type="button" disabled={busy} onclick={() => (renaming = false)}>{m.common_cancel({}, options)}</button>
             <button class="btn btn-primary" type="submit" disabled={busy}>{busy ? m.entry_list_renaming({}, options) : m.editor_rename({}, options)}</button>
@@ -2098,7 +2096,7 @@ async function saveAddress() {
           ? m.editor_lock_take_shared({ holder: holderName }, options)
           : m.editor_lock_take_shared_anonymous({}, options)}</p>
         <p>{m.editor_lock_take_refusal({}, options)}</p>
-        {#if lockFailed}<p class="notice notice-danger" role="alert">{feedbackText(lockFailed)} {feedbackDetail(lockFailed)}</p>{/if}
+        {#if lockFailed}<p class="notice notice-danger" role="alert">{feedbackText(lockFailed)} {messageDetail(lockFailed, uiLocale)}</p>{/if}
         <div class="actions">
           <button class="btn" type="button" disabled={takeBusy} onclick={cancelTake}>{m.common_cancel({}, options)}</button>
           <button class="btn btn-primary" type="button" disabled={takeBusy} onclick={takeOver}>{m.editor_lock_take_over({}, options)}</button>

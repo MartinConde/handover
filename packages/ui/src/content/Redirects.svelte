@@ -1,6 +1,6 @@
 <script lang="ts">
 import { type Pickable, readEntryDirectory } from '../entry-directory.js';
-import { messageText, responseMessage, type UiMessage } from '../errors.js';
+import { messageLine, messageText, responseMessage, type UiMessage } from '../errors.js';
 import { languageTag, messageOptions, type UiLocale } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
 import { request as fetch, sitePath } from '../request.js';
@@ -12,13 +12,6 @@ let {
   oncommitted,
 }: { uiLocale?: UiLocale; oncommitted?: () => void | Promise<void> } = $props();
 const options = $derived(messageOptions(uiLocale));
-const errorText = (message: UiMessage) =>
-  [
-    messageText(message, uiLocale),
-    message.detail ? m.common_technical_detail({ detail: message.detail }, options) : '',
-  ]
-    .filter(Boolean)
-    .join(' ');
 
 /** One rule as `/admin/api/redirects` answers it. */
 interface Rule {
@@ -325,10 +318,10 @@ async function remove() {
   </div>
   <p class="list-note">{m.redirect_intro({}, options)}</p>
     <div class="redirects">
-      {#if error}<p class="notice notice-danger" role="alert">{errorText(error)}</p>{/if}
+      {#if error}<p class="notice notice-danger" role="alert">{messageLine(error, uiLocale)}</p>{/if}
       {#if readError}
         <div class="notice notice-danger redirects-read-error" role="alert">
-          {errorText(readError)}{rulesKnown ? ` ${m.redirect_last_result({}, options)}` : ''}
+          {messageLine(readError, uiLocale)}{rulesKnown ? ` ${m.redirect_last_result({}, options)}` : ''}
           <button class="btn-link" type="button" onclick={load}>{m.common_retry({}, options)}</button>
         </div>
       {/if}

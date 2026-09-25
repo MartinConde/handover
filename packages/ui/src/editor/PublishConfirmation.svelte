@@ -1,6 +1,6 @@
 <script lang="ts">
 import type { UiMessage } from '../errors.js';
-import { messageText } from '../errors.js';
+import { messageDetail, messageText } from '../errors.js';
 import { formatLanguageName, messageOptions, type UiLocale } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
 import CheckLines, { type CheckLine, verdict } from '../publishing/CheckLines.svelte';
@@ -43,8 +43,6 @@ let {
 const options = $derived(messageOptions(uiLocale));
 const language = (locale: string) => formatLanguageName(locale, uiLocale);
 const feedbackText = (message: UiMessage) => messageText(message, uiLocale);
-const feedbackDetail = (message: UiMessage) =>
-  message.detail ? m.common_technical_detail({ detail: message.detail }, options) : '';
 const readiness = $derived(choice.readiness);
 const later = $derived(choice.later);
 const going = $derived(choice.going);
@@ -132,7 +130,7 @@ const warnings = $derived(lines.filter((c) => c.severity === 'warn'));
   <p class="rebuild-note">
     {m.pending_entry_publish_explanation({}, options)}
   </p>
-  {#if failed}<div class="notice notice-danger" role="alert">{feedbackText(failed)}{#if feedbackDetail(failed)} {feedbackDetail(failed)}{/if}</div>{/if}
+  {#if failed}<div class="notice notice-danger" role="alert">{feedbackText(failed)}{#if messageDetail(failed, uiLocale)} {messageDetail(failed, uiLocale)}{/if}</div>{/if}
   <div class="actions">
     <button class="btn" type="button" disabled={sending} onclick={onclose}>{m.common_cancel({}, options)}</button>
     <button

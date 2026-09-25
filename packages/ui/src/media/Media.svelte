@@ -1,6 +1,6 @@
 <script lang="ts">
 import { cropWidth, type Preset } from '@handover/core';
-import { messageText, type UiMessage } from '../errors.js';
+import { messageDetail, messageText, type UiMessage } from '../errors.js';
 import type { UiLocale } from '../i18n.js';
 import { messageOptions } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
@@ -219,7 +219,7 @@ function drop(e: DragEvent) {
               {#each queue as row}
                 <li class="upload-row">
                   <span class="name">{row.name}</span>
-                  <span class={['state', { 'is-failed': row.failed }]} role={row.failed ? 'alert' : undefined} aria-live={row.failed ? undefined : 'polite'}>{queueText(row.state)}{#if typeof row.state !== 'string' && row.state.detail}<span class="technical-detail">{m.common_technical_detail({ detail: row.state.detail }, options)}</span>{/if}</span>
+                  <span class={['state', { 'is-failed': row.failed }]} role={row.failed ? 'alert' : undefined} aria-live={row.failed ? undefined : 'polite'}>{queueText(row.state)}{#if typeof row.state !== 'string' && row.state.detail}<span class="technical-detail">{messageDetail(row.state, uiLocale)}</span>{/if}</span>
                 </li>
               {/each}
             </ul>

@@ -1,7 +1,7 @@
 <script lang="ts">
 import { addressError, entryName } from '@handover/core';
 import { invalidateEntryDirectory } from '../entry-directory.js';
-import { messageText, responseMessage, type UiMessage } from '../errors.js';
+import { messageDetail, messageText, responseMessage, type UiMessage } from '../errors.js';
 import { collectionName, formatLanguageName, messageOptions, type UiLocale } from '../i18n.js';
 import { navigate } from '../navigate';
 import * as m from '../paraglide/messages.js';
@@ -174,7 +174,7 @@ async function create(event: Event) {
       {#if directoryError}
         <div class="notice notice-danger entry-read-error" role="alert">
           {directoryText}
-          {#if directoryError.detail}<span class="technical-detail">{m.common_technical_detail({ detail: directoryError.detail }, options)}</span>{/if}
+          {#if directoryError.detail}<span class="technical-detail">{messageDetail(directoryError, uiLocale)}</span>{/if}
           <button class="btn-link" type="button" onclick={() => load(collection)}>{m.common_retry({}, options)}</button>
         </div>
       {/if}
@@ -202,7 +202,7 @@ async function create(event: Event) {
           {/each}
         </fieldset>
       {/if}
-      {#if error}<div class="notice notice-danger" role="alert">{messageText(error, uiLocale)}{#if error.detail}<span class="technical-detail">{m.common_technical_detail({ detail: error.detail }, options)}</span>{/if}</div>{/if}
+      {#if error}<div class="notice notice-danger" role="alert">{messageText(error, uiLocale)}{#if error.detail}<span class="technical-detail">{messageDetail(error, uiLocale)}</span>{/if}</div>{/if}
       <div class="actions">
         <button class="btn" type="button" disabled={busy} onclick={onclose}>{m.common_cancel({}, options)}</button>
         <button class="btn btn-primary" type="submit" disabled={busy || !directoryCurrent}>

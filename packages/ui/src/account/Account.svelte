@@ -1,6 +1,6 @@
 <script lang="ts">
 import type { UiLocale } from '@handover/core';
-import { messageText, responseMessage, type UiMessage } from '../errors.js';
+import { messageDetail, messageText, responseMessage, type UiMessage } from '../errors.js';
 import { messageOptions } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
 import { request as fetch, sitePath } from '../request.js';
@@ -207,7 +207,7 @@ function when(at: number, locale: UiLocale): string {
       role={noticeError ? 'alert' : 'status'}
     >
       {messageText(notice, uiLocale)}
-      {#if notice.detail}<span class="technical-detail">{m.common_technical_detail({ detail: notice.detail }, messageOptions(uiLocale))}</span>{/if}
+      {#if notice.detail}<span class="technical-detail">{messageDetail(notice, uiLocale)}</span>{/if}
     </p>
   {/if}
 {/snippet}
@@ -359,7 +359,7 @@ function when(at: number, locale: UiLocale): string {
                 {#if passwordError}
                   <span class="error" id="change-new-error" role="alert">
                     {messageText(passwordError, uiLocale)}
-                    {#if passwordError.detail}<span class="technical-detail">{m.common_technical_detail({ detail: passwordError.detail }, messageOptions(uiLocale))}</span>{/if}
+                    {#if passwordError.detail}<span class="technical-detail">{messageDetail(passwordError, uiLocale)}</span>{/if}
                   </span>
                 {:else}
                   <span class="hint" id="change-new-hint">
@@ -424,7 +424,7 @@ function when(at: number, locale: UiLocale): string {
                 {#if passwordError}
                   <span class="error" id="set-new-error" role="alert">
                     {messageText(passwordError, uiLocale)}
-                    {#if passwordError.detail}<span class="technical-detail">{m.common_technical_detail({ detail: passwordError.detail }, messageOptions(uiLocale))}</span>{/if}
+                    {#if passwordError.detail}<span class="technical-detail">{messageDetail(passwordError, uiLocale)}</span>{/if}
                   </span>
                 {:else}
                   <span class="hint" id="set-new-hint">{m.auth_password_hint_length({}, messageOptions(uiLocale))}</span>
@@ -483,7 +483,7 @@ function when(at: number, locale: UiLocale): string {
       <div class="account-read-error">
         <p class="notice notice-danger" role="alert">
           {messageText(accountReadFailure(error), uiLocale)}
-          {#if accountReadFailure(error).detail}<span class="technical-detail">{m.common_technical_detail({ detail: accountReadFailure(error).detail ?? '' }, messageOptions(uiLocale))}</span>{/if}
+          {#if accountReadFailure(error).detail}<span class="technical-detail">{messageDetail(accountReadFailure(error), uiLocale)}</span>{/if}
         </p>
         <button class="btn" type="button" onclick={() => (reload += 1)}>{m.common_retry({}, messageOptions(uiLocale))}</button>
       </div>

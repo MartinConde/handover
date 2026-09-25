@@ -1,7 +1,7 @@
 import { z } from 'astro/zod';
 import { expect, test } from 'vitest';
 import { entryProblems } from '../../astro/src/problems.js';
-import { messageText, problemText, responseMessage } from './errors.js';
+import { messageLine, messageText, problemText, responseMessage } from './errors.js';
 
 test('integer and ordinary number problems render distinct remedies', () => {
   const problems = entryProblems(z.object({ whole: z.number().int(), amount: z.number() }), {
@@ -359,4 +359,13 @@ test('an unresolved source refusal reads the same for all three codes, in either
       'Die Dateien dieses Eintrags nennen keine gemeinsame Ausgangssprache mehr. Lade ihn neu, um zu sehen, was jede Datei nennt.',
     );
   }
+});
+
+test('a message line carries the technical detail only when there is one', () => {
+  expect(
+    messageLine({ code: 'MEMBER_LIST_FAILED', status: 503, detail: 'database diagnostic' }, 'en'),
+  ).toBe('Could not load the members (503). Technical detail: database diagnostic');
+  expect(messageLine({ code: 'MEMBER_LIST_FAILED', status: 0 }, 'en')).toBe(
+    'Could not load the members.',
+  );
 });

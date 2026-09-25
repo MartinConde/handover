@@ -1,7 +1,13 @@
 <script lang="ts">
 import { entryName } from '@handover/core';
 import { invalidateEntryDirectory } from '../entry-directory.js';
-import { messageText, responseMessage, type UiMessage } from '../errors.js';
+import {
+  messageDetail,
+  messageLine,
+  messageText,
+  responseMessage,
+  type UiMessage,
+} from '../errors.js';
 import {
   collectionName,
   formatExactTime,
@@ -190,11 +196,7 @@ const preview = $derived(
   ),
 );
 const textOf = (message: UiMessage) => messageText(message, uiLocale);
-const errorDetail = (message: UiMessage) =>
-  message.detail ? m.common_technical_detail({ detail: message.detail }, options) : '';
-const dialogError = $derived(
-  error ? [textOf(error), errorDetail(error)].filter(Boolean).join(' ') : '',
-);
+const dialogError = $derived(error ? messageLine(error, uiLocale) : '');
 
 async function loadDeleted(name: string) {
   deletedLoading = true;
@@ -417,7 +419,7 @@ async function done() {
       {#if filtered}<button class="btn btn-ghost btn-sm" type="button" onclick={() => { search = ''; showing = 'all'; language = ''; work = 'owed'; }}>{m.entry_list_clear_filters({}, options)}</button>{/if}
     </div>
   {/if}
-  {#if error && !dialog}<p class="notice notice-danger" role="alert">{textOf(error)}{#if error.detail}<span class="technical-detail">{errorDetail(error)}</span>{/if}</p>{/if}
+  {#if error && !dialog}<p class="notice notice-danger" role="alert">{textOf(error)}{#if error.detail}<span class="technical-detail">{messageDetail(error, uiLocale)}</span>{/if}</p>{/if}
   {#if tab === 'deleted'}
     <p class="list-note">{m.entry_list_deleted_note({ collection: plural }, options)}</p>
     {#if deletedLoading && !deleted.length}
@@ -660,7 +662,7 @@ async function done() {
         <li>{m.entry_list_restore_redirect({}, options)}</li>
       </ul>
       <p class="hint">{m.entry_list_restore_pictures({}, options)}</p>
-      {#if error}<div class="notice notice-danger" role="alert">{textOf(error)}{#if error.detail}<span class="technical-detail">{errorDetail(error)}</span>{/if}</div>{/if}
+      {#if error}<div class="notice notice-danger" role="alert">{textOf(error)}{#if error.detail}<span class="technical-detail">{messageDetail(error, uiLocale)}</span>{/if}</div>{/if}
       <div class="actions">
         <button class="btn" type="button" disabled={busy} onclick={close}>{m.common_cancel({}, options)}</button>
         <button class="btn btn-primary" type="button" disabled={busy} onclick={() => restore(row)}>
@@ -714,7 +716,7 @@ async function done() {
             />
             <p class="hint" id="rename-hint">{m.entry_list_saved_as({}, options)} <span class="filename">{preview}</span>. {m.entry_list_rename_hint({}, options)}</p>
           </div>
-          {#if error}<div class="notice notice-danger" role="alert">{textOf(error)}{#if error.detail}<span class="technical-detail">{errorDetail(error)}</span>{/if}</div>{/if}
+          {#if error}<div class="notice notice-danger" role="alert">{textOf(error)}{#if error.detail}<span class="technical-detail">{messageDetail(error, uiLocale)}</span>{/if}</div>{/if}
           <div class="actions">
             <button class="btn" type="button" disabled={busy} onclick={close}>{m.common_cancel({}, options)}</button>
             <button class="btn btn-primary" type="submit" disabled={busy}>
@@ -736,7 +738,7 @@ async function done() {
             />
             <p class="hint" id="template-hint">{m.entry_list_saved_as({}, options)} <span class="filename">{preview}</span>. {m.entry_list_template_hint({ collection: plural }, options)}</p>
           </div>
-          {#if error}<div class="notice notice-danger" role="alert">{textOf(error)}{#if error.detail}<span class="technical-detail">{errorDetail(error)}</span>{/if}</div>{/if}
+          {#if error}<div class="notice notice-danger" role="alert">{textOf(error)}{#if error.detail}<span class="technical-detail">{messageDetail(error, uiLocale)}</span>{/if}</div>{/if}
           <div class="actions">
             <button class="btn" type="button" disabled={busy} onclick={close}>{m.common_cancel({}, options)}</button>
             <button class="btn btn-primary" type="submit" disabled={busy}>
@@ -764,7 +766,7 @@ async function done() {
               {m.entry_list_duplicate_drafts({}, options)}
             </label>
           {/if}
-          {#if error}<div class="notice notice-danger" role="alert">{textOf(error)}{#if error.detail}<span class="technical-detail">{errorDetail(error)}</span>{/if}</div>{/if}
+          {#if error}<div class="notice notice-danger" role="alert">{textOf(error)}{#if error.detail}<span class="technical-detail">{messageDetail(error, uiLocale)}</span>{/if}</div>{/if}
           <div class="actions">
             <button class="btn" type="button" disabled={busy} onclick={close}>{m.common_cancel({}, options)}</button>
             <button class="btn btn-primary" type="submit" disabled={busy}>

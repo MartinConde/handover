@@ -1,6 +1,6 @@
 <script lang="ts">
 import { ParaglideMessage } from '@inlang/paraglide-js-svelte';
-import { messageText, type UiMessage } from '../errors.js';
+import { messageDetail, messageText, type UiMessage } from '../errors.js';
 import type { UiLocale } from '../i18n.js';
 import { messageOptions } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
@@ -162,7 +162,7 @@ async function make() {
         </div>
       </div>
     </div>
-    {#if failure}<p class="notice notice-danger" role="alert">{messageText(failure, uiLocale)}{#if failure.detail}<span class="technical-detail">{m.common_technical_detail({ detail: failure.detail }, options)}</span>{/if}</p>{/if}
+    {#if failure}<p class="notice notice-danger" role="alert">{messageText(failure, uiLocale)}{#if failure.detail}<span class="technical-detail">{messageDetail(failure, uiLocale)}</span>{/if}</p>{/if}
     <div class="actions">
       <button class="btn" type="button" disabled={busy} onclick={onclose}>{m.common_cancel({}, options)}</button>
       <button class="btn btn-primary" type="button" disabled={busy} onclick={make}>{busy ? m.crop_working({}, options) : m.crop_create({}, options)}</button>

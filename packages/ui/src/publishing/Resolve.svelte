@@ -1,6 +1,6 @@
 <script lang="ts">
 import type { Change, MergedChange, Question } from '@handover/core';
-import { messageText, responseMessage, type UiMessage } from '../errors.js';
+import { messageLine, responseMessage, type UiMessage } from '../errors.js';
 import { formatExactTime, messageOptions, type UiLocale } from '../i18n.js';
 import { coordinateEntryReplacement } from '../navigate';
 import * as m from '../paraglide/messages.js';
@@ -35,16 +35,7 @@ let answers = $state<Record<string, 'ours' | 'theirs'>>({});
 let loading = $state(true);
 let busy = $state(false);
 let error = $state<UiMessage>();
-const errorText = $derived(
-  error
-    ? [
-        messageText(error, uiLocale),
-        error.detail ? m.common_technical_detail({ detail: error.detail }, options) : '',
-      ]
-        .filter(Boolean)
-        .join(' ')
-    : '',
-);
+const errorText = $derived(error ? messageLine(error, uiLocale) : '');
 let reportKnown = $state(false);
 let reportCurrent = $state(false);
 
