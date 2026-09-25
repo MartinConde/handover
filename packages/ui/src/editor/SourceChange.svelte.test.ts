@@ -1,7 +1,8 @@
 import { type Field, markTranslation, parseEntry, stringifyEntry } from '@handover/core';
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
-import SourceChangeLocaleFixture from './SourceChangeLocaleFixture.svelte';
+import type { UiLocale } from '../i18n.js';
+import SourceChange from './SourceChange.svelte';
 
 // Not testing: the request and the reload, which Editor.languages.test.ts drives through the menu.
 
@@ -35,9 +36,10 @@ const files = async () => ({
 });
 
 let app: ReturnType<typeof mount>;
+let uiLocale = $state<UiLocale>('en');
 const confirmed = vi.fn();
 const show = async (over: Record<string, unknown> = {}) => {
-  app = mount(SourceChangeLocaleFixture, {
+  app = mount(SourceChange, {
     target: document.body,
     props: {
       locales: ['de', 'en', 'fr', 'it', 'es', 'nl'],
@@ -50,6 +52,9 @@ const show = async (over: Record<string, unknown> = {}) => {
       onconfirm: confirmed,
       onclose: () => {},
       onreload: () => {},
+      get uiLocale() {
+        return uiLocale;
+      },
       ...over,
     },
   });
@@ -58,6 +63,7 @@ const show = async (over: Record<string, unknown> = {}) => {
 };
 afterEach(() => {
   unmount(app);
+  uiLocale = 'en';
   confirmed.mockClear();
   document.body.innerHTML = '';
 });
@@ -130,7 +136,7 @@ test('a language that cannot become the source cannot be chosen', async () => {
 test('switching the interface language keeps the chosen language', async () => {
   const root = await show();
   await choose(root, 'fr');
-  root.querySelector<HTMLButtonElement>('[data-locale-switch]')?.click();
+  uiLocale = 'de';
   flushSync();
   expect(root.querySelector<HTMLInputElement>('#source-change-fr')?.checked).toBe(true);
   expect(text(root.querySelector('.actions .btn-primary'))).toBe(

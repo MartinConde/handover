@@ -1,7 +1,8 @@
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
+import type { UiLocale } from '../i18n.js';
 import { deferred, q } from '../test-helpers.fixture.js';
-import LibraryLocaleFixture from './LibraryLocaleFixture.svelte';
+import Library from './Library.svelte';
 import type { LibraryItem } from './upload.js';
 
 const item = (id: string, filename: string, over: Partial<LibraryItem> = {}): LibraryItem => ({
@@ -27,8 +28,21 @@ const change = (element: HTMLInputElement | HTMLTextAreaElement, value: string) 
 };
 
 let app: ReturnType<typeof mount>;
+let uiLocale = $state<UiLocale>('en');
+const show = () => {
+  app = mount(Library, {
+    target: document.body,
+    props: {
+      base: 'https://cdn.example.com',
+      get uiLocale() {
+        return uiLocale;
+      },
+    },
+  });
+};
 afterEach(() => {
   unmount(app);
+  uiLocale = 'en';
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
@@ -74,7 +88,7 @@ test.each([
         return reads === 1 ? Response.json({ media: [garden] }) : answer();
       }),
     );
-    app = mount(LibraryLocaleFixture, { target: document.body });
+    show();
     await settle();
     q<HTMLButtonElement>('.tile-link').click();
     flushSync();
@@ -82,7 +96,7 @@ test.each([
     const search = q<HTMLInputElement>('#lib-q');
     change(search, 'coast');
     await settle();
-    q<HTMLButtonElement>('[data-locale-switch]').click();
+    uiLocale = 'de';
     flushSync();
 
     expect(q('.lib-side')).toBe(panel);
@@ -128,14 +142,14 @@ test.each([
         init?.method === 'PATCH' ? answer() : Response.json({ media: [garden] }),
       ),
     );
-    app = mount(LibraryLocaleFixture, { target: document.body });
+    show();
     await settle();
     q<HTMLButtonElement>('.tile-link').click();
     flushSync();
     const alt = q<HTMLTextAreaElement>('#lib-alt');
     change(alt, 'Authored summer coast');
     await new Promise((resolve) => setTimeout(resolve));
-    q<HTMLButtonElement>('[data-locale-switch]').click();
+    uiLocale = 'de';
     flushSync();
 
     expect(q<HTMLTextAreaElement>('#lib-alt')).toBe(alt);
@@ -214,7 +228,7 @@ test.each([
         init?.method === 'DELETE' ? answer() : Response.json({ media: [garden] }),
       ),
     );
-    app = mount(LibraryLocaleFixture, { target: document.body });
+    show();
     await settle();
     q<HTMLButtonElement>('.tile-link').click();
     flushSync();
@@ -222,7 +236,7 @@ test.each([
     flushSync();
     q<HTMLButtonElement>('.dialog .btn-danger').click();
     await new Promise((resolve) => setTimeout(resolve));
-    q<HTMLButtonElement>('[data-locale-switch]').click();
+    uiLocale = 'de';
     flushSync();
 
     expect(document.querySelectorAll('.tile')).toHaveLength(1);
@@ -274,7 +288,7 @@ test('live language switching keeps library work, selection, drafts and focus', 
     done(new Blob([new Uint8Array([1, 2, 3])], { type: 'image/webp' })),
   );
 
-  app = mount(LibraryLocaleFixture, { target: document.body });
+  show();
   await settle();
   const unused = q<HTMLButtonElement>('.filters [aria-pressed]:last-child');
   unused.click();
@@ -302,7 +316,7 @@ test('live language switching keeps library work, selection, drafts and focus', 
   const queueRow = q<HTMLElement>('.upload-row');
   const beforeSwitch = calls.map(({ method, url }) => `${method} ${url}`);
 
-  q<HTMLButtonElement>('[data-locale-switch]').click();
+  uiLocale = 'de';
   flushSync();
 
   expect(q('.media-page')).toBe(page);

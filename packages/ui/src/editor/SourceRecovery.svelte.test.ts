@@ -1,6 +1,7 @@
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
-import SourceRecoveryLocaleFixture from './SourceRecoveryLocaleFixture.svelte';
+import type { UiLocale } from '../i18n.js';
+import SourceRecovery from './SourceRecovery.svelte';
 
 // Not testing: the shell around it, which App.svelte.test.ts opens it in.
 
@@ -24,20 +25,22 @@ const MISSING = {
 } as const;
 
 let app: ReturnType<typeof mount>;
+let uiLocale = $state<UiLocale>('en');
 type Problem = {
   code: (typeof CONFLICT | typeof UNDECLARED | typeof MISSING)['code'];
   marks: Readonly<Record<string, string>>;
   files: readonly string[];
   offered: readonly string[];
 };
-const show = (
-  problem: Problem,
-  initialUiLocale: 'en' | 'de',
-  over: Record<string, unknown> = {},
-) => {
-  app = mount(SourceRecoveryLocaleFixture, {
+const show = (problem: Problem, initialUiLocale: UiLocale, over: Record<string, unknown> = {}) => {
+  uiLocale = initialUiLocale;
+  app = mount(SourceRecovery, {
     target: document.body,
     props: {
+      collection: 'listings',
+      slug: 'muehlenhaus',
+      onchosen: () => {},
+      onreload: () => {},
       ...over,
       problem: {
         ...problem,
@@ -45,7 +48,9 @@ const show = (
         files: [...problem.files],
         offered: [...problem.offered],
       },
-      initialUiLocale,
+      get uiLocale() {
+        return uiLocale;
+      },
     },
   });
   flushSync();
@@ -171,7 +176,7 @@ test('switching the interface language keeps the panel and the chosen language',
   show(CONFLICT, 'en');
   document.body.querySelector<HTMLInputElement>('#source-recovery-fr')?.click();
   flushSync();
-  document.body.querySelector<HTMLButtonElement>('[data-locale-switch]')?.click();
+  uiLocale = 'de';
   flushSync();
   expect(document.body.querySelector('.source-recovery h2')?.textContent).toBe(
     'Welche Sprache ist die Ausgangssprache?',

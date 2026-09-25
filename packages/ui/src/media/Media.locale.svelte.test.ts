@@ -1,7 +1,8 @@
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
+import type { UiLocale } from '../i18n.js';
 import { deferred, q } from '../test-helpers.fixture.js';
-import MediaLocaleFixture from './MediaLocaleFixture.svelte';
+import Media from './Media.svelte';
 import type { MediaItem } from './upload.js';
 
 const item = (id: string, filename: string): MediaItem => ({
@@ -13,8 +14,10 @@ const item = (id: string, filename: string): MediaItem => ({
   height: 900,
 });
 let app: ReturnType<typeof mount>;
+let uiLocale = $state<UiLocale>('en');
 afterEach(() => {
   unmount(app);
+  uiLocale = 'en';
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
@@ -56,7 +59,20 @@ test('live language switching preserves real pending upload work and recovery', 
     done(new Blob([new Uint8Array([1, 2, 3])], { type: 'image/webp' })),
   );
 
-  app = mount(MediaLocaleFixture, { target: document.body });
+  app = mount(Media, {
+    target: document.body,
+    props: {
+      kind: 'images',
+      label: 'Hero image',
+      preset: { ratio: '16:9', max: 2400, min: 800 },
+      many: true,
+      get uiLocale() {
+        return uiLocale;
+      },
+      onpick: () => {},
+      onclose: () => {},
+    },
+  });
   await new Promise((resolve) => setTimeout(resolve));
   flushSync();
   q<HTMLInputElement>(`input[value="${'b'.repeat(64)}"]`).click();
@@ -85,7 +101,7 @@ test('live language switching preserves real pending upload work and recovery', 
   );
   expect(selected).toEqual(['garden.jpg', 'harbour.jpg']);
   const beforeSwitch = calls.map(({ method, url }) => `${method} ${url}`);
-  q<HTMLButtonElement>('[data-locale-switch]').click();
+  uiLocale = 'de';
   flushSync();
 
   expect(q('[aria-labelledby="picker-h"]')).toBe(dialog);

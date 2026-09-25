@@ -1,7 +1,7 @@
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
+import type { UiLocale } from '../i18n.js';
 import Drift from './Drift.svelte';
-import DriftLocaleFixture from './DriftLocaleFixture.svelte';
 
 // Not testing: the banner above it or the chrome the panel sits in.
 
@@ -22,6 +22,7 @@ const MARKED = {
 
 let app: ReturnType<typeof mount>;
 const resolved = vi.fn();
+let uiLocale = $state<UiLocale>('en');
 const show = (drift = [STRAY]) => {
   app = mount(Drift, {
     target: document.body,
@@ -30,6 +31,9 @@ const show = (drift = [STRAY]) => {
       slug: 'home',
       drift,
       locales: ['en', 'de'],
+      get uiLocale() {
+        return uiLocale;
+      },
       onresolved: resolved,
     },
   });
@@ -38,6 +42,7 @@ const show = (drift = [STRAY]) => {
 };
 afterEach(() => {
   unmount(app);
+  uiLocale = 'en';
   resolved.mockClear();
   vi.unstubAllGlobals();
 });
@@ -47,8 +52,7 @@ test('an open decision and retained refusal retranslate without replacing the ch
     'fetch',
     vi.fn(async () => new Response('moved', { status: 409 })),
   );
-  app = mount(DriftLocaleFixture, { target: document.body });
-  flushSync();
+  show();
   const choice = document.body.querySelector<HTMLInputElement>('.choice input');
   if (!choice) throw new Error('drift choice missing');
   choice.click();
@@ -61,7 +65,7 @@ test('an open decision and retained refusal retranslate without replacing the ch
     'This entry changed while you were deciding.',
   );
 
-  document.body.querySelector<HTMLButtonElement>('[data-locale-switch]')?.click();
+  uiLocale = 'de';
   flushSync();
 
   expect(document.body.querySelector('.drift h2')?.textContent).toBe(
