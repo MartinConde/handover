@@ -32,7 +32,7 @@ import {
   readSetting,
 } from '@handover/core';
 import { entryForm, formSchema } from '../../index.js';
-import type { RequestContext } from './context.js';
+import type { RequestContext } from './environment.js';
 
 /** The pasted key wins; a site with neither never needs `HANDOVER_SETTINGS_KEY`. */
 export async function deeplKey(ctx: RequestContext): Promise<string | undefined> {

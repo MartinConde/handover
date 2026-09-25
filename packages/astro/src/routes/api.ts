@@ -25,7 +25,6 @@ import { createAuth } from '../auth.js';
 import { formSchema } from '../index.js';
 import { BodyTooLargeError, bodyErrorResponse } from './api/body.js';
 import { tabOf } from './api/content.js';
-import { requestContext } from './api/context.js';
 import { dashboard, globalsList, listEntries, pendingList, pickList } from './api/dashboard.js';
 import {
   address,
@@ -43,6 +42,7 @@ import {
   rename,
   setStatus,
 } from './api/entries.js';
+import { requestContext } from './api/environment.js';
 import {
   activityDiff,
   conflictView,

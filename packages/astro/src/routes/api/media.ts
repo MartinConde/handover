@@ -26,7 +26,7 @@ import {
 } from '@handover/core';
 import { readJson } from './body.js';
 import { entryHref, entryTitle } from './content.js';
-import type { RequestContext } from './context.js';
+import type { RequestContext } from './environment.js';
 import { mediaStore, NO_BUCKET, NO_UPLOAD_BUCKET, uploadBucket } from './environment.js';
 
 /** The key a content file stores, and where the asset is served from. */

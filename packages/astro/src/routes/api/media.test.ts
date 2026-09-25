@@ -14,7 +14,6 @@ import {
   logged,
   mediaList,
   owner,
-  patch,
   post,
   privateUploads,
   put,
@@ -38,6 +37,13 @@ vi.mock('../../auth.js', async (original) =>
 vi.mock('@handover/core', async (original) =>
   coreMock((await original()) as Record<string, unknown>),
 );
+
+const patch = (path: string, body: unknown, locals: Record<string, unknown> = {}) =>
+  ctx(
+    path,
+    new Request(`https://x/admin/api/${path}`, { method: 'PATCH', body: JSON.stringify(body) }),
+    locals,
+  );
 
 afterEach(() => {
   vi.unstubAllGlobals();

@@ -86,7 +86,7 @@ import {
   translationSource,
   translator,
 } from './content.js';
-import type { RequestContext } from './context.js';
+import type { RequestContext } from './environment.js';
 
 /** Committed and draft rules are both read; empty means the client answered "nowhere". */
 async function hideTargets(

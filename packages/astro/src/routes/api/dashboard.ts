@@ -20,7 +20,7 @@ import {
 } from '@handover/core';
 import { entryForm } from '../../index.js';
 import { ENTRY_FILE, entryHref, globalLabel, pickable } from './content.js';
-import type { RequestContext } from './context.js';
+import type { RequestContext } from './environment.js';
 import { templateNames } from './templates.js';
 
 // Nothing here touches GitHub: listing through the contents API is one request per file.

@@ -12,7 +12,7 @@ import {
 } from '@handover/core';
 import { createAuth, loginMethods, mailer } from '../../auth.js';
 import { entryTitle } from './content.js';
-import type { RequestContext } from './context.js';
+import type { RequestContext } from './environment.js';
 import { missingMailer } from './environment.js';
 
 /** Only the facts the page cannot work out itself; everything else is a Better Auth endpoint. */

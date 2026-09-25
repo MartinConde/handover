@@ -23,7 +23,7 @@ import {
 } from '@handover/core';
 import { formSchema } from '../../index.js';
 import { entryFiles, entryPath, sourceOrder, takenNames } from './content.js';
-import type { RequestContext } from './context.js';
+import type { RequestContext } from './environment.js';
 
 const templatePath = (collection: string, name: string) =>
   `src/content/_templates/${collection}/${name}.yaml`;

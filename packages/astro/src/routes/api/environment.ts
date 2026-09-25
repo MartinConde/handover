@@ -42,7 +42,7 @@ export function mediaStore(): R2Store | undefined {
     : undefined;
 }
 
-export interface UploadBucket {
+interface UploadBucket {
   put(
     key: string,
     value: ReadableStream | ArrayBuffer | ArrayBufferView,
@@ -80,4 +80,16 @@ export function missingMailer(): string {
   if (configured.provider === 'resend')
     return 'RESEND_API_KEY is not set: put it in .dev.vars, or set it with `wrangler secret put RESEND_API_KEY`';
   return 'No mailer is configured: add a `mailer` block to cms.config.ts';
+}
+
+export type RequestContext = { db: () => Db; git: () => GitClient };
+
+/** Lazy dependencies belong to one HTTP request, including all its parallel content reads. */
+export function requestContext(): RequestContext {
+  let database: Db | undefined;
+  let git: GitClient | undefined;
+  return {
+    db: () => (database ??= db()),
+    git: () => (git ??= gitClient()),
+  };
 }

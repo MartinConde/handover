@@ -16,7 +16,7 @@ import {
   redirectRule,
 } from '@handover/core';
 import { pickable, sitePages } from './content.js';
-import type { RequestContext } from './context.js';
+import type { RequestContext } from './environment.js';
 
 /** Committed rules in file order, then the rules waiting on an entry's draft, flagged. */
 export async function redirectList(ctx: RequestContext): Promise<Response> {

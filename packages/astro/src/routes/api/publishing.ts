@@ -32,7 +32,7 @@ import {
   schemaOf,
   siteSeoDefaults,
 } from './content.js';
-import type { RequestContext } from './context.js';
+import type { RequestContext } from './environment.js';
 import { mediaStore, workerBuilds } from './environment.js';
 
 /** Read from the log: a publish redeploys the Worker, so the tab that pressed it may reload. */

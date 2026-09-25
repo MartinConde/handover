@@ -37,7 +37,7 @@ import {
   SHA,
   schemaOf,
 } from './content.js';
-import type { RequestContext } from './context.js';
+import type { RequestContext } from './environment.js';
 
 /** The draft against HEAD, not the commit it was loaded from: the row says what goes out next. */
 export async function entryDiff(

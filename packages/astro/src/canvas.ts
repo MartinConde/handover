@@ -62,14 +62,14 @@ export interface EditContext extends EditAttributes {
   block(id: string | EditBlock): EditContext;
 }
 
-export interface CanvasSuccessManifest extends HandoverCanvas {
+interface CanvasSuccessManifest extends HandoverCanvas {
   mode: 'canvas';
   status: 'success';
   /** Authenticated, base-aware route used by the iframe's page and entry pickers. */
   entryDirectory: string;
 }
 
-export interface CanvasErrorManifest {
+interface CanvasErrorManifest {
   mode: 'canvas';
   status: 'error';
   protocol: typeof CANVAS_PROTOCOL;
@@ -79,7 +79,7 @@ export interface CanvasErrorManifest {
   error: { status: number; message: string };
 }
 
-export type CanvasResultManifest = CanvasSuccessManifest | CanvasErrorManifest;
+type CanvasResultManifest = CanvasSuccessManifest | CanvasErrorManifest;
 
 declare global {
   namespace App {

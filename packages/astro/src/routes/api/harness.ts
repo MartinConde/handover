@@ -4,7 +4,7 @@ import { vi } from 'vitest';
 import type { HandoverConfig } from '../../index.js';
 
 // The row GET should overlay; `rows` is the same keyed by path when the languages differ in state.
-export type Row = {
+type Row = {
   contents: string;
   baseSha: string;
   baseBlob: string;
@@ -28,7 +28,7 @@ export type MemberRow = {
 // read and write `state.<name>` the same way -- a static import and the `vi.hoisted` dynamic
 // import used for the mock builders resolve to the same module instance, so it's the same object
 // either way (proven in this session by breaking `resetState` and watching state leak).
-export type State = {
+type State = {
   draft: Row | undefined;
   locales: string[];
   translator: typeof translate | undefined;
@@ -119,7 +119,7 @@ export const stored: Record<
   string,
   { value: string; hint: string; updatedAt: number; updatedBy: string | null }
 > = {};
-export type Call = { body: Record<string, unknown>; invite: boolean };
+type Call = { body: Record<string, unknown>; invite: boolean };
 export const calls: Record<string, Call[]> = {
   createUser: [],
   signInMagicLink: [],
@@ -416,7 +416,6 @@ const {
 });
 
 export {
-  article,
   clearPublished,
   commitBuild,
   confirmUpload,
@@ -437,16 +436,13 @@ export {
   holdEntry,
   listing,
   mediaList,
-  notice,
   overlayRows,
   page,
   pendingDrafts,
-  presenter,
   publish,
   publishDrafts,
   readyDrafts,
   recordDelete,
-  recordOffer,
   recordRenames,
   resolveConflict,
   resolveDrift,
@@ -1075,9 +1071,3 @@ export const put = (path: string, body: string) => {
   } catch {}
   return ctx(path, new Request(`https://x/admin/api/${path}`, { method: 'PUT', body }));
 };
-export const patch = (path: string, body: unknown, locals: Record<string, unknown> = {}) =>
-  ctx(
-    path,
-    new Request(`https://x/admin/api/${path}`, { method: 'PATCH', body: JSON.stringify(body) }),
-    locals,
-  );

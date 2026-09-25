@@ -1,6 +1,6 @@
 import { z } from 'astro/zod';
 
-export interface ProblemDescriptor {
+interface ProblemDescriptor {
   code: string;
   limit?: number;
   inclusive?: boolean;
@@ -8,7 +8,7 @@ export interface ProblemDescriptor {
 }
 
 /** One thing the schema will not accept, addressed the way the form addresses its fields. */
-export interface Problem {
+interface Problem {
   /** Dotted, array indices included: `body.0.heading`. */
   path: string;
   message: string;

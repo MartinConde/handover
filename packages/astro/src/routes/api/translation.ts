@@ -29,7 +29,7 @@ import {
   translationSource,
   translator,
 } from './content.js';
-import type { RequestContext } from './context.js';
+import type { RequestContext } from './environment.js';
 
 /** Structure and shared values from the source file, none of its words, as a draft. */
 export async function createTranslation(

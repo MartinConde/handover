@@ -23,8 +23,8 @@ import {
   withSource,
 } from '@handover/core';
 import { entryHref, entryPath, formFor } from './content.js';
-import type { RequestContext } from './context.js';
 import { entryTitles } from './dashboard.js';
+import type { RequestContext } from './environment.js';
 
 const KIND = 'sources-recorded';
 

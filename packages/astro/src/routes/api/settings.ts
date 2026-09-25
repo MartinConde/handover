@@ -23,7 +23,7 @@ import {
 import { mailer } from '../../auth.js';
 import { entryProblems } from '../../problems.js';
 import { deeplKey, entryPath, formFor, publishSources, takenNames } from './content.js';
-import type { RequestContext } from './context.js';
+import type { RequestContext } from './environment.js';
 import { mediaStore, missingMailer, NO_BUCKET, workerBuilds } from './environment.js';
 
 export async function testEmail(session: App.Locals['handover']): Promise<Response> {
