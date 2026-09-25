@@ -24,8 +24,11 @@ import {
   resetMocks,
   resetState,
   resolveConflict,
+  restoreCommit,
   restoreDraft,
+  revertCommit,
   rows,
+  setEntryLocales,
   state,
   translated,
 } from './harness.js';
@@ -619,4 +622,126 @@ test('a restore of a collection the site does not declare is a 404', async () =>
   expect(
     (await restoring('history/nope/mill-house/restore', { commit_sha: 'abc1234' })).status,
   ).toBe(404);
+});
+
+test('restoring waits for the editor who has the entry open', async () => {
+  restoreCommit.mockClear();
+  state.holder = { userId: 'someone-else', name: 'Anna Berg', expiresAt: 1755864120000 };
+
+  const res = await POST(post('restore', JSON.stringify({ commit_sha: 'del111' })));
+
+  expect(res.status).toBe(409);
+  expect(await res.text()).toBe(
+    'Anna Berg is editing this entry — it can be restored once they are done',
+  );
+  expect(restoreCommit).not.toHaveBeenCalled();
+});
+
+test('revert undoes the commit the body names and logs it', async () => {
+  const session = { user: { id: 'u1', name: 'Anna', email: 'a@x' }, role: 'editor' };
+  const res = await POST(
+    ctx(
+      'revert',
+      new Request('https://x/admin/api/revert', {
+        method: 'POST',
+        body: JSON.stringify({ commit_sha: 'def456' }),
+      }),
+      { handover: session },
+    ),
+  );
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({
+    commit_sha: 'rev999',
+    paths: ['src/content/listings/en/mill-house.yaml'],
+  });
+  expect(revertCommit).toHaveBeenCalledWith(
+    'default',
+    expect.anything(),
+    expect.anything(),
+    'def456',
+    expect.any(Function),
+    false,
+    { userId: 'u1' },
+  );
+  expect(logged.at(-1)).toMatchObject({
+    kind: 'revert',
+    commitSha: 'rev999',
+    detail: { of: 'def456' },
+  });
+});
+
+test('restore undoes the commit the body names and says so in the log', async () => {
+  const res = await POST(post('restore', JSON.stringify({ commit_sha: 'del111' })));
+
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({
+    commit_sha: 'res888',
+    paths: ['src/content/listings/en/mill-house.yaml'],
+  });
+  expect(restoreCommit).toHaveBeenCalledWith(
+    'default',
+    expect.anything(),
+    expect.anything(),
+    'del111',
+    expect.any(Function),
+    { userId: undefined },
+  );
+  // The same kind a revert writes — it is the same inverse commit — with what it was over.
+  expect(logged.at(-1)).toMatchObject({
+    kind: 'revert',
+    subject: 'src/content/listings/en/mill-house.yaml',
+    detail: { of: 'del111', restore: true },
+    commitSha: 'res888',
+  });
+});
+
+// A language that stays and has only a draft behind it was never in the turn-off commit.
+test('restoring writes the offer back into a language that has only a draft', async () => {
+  state.locales = ['en', 'de', 'fr'];
+  files['src/content/listings/de/mill-house.yaml'] = '_version: 1\ntitle: "Die Muehle"\n';
+  rows['src/content/listings/fr/mill-house.yaml'] = {
+    contents: '_version: 1\n_locales:\n  - "en"\n  - "fr"\ntitle: "Le Moulin"\n',
+    baseSha: 'head789',
+    baseBlob: '',
+  };
+  setEntryLocales.mockClear();
+
+  await POST(post('restore', JSON.stringify({ commit_sha: 'off222' })));
+
+  // The restored files say every language is offered again, and the draft is brought into line.
+  expect(setEntryLocales).toHaveBeenCalledWith(
+    'default',
+    expect.anything(),
+    expect.anything(),
+    ['src/content/listings/fr/mill-house.yaml'],
+    ['en', 'de', 'fr'],
+    ['en', 'de', 'fr'],
+  );
+});
+
+test('restore with no commit named is refused', async () => {
+  const res = await POST(post('restore', '{}'));
+  expect(res.status).toBe(400);
+  expect(restoreCommit).not.toHaveBeenCalled();
+});
+
+test('revert with no commit named is refused', async () => {
+  const res = await POST(post('revert', '{}'));
+  expect(res.status).toBe(400);
+  expect(revertCommit).not.toHaveBeenCalled();
+});
+
+// The one thing an inverse composed against HEAD cannot decide on its own.
+test('revert is 409 naming the file that has moved on since', async () => {
+  const { RevertConflictError } = await import('@handover/core');
+  revertCommit.mockImplementationOnce(async () => {
+    throw new RevertConflictError(['src/content/listings/en/mill-house.yaml']);
+  });
+  const res = await POST(post('revert', JSON.stringify({ commit_sha: 'def456' })));
+  expect(res.status).toBe(409);
+  expect(await res.json()).toEqual({
+    error:
+      'src/content/listings/en/mill-house.yaml has changed since that commit, so it cannot be put back',
+    paths: ['src/content/listings/en/mill-house.yaml'],
+  });
 });

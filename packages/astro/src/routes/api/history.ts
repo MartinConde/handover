@@ -2,22 +2,30 @@ import config from 'virtual:handover/config';
 import type { Answer, CommitPage, FileCommit, GitClient, I18nMark } from '@handover/core';
 import {
   commitAuthors,
+  commitScope,
   diffEntry,
   entryConflict,
   entryKey,
+  entryOffer,
+  finalizeOperation,
   formOf,
   loadDraft,
   logActivity,
   mergeFileCommits,
   migrateDocument,
+  OperationFinalizationError,
   parseEntry,
   renamedFrom,
   resolveConflict,
+  restoreCommit,
   restoreDraft,
+  revertCommit,
+  setEntryLocales,
   sourceChanges,
 } from '@handover/core';
 import { formSchema } from '../../index.js';
 import {
+  entryLocales,
   entryPath,
   entryPaths,
   entrySourceFor,
@@ -381,4 +389,104 @@ export async function resolve(
     );
   await resolveConflict('default', ctx.db(), form, found, answers);
   return Response.json({});
+}
+
+/** Any admin commit, not only the last; 409 with paths when one of its files has moved since. */
+export async function revert(
+  ctx: RequestContext,
+  request: Request,
+  session: App.Locals['handover'],
+): Promise<Response> {
+  const sha = await undoing(request);
+  if (!sha) return new Response('A commit_sha is needed to revert', { status: 400 });
+  const database = ctx.db();
+  const scope = await commitScope('default', database, sha);
+  if (scope.kind.startsWith('redirect-') && session?.role !== 'owner')
+    return new Response('Forbidden', { status: 403 });
+  const result = await revertCommit('default', database, ctx.git(), sha, undoPath(session), false, {
+    userId: session?.user.id,
+  });
+  await logActivity('default', database, {
+    userId: session?.user.id,
+    kind: 'revert',
+    detail: { of: sha, files: result.paths.length },
+    commitSha: result.commit_sha,
+  });
+  // The commit and the paths, never the whole result: it carries the restored file contents.
+  return Response.json({ commit_sha: result.commit_sha, paths: result.paths });
+}
+
+/** Redirect-only changes require an owner; content paths must be configured editable files. */
+const undoPath = (_session: App.Locals['handover']) => (path: string) => {
+  if (path === 'src/content/redirects.yaml') return true;
+  const match = /^src\/content\/([\w-]+)\/([\w-]+)\/([\w-]+)\.yaml$/.exec(path);
+  return Boolean(
+    match &&
+      config.i18n.locales.includes(match[2] ?? '') &&
+      schemaOf(match[1] ?? '', match[3] ?? ''),
+  );
+};
+
+async function undoing(request: Request): Promise<string> {
+  const body = (await request.json().catch(() => undefined)) as
+    | { commit_sha?: unknown }
+    | undefined;
+  return typeof body?.commit_sha === 'string' ? body.commit_sha : '';
+}
+
+/** A revert plus the draft marks and hidden rows only D1 knows; 409 when a file has moved since. */
+export async function restore(
+  ctx: RequestContext,
+  request: Request,
+  session: App.Locals['handover'],
+): Promise<Response> {
+  const sha = await undoing(request);
+  if (!sha) return new Response('A commit_sha is needed to restore', { status: 400 });
+  const database = ctx.db();
+  const git = ctx.git();
+  await commitScope('default', database, sha, true);
+  // Asked before undoing: somebody may have the name open again and a restore would overwrite it.
+  const about = entryKey((await git.getCommit(sha)).paths.find((p) => entryKey(p)) ?? '');
+  if (about) {
+    const [collection = '', slug = ''] = about.split('/');
+    const held = await heldByAnother(ctx, collection, slug, session, 'restored');
+    if (held) return held;
+  }
+  const result = await restoreCommit('default', database, git, sha, undoPath(session), {
+    userId: session?.user.id,
+  });
+  // A draft-only language was never in the turn-off commit, so the inverse cannot put it back.
+  const entry = entryKey(result.paths[0] ?? '');
+  const [collection = '', slug = ''] = entry ? entry.split('/') : [];
+  try {
+    if (config.collections[collection]) {
+      const loaded = await entryLocales(ctx, collection, slug, config.i18n.locales);
+      const written = Object.entries(loaded).filter(([, l]) => l.live);
+      const { offered } = entryOffer(
+        'default',
+        config.i18n.locales,
+        (written[0]?.[1].data as { _locales?: unknown } | undefined)?._locales,
+        written.map(([locale]) => locale),
+      );
+      const drafted = Object.entries(loaded)
+        .filter(([, l]) => !l.live)
+        .map(([locale]) => entryPath(collection, slug, locale));
+      if (drafted.length)
+        await setEntryLocales('default', database, git, drafted, offered, config.i18n.locales);
+    }
+    if (result.operation_id) await finalizeOperation('default', database, result.operation_id);
+  } catch (cause) {
+    if (result.operation_id)
+      throw new OperationFinalizationError(result.operation_id, result.commit_sha, { cause });
+    throw cause;
+  }
+  await logActivity('default', database, {
+    userId: session?.user.id,
+    kind: 'revert',
+    // `restore` is what tells this row from a revert on screen: both are the same inverse commit.
+    subject: result.paths[0] ?? null,
+    detail: { of: sha, files: result.paths.length, restore: true },
+    commitSha: result.commit_sha,
+  });
+  return Response.json({ commit_sha: result.commit_sha, paths: result.paths });
 }

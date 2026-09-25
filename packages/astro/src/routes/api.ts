@@ -49,7 +49,9 @@ import {
   entryDiff,
   entryHistory,
   resolve,
+  restore,
   restoreVersion,
+  revert,
   translatedFromView,
   versionDiff,
 } from './api/history.js';
@@ -71,17 +73,8 @@ import {
   setMemberRole,
   setPassword,
 } from './api/members.js';
-import {
-  addRedirect,
-  buildStatus,
-  changeRedirect,
-  prepublishChecks,
-  publish,
-  redirectList,
-  removeRedirect,
-  restore,
-  revert,
-} from './api/publishing.js';
+import { buildStatus, prepublishChecks, publish } from './api/publishing.js';
+import { addRedirect, changeRedirect, redirectList, removeRedirect } from './api/redirects.js';
 import {
   clearIntegration,
   connection,
