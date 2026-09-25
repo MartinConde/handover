@@ -1,8 +1,6 @@
 import type { Drift, Field, Form } from '@handover/core';
-import type { SourceProblem } from './SourceRecovery.svelte';
 
 // Six languages, the smallest set where the switcher is a select and the list overflows.
-// Plain data only, so a core or route test can copy a variant without the UI runtime.
 
 type Data = Record<string, unknown>;
 
@@ -358,12 +356,6 @@ const SIX_LANGUAGE_TEXTS: Partial<
   sourceDraft: { partial: { de: [2, 3], fr: [2, 3], it: [0, 3] } },
 };
 
-/** The effective files, form and offer, for core and route tests. */
-export function sixLanguageFiles(name: SixLanguageVariant = 'base') {
-  const { form, files, offered } = variant(name);
-  return { form, files, offered };
-}
-
 /** `show(sixLanguages('base'))` opens the editor on the variant, as `getEntry` would answer it. */
 export function sixLanguages(name: SixLanguageVariant = 'base'): { entry: SixLanguageEntry } {
   const v = variant(name);
@@ -410,25 +402,10 @@ export function sixLanguageRows(): SixLanguageRow[] {
       ...structuredClone(SIX_LANGUAGE_TEXTS[name]),
     };
   });
-  const conflict = sourceConflict();
-  return [...rows, { id: 'sourceConflict', locales: conflict.row }];
-}
-
-/** Two files naming different sources: the entry refuses to open and draws `SourceRecovery`. */
-export function sourceConflict() {
-  const files: Record<string, Data> = {
-    en: { ...head('en', SIX), ...english },
-    de: { ...head('de', SIX), ...german },
-  };
-  const problem: SourceProblem = {
-    code: 'ENTRY_SOURCE_CONFLICT',
-    marks: { en: 'en', de: 'de' },
-    files: ['en', 'de'],
-    offered: [...SIX],
-  };
-  const row = {
+  // Two files naming different sources: the entry refuses to open and draws `SourceRecovery`.
+  const conflict = {
     en: { title: english.title, path: 'src/content/listings/en/sourceConflict.yaml' },
     de: { title: german.title, path: 'src/content/listings/de/sourceConflict.yaml' },
   };
-  return { form: structuredClone(form), files: structuredClone(files), problem, row };
+  return [...rows, { id: 'sourceConflict', locales: conflict }];
 }
