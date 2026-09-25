@@ -19,6 +19,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Internal: the draft store's SQL guards and batch writes are named helpers.
 - Internal: `drafts/drafts.ts` is split into entry settings and committed-change records.
 - Internal: core builds a row's address in one place.
+- Internal: the stored media key format is one pattern, and the publish checks chunk their media
+  lookups with the shared D1 helper.
 - Internal: core's test fixture files end in `.fixture.ts`, like the other packages'.
 - `handover init` reads Wrangler JSONC and TOML with standard parsers, preserving comment
   characters inside quoted values and reporting invalid configuration before provisioning.

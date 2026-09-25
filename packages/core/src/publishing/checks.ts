@@ -13,8 +13,8 @@ import {
   type SeoDefaultsValue,
   type SeoValue,
 } from '../content/seo.js';
-import type { Db } from '../db.js';
-import { objectExists, type R2Store } from '../media/media.js';
+import { chunksOf, D1_MAX_BOUND_PARAMETERS, type Db } from '../db.js';
+import { MEDIA_KEY, objectExists, type R2Store } from '../media/media.js';
 import { media } from '../tables.js';
 import type { HiddenLong } from './cron.js';
 
@@ -433,12 +433,6 @@ function itemsIn(w: Walk, items: unknown, at: string, menu: string): void {
   }
 }
 
-// The row's id is the hash in the middle of `mediaKey`'s format.
-const STORED = /^(?:media|files)\/([0-9a-f]{64})\./;
-
-// D1 takes a hundred bound parameters a query, and the site id is one of them.
-const PER_QUERY = 90;
-
 /** The bucket is asked only about keys with no row: a HEAD apiece is a subrequest apiece. */
 async function assetResults(
   siteId: string,
@@ -448,26 +442,27 @@ async function assetResults(
   deps: { fetch?: typeof globalThis.fetch },
 ): Promise<CheckResult[]> {
   if (!assets.length) return [];
-  const ids = [...new Set(assets.flatMap((a) => STORED.exec(a.key)?.[1] ?? []))];
+  const ids = [...new Set(assets.flatMap((a) => MEDIA_KEY.exec(a.key)?.[1] ?? []))];
   const rows: { id: string; archived: number | null; state: 'active' | 'deleting' | 'deleted' }[] =
     [];
-  for (let i = 0; i < ids.length; i += PER_QUERY)
+  // The site id is one of D1's bound parameters.
+  for (const chunk of chunksOf(ids, D1_MAX_BOUND_PARAMETERS - 1))
     rows.push(
       ...(await db
         .select({ id: media.id, archived: media.archived, state: media.state })
         .from(media)
-        .where(and(eq(media.siteId, siteId), inArray(media.id, ids.slice(i, i + PER_QUERY))))),
+        .where(and(eq(media.siteId, siteId), inArray(media.id, chunk)))),
     );
   const known = new Map(rows.map((row) => [row.id, row]));
   const unknown = [...new Set(assets.map((a) => a.key))].filter(
-    (key) => !known.has(STORED.exec(key)?.[1] ?? ''),
+    (key) => !known.has(MEDIA_KEY.exec(key)?.[1] ?? ''),
   );
   const there = await Promise.all(
     unknown.map((key) => (input.store ? objectExists(input.store, key, deps) : false)),
   );
   const gone = new Set(unknown.filter((_, i) => !there[i]));
   return assets.flatMap((asset) => {
-    const row = known.get(STORED.exec(asset.key)?.[1] ?? '');
+    const row = known.get(MEDIA_KEY.exec(asset.key)?.[1] ?? '');
     const said = (check: CheckName, message: string) => [
       { check, path: asset.path, fieldPath: asset.fieldPath, severity: CHECKS[check], message },
     ];

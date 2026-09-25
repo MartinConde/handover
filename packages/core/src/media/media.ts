@@ -169,14 +169,14 @@ export async function setMediaDetails(
   return row;
 }
 
-/** The key format `mediaKey` writes. */
-const STORED = /^(?:media|files)\/[0-9a-f]{64}\.[a-z0-9]+$/;
+/** The key format `mediaKey` writes, and nothing else. */
+export const MEDIA_KEY = /^(?:media|files)\/([0-9a-f]{64})\.([a-z0-9]+)$/;
 
 export type MediaUses = Record<string, string[]>;
 
 function keysIn(node: unknown, found: Set<string>) {
   if (typeof node === 'string') {
-    if (STORED.test(node)) found.add(node);
+    if (MEDIA_KEY.test(node)) found.add(node);
   } else if (Array.isArray(node)) for (const row of node) keysIn(row, found);
   else if (node && typeof node === 'object') for (const v of Object.values(node)) keysIn(v, found);
 }
@@ -411,8 +411,6 @@ const CONTENTS = /<Contents>([\s\S]*?)<\/Contents>/g;
 const tag = (xml: string, name: string) =>
   xml.match(new RegExp(`<${name}>([\\s\\S]*?)</${name}>`))?.[1];
 
-/** The key format `mediaKey` writes, and nothing else. */
-const OURS = /^(?:media|files)\/([0-9a-f]{64})\.([a-z0-9]+)$/;
 const MIMES: Record<string, string> = Object.fromEntries(
   Object.entries(EXTENSIONS).map(([mime, ext]) => [ext, mime]),
 );
@@ -453,10 +451,10 @@ export async function reconcileMedia(
       const item = match[1] ?? '';
       const storedKey = tag(item, 'Key') ?? '';
       const staging = storedKey.match(
-        /^uploads\/[0-9a-f-]{36}\/((?:media|files)\/[0-9a-f]{64}\.[a-z]+)$/,
+        /^uploads\/[0-9a-f-]{36}\/((?:media|files)\/[0-9a-f]{64}\.[a-z0-9]+)$/,
       )?.[1];
       const key = staging ?? storedKey;
-      const [, id = '', ext = ''] = key.match(OURS) ?? [];
+      const [, id = '', ext = ''] = key.match(MEDIA_KEY) ?? [];
       if (!id) continue;
       if (staging) {
         const uploaded = Date.parse(tag(item, 'LastModified') ?? '');
