@@ -6,5 +6,5 @@
     "declaration": true,
     "rootDir": "src"
   },
-  "exclude": ["src/**/*.test.ts", "src/db.fixtures.ts"]
+  "exclude": ["src/**/*.test.ts", "src/**/*.fixtures.ts"]
 }

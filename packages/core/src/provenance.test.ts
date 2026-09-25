@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, test } from 'vitest';
+import { article, listing, localeFile } from './content.fixtures.js';
 import { parseEntry, stringifyEntry } from './entry-format.js';
 import {
   answeredPaths,
@@ -24,30 +25,6 @@ const blobSha = (text: string) =>
     .update(`blob ${Buffer.byteLength(text)}\0${text}`)
     .digest('hex');
 
-// decap-cms#6978: the German form never sends duplicate fields back; a save must keep them.
-const listing: Form = {
-  fields: [
-    { path: ['title'], label: 'Title', type: 'text', required: true },
-    { path: ['summary'], label: 'Summary', type: 'text', required: false },
-    { path: ['price'], label: 'Price', type: 'number', required: true, i18n: 'duplicate' },
-    { path: ['bedrooms'], label: 'Bedrooms', type: 'number', required: true, i18n: 'duplicate' },
-    { path: ['notes'], label: 'Notes', type: 'text', required: false, i18n: false },
-    { path: ['image'], label: 'Image', type: 'image', required: false, preset: { max: 2400 } },
-  ],
-  blocks: {},
-};
-
-// A translated save carries values, never structure: blocks are paired by `_id` with the file's.
-const article: Form = {
-  fields: [{ path: ['blocks'], label: 'Blocks', type: 'blocks', required: true, types: ['hero'] }],
-  blocks: {
-    hero: [
-      { path: ['heading'], label: 'Heading', type: 'text', required: true },
-      { path: ['image'], label: 'Image', type: 'image', required: false, preset: { max: 2400 } },
-    ],
-  },
-};
-
 // `notes` is the source locale's alone and the German file holds only translations.
 const millHouse: Form = {
   fields: [
@@ -56,8 +33,6 @@ const millHouse: Form = {
   ],
   blocks: article.blocks,
 };
-const localeFile = (locale: string) =>
-  readFileSync(join(import.meta.dirname, '../test/locales', locale, 'mill-house.yaml'), 'utf8');
 
 // DE has the shared blocks plus `compliance` marked `_locales: [de]` and an unmarked `quote`.
 const page: Form = {

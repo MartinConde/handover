@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, test } from 'vitest';
+import { article, listing, localeFile } from './content.fixtures.js';
 import {
   mergeEntry,
   offeredEntry,
@@ -40,9 +41,6 @@ for (const locale of ['en', 'de']) {
     expect(stringifyEntry('default', parseEntry('default', file))).toBe(file);
   });
 }
-
-const localeFile = (locale: string) =>
-  readFileSync(join(import.meta.dirname, '../test/locales', locale, 'mill-house.yaml'), 'utf8');
 
 for (const locale of ['en', 'de']) {
   test(`the ${locale} locale fixture is one the serialiser could have written`, () => {
@@ -405,19 +403,6 @@ test('a save keeps the _version the entry already has', () => {
   });
 });
 
-// decap-cms#6978: the German form never sends duplicate fields back; a save must keep them.
-const listing: Form = {
-  fields: [
-    { path: ['title'], label: 'Title', type: 'text', required: true },
-    { path: ['summary'], label: 'Summary', type: 'text', required: false },
-    { path: ['price'], label: 'Price', type: 'number', required: true, i18n: 'duplicate' },
-    { path: ['bedrooms'], label: 'Bedrooms', type: 'number', required: true, i18n: 'duplicate' },
-    { path: ['notes'], label: 'Notes', type: 'text', required: false, i18n: false },
-    { path: ['image'], label: 'Image', type: 'image', required: false, preset: { max: 2400 } },
-  ],
-  blocks: {},
-};
-
 // Which video an embed points at is every language's, so a translation cannot change it.
 test('a translated save of an embed writes the title and leaves the video alone', () => {
   const form: Form = {
@@ -505,17 +490,6 @@ test('a translated field its form left empty goes, rather than coming back', () 
     price: 425000,
   });
 });
-
-// A translated save carries values, never structure: blocks are paired by `_id` with the file's.
-const article: Form = {
-  fields: [{ path: ['blocks'], label: 'Blocks', type: 'blocks', required: true, types: ['hero'] }],
-  blocks: {
-    hero: [
-      { path: ['heading'], label: 'Heading', type: 'text', required: true },
-      { path: ['image'], label: 'Image', type: 'image', required: false, preset: { max: 2400 } },
-    ],
-  },
-};
 
 test('a duplicate value inside a block survives a translated save', () => {
   const de = {
