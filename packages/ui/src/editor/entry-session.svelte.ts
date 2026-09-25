@@ -611,6 +611,13 @@ export function createEntrySession({
     } while (locales().some(dirty));
     return true;
   };
+  const retire = (reloading?: NonNullable<typeof persistedAction>) => {
+    mutationOpen = false;
+    freezeHistory();
+    epoch += 1;
+    if (reloading) persistedAction = reloading;
+    for (const saves of coordinators.values()) saves.close();
+  };
 
   for (const [locale, found] of Object.entries(problems)) {
     const snapshot = snapshots[locale];
@@ -1482,11 +1489,7 @@ export function createEntrySession({
             // The commit may have reached the server. Nothing from this stale session may save
             // again until the parent has established the authoritative published/draft state.
             keepClosed = true;
-            mutationOpen = false;
-            freezeHistory();
-            epoch += 1;
-            persistedAction = { ...running, phase: 'reloading' };
-            for (const saves of coordinators.values()) saves.close();
+            retire({ ...running, phase: 'reloading' });
             try {
               await reload('uncertain');
             } catch {
@@ -1497,11 +1500,7 @@ export function createEntrySession({
           if (!published) return { ok: false, reason: 'refused' };
 
           keepClosed = true;
-          mutationOpen = false;
-          freezeHistory();
-          epoch += 1;
-          persistedAction = { ...running, phase: 'reloading' };
-          for (const saves of coordinators.values()) saves.close();
+          retire({ ...running, phase: 'reloading' });
           try {
             await reload('published');
           } catch {
@@ -1548,11 +1547,7 @@ export function createEntrySession({
             changed = await request();
           } catch {
             keepClosed = true;
-            mutationOpen = false;
-            freezeHistory();
-            epoch += 1;
-            persistedAction = { ...running, phase: 'reloading' };
-            for (const saves of coordinators.values()) saves.close();
+            retire({ ...running, phase: 'reloading' });
             try {
               await reload('uncertain');
             } catch {
@@ -1563,11 +1558,7 @@ export function createEntrySession({
           if (!changed) return { ok: false, reason: 'refused' };
 
           keepClosed = true;
-          mutationOpen = false;
-          freezeHistory();
-          epoch += 1;
-          persistedAction = { ...running, phase: 'reloading' };
-          for (const saves of coordinators.values()) saves.close();
+          retire({ ...running, phase: 'reloading' });
           try {
             await reload('changed');
           } catch {
@@ -1687,11 +1678,7 @@ export function createEntrySession({
             // The request may have reached the server. Preserve the local snapshots for this
             // component's remaining lifetime, but never let them save over an unknown result.
             keepClosed = true;
-            mutationOpen = false;
-            freezeHistory();
-            epoch += 1;
-            persistedAction = { ...running, phase: 'reloading' };
-            for (const saves of coordinators.values()) saves.close();
+            retire({ ...running, phase: 'reloading' });
             try {
               await reload('uncertain');
             } catch {
@@ -1705,11 +1692,7 @@ export function createEntrySession({
           // A confirmed restore invalidates this session and any render made from its snapshots.
           // The replacement session is created only after the parent has re-read every locale.
           keepClosed = true;
-          mutationOpen = false;
-          freezeHistory();
-          epoch += 1;
-          persistedAction = { ...running, phase: 'reloading' };
-          for (const saves of coordinators.values()) saves.close();
+          retire({ ...running, phase: 'reloading' });
           try {
             await reload('restored');
           } catch {
@@ -1725,17 +1708,11 @@ export function createEntrySession({
     },
     /** Keep the gate closed until the parent replaces this session with one fresh entry read. */
     async afterReconciliation(): Promise<void> {
-      mutationOpen = false;
-      freezeHistory();
-      epoch += 1;
-      for (const saves of coordinators.values()) saves.close();
+      retire();
       await onreconciled?.();
     },
     closeSaveGate(): void {
-      mutationOpen = false;
-      freezeHistory();
-      epoch += 1;
-      for (const saves of coordinators.values()) saves.close();
+      retire();
     },
   };
 }
