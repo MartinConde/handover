@@ -30,6 +30,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   duplicates.
 - Internal: redundant core tests in auth, git, media, content, publish and entry-format are
   removed or folded into tables.
+- Internal: the admin API body reader has one size limit, and the route wrapper drops its
+  unreachable body-size branch.
 - `@handover/core`: `setEntryStatus` no longer takes a `deps` argument, and `claimResource` no
   longer takes `windowMs`; the window is always one hour.
 - `@handover/core`: `clearPublished` now requires the deployment's git client as its fourth

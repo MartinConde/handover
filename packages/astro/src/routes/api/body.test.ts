@@ -1,47 +1,17 @@
 import { expect, test } from 'vitest';
 import {
   BodyStructureError,
-  BodyTooLargeError,
   bodyErrorResponse,
   MAX_JSON_BYTES,
   readBodyText,
   readJson,
 } from './body.js';
 
-test('bounded JSON refuses a declared oversized body before reading it', async () => {
-  const request = new Request('https://x/admin/api/drafts/x/y', {
-    method: 'PUT',
-    headers: { 'content-length': '9' },
-    body: '{}',
-  });
-  await expect(readJson(request, 8)).rejects.toThrow(BodyTooLargeError);
-});
-
 test('bounded JSON refuses structures deeper than downstream schema walkers accept', async () => {
   const nested = `${'{"x":'.repeat(65)}null${'}'.repeat(65)}`;
   await expect(
     readJson(new Request('https://x/admin/api/drafts/x/y', { method: 'PUT', body: nested })),
   ).rejects.toThrow(BodyStructureError);
-});
-
-test('bounded JSON cancels a chunked body as soon as it crosses the cap', async () => {
-  let cancelled = false;
-  const body = new ReadableStream<Uint8Array>({
-    start(controller) {
-      controller.enqueue(new Uint8Array(5));
-      controller.enqueue(new Uint8Array(5));
-    },
-    cancel() {
-      cancelled = true;
-    },
-  });
-  const request = new Request('https://x/admin/api/drafts/x/y', {
-    method: 'PUT',
-    body,
-    duplex: 'half',
-  } as RequestInit & { duplex: 'half' });
-  await expect(readJson(request, 8)).rejects.toThrow(BodyTooLargeError);
-  expect(cancelled).toBe(true);
 });
 
 test.each([undefined, 'text/plain', 'application/octet-stream'])(
@@ -68,7 +38,8 @@ test('oversized chunked API bodies are rejected without waiting for the unread r
     headers: { 'content-type': 'application/json' },
     body: new ReadableStream<Uint8Array>({
       start(controller) {
-        controller.enqueue(new Uint8Array(MAX_JSON_BYTES + 1));
+        controller.enqueue(new Uint8Array(MAX_JSON_BYTES / 2 + 1));
+        controller.enqueue(new Uint8Array(MAX_JSON_BYTES / 2 + 1));
       },
       cancel() {
         cancelled = true;

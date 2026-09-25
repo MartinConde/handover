@@ -23,7 +23,7 @@ import {
 import type { APIRoute } from 'astro';
 import { createAuth } from '../auth.js';
 import { formSchema } from '../index.js';
-import { BodyTooLargeError, bodyErrorResponse, readJson } from './api/body.js';
+import { bodyErrorResponse, readJson } from './api/body.js';
 import { tabOf } from './api/content.js';
 import { dashboard, globalsList, listEntries, pendingList, pickList } from './api/dashboard.js';
 import { autosave, hold, lockState } from './api/entries/editing.js';
@@ -320,8 +320,6 @@ async function answering(
     // A refused upload is the chooser's own file, so it is answered to them by the rule it broke.
     if (err instanceof UploadRefusedError)
       return Response.json({ error: err.message }, { status: 422 });
-    if (err instanceof BodyTooLargeError)
-      return Response.json({ code: 'BODY_TOO_LARGE', error: err.message }, { status: 413 });
     if (err instanceof ResourceLimitError)
       return Response.json({ code: 'RESOURCE_LIMIT', error: err.message }, { status: 429 });
     throw err;

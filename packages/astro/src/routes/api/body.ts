@@ -12,26 +12,25 @@ type ParsedBody = { text: string; json: unknown };
 const parsedBodies = new WeakMap<Request, Promise<ParsedBody>>();
 
 export async function readBodyText(request: Request): Promise<string> {
-  return (await boundedBody(request, MAX_JSON_BYTES)).text;
+  return (await boundedBody(request)).text;
 }
 
-export async function readJson(request: Request, limit = MAX_JSON_BYTES): Promise<unknown> {
-  return (await boundedBody(request, limit)).json;
+export async function readJson(request: Request): Promise<unknown> {
+  return (await boundedBody(request)).json;
 }
 
-function boundedBody(request: Request, limit: number): Promise<ParsedBody> {
-  if (limit !== MAX_JSON_BYTES) return parseBody(request, limit);
+function boundedBody(request: Request): Promise<ParsedBody> {
   const cached = parsedBodies.get(request);
   if (cached) return cached;
-  const parsed = parseBody(request, limit);
+  const parsed = parseBody(request);
   parsedBodies.set(request, parsed);
   return parsed;
 }
 
-async function parseBody(request: Request, limit: number): Promise<ParsedBody> {
+async function parseBody(request: Request): Promise<ParsedBody> {
   const declared = Number(request.headers.get('content-length'));
-  if (Number.isFinite(declared) && declared > limit)
-    throw new BodyTooLargeError(`Request body exceeds ${limit} bytes`);
+  if (Number.isFinite(declared) && declared > MAX_JSON_BYTES)
+    throw new BodyTooLargeError(`Request body exceeds ${MAX_JSON_BYTES} bytes`);
   const reader = request.body?.getReader();
   if (!reader) return { text: '', json: undefined };
   const chunks: Uint8Array[] = [];
@@ -41,7 +40,8 @@ async function parseBody(request: Request, limit: number): Promise<ParsedBody> {
       const { value, done } = await reader.read();
       if (done) break;
       size += value.byteLength;
-      if (size > limit) throw new BodyTooLargeError(`Request body exceeds ${limit} bytes`);
+      if (size > MAX_JSON_BYTES)
+        throw new BodyTooLargeError(`Request body exceeds ${MAX_JSON_BYTES} bytes`);
       chunks.push(value);
     }
   } finally {
