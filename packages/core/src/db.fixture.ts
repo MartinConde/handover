@@ -199,6 +199,8 @@ export const page = (title: string, first: string, second: string) =>
     `    heading: "${second}"`,
     '',
   ].join('\n');
+export const afterVersion = (contents: string, lines: string) =>
+  contents.replace('_version: 1\n', `_version: 1\n${lines}`);
 export const PAGE_FORM: Form = {
   fields: [
     { path: ['title'], label: 'Title', type: 'text', required: true },

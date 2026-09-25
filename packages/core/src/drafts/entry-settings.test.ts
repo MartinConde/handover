@@ -5,12 +5,14 @@ import { driftReport } from '../content/locale-sync.js';
 import type { Form } from '../content/schema.js';
 import {
   ADDRESSED,
+  afterVersion,
   bilingual,
   draftDb,
   FILE,
   fakeRepo,
   HIDE_DE,
   HIDE_EN,
+  LISTING_DE,
   migrateTestD1,
   newTestD1,
   only,
@@ -46,7 +48,7 @@ test('turning a language off stamps the version on a file that has none', async 
   await setEntryLocales('default', db, repo, [PAGE_EN], ['en'], ['en', 'de']);
 
   expect((await only(db))?.contents).toBe(
-    page('Home', 'a', 'b').replace('_version: 1\n', '_version: 1\n_locales:\n  - "en"\n'),
+    afterVersion(page('Home', 'a', 'b'), '_locales:\n  - "en"\n'),
   );
 });
 
@@ -60,9 +62,9 @@ test('turning a language off marks every file the entry has with the ones it kee
   const rows = (await db.select().from(drafts)).toSorted((a, b) => a.path.localeCompare(b.path));
   expect(rows.map((r) => r.path)).toEqual([PAGE_DE, PAGE_EN]);
   expect(rows[1]?.contents).toBe(
-    page('Home', 'Move to the coast', 'Ready to move?').replace(
-      '_version: 1\n',
-      '_version: 1\n_locales:\n  - "en"\n  - "de"\n',
+    afterVersion(
+      page('Home', 'Move to the coast', 'Ready to move?'),
+      '_locales:\n  - "en"\n  - "de"\n',
     ),
   );
   expect(rows[0]?.updatedAt).toBe(rows[1]?.updatedAt);
@@ -87,9 +89,9 @@ test('an address is written into that language alone, in schema order', async ()
   const rows = await db.select().from(drafts);
   expect(rows.map((r) => r.path)).toEqual([PAGE_DE]);
   expect(rows[0]?.contents).toBe(
-    page('Startseite', 'Zieh an die Küste', 'Bereit für den Umzug?').replace(
-      '_version: 1\n',
-      '_version: 1\nslug: "startseite"\n',
+    afterVersion(
+      page('Startseite', 'Zieh an die Küste', 'Bereit für den Umzug?'),
+      'slug: "startseite"\n',
     ),
   );
 });
@@ -110,12 +112,11 @@ test('an address stamps the version on a file that has none', async () => {
   await setEntryAddress('default', db, repo, ADDRESSED, PAGE_DE, 'startseite', undefined);
 
   expect((await only(db))?.contents).toBe(
-    page('Startseite', 'a', 'b').replace('_version: 1\n', '_version: 1\nslug: "startseite"\n'),
+    afterVersion(page('Startseite', 'a', 'b'), 'slug: "startseite"\n'),
   );
 });
 
-const hidden = (contents: string) =>
-  contents.replace('_version: 1\n', '_version: 1\n_status: "hidden"\n');
+const hidden = (contents: string) => afterVersion(contents, '_status: "hidden"\n');
 
 // `_status` is the entry's, not one language's, so every file carries it.
 test('hiding an entry writes _status into every language it has', async () => {
@@ -231,21 +232,20 @@ const VERSION_FORM: Form = {
   ],
   blocks: {},
 };
-const PATH_DE = 'src/content/listings/de/mill-house.yaml';
 const FILE_DE = '_version: 1\n_status: "hidden"\ntitle: "Das Mühlenhaus"\nrooms: 3\n';
 const OLD_EN = { _version: 1, title: 'The Mill House', price: '£800 per week', rooms: 2 };
 const OLD_DE = { _version: 1, title: 'Das Muehlenhaus', rooms: 2 };
 
 test('restoring a version writes its bytes as the draft of every language it has', async () => {
   const db = await fresh();
-  const repo = fakeRepo({ [PATH]: FILE, [PATH_DE]: FILE_DE });
+  const repo = fakeRepo({ [PATH]: FILE, [LISTING_DE]: FILE_DE });
 
   const { paths } = await restoreDraft('default', db, repo, VERSION_FORM, [
     { path: PATH, entry: OLD_EN },
-    { path: PATH_DE, entry: OLD_DE },
+    { path: LISTING_DE, entry: OLD_DE },
   ]);
 
-  expect(paths.toSorted()).toEqual([PATH_DE, PATH].toSorted());
+  expect(paths.toSorted()).toEqual([LISTING_DE, PATH].toSorted());
   const row = (await db.select().from(drafts)).find((r) => r.path === PATH);
   expect(row?.contents).toBe(
     '_version: 1\n_status: "hidden"\ntitle: "The Mill House"\nprice: "£800 per week"\nrooms: 2\n',
@@ -254,7 +254,7 @@ test('restoring a version writes its bytes as the draft of every language it has
 
 test('restoring a version rejects duplicate identities before writing any locale', async () => {
   const db = await fresh();
-  const repo = fakeRepo({ [PATH]: FILE, [PATH_DE]: FILE_DE });
+  const repo = fakeRepo({ [PATH]: FILE, [LISTING_DE]: FILE_DE });
 
   await expect(
     restoreDraft('default', db, repo, VERSION_FORM, [
@@ -268,7 +268,7 @@ test('restoring a version rejects duplicate identities before writing any locale
           ],
         },
       },
-      { path: PATH_DE, entry: OLD_DE },
+      { path: LISTING_DE, entry: OLD_DE },
     ]),
   ).rejects.toThrow(
     'opaque[1]._id: duplicate row identity "same0001"; already used at opaque[0]._id',
@@ -278,7 +278,7 @@ test('restoring a version rejects duplicate identities before writing any locale
 
 test('a restore stamps who restored on every language it writes', async () => {
   const db = await fresh();
-  const repo = fakeRepo({ [PATH]: FILE, [PATH_DE]: FILE_DE });
+  const repo = fakeRepo({ [PATH]: FILE, [LISTING_DE]: FILE_DE });
 
   await restoreDraft(
     'default',
@@ -287,7 +287,7 @@ test('a restore stamps who restored on every language it writes', async () => {
     VERSION_FORM,
     [
       { path: PATH, entry: OLD_EN },
-      { path: PATH_DE, entry: OLD_DE },
+      { path: LISTING_DE, entry: OLD_DE },
     ],
     'u2',
   );
@@ -325,10 +325,7 @@ test('publishing a restored version is an ordinary forward commit', async () => 
 // The restore makes the drift the editor is asked about before publish; nothing here refuses.
 test('restoring one language across a structural change leaves the languages in drift', async () => {
   const db = await fresh();
-  const repo = fakeRepo({
-    [PAGE_EN]: page('Home', 'Move to the coast', 'Ready to move?'),
-    [PAGE_DE]: page('Startseite', 'Zieh an die Küste', 'Bereit für den Umzug?'),
-  });
+  const repo = bilingual();
   const oneBlock = {
     _version: 1,
     title: 'Home',
@@ -354,7 +351,7 @@ test('a language whose file has gone since is not brought back', async () => {
 
   const { paths } = await restoreDraft('default', db, repo, VERSION_FORM, [
     { path: PATH, entry: OLD_EN },
-    { path: PATH_DE, entry: OLD_DE },
+    { path: LISTING_DE, entry: OLD_DE },
   ]);
 
   expect(paths).toEqual([PATH]);

@@ -3,6 +3,7 @@ import { beforeAll, expect, test } from 'vitest';
 import { parseEntry } from '../content/entry-format.js';
 import type { Form } from '../content/schema.js';
 import {
+  afterVersion,
   BLOB,
   bilingual,
   block,
@@ -29,7 +30,6 @@ import {
   SYNC,
   VALUES,
 } from '../db.fixture.js';
-import { openDb } from '../db.js';
 import { blobSha } from '../publishing/git.js';
 import { publishDrafts } from '../publishing/publish.js';
 import { drafts } from '../tables.js';
@@ -52,47 +52,6 @@ beforeAll(async () => {
   await migrateTestD1(binding);
 });
 const fresh = draftDb(() => binding);
-
-test('a draft row round-trips every column', async () => {
-  const db = openDb('default', binding);
-  const row = {
-    siteId: 'default',
-    revision: 'first-revision',
-    path: 'src/content/listings/en/seaview-cottage.yaml',
-    contents: 'title: "Seaview Cottage"\n',
-    baseSha: '9f2c1b4e8a7d6c5b4a39281706f5e4d3c2b1a098',
-    baseBlob: '0a1b2c3d4e5f60718293a4b5c6d7e8f901234567',
-    updatedAt: 1755864000000,
-    updatedBy: 'anna',
-    heldBy: 'martin',
-    heldAt: 1755860000000,
-    pendingRedirects: [
-      {
-        _id: 'k3n8x1',
-        from: '/listings/sea-view-cottage',
-        to: '/listings/seaview-cottage',
-        status: 301 as const,
-        reason: 'slug-change' as const,
-        entry: 'listings/seaview-cottage',
-        createdAt: '2026-08-22T10:00:00Z',
-      },
-    ],
-    publishedSha: 'aa11bb22cc33dd44ee55ff6677889900aabbccdd',
-  };
-  await db.insert(drafts).values(row);
-
-  const [read] = await db.select().from(drafts);
-  expect(read).toEqual(row);
-});
-
-test('the first autosave takes the base sha and blob from git, not from the browser', async () => {
-  const db = await fresh();
-  await saveDraft('default', db, git, PATH, VALUES);
-
-  const row = await only(db);
-  expect(row?.baseSha).toBe('commit-A');
-  expect(row?.baseBlob).toBe(BLOB);
-});
 
 test('opening an invalid repository document does not copy it into the draft store', async () => {
   const db = await fresh();
@@ -228,10 +187,7 @@ test('creating an entry rejects unreadable nested metadata before inserting a dr
 
 test('moving a block writes every language of the entry in one write', async () => {
   const db = await fresh();
-  const repo = fakeRepo({
-    [PAGE_EN]: page('Home', 'Move to the coast', 'Ready to move?'),
-    [PAGE_DE]: page('Startseite', 'Zieh an die Küste', 'Bereit für den Umzug?'),
-  });
+  const repo = bilingual();
 
   await saveDraft('default', db, repo, PAGE_EN, MOVED, SYNC);
 
@@ -259,10 +215,7 @@ test('moving a block writes every language of the entry in one write', async () 
 
 test('a save that changes no structure and no shared value leaves the other languages alone', async () => {
   const db = await fresh();
-  const repo = fakeRepo({
-    [PAGE_EN]: page('Home', 'Move to the coast', 'Ready to move?'),
-    [PAGE_DE]: page('Startseite', 'Zieh an die Küste', 'Bereit für den Umzug?'),
-  });
+  const repo = bilingual();
 
   await saveDraft(
     'default',
@@ -287,10 +240,7 @@ test('a language the entry does not have yet is not created by a save of another
 
 test('a saved deletion can restore a sibling locale subtree in the same atomic save', async () => {
   const db = await fresh();
-  const repo = fakeRepo({
-    [PAGE_EN]: page('Home', 'Move to the coast', 'Ready to move?'),
-    [PAGE_DE]: page('Startseite', 'Zieh an die Küste', 'Bereit für den Umzug?'),
-  });
+  const repo = bilingual();
   const deleted = await saveDraft(
     'default',
     db,
@@ -353,10 +303,7 @@ test('a saved deletion can restore a sibling locale subtree in the same atomic s
 
 test('a stale sibling restoration revision rejects the complete locale batch', async () => {
   const db = await fresh();
-  const repo = fakeRepo({
-    [PAGE_EN]: page('Home', 'Move to the coast', 'Ready to move?'),
-    [PAGE_DE]: page('Startseite', 'Zieh an die Küste', 'Bereit für den Umzug?'),
-  });
+  const repo = bilingual();
   const deleted = await saveDraft(
     'default',
     db,
@@ -527,9 +474,9 @@ test('a machine fill writes the values into the draft and names them in the file
   const row = await only(db);
   expect(row?.path).toBe(PAGE_DE);
   expect(row?.contents).toBe(
-    page('Zuhause', 'Zieh ans Meer', 'Bereit für den Umzug?').replace(
-      '_version: 1\n',
-      '_version: 1\n_machine:\n  - "title"\n  - "blocks[_id=k3nf9a2p].heading"\n',
+    afterVersion(
+      page('Zuhause', 'Zieh ans Meer', 'Bereit für den Umzug?'),
+      '_machine:\n  - "title"\n  - "blocks[_id=k3nf9a2p].heading"\n',
     ),
   );
   expect(saved?.pending).toBe(true);

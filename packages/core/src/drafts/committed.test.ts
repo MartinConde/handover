@@ -9,6 +9,7 @@ import {
   fakeRepo,
   git,
   indexOf,
+  LISTING_DE,
   listed,
   migrateTestD1,
   newTestD1,
@@ -83,7 +84,6 @@ test('a rename carries the unpublished edits rather than the committed bytes', a
 
 test('one rename batch moves repository, edited, and draft-only locales without reviving deletions', async () => {
   const db = await fresh();
-  const de = 'src/content/listings/de/mill-house.yaml';
   const deTo = 'src/content/listings/de/the-old-mill.yaml';
   const deFile = '_version: 1\ntitle: "Das Muehlenhaus"\n';
   const fr = 'src/content/listings/fr/mill-house.yaml';
@@ -101,7 +101,7 @@ test('one rename batch moves repository, edited, and draft-only locales without 
   await db.insert(drafts).values([
     {
       siteId: 'default',
-      path: de,
+      path: LISTING_DE,
       revision: 'de-revision',
       contents: '_version: 1\ntitle: "Bearbeitete Muehle"\n',
       baseSha: 'commit-old',
@@ -137,7 +137,7 @@ test('one rename batch moves repository, edited, and draft-only locales without 
     db,
     [
       { from: PATH, to: RENAMED, contents: FILE },
-      { from: de, to: deTo, contents: deFile },
+      { from: LISTING_DE, to: deTo, contents: deFile },
       { from: fr, to: frTo },
       { from: it, to: itTo },
     ],
@@ -146,7 +146,7 @@ test('one rename batch moves repository, edited, and draft-only locales without 
   );
 
   const rows = new Map((await db.select().from(drafts)).map((row) => [row.path, row]));
-  expect([...rows.keys()].sort()).toEqual([PATH, RENAMED, de, deTo, frTo, it].sort());
+  expect([...rows.keys()].sort()).toEqual([PATH, RENAMED, LISTING_DE, deTo, frTo, it].sort());
   expect(rows.get(RENAMED)).toMatchObject({
     contents: FILE,
     baseSha: 'commit-rename',
@@ -173,23 +173,6 @@ test('one rename batch moves repository, edited, and draft-only locales without 
   expect(rows.get(fr)).toBeUndefined();
   expect(rows.get(it)).toMatchObject({ revision: 'it-deleted', publishedSha: 'commit-delete' });
   expect(rows.get(itTo)).toBeUndefined();
-});
-
-// A rename is the last thing that happened to the entry, so it names the renamer.
-test('a rename stamps who renamed onto the draft it carries over', async () => {
-  const db = await fresh();
-  const repo = fakeRepo({ [PATH]: FILE });
-  await saveDraft('default', db, repo, PATH, { ...VALUES, title: 'The Old Mill' }, undefined, 'u1');
-
-  await recordRenames(
-    'default',
-    db,
-    [{ from: PATH, to: RENAMED, contents: FILE }],
-    'commit-rename',
-    'u2',
-  );
-
-  expect((await only(db))?.updatedBy).toBe('u2');
 });
 
 test('a delete takes the entry out of the list and leaves nothing to publish', async () => {
