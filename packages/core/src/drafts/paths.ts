@@ -1,9 +1,13 @@
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { batchAll, type Db } from '../db.js';
 import { operations, pathReservations } from '../tables.js';
-import { noLiveRow, type PathReservation } from './drafts.js';
+import { noLiveRow } from './drafts.js';
 
-export type { PathReservation } from './drafts.js';
+export interface PathReservation {
+  operationId: string;
+  paths: string[];
+  token: string;
+}
 
 const ownedReservation = async (
   siteId: string,

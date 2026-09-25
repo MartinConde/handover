@@ -55,7 +55,7 @@ test('rename reservations exclude creations in every destination locale and rele
 });
 
 test('a rename retry rejoins its operation claim and an old token cannot cross a new claim', async () => {
-  const { recordRenames } = await import('./drafts.js');
+  const { recordRenames } = await import('./committed.js');
   const { releaseOperationPaths, reservePaths, releasePaths } = await import('./paths.js');
   const db = await fresh();
   const destination = 'src/content/listings/en/recovered.yaml';

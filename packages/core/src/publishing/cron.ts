@@ -3,7 +3,7 @@ import { entryParts } from '../content/entries.js';
 import { isObject } from '../content/entry-format.js';
 import { newId } from '../content/reserved.js';
 import type { Db } from '../db.js';
-import { sweepOrphans } from '../drafts/drafts.js';
+import { sweepOrphans } from '../drafts/committed.js';
 import { type R2Store, reconcileMedia } from '../media/media.js';
 import { activity, cronState } from '../tables.js';
 import { expireActivity, logActivity } from './activity.js';

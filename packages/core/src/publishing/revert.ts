@@ -3,7 +3,8 @@ import { entryKey } from '../content/entries.js';
 import { parseEntry, stringifyEntry, writtenEntry } from '../content/entry-format.js';
 import { REDIRECTS, type RedirectRule } from '../content/redirects.js';
 import { chunksOf, D1_MAX_BOUND_PARAMETERS, type Db, type Draft } from '../db.js';
-import { keptSource, loadDraft, nextRevision } from '../drafts/drafts.js';
+import { loadDraft, nextRevision } from '../drafts/drafts.js';
+import { keptSource } from '../drafts/entry-settings.js';
 import { drafts, locks } from '../tables.js';
 import { blobSha, type GitClient, type PublishFile } from './git.js';
 import {

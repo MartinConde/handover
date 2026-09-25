@@ -42,9 +42,8 @@ import {
   pendingDrafts,
   saveDraft,
   saveTranslated,
-  setEntryAddress,
-  setEntryStatus,
 } from '../drafts/drafts.js';
+import { setEntryAddress, setEntryStatus } from '../drafts/entry-settings.js';
 import * as tables from '../tables.js';
 import { drafts } from '../tables.js';
 import { blobSha, RefMovedError } from './git.js';

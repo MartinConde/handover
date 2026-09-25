@@ -5,7 +5,7 @@ import { parse } from 'yaml';
 import { type ContentIndex, collectionEntries, indexFrom } from './content/entries.js';
 import type { Form } from './content/schema.js';
 import { openDb } from './db.js';
-import { overlayRows } from './drafts/drafts.js';
+import { overlayRows } from './drafts/committed.js';
 import { blobSha, type GitClient, type PublishFile } from './publishing/git.js';
 import * as tables from './tables.js';
 import { drafts } from './tables.js';

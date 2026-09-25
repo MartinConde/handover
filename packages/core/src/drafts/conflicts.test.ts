@@ -17,8 +17,9 @@ import {
 } from '../db.fixtures.js';
 import { blobSha } from '../publishing/git.js';
 import { drafts } from '../tables.js';
+import { draftFiles } from './committed.js';
 import { entryConflict, resolveConflict, resolveDrift } from './conflicts.js';
-import { draftFiles, loadDraft, pendingDrafts, saveDraft } from './drafts.js';
+import { loadDraft, pendingDrafts, saveDraft } from './drafts.js';
 
 const mf = newTestD1();
 let binding: Awaited<ReturnType<Miniflare['getD1Database']>>;

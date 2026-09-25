@@ -152,6 +152,14 @@ export {
 } from './content/ui-locale.js';
 export type { Db, Draft } from './db.js';
 export { openDb } from './db.js';
+export {
+  draftFiles,
+  overlayRows,
+  recordDelete,
+  recordOffer,
+  recordRenames,
+  recordSource,
+} from './drafts/committed.js';
 export type { EntryConflict } from './drafts/conflicts.js';
 export { entryConflict, resolveConflict, resolveDrift } from './drafts/conflicts.js';
 export {
@@ -160,27 +168,23 @@ export {
   DraftRevisionError,
   discardDraft,
   draftEditors,
-  draftFiles,
   heldDrafts,
   holdEntry,
   isDraftRace,
   isMediaRace,
   loadDraft,
   openDraft,
-  overlayRows,
   pendingDrafts,
-  recordDelete,
-  recordOffer,
-  recordRenames,
-  recordSource,
-  restoreDraft,
   rewriteDrafts,
   saveDraft,
   saveTranslated,
+} from './drafts/drafts.js';
+export {
+  restoreDraft,
   setEntryAddress,
   setEntryLocales,
   setEntryStatus,
-} from './drafts/drafts.js';
+} from './drafts/entry-settings.js';
 export type { Lock } from './drafts/locks.js';
 export {
   claimLock,
