@@ -1,4 +1,5 @@
-import { UploadRefusedError } from './media.js';
+/** The message is shown to the person who chose the file. */
+export class UploadRefusedError extends Error {}
 
 /** Read dimensions from the encoded container, never from the browser's declaration. */
 export function imageDimensions(

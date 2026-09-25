@@ -1,6 +1,16 @@
-import { DEFAULT_MAX, type Preset } from './media.js';
 import type { RichtextTier } from './richtext.js';
 import { type Labels, labelIn, labelsOf, type UiLocale } from './ui-locale.js';
+
+export interface Preset {
+  /** `'16:9'`: what the field shows, whatever shape the picture is. */
+  ratio?: string;
+  /** Longest side an upload is downscaled to in the browser. */
+  max?: number;
+  /** Narrowest crop width the picker will take. */
+  min?: number;
+}
+
+export const DEFAULT_MAX = 2400;
 
 // The subset of `z.toJSONSchema()` output the walker reads; anything else is "unsupported".
 export interface JsonSchema {

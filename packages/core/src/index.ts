@@ -175,12 +175,11 @@ export {
 } from './locks.js';
 export type { EmailSender, Mailer } from './mailer.js';
 export { cloudflareMailer, resendMailer, senderAddress } from './mailer.js';
-export type { MediaQuery, MediaRow, MediaUses, Preset, R2Store, Upload } from './media.js';
+export type { MediaQuery, MediaRow, MediaUses, R2Store, Upload } from './media.js';
 export {
   checkStore,
   confirmUpload,
   cropWidth,
-  DEFAULT_MAX,
   deleteMedia,
   findMedia,
   MAX_UPLOAD_BYTES,
@@ -198,7 +197,6 @@ export {
   SOCIAL_CARD,
   setMediaDetails,
   tooSmall,
-  UploadRefusedError,
 } from './media.js';
 export type { MigrationStep } from './migrate.js';
 export { MIGRATIONS, migrateDocument, versionOf } from './migrate.js';
@@ -289,8 +287,8 @@ export {
   richtextLinks,
   unsafeLinkScheme,
 } from './richtext.js';
-export type { Field, Form, JsonSchema, Translation } from './schema.js';
-export { fieldsFrom, formIn, formOf, humanise, imagePresets } from './schema.js';
+export type { Field, Form, JsonSchema, Preset, Translation } from './schema.js';
+export { DEFAULT_MAX, fieldsFrom, formIn, formOf, humanise, imagePresets } from './schema.js';
 export type { ResolvedSeo, SeoDefaultsValue, SeoImage, SeoValue } from './seo.js';
 export {
   resolveSeo,
@@ -345,6 +343,7 @@ export {
 } from './translate.js';
 export type { Labels, UiLocale } from './ui-locale.js';
 export { DEFAULT_UI_LOCALE, isUiLocale, labelIn, labelsOf, UI_LOCALES } from './ui-locale.js';
+export { UploadRefusedError } from './upload-bytes.js';
 export {
   claimUploadIntent,
   finishUploadIntent,

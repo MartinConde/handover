@@ -22,9 +22,9 @@ import {
   setMediaDetails,
   tooSmall,
   type Upload,
-  UploadRefusedError,
 } from './media.js';
 import * as tables from './tables.js';
+import { UploadRefusedError } from './upload-bytes.js';
 
 const store: R2Store = {
   accountId: '2e4dff78a4af5223c7940d6b41d7c9a7',

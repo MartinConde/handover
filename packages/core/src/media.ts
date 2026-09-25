@@ -4,8 +4,9 @@ import type { Db } from './db.js';
 import type { ContentFile } from './entries.js';
 import { entryKey } from './entries.js';
 import { parseEntry } from './entry-format.js';
+import type { Preset } from './schema.js';
 import { drafts, media } from './tables.js';
-import { imageDimensions } from './upload-bytes.js';
+import { imageDimensions, UploadRefusedError } from './upload-bytes.js';
 
 export interface R2Store {
   /** The S3 endpoint is named after it. */
@@ -40,17 +41,6 @@ export type MediaRow = typeof media.$inferSelect;
 
 /** The client downscales a picture long before this cap. */
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
-
-export interface Preset {
-  /** `'16:9'`: what the field shows, whatever shape the picture is. */
-  ratio?: string;
-  /** Longest side an upload is downscaled to in the browser. */
-  max?: number;
-  /** Narrowest crop width the picker will take. */
-  min?: number;
-}
-
-export const DEFAULT_MAX = 2400;
 
 /** 1.91:1 at 1200 is the 1200 × 630 every social card asks for, so cap and floor coincide. */
 export const SOCIAL_CARD: Preset = { ratio: '1.91:1', max: 1200, min: 1200 };
@@ -89,9 +79,6 @@ const EXTENSIONS: Record<string, string> = {
 const SHA256 = /^[0-9a-f]{64}$/;
 /** Long enough for a slow phone, short enough that a leaked url is worth nothing. */
 const TTL = 300;
-
-/** The message is shown to the person who chose the file. */
-export class UploadRefusedError extends Error {}
 
 /** A stale picker must not bring back bytes whose deletion already owns the key. */
 export class MediaUnavailableError extends Error {
