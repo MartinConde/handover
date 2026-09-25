@@ -1,8 +1,6 @@
-import { generateSQLiteDrizzleJson, generateSQLiteMigration } from 'drizzle-kit/api';
-import { drizzle } from 'drizzle-orm/d1';
-import { Miniflare } from 'miniflare';
-import { afterAll, beforeAll, beforeEach, expect, test } from 'vitest';
-import type { Db } from './db.js';
+import { beforeAll, beforeEach, expect, test } from 'vitest';
+import { newTestD1, resetTestD1 } from './db.fixtures.js';
+import { type Db, openDb } from './db.js';
 import {
   claimLock,
   heldEntries,
@@ -12,35 +10,19 @@ import {
   releaseLocks,
   takeLock,
 } from './locks.js';
-import * as tables from './tables.js';
 
 // A real D1 behind the real schema, since this is about a conditional upsert and an expiry.
-const mf = new Miniflare({
-  modules: true,
-  script: 'export default {}',
-  d1Databases: { DB: ':memory:' },
-});
-afterAll(() => mf.dispose());
+const mf = newTestD1();
 
 let binding: Awaited<ReturnType<typeof mf.getD1Database>>;
 let db: Db;
-let ddl: string[];
 beforeAll(async () => {
   binding = await mf.getD1Database('DB');
-  db = drizzle(binding, { schema: { drafts: tables.drafts } }) as unknown as Db;
-  ddl = await generateSQLiteMigration(
-    await generateSQLiteDrizzleJson({}),
-    await generateSQLiteDrizzleJson({ ...tables }),
-  );
+  db = openDb('default', binding);
 });
 
 beforeEach(async () => {
-  const rows = (await binding.prepare(`SELECT name FROM sqlite_master WHERE type = 'table'`).all())
-    .results as { name: string }[];
-  for (const { name } of rows.filter((r) => !/^(sqlite_|_cf_)/.test(r.name))) {
-    await binding.prepare(`DROP TABLE IF EXISTS "${name}"`).run();
-  }
-  await binding.batch(ddl.map((sql) => binding.prepare(sql)));
+  await resetTestD1(binding);
   await seedUser('u1', 'Anna Berg');
   await seedUser('u2', 'Martin');
 });

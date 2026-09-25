@@ -1,6 +1,4 @@
-import { generateSQLiteDrizzleJson, generateSQLiteMigration } from 'drizzle-kit/api';
-import { Miniflare } from 'miniflare';
-import { afterAll, beforeAll, expect, test } from 'vitest';
+import { beforeAll, expect, test } from 'vitest';
 import {
   type CheckEntry,
   type CheckInput,
@@ -10,6 +8,7 @@ import {
   lastHiddenLong,
   runChecks,
 } from './checks.js';
+import { migrateTestD1, newTestD1 } from './db.fixtures.js';
 import { type Db, openDb } from './db.js';
 import type { ContentIndex } from './entries.js';
 import type { R2Store } from './media.js';
@@ -98,21 +97,12 @@ const entryOf = (
   };
 };
 
-const mf = new Miniflare({
-  modules: true,
-  script: 'export default {}',
-  d1Databases: { DB: ':memory:' },
-});
-afterAll(() => mf.dispose());
+const mf = newTestD1();
 
 let db: Db;
 beforeAll(async () => {
   const binding = await mf.getD1Database('DB');
-  const ddl = await generateSQLiteMigration(
-    await generateSQLiteDrizzleJson({}),
-    await generateSQLiteDrizzleJson({ ...tables }),
-  );
-  await binding.batch(ddl.map((sql) => binding.prepare(sql)));
+  await migrateTestD1(binding);
   db = openDb('default', binding);
 });
 

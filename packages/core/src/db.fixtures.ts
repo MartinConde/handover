@@ -19,13 +19,28 @@ export function newTestD1() {
   return mf;
 }
 
+// Generated once per file: the reset below migrates before every test.
+let ddl: Promise<string[]> | undefined;
+
 // The same generator the client repo's `drizzle-kit generate` runs, against a real D1.
 export async function migrateTestD1(binding: Awaited<ReturnType<Miniflare['getD1Database']>>) {
-  const ddl = await generateSQLiteMigration(
-    await generateSQLiteDrizzleJson({}),
-    await generateSQLiteDrizzleJson({ ...tables }),
-  );
-  await binding.batch(ddl.map((sql) => binding.prepare(sql)));
+  ddl ??= (async () =>
+    generateSQLiteMigration(
+      await generateSQLiteDrizzleJson({}),
+      await generateSQLiteDrizzleJson({ ...tables }),
+    ))();
+  const statements = await ddl;
+  await binding.batch(statements.map((sql) => binding.prepare(sql)));
+}
+
+/** Drop every table and migrate again, for files whose tests each need an empty database. */
+export async function resetTestD1(binding: Awaited<ReturnType<Miniflare['getD1Database']>>) {
+  const rows = (await binding.prepare(`SELECT name FROM sqlite_master WHERE type = 'table'`).all())
+    .results as { name: string }[];
+  for (const { name } of rows.filter((r) => !/^(sqlite_|_cf_)/.test(r.name))) {
+    await binding.prepare(`DROP TABLE IF EXISTS "${name}"`).run();
+  }
+  await migrateTestD1(binding);
 }
 
 /** Bound to a test file's own `binding`, read live so it works whenever `beforeAll` finishes. */

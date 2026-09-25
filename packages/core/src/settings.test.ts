@@ -1,26 +1,15 @@
-import { generateSQLiteDrizzleJson, generateSQLiteMigration } from 'drizzle-kit/api';
-import { Miniflare } from 'miniflare';
-import { afterAll, afterEach, beforeAll, expect, test } from 'vitest';
+import { afterEach, beforeAll, expect, test } from 'vitest';
+import { migrateTestD1, newTestD1 } from './db.fixtures.js';
 import { openDb } from './db.js';
 import { readSetting, removeSetting, settingFacts, writeSetting } from './settings.js';
-import * as tables from './tables.js';
 import { settings } from './tables.js';
 
-const mf = new Miniflare({
-  modules: true,
-  script: 'export default {}',
-  d1Databases: { DB: ':memory:' },
-});
-afterAll(() => mf.dispose());
+const mf = newTestD1();
 
 let binding: Awaited<ReturnType<typeof mf.getD1Database>>;
 beforeAll(async () => {
   binding = await mf.getD1Database('DB');
-  const ddl = await generateSQLiteMigration(
-    await generateSQLiteDrizzleJson({}),
-    await generateSQLiteDrizzleJson({ ...tables }),
-  );
-  await binding.batch(ddl.map((sql) => binding.prepare(sql)));
+  await migrateTestD1(binding);
 });
 
 const db = () => openDb('default', binding);

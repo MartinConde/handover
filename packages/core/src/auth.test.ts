@@ -1,40 +1,20 @@
 import { hashPassword } from 'better-auth/crypto';
-import { generateSQLiteDrizzleJson, generateSQLiteMigration } from 'drizzle-kit/api';
-import { drizzle } from 'drizzle-orm/d1';
-import { Miniflare } from 'miniflare';
-import { afterAll, afterEach, beforeAll, beforeEach, expect, test, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, expect, test, vi } from 'vitest';
 import { AUTH_BASE_PATH, accountFacts, createAuth, demoteOwner, memberList } from './auth.js';
-import type { Db } from './db.js';
-import * as tables from './tables.js';
+import { newTestD1, resetTestD1 } from './db.fixtures.js';
+import { type Db, openDb } from './db.js';
 
-const mf = new Miniflare({
-  modules: true,
-  script: 'export default {}',
-  d1Databases: { DB: ':memory:' },
-});
-afterAll(() => mf.dispose());
+const mf = newTestD1();
 
 let binding: Awaited<ReturnType<typeof mf.getD1Database>>;
 let db: Db;
-let ddl: string[];
 beforeAll(async () => {
   binding = await mf.getD1Database('DB');
-  db = drizzle(binding, { schema: { drafts: tables.drafts } }) as unknown as Db;
-  ddl = await generateSQLiteMigration(
-    await generateSQLiteDrizzleJson({}),
-    await generateSQLiteDrizzleJson({ ...tables }),
-  );
+  db = openDb('default', binding);
 });
 
 // Each test gets its own database so failed sign-ins cannot spend another's rate-limit budget.
-beforeEach(async () => {
-  const rows = (await binding.prepare(`SELECT name FROM sqlite_master WHERE type = 'table'`).all())
-    .results as { name: string }[];
-  for (const { name } of rows.filter((r) => !/^(sqlite_|_cf_)/.test(r.name))) {
-    await binding.prepare(`DROP TABLE IF EXISTS "${name}"`).run();
-  }
-  await binding.batch(ddl.map((sql) => binding.prepare(sql)));
-});
+beforeEach(() => resetTestD1(binding));
 
 // The two emailing methods are not mounted until a site has both a base URL and a sender.
 const SITE = 'https://demo.example';

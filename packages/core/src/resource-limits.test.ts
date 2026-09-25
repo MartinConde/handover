@@ -1,6 +1,5 @@
-import { generateSQLiteDrizzleJson, generateSQLiteMigration } from 'drizzle-kit/api';
-import { Miniflare } from 'miniflare';
 import { beforeAll, expect, test } from 'vitest';
+import { migrateTestD1, newTestD1 } from './db.fixtures.js';
 import { openDb } from './db.js';
 import {
   claimCostlyOperation,
@@ -10,22 +9,13 @@ import {
   ResourceLimitError,
   releaseResource,
 } from './resource-limits.js';
-import * as tables from './tables.js';
 
-const mf = new Miniflare({
-  modules: true,
-  script: 'export default {}',
-  d1Databases: { DB: ':memory:' },
-});
+const mf = newTestD1();
 let binding: Awaited<ReturnType<typeof mf.getD1Database>>;
 
 beforeAll(async () => {
   binding = await mf.getD1Database('DB');
-  const ddl = await generateSQLiteMigration(
-    await generateSQLiteDrizzleJson({}),
-    await generateSQLiteDrizzleJson({ ...tables }),
-  );
-  await binding.batch(ddl.map((statement) => binding.prepare(statement)));
+  await migrateTestD1(binding);
 });
 
 test('an expired owner cannot complete a lease after a new owner takes it', async () => {
