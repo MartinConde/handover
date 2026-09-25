@@ -26,6 +26,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Internal: the cron dispatcher runs its jobs directly; the unreachable unknown-job guard is gone.
 - Internal: core's test fixture files end in `.fixture.ts`, like the other packages'.
 - Internal: the draft-store tests share their fixtures and drop three tests others cover.
+- Internal: the provenance, locale-sync and diff tests share fixtures and a table, and drop two
+  duplicates.
 - `@handover/core`: `setEntryStatus` no longer takes a `deps` argument, and `claimResource` no
   longer takes `windowMs`; the window is always one hour.
 - `@handover/core`: `clearPublished` now requires the deployment's git client as its fourth

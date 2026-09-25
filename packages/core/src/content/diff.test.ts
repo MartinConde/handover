@@ -16,6 +16,8 @@ const listing: Form = {
 
 const changesIn = (groups: ReturnType<typeof diffEntry>, locale?: string): Change[] =>
   groups.find((g) => g.locale === locale)?.changes ?? [];
+const enChanges = (form: Form, before: unknown, after: unknown) =>
+  changesIn(diffEntry('default', form, { en: before }, { en: after }), 'en');
 
 test('a value every language shares is lifted out of them', () => {
   const en = { title: 'Mill House', price: 450000 };
@@ -58,14 +60,13 @@ test('an entry in one language has no shared group, because nothing is doubled',
 });
 
 test('a text field is diffed word by word, not replaced whole', () => {
-  const groups = diffEntry(
-    'default',
+  const changes = enChanges(
     listing,
-    { en: { summary: 'A cottage above the harbour' } },
-    { en: { summary: 'A whitewashed cottage above the fish market' } },
+    { summary: 'A cottage above the harbour' },
+    { summary: 'A whitewashed cottage above the fish market' },
   );
 
-  expect(changesIn(groups, 'en')).toEqual([
+  expect(changes).toEqual([
     {
       path: 'summary',
       label: 'Summary',
@@ -86,15 +87,7 @@ test('a long text with a small middle edit is trimmed before word comparison', (
   const after = [...before];
   after[2_000] = 'replacement';
 
-  const changes = changesIn(
-    diffEntry(
-      'default',
-      listing,
-      { en: { summary: before.join(' ') } },
-      { en: { summary: after.join(' ') } },
-    ),
-    'en',
-  );
+  const changes = enChanges(listing, { summary: before.join(' ') }, { summary: after.join(' ') });
 
   expect(changes).toEqual([
     {
@@ -115,23 +108,19 @@ test('adversarial long text falls back to a whole-field change', () => {
   const before = Array.from({ length: 10_000 }, (_, i) => `before${i}`).join(' ');
   const after = Array.from({ length: 10_000 }, (_, i) => `after${i}`).join(' ');
 
-  expect(
-    changesIn(
-      diffEntry('default', listing, { en: { summary: before } }, { en: { summary: after } }),
-      'en',
-    ),
-  ).toEqual([{ path: 'summary', label: 'Summary', kind: 'whole' }]);
+  expect(enChanges(listing, { summary: before }, { summary: after })).toEqual([
+    { path: 'summary', label: 'Summary', kind: 'whole' },
+  ]);
 });
 
 test('a rich text body says that it changed and nothing more', () => {
-  const groups = diffEntry(
-    'default',
+  const changes = enChanges(
     listing,
-    { en: { body: '# One\n\nA paragraph.' } },
-    { en: { body: '# One\n\nA longer paragraph.' } },
+    { body: '# One\n\nA paragraph.' },
+    { body: '# One\n\nA longer paragraph.' },
   );
 
-  expect(changesIn(groups, 'en')).toEqual([{ path: 'body', label: 'Body', kind: 'whole' }]);
+  expect(changes).toEqual([{ path: 'body', label: 'Body', kind: 'whole' }]);
 });
 
 // A picture is an immutable key: a replacement reads as two thumbnails, its size as no change.
@@ -213,14 +202,9 @@ const cta = { _type: 'cta', _id: 'bbbb2222', heading: 'Newsletter signup' };
 const quote = { _type: 'hero', _id: 'cccc3333', heading: 'Gallery' };
 
 test('a block that moved says it moved, not that it was deleted and added again', () => {
-  const groups = diffEntry(
-    'default',
-    page,
-    { en: { blocks: [hero, cta, quote] } },
-    { en: { blocks: [quote, hero, cta] } },
-  );
+  const changes = enChanges(page, { blocks: [hero, cta, quote] }, { blocks: [quote, hero, cta] });
 
-  expect(changesIn(groups, 'en')).toEqual([
+  expect(changes).toEqual([
     {
       path: 'blocks[_id=cccc3333]',
       label: 'Gallery',
@@ -239,10 +223,7 @@ test('adversarial row order uses a bounded deterministic movement summary', () =
     _id: `row${String(i).padStart(5, '0')}`,
     heading: `Row ${i}`,
   }));
-  const changes = changesIn(
-    diffEntry('default', page, { en: { blocks: rows } }, { en: { blocks: [...rows].reverse() } }),
-    'en',
-  );
+  const changes = enChanges(page, { blocks: rows }, { blocks: [...rows].reverse() });
 
   expect(changes).toHaveLength(1_500);
   expect(changes[0]).toMatchObject({ path: 'blocks[_id=row01499]', at: 'moved-up' });
@@ -250,14 +231,9 @@ test('adversarial row order uses a bounded deterministic movement summary', () =
 });
 
 test('a block that arrived and one that went are named by what they say', () => {
-  const groups = diffEntry(
-    'default',
-    page,
-    { en: { blocks: [hero, quote] } },
-    { en: { blocks: [hero, cta] } },
-  );
+  const changes = enChanges(page, { blocks: [hero, quote] }, { blocks: [hero, cta] });
 
-  expect(changesIn(groups, 'en')).toEqual([
+  expect(changes).toEqual([
     {
       path: 'blocks[_id=bbbb2222]',
       label: 'Newsletter signup',
@@ -278,14 +254,13 @@ test('a block that arrived and one that went are named by what they say', () => 
 });
 
 test('a block that stayed where it was carries what changed inside it', () => {
-  const groups = diffEntry(
-    'default',
+  const changes = enChanges(
     page,
-    { en: { blocks: [hero] } },
-    { en: { blocks: [{ ...hero, heading: 'Seaview Cottage, Devon' }] } },
+    { blocks: [hero] },
+    { blocks: [{ ...hero, heading: 'Seaview Cottage, Devon' }] },
   );
 
-  expect(changesIn(groups, 'en')).toEqual([
+  expect(changes).toEqual([
     {
       path: 'blocks[_id=aaaa1111]',
       label: 'Seaview Cottage, Devon',
@@ -319,14 +294,13 @@ const team: Form = {
 };
 
 test('rows without an id pair by position, so the second row is what changed', () => {
-  const groups = diffEntry(
-    'default',
+  const changes = enChanges(
     team,
-    { en: { people: [{ name: 'Anna' }, { name: 'Martin' }] } },
-    { en: { people: [{ name: 'Anna' }, { name: 'Marta' }] } },
+    { people: [{ name: 'Anna' }, { name: 'Martin' }] },
+    { people: [{ name: 'Anna' }, { name: 'Marta' }] },
   );
 
-  expect(changesIn(groups, 'en')).toEqual([
+  expect(changes).toEqual([
     {
       path: 'people[1]',
       label: 'Marta',
@@ -396,7 +370,7 @@ test('every other field type has a shape, including the one the schema cannot re
     odd: [[2]],
   };
 
-  expect(changesIn(diffEntry('default', everything, { en: before }, { en: after }), 'en')).toEqual([
+  expect(enChanges(everything, before, after)).toEqual([
     { path: 'when', label: 'When', kind: 'value', before: '2026-01-01', after: '2026-02-01' },
     { path: 'live', label: 'Live', kind: 'value', before: 'false', after: 'true' },
     { path: 'status', label: 'Status', kind: 'value', before: 'a', after: 'b' },
@@ -444,14 +418,13 @@ test('every other field type has a shape, including the one the schema cannot re
 });
 
 test('a field that arrived and one that went say so with one side missing', () => {
-  const groups = diffEntry(
-    'default',
+  const changes = enChanges(
     listing,
-    { en: { title: 'Mill House', summary: 'A cottage' } },
-    { en: { title: 'Mill House', body: '# One' } },
+    { title: 'Mill House', summary: 'A cottage' },
+    { title: 'Mill House', body: '# One' },
   );
 
-  expect(changesIn(groups, 'en')).toEqual([
+  expect(changes).toEqual([
     {
       path: 'summary',
       label: 'Summary',
@@ -487,14 +460,13 @@ test('a list of words is read as a sentence, not as the brackets the file writes
     blocks: {},
   };
 
-  const groups = diffEntry(
-    'default',
+  const changes = enChanges(
     tags,
-    { en: { tags: ['sea', 'view', 'devon'] } },
-    { en: { tags: ['sea', 'harbour', 'devon'] } },
+    { tags: ['sea', 'view', 'devon'] },
+    { tags: ['sea', 'harbour', 'devon'] },
   );
 
-  expect(changesIn(groups, 'en')).toEqual([
+  expect(changes).toEqual([
     {
       path: 'tags',
       label: 'Tags',
@@ -515,14 +487,13 @@ test('the sharing image is a picture too, named by the steps down to it', () => 
     blocks: {},
   };
 
-  const groups = diffEntry(
-    'default',
+  const changes = enChanges(
     form,
-    { en: { seo: { image: { src: 'media/a.webp', width: 1200 } } } },
-    { en: { seo: { image: { src: 'media/b.webp', width: 1600 } } } },
+    { seo: { image: { src: 'media/a.webp', width: 1200 } } },
+    { seo: { image: { src: 'media/b.webp', width: 1600 } } },
   );
 
-  expect(changesIn(groups, 'en')).toEqual([
+  expect(changes).toEqual([
     {
       path: 'seo.image.src',
       label: 'SEO · Image',
@@ -539,14 +510,13 @@ test('a property inside a structured field is named by every step down to it', (
     blocks: {},
   };
 
-  const groups = diffEntry(
-    'default',
+  const changes = enChanges(
     form,
-    { en: { seo: { image: { alt: 'The front' } } } },
-    { en: { seo: { image: { alt: 'The quay' } } } },
+    { seo: { image: { alt: 'The front' } } },
+    { seo: { image: { alt: 'The quay' } } },
   );
 
-  expect(changesIn(groups, 'en')).toEqual([
+  expect(changes).toEqual([
     {
       path: 'seo.image.alt',
       label: 'SEO · Image · Alt',
@@ -588,14 +558,9 @@ test('a removed row with no words of its own is named by its place, not its id',
   const first = { _id: 'k3nf9a2p', open: 9 };
   const second = { _id: 'q8zt1m4c', open: 10 };
 
-  const groups = diffEntry(
-    'default',
-    opening,
-    { en: { hours: [first, second] } },
-    { en: { hours: [first] } },
-  );
+  const changes = enChanges(opening, { hours: [first, second] }, { hours: [first] });
 
-  expect(changesIn(groups, 'en')).toEqual([
+  expect(changes).toEqual([
     { path: 'hours[_id=q8zt1m4c]', label: 'Row 2', kind: 'row', at: 'removed', changes: [] },
   ]);
 });
@@ -660,7 +625,7 @@ test('a menu item with no label is named by its target, and a swapped target is 
     { _id: 'x2', label: '', link: { type: 'entry', ref: 'pages/contact' } },
   ]);
 
-  const [menu] = changesIn(diffEntry('default', navigation, { en }, { en: after }), 'en');
+  const [menu] = enChanges(navigation, en, after);
 
   expect(menu && 'changes' in menu && menu.changes).toEqual([
     {
@@ -827,14 +792,9 @@ const labelled: Form = {
 };
 
 test('a change to a labelled field carries its label in every interface language', () => {
-  const groups = diffEntry(
-    'default',
-    labelled,
-    { en: { contact: { phone: 1 } } },
-    { en: { contact: { phone: 2 } } },
-  );
+  const changes = enChanges(labelled, { contact: { phone: 1 } }, { contact: { phone: 2 } });
 
-  expect(changesIn(groups, 'en')).toEqual([
+  expect(changes).toEqual([
     {
       path: 'contact.phone',
       label: 'Contact · Phone',
@@ -848,29 +808,17 @@ test('a change to a labelled field carries its label in every interface language
 
 test('a block row is named by its type label, in every interface language', () => {
   const hero = { _type: 'hero', _id: 'aaaa1111', heading: 'Welcome' };
-  const [row] = changesIn(
-    diffEntry(
-      'default',
-      labelled,
-      { en: { body: [] } },
-      { en: { body: [{ ...hero, heading: '' }] } },
-    ),
-    'en',
-  );
+  const [row] = enChanges(labelled, { body: [] }, { body: [{ ...hero, heading: '' }] });
 
   expect(row).toMatchObject({ kind: 'row', type: 'Hero', types: { en: 'Hero', de: 'Bühne' } });
 });
 
 test('a row position carries the localized name of the following block', () => {
   const row = (id: string) => ({ _id: id, _type: 'hero', heading: '' });
-  const changes = changesIn(
-    diffEntry(
-      'default',
-      labelled,
-      { en: { body: [row('existing')] } },
-      { en: { body: [row('new'), row('existing')] } },
-    ),
-    'en',
+  const changes = enChanges(
+    labelled,
+    { body: [row('existing')] },
+    { body: [row('new'), row('existing')] },
   );
   expect(changes[0]).toMatchObject({
     kind: 'row',

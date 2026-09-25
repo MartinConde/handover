@@ -1,7 +1,5 @@
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { expect, test } from 'vitest';
-import { article, listing, localeFile } from './content.fixture.js';
+import { drifted, driftFile, listing, localeFile, millHouse, page } from './content.fixture.js';
 import { parseEntry, stringifyEntry } from './entry-format.js';
 import { applyDrift, driftReport, syncLocale, syncLocaleField } from './locale-sync.js';
 import type { Form } from './schema.js';
@@ -34,15 +32,6 @@ test('one-field locale projection preserves translated properties and copies sha
   expect(syncLocaleField(field, 'duplicate', source, target)).toBe(source);
   expect(syncLocaleField(field, false, source, target)).toBe(target);
 });
-
-// `notes` is the source locale's alone and the German file holds only translations.
-const millHouse: Form = {
-  fields: [
-    ...listing.fields,
-    { path: ['blocks'], label: 'Blocks', type: 'blocks', required: true, types: ['hero'] },
-  ],
-  blocks: article.blocks,
-};
 
 test('a duplicate value follows the source locale into the other file, nested included', () => {
   const en = parseEntry('default', localeFile('en')) as Record<string, unknown>;
@@ -81,33 +70,6 @@ test('the other locale file comes back byte for byte when the source has nothing
   expect(stringifyEntry('default', synced)).toBe(de);
 });
 
-// DE has the shared blocks plus `compliance` marked `_locales: [de]` and an unmarked `quote`.
-const page: Form = {
-  fields: [
-    { path: ['title'], label: 'Title', type: 'text', required: true },
-    {
-      path: ['blocks'],
-      label: 'Blocks',
-      type: 'blocks',
-      required: true,
-      types: ['hero', 'cta', 'compliance', 'quote'],
-    },
-  ],
-  blocks: {
-    hero: [
-      { path: ['heading'], label: 'Heading', type: 'text', required: true },
-      { path: ['image'], label: 'Image', type: 'image', required: false, preset: { max: 2400 } },
-    ],
-    cta: [{ path: ['heading'], label: 'Heading', type: 'text', required: true }],
-    compliance: [{ path: ['heading'], label: 'Heading', type: 'text', required: true }],
-    quote: [{ path: ['body'], label: 'Body', type: 'text', required: true }],
-  },
-};
-
-const driftFile = (locale: string) =>
-  readFileSync(join(import.meta.dirname, '../../test/drift', locale, 'home.yaml'), 'utf8');
-const drifted = (locale: string) =>
-  parseEntry('default', driftFile(locale)) as Record<string, unknown>;
 const blockIds = (data: Record<string, unknown>) =>
   (data.blocks as Record<string, unknown>[]).map((b) => b._id);
 
@@ -533,14 +495,6 @@ test('a block deleted in one language is deleted in every language', () => {
   const de = syncLocale('default', page, 'de', { before, after }, drifted('de'));
 
   expect(blockIds(de)).toEqual(['k3nf9a2p', 'p8xk2m4q', 'z9y8x7w6']);
-});
-
-test('a block the other language alone has is never written into this one', () => {
-  const before = drifted('en');
-
-  const en = syncLocale('default', page, 'en', { before, after: before }, before);
-
-  expect(stringifyEntry('default', en)).toBe(driftFile('en'));
 });
 
 test('a block marked for one language is written to that file and to no other', () => {

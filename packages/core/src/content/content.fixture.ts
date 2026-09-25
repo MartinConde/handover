@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { parseEntry } from './entry-format.js';
 import type { Form } from './schema.js';
 
 // decap-cms#6978: the German form never sends duplicate fields back; a save must keep them.
@@ -28,3 +29,40 @@ export const article: Form = {
 
 export const localeFile = (locale: string) =>
   readFileSync(join(import.meta.dirname, '../../test/locales', locale, 'mill-house.yaml'), 'utf8');
+
+// `notes` is the source locale's alone and the German file holds only translations.
+export const millHouse: Form = {
+  fields: [
+    ...listing.fields,
+    { path: ['blocks'], label: 'Blocks', type: 'blocks', required: true, types: ['hero'] },
+  ],
+  blocks: article.blocks,
+};
+
+// DE has the shared blocks plus `compliance` marked `_locales: [de]` and an unmarked `quote`.
+export const page: Form = {
+  fields: [
+    { path: ['title'], label: 'Title', type: 'text', required: true },
+    {
+      path: ['blocks'],
+      label: 'Blocks',
+      type: 'blocks',
+      required: true,
+      types: ['hero', 'cta', 'compliance', 'quote'],
+    },
+  ],
+  blocks: {
+    hero: [
+      { path: ['heading'], label: 'Heading', type: 'text', required: true },
+      { path: ['image'], label: 'Image', type: 'image', required: false, preset: { max: 2400 } },
+    ],
+    cta: [{ path: ['heading'], label: 'Heading', type: 'text', required: true }],
+    compliance: [{ path: ['heading'], label: 'Heading', type: 'text', required: true }],
+    quote: [{ path: ['body'], label: 'Body', type: 'text', required: true }],
+  },
+};
+
+export const driftFile = (locale: string) =>
+  readFileSync(join(import.meta.dirname, '../../test/drift', locale, 'home.yaml'), 'utf8');
+export const drifted = (locale: string) =>
+  parseEntry('default', driftFile(locale)) as Record<string, unknown>;

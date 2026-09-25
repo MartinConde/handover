@@ -310,21 +310,6 @@ test("a field's own i18n outranks the mode of the group or rows around it", () =
   expect(answeredText('default', form, en, en, 'de')).toEqual({ written: 2, of: 2 });
 });
 
-test('a row written only to other languages is not owed by this one', () => {
-  const en = {
-    ...harbourEn,
-    rooms: [
-      { _id: 'room0001', name: 'Harbour room' },
-      { _id: 'room0002', _locales: ['en', 'fr'], name: 'Garden room' },
-    ],
-  };
-
-  expect(answeredText('default', harbourForm, en, harbourCreated, 'de')).toEqual({
-    written: 0,
-    of: 14,
-  });
-});
-
 test('the work of a language is every owed path, and the ones its file leaves empty', () => {
   const de = { ...harbourCreated, title: 'Haus am Hafen' };
 

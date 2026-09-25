@@ -1,8 +1,6 @@
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { expect, test } from 'vitest';
-import { article, listing, localeFile } from './content.fixture.js';
+import { drifted, driftFile, listing, localeFile, millHouse, page } from './content.fixture.js';
 import { parseEntry, stringifyEntry } from './entry-format.js';
 import { translatableText } from './field-text.js';
 import {
@@ -20,43 +18,6 @@ const blobSha = (text: string) =>
   createHash('sha1')
     .update(`blob ${Buffer.byteLength(text)}\0${text}`)
     .digest('hex');
-
-// `notes` is the source locale's alone and the German file holds only translations.
-const millHouse: Form = {
-  fields: [
-    ...listing.fields,
-    { path: ['blocks'], label: 'Blocks', type: 'blocks', required: true, types: ['hero'] },
-  ],
-  blocks: article.blocks,
-};
-
-// DE has the shared blocks plus `compliance` marked `_locales: [de]` and an unmarked `quote`.
-const page: Form = {
-  fields: [
-    { path: ['title'], label: 'Title', type: 'text', required: true },
-    {
-      path: ['blocks'],
-      label: 'Blocks',
-      type: 'blocks',
-      required: true,
-      types: ['hero', 'cta', 'compliance', 'quote'],
-    },
-  ],
-  blocks: {
-    hero: [
-      { path: ['heading'], label: 'Heading', type: 'text', required: true },
-      { path: ['image'], label: 'Image', type: 'image', required: false, preset: { max: 2400 } },
-    ],
-    cta: [{ path: ['heading'], label: 'Heading', type: 'text', required: true }],
-    compliance: [{ path: ['heading'], label: 'Heading', type: 'text', required: true }],
-    quote: [{ path: ['body'], label: 'Body', type: 'text', required: true }],
-  },
-};
-
-const driftFile = (locale: string) =>
-  readFileSync(join(import.meta.dirname, '../../test/drift', locale, 'home.yaml'), 'utf8');
-const drifted = (locale: string) =>
-  parseEntry('default', driftFile(locale)) as Record<string, unknown>;
 
 // A shared price and a source-only note must not count as something to retranslate.
 const translate = (en: string, de: string, was?: string) =>
@@ -282,87 +243,85 @@ test('a reported path is the one the form derives for the same field', () => {
   expect(fieldAddress('default', ['blocks', '0', 'heading'], en)).toBe(block?.path);
 });
 
+const one = { locales: ['en'], defaultLocale: 'en' };
 const two = { locales: ['en', 'de'], defaultLocale: 'en' };
 const three = { locales: ['en', 'de', 'fr'], defaultLocale: 'en' };
 
-test('a one-language site answers its default language and ignores marks', () => {
-  const files = { en: { _source: 'de', title: 'Home' }, de: { title: 'Start' } };
-
-  expect(entrySource('default', { locales: ['en'], defaultLocale: 'en' }, files)).toEqual({
-    locale: 'en',
-    recorded: false,
-  });
-});
-
-test('an entry with no file has no source', () => {
-  expect(entrySource('default', two, { en: undefined })).toBeUndefined();
-});
-
-test('two files claiming different sources is a conflict', () => {
-  const files = { en: { _source: 'en' }, de: { _source: 'de' }, fr: { title: 'Accueil' } };
-
-  expect(entrySource('default', three, files)).toEqual({
-    problem: 'conflict',
-    marks: { en: 'en', de: 'de' },
-  });
-});
-
-test('a source the site does not declare is refused', () => {
-  const files = { en: { _source: 'it' }, de: { _source: 'it' } };
-
-  expect(entrySource('default', two, files)).toEqual({
-    problem: 'undeclared',
-    marks: { en: 'it', de: 'it' },
-  });
-});
-
-test('a source with no file of its own is refused', () => {
-  expect(entrySource('default', three, { en: { _source: 'de' } })).toEqual({
-    problem: 'missing',
-    marks: { en: 'de' },
-  });
-});
-
-test('a recorded source is the answer', () => {
-  const files = { en: { _source: 'de' }, de: { _source: 'de' } };
-
-  expect(entrySource('default', two, files)).toEqual({ locale: 'de', recorded: true });
-});
-
-test('an unmarked file beside a marked one agrees with it', () => {
-  const files = { en: { title: 'Notice' }, de: { _source: 'de' }, fr: { title: 'Avis' } };
-
-  expect(entrySource('default', three, files)).toEqual({ locale: 'de', recorded: true });
-});
-
-test('an unrecorded entry with one file is written in that language', () => {
-  expect(entrySource('default', three, { de: { title: 'Impressum' } })).toEqual({
-    locale: 'de',
-    recorded: false,
-  });
-});
-
-test('an unrecorded entry with several files falls back to the default language first', () => {
-  const files = { fr: { title: 'Avis' }, de: { title: 'Hinweis' }, en: { title: 'Notice' } };
-
-  expect(entrySource('default', three, files)).toEqual({ locale: 'en', recorded: false });
-  expect(entrySource('default', three, { fr: files.fr, de: files.de })).toEqual({
-    locale: 'de',
-    recorded: false,
-  });
-});
-
-test('a recorded German source survives reordered locales and a new default language', () => {
-  const files = { en: { _source: 'de' }, de: { _source: 'de' }, fr: {} };
-  const moved = { locales: ['fr', 'en', 'de'], defaultLocale: 'fr' };
-
-  expect(entrySource('default', moved, files)).toEqual({ locale: 'de', recorded: true });
-});
-
-test('undeclared folders take no part in the answer', () => {
-  const files = { en: { title: 'Notice' }, it: { _source: 'it' } };
-
-  expect(entrySource('default', two, files)).toEqual({ locale: 'en', recorded: false });
+test.each([
+  {
+    name: 'a one-language site answers its default language and ignores marks',
+    i18n: one,
+    files: { en: { _source: 'de', title: 'Home' }, de: { title: 'Start' } },
+    source: { locale: 'en', recorded: false },
+  },
+  {
+    name: 'an entry with no file has no source',
+    i18n: two,
+    files: { en: undefined },
+    source: undefined,
+  },
+  {
+    name: 'two files claiming different sources is a conflict',
+    i18n: three,
+    files: { en: { _source: 'en' }, de: { _source: 'de' }, fr: { title: 'Accueil' } },
+    source: { problem: 'conflict', marks: { en: 'en', de: 'de' } },
+  },
+  {
+    name: 'a source the site does not declare is refused',
+    i18n: two,
+    files: { en: { _source: 'it' }, de: { _source: 'it' } },
+    source: { problem: 'undeclared', marks: { en: 'it', de: 'it' } },
+  },
+  {
+    name: 'a source with no file of its own is refused',
+    i18n: three,
+    files: { en: { _source: 'de' } },
+    source: { problem: 'missing', marks: { en: 'de' } },
+  },
+  {
+    name: 'a recorded source is the answer',
+    i18n: two,
+    files: { en: { _source: 'de' }, de: { _source: 'de' } },
+    source: { locale: 'de', recorded: true },
+  },
+  {
+    name: 'an unmarked file beside a marked one agrees with it',
+    i18n: three,
+    files: { en: { title: 'Notice' }, de: { _source: 'de' }, fr: { title: 'Avis' } },
+    source: { locale: 'de', recorded: true },
+  },
+  {
+    name: 'an unrecorded entry with one file is written in that language',
+    i18n: three,
+    files: { de: { title: 'Impressum' } },
+    source: { locale: 'de', recorded: false },
+  },
+  {
+    name: 'an unrecorded entry with several files falls back to the default language first',
+    i18n: three,
+    files: { fr: { title: 'Avis' }, de: { title: 'Hinweis' }, en: { title: 'Notice' } },
+    source: { locale: 'en', recorded: false },
+  },
+  {
+    name: 'an unrecorded entry without the default language falls back in declared order',
+    i18n: three,
+    files: { fr: { title: 'Avis' }, de: { title: 'Hinweis' } },
+    source: { locale: 'de', recorded: false },
+  },
+  {
+    name: 'a recorded German source survives reordered locales and a new default language',
+    i18n: { locales: ['fr', 'en', 'de'], defaultLocale: 'fr' },
+    files: { en: { _source: 'de' }, de: { _source: 'de' }, fr: {} },
+    source: { locale: 'de', recorded: true },
+  },
+  {
+    name: 'undeclared folders take no part in the answer',
+    i18n: two,
+    files: { en: { title: 'Notice' }, it: { _source: 'it' } },
+    source: { locale: 'en', recorded: false },
+  },
+])('$name', ({ i18n, files, source }) => {
+  expect(entrySource('default', i18n, files)).toEqual(source);
 });
 
 // Marks made by the real markTranslation, so every hash here is one the CMS would write.
