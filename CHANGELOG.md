@@ -49,6 +49,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Internal: 18 admin messages nothing displays are removed from both catalogs.
 - Internal: the six-language ui fixture drops its self-check suite and the helpers only that
   suite used.
+- Internal: the editor's entry session drops four methods only its tests called and stops
+  exporting 14 types nothing imports.
 - `@handover/core`: `setEntryStatus` no longer takes a `deps` argument, and `claimResource` no
   longer takes `windowMs`; the window is always one hour.
 - `@handover/core`: `clearPublished` now requires the deployment's git client as its fourth

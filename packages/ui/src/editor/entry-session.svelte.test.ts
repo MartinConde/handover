@@ -215,9 +215,7 @@ test('validation problems follow nested rows after a local reorder', () => {
     form,
     problems: { en: [{ path: 'sections.1.title', message: 'Required' }] },
   });
-  expect(session.problemAddresses('en')).toEqual({
-    'sections[_id=second].title': 'Required',
-  });
+  expect(session.positionalProblems('en')).toEqual({ 'sections.1.title': 'Required' });
   session.listCommand('en', {
     address: 'sections',
     contentVersion: 0,
@@ -310,9 +308,7 @@ test('a late validation response is discarded by content version', () => {
       sentVersion,
     ),
   ).toBe(false);
-  expect(session.problemAddresses('en')).toEqual({
-    'sections[_id=second].title': 'Required',
-  });
+  expect(session.positionalProblems('en')).toEqual({ 'sections.1.title': 'Required' });
 });
 
 test('validation does not guess between duplicate ids', () => {
@@ -328,7 +324,6 @@ test('validation does not guess between duplicate ids', () => {
     problems: { en: [{ path: 'sections.0.title', message: 'Required' }] },
   });
 
-  expect(session.problemAddresses('en')).toEqual({});
   expect(session.positionalProblems('en')).toEqual({});
   expect(session.resolveField('en', 'sections[_id=first].title')).toEqual({
     ok: false,
@@ -345,7 +340,6 @@ test('unresolved drift blocks field and list commands across the shared session'
     drift: [drift],
   });
 
-  expect(session.hasDrift()).toBe(true);
   expect(
     session.fieldCommand('en', {
       address: 'sections[_id=first].title',
@@ -1665,7 +1659,7 @@ test('composition updates and structured widget changes keep atomic forward and 
   expect(session.snapshot('en').title).toBe('日本');
 });
 
-test('history freezes on lock loss and reset establishes a fresh boundary', () => {
+test('history freezes on lock loss', () => {
   const session = createEntrySession({
     sourceLocale: 'en',
     data: widgetData(),
@@ -1679,20 +1673,23 @@ test('history freezes on lock loss and reset establishes a fresh boundary', () =
   });
 
   session.freezeHistory();
-  expect(session.historyFrozen()).toBe(true);
   expect(session.undo()).toEqual({ ok: false, reason: 'frozen' });
-  session.resetHistory();
-  expect(session.historyFrozen()).toBe(false);
-  expect(session.canUndo()).toBe(false);
-  expect(session.canRedo()).toBe(false);
+});
 
+test('closing the save gate freezes history', () => {
+  const session = createEntrySession({
+    sourceLocale: 'en',
+    data: widgetData(),
+    translations: {},
+    form: widgetForm,
+  });
   session.fieldCommand('en', {
     address: 'title',
-    contentVersion: 1,
-    changes: [{ value: 'Fresh change' }],
+    contentVersion: 0,
+    changes: [{ value: 'Changed' }],
   });
+
   session.closeSaveGate();
-  expect(session.historyFrozen()).toBe(true);
   expect(session.undo()).toEqual({ ok: false, reason: 'frozen' });
 });
 

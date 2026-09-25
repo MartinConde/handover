@@ -18,7 +18,7 @@ import type { UiLocale } from '../i18n.js';
 import { requiredFieldProblems } from './required-fields';
 import { type SaveState, saveCoordinator, saveLane } from './save';
 
-export type EntryData = Record<string, unknown>;
+type EntryData = Record<string, unknown>;
 export type EntryProblem = { path: string; message: string; descriptor?: UiMessage };
 
 export type EntrySession = ReturnType<typeof createEntrySession>;
@@ -41,7 +41,7 @@ export type FieldHistory = {
   before?: LogicalSelection;
   after?: LogicalSelection;
 };
-export type FieldCommand = {
+type FieldCommand = {
   /** Stable address at or within the schema field which owns every relative change. */
   address: string;
   /** The local snapshot version this command was made against. */
@@ -64,8 +64,8 @@ export type FieldCommandResult =
   | { ok: true; contentVersion: number }
   | { ok: false; reason: FieldCommandFailure };
 
-export type HistoryFailure = FieldCommandFailure | 'empty' | 'frozen';
-export type HistoryResult =
+type HistoryFailure = FieldCommandFailure | 'empty' | 'frozen';
+type HistoryResult =
   | { ok: true; contentVersion: number; selection?: LogicalSelection }
   | { ok: false; reason: HistoryFailure };
 
@@ -75,7 +75,7 @@ export type ListOperation =
   | { type: 'remove'; index: number }
   | { type: 'move'; from: number; to: number }
   | { type: 'duplicate'; index: number };
-export type ListCommand = {
+type ListCommand = {
   /** Stable address of the array or block-list field being changed. */
   address: string;
   /** The local snapshot version this command was made against. */
@@ -90,18 +90,18 @@ export type StructuralSaveEnvelope = {
   seeds: Record<string, LocaleSeed[]>;
 };
 
-export type MachineTranslationResponse = {
+type MachineTranslationResponse = {
   data: EntryData;
   pending: boolean;
   revision?: string;
 };
-export type MachineTranslationFailure = 'busy' | 'closed' | 'drift' | 'request' | 'save' | 'stale';
-export type MachineTranslationResult =
+type MachineTranslationFailure = 'busy' | 'closed' | 'drift' | 'request' | 'save' | 'stale';
+type MachineTranslationResult =
   | { ok: true; response: MachineTranslationResponse }
   | { ok: false; reason: MachineTranslationFailure };
 
 export type HistoricalRestoreResponse = { ok: true } | { ok: false; error: UiMessage };
-export type HistoricalRestoreFailure =
+type HistoricalRestoreFailure =
   | 'busy'
   | 'closed'
   | 'refused'
@@ -113,7 +113,7 @@ export type HistoricalRestoreResult =
   | { ok: true }
   | { ok: false; reason: HistoricalRestoreFailure; error?: UiMessage };
 
-export type FinalPublishFailure =
+type FinalPublishFailure =
   | 'busy'
   | 'closed'
   | 'drift'
@@ -122,9 +122,9 @@ export type FinalPublishFailure =
   | 'save'
   | 'stale'
   | 'uncertain';
-export type FinalPublishResult = { ok: true } | { ok: false; reason: FinalPublishFailure };
+type FinalPublishResult = { ok: true } | { ok: false; reason: FinalPublishFailure };
 
-export type AuthoritativeChangeFailure =
+type AuthoritativeChangeFailure =
   | 'busy'
   | 'closed'
   | 'refused'
@@ -132,9 +132,7 @@ export type AuthoritativeChangeFailure =
   | 'save'
   | 'stale'
   | 'uncertain';
-export type AuthoritativeChangeResult =
-  | { ok: true }
-  | { ok: false; reason: AuthoritativeChangeFailure };
+type AuthoritativeChangeResult = { ok: true } | { ok: false; reason: AuthoritativeChangeFailure };
 
 type FieldContext = {
   field: Field;
@@ -165,7 +163,7 @@ type StructuralHistoryTransaction = {
 
 type HistoryTransaction = FieldHistoryTransaction | StructuralHistoryTransaction;
 
-export type HistoryStats = {
+type HistoryStats = {
   redoTransactions: number;
   retainedCharacters: number;
   retainedFieldValues: number;
@@ -567,14 +565,6 @@ export function createEntrySession({
       const dropped = undoStack.shift();
       if (dropped) undoCharacters -= historyCharacters(dropped);
     }
-  };
-  const resetHistory = () => {
-    undoStack.splice(0);
-    redoStack.splice(0);
-    undoCharacters = 0;
-    logicalSelection = undefined;
-    clearActiveHistoryGroup();
-    historyIsFrozen = !mutationOpen;
   };
   const freezeHistory = () => {
     historyIsFrozen = true;
@@ -1240,15 +1230,6 @@ export function createEntrySession({
       const current = snapshots[locale];
       return current && form ? fieldAddress('default', path.split('.'), current, form) : undefined;
     },
-    /** Stable addresses are consumed directly by Canvas and future session commands. */
-    problemAddresses(locale: string, uiLocale: UiLocale = 'en'): Record<string, string> {
-      return Object.fromEntries(
-        Object.entries(validation[locale] ?? {}).map(([address, problem]) => [
-          address,
-          problemText(problem, uiLocale),
-        ]),
-      );
-    },
     /** Form controls still consume the API's positional dotted-path shape. */
     positionalProblems(locale: string, uiLocale: UiLocale = 'en'): Record<string, string> {
       const current = snapshots[locale];
@@ -1470,14 +1451,8 @@ export function createEntrySession({
     historyBoundary(): void {
       clearActiveHistoryGroup();
     },
-    resetHistory(): void {
-      resetHistory();
-    },
     freezeHistory(): void {
       freezeHistory();
-    },
-    historyFrozen(): boolean {
-      return historyIsFrozen;
     },
     /** Drain every loaded locale, including dirty panes which are no longer mounted. */
     async flush(): Promise<boolean> {
@@ -1495,9 +1470,6 @@ export function createEntrySession({
     accept(locale: string, snapshot: string): void {
       if (snapshot === serialize(locale)) savedVersions[locale] = versionOf(locale);
       coordinator(locale).accept(snapshot);
-    },
-    hasDrift(): boolean {
-      return drifted;
     },
     persistedActionPending(): boolean {
       return persistedAction !== undefined;
