@@ -1,3 +1,4 @@
+import type { BatchItem } from 'drizzle-orm/batch';
 import { drizzle } from 'drizzle-orm/d1';
 import { drafts } from './tables.js';
 
@@ -25,4 +26,10 @@ export function chunksOf<T>(values: readonly T[], size: number): T[][] {
   const chunks: T[][] = [];
   for (let i = 0; i < values.length; i += size) chunks.push(values.slice(i, i + size));
   return chunks;
+}
+
+/** One D1 transaction; drizzle's `batch` refuses an empty list. */
+export async function batchAll(db: Db, writes: readonly BatchItem<'sqlite'>[]): Promise<void> {
+  const [first, ...rest] = writes;
+  if (first) await db.batch([first, ...rest]);
 }

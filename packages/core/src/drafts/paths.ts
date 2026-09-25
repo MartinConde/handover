@@ -1,7 +1,7 @@
 import { and, eq, inArray, sql } from 'drizzle-orm';
-import type { Db } from '../db.js';
+import { batchAll, type Db } from '../db.js';
 import { operations, pathReservations } from '../tables.js';
-import type { PathReservation } from './drafts.js';
+import { noLiveRow, type PathReservation } from './drafts.js';
 
 export type { PathReservation } from './drafts.js';
 
@@ -59,12 +59,11 @@ export async function reservePaths(
       siteId,
       path,
       operationId,
-      token: sql`case when not exists (select 1 from drafts where site_id = ${siteId} and path = ${path} and (contents <> '' or published_sha is null)) then ${token} else null end`,
+      token: sql`case when ${noLiveRow(siteId, path)} then ${token} else null end`,
     }),
   );
-  const [first, ...rest] = writes;
   try {
-    if (first) await db.batch([first, ...rest]);
+    await batchAll(db, writes);
   } catch (error) {
     // Simultaneous retries of one durable operation join whichever token won the batch.
     const joined = await ownedReservation(siteId, db, operationId, unique);

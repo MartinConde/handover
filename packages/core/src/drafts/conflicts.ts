@@ -2,10 +2,18 @@ import { and, eq, sql } from 'drizzle-orm';
 import { parseEntry, stringifyEntry, writtenEntry } from '../content/entry-format.js';
 import { applyDrift, type DriftChoice } from '../content/locale-sync.js';
 import type { Form } from '../content/schema.js';
-import type { Db } from '../db.js';
+import { batchAll, type Db } from '../db.js';
 import { blobSha, type GitClient } from '../publishing/git.js';
 import { drafts } from '../tables.js';
-import { availableContents, load, loadDraft, nextRevision, stampOf, upsert } from './drafts.js';
+import {
+  atRevision,
+  availableContents,
+  load,
+  loadDraft,
+  nextRevision,
+  stampOf,
+  upsert,
+} from './drafts.js';
 import {
   type Answer,
   applyResolution,
@@ -110,7 +118,7 @@ export async function resolveConflict(
       (conflict.snapshots ?? Object.values(conflict.conflicted)).map(({ path, revision }) =>
         revision === undefined
           ? sql`not exists (select 1 from drafts where site_id = ${siteId} and path = ${path})`
-          : sql`exists (select 1 from drafts where site_id = ${siteId} and path = ${path} and revision = ${revision})`,
+          : atRevision(siteId, path, revision),
       ),
       sql` and `,
     );
@@ -160,6 +168,5 @@ export async function resolveDrift(
       ? []
       : [upsert(db, siteId, path, contents, loaded, updatedAt, stampOf(by))];
   });
-  const [first, ...rest] = writes;
-  if (first) await db.batch([first, ...rest]);
+  await batchAll(db, writes);
 }

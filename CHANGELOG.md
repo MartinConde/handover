@@ -16,6 +16,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Internal: core's operation records and entry rename, delete and duplicate moved to
   `publishing/`, and the conflict resolver to `drafts/`.
 - Internal: the hidden-long cron job moved from the publish checks into `publishing/cron.ts`.
+- Internal: the draft store's SQL guards and batch writes are named helpers.
 - `handover init` reads Wrangler JSONC and TOML with standard parsers, preserving comment
   characters inside quoted values and reporting invalid configuration before provisioning.
 - The published `astro-handover` package excludes route test fixtures. Core modules are

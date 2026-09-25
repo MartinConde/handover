@@ -15,7 +15,7 @@ import { type RedirectRule, redirectRule } from '../content/redirects.js';
 import { checkReserved } from '../content/reserved.js';
 import type { Form } from '../content/schema.js';
 import { machineFilled } from '../content/translate.js';
-import { chunksOf, D1_MAX_BOUND_PARAMETERS, type Db, type Draft } from '../db.js';
+import { batchAll, chunksOf, D1_MAX_BOUND_PARAMETERS, type Db, type Draft } from '../db.js';
 import { blobSha, type GitClient } from '../publishing/git.js';
 import { drafts, media, pathReservations, user } from '../tables.js';
 
@@ -75,6 +75,24 @@ export function isMediaRace(error: unknown): boolean {
 export const availableContents = (siteId: string, contents: string) =>
   sql<string>`case when not exists (select 1 from ${media} where ${media.siteId} = ${siteId} and ${media.state} <> 'active' and instr(${contents}, ${media.r2Key}) > 0) then ${contents} else null end`;
 
+// SQL conditions for NOT NULL assertions: one false aborts the whole D1 batch.
+export const noLiveRow = (siteId: string, path: string) =>
+  sql`not exists (select 1 from drafts where site_id = ${siteId} and path = ${path} and (contents <> '' or published_sha is null))`;
+
+export const atRevision = (siteId: string, path: string, revision: string) =>
+  sql`exists (select 1 from drafts where site_id = ${siteId} and path = ${path} and revision = ${revision})`;
+
+const unreserved = (siteId: string, path: string) =>
+  sql`not exists (select 1 from path_reservations r join operations o on o.site_id = r.site_id and o.id = r.operation_id where r.site_id = ${siteId} and r.path = ${path} and o.state <> 'finalized')`;
+
+const allAt = (siteId: string, expected: readonly { path: string; revision?: string }[]) =>
+  sql.join(
+    expected.map(({ path, revision }) =>
+      revision === undefined ? noLiveRow(siteId, path) : atRevision(siteId, path, revision),
+    ),
+    sql` and `,
+  );
+
 /** Seed precisely the immutable file shown on GET; concurrent opens share the winning row. */
 export async function openDraft(
   siteId: string,
@@ -91,7 +109,7 @@ export async function openDraft(
       .values({
         siteId,
         path,
-        revision: sql`case when not exists (select 1 from path_reservations r join operations o on o.site_id = r.site_id and o.id = r.operation_id where r.site_id = ${siteId} and r.path = ${path} and o.state <> 'finalized') then ${crypto.randomUUID()} else null end`,
+        revision: sql`case when ${unreserved(siteId, path)} then ${crypto.randomUUID()} else null end`,
         contents: file.contents,
         baseSha: head,
         baseBlob: file.blob_sha,
@@ -232,8 +250,7 @@ export async function saveDraft(
     );
   }
   // One batch: an entry's languages reach the drafts table together or not at all.
-  const [first, ...rest] = writes;
-  if (first) await db.batch([first, ...rest]);
+  await batchAll(db, writes);
   return {
     updated_at: updatedAt,
     pending: (await blobSha(contents)) !== loaded.baseBlob,
@@ -253,14 +270,7 @@ export async function rewriteDrafts(
 ): Promise<void> {
   const found = await Promise.all(files.map((f) => load(siteId, db, git, f.path)));
   const updatedAt = Date.now();
-  const captured = sql.join(
-    expected.map(({ path, revision }) =>
-      revision === undefined
-        ? sql`not exists (select 1 from drafts where site_id = ${siteId} and path = ${path} and (contents <> '' or published_sha is null))`
-        : sql`exists (select 1 from drafts where site_id = ${siteId} and path = ${path} and revision = ${revision})`,
-    ),
-    sql` and `,
-  );
+  const captured = allAt(siteId, expected);
   const writes = files.map((f, i) => {
     const loaded = found[i];
     if (!loaded || loaded.revision !== f.revision) throw new DraftRevisionError();
@@ -278,8 +288,7 @@ export async function rewriteDrafts(
       i === 0 ? captured : sql`true`,
     );
   });
-  const [first, ...rest] = writes;
-  if (first) await db.batch([first, ...rest]);
+  await batchAll(db, writes);
 }
 
 /** In the files, since the site builds from git alone; offered everywhere means no mark at all. */
@@ -309,8 +318,7 @@ export async function setEntryLocales(
       ? []
       : [upsert(db, siteId, f.path, contents, f.loaded, updatedAt)];
   });
-  const [first, ...rest] = writes;
-  if (first) await db.batch([first, ...rest]);
+  await batchAll(db, writes);
 }
 
 /** The redirect is stored on the row, not committed: the old address is live until publish. */
@@ -404,8 +412,7 @@ export async function setEntryStatus(
       ),
     ];
   });
-  const [first, ...rest] = writes;
-  if (first) await db.batch([first, ...rest]);
+  await batchAll(db, writes);
 }
 
 /** Each of these is owned by an action of its own, never by a version of the words. */
@@ -446,8 +453,7 @@ export async function restoreDraft(
     );
     return [upsert(db, siteId, file.path, contents, file.loaded, updatedAt, stampOf(by))];
   });
-  const [first, ...rest] = writes;
-  if (first) await db.batch([first, ...rest]);
+  await batchAll(db, writes);
   return { paths: found.filter((f) => f !== undefined).map((f) => f.path) };
 }
 
@@ -499,10 +505,8 @@ export function upsert(
 ) {
   // A conditional UPDATE would silently succeed; violating NOT NULL aborts the whole D1 batch.
   const next = extra.revision ?? nextRevision(revision);
-  const matches = revision
-    ? sql`exists (select 1 from drafts where site_id = ${siteId} and path = ${path} and revision = ${revision})`
-    : sql`not exists (select 1 from drafts where site_id = ${siteId} and path = ${path} and (contents <> '' or published_sha is null))`;
-  const asserted = sql<string>`case when ${matches} and ${guard} and not exists (select 1 from path_reservations r join operations o on o.site_id = r.site_id and o.id = r.operation_id where r.site_id = ${siteId} and r.path = ${path} and o.state <> 'finalized') then ${next} else null end`;
+  const matches = revision ? atRevision(siteId, path, revision) : noLiveRow(siteId, path);
+  const asserted = sql<string>`case when ${matches} and ${guard} and ${unreserved(siteId, path)} then ${next} else null end`;
   const available = availableContents(siteId, contents);
   return db
     .insert(drafts)
@@ -559,13 +563,9 @@ export async function createDrafts(
   const updatedAt = Date.now();
   const baseSha = await git.getHead();
   const captured = expected
-    ? sql.join(
-        Object.entries(expected).map(([path, revision]) =>
-          revision === undefined
-            ? sql`not exists (select 1 from drafts where site_id = ${siteId} and path = ${path} and (contents <> '' or published_sha is null))`
-            : sql`exists (select 1 from drafts where site_id = ${siteId} and path = ${path} and revision = ${revision})`,
-        ),
-        sql` and `,
+    ? allAt(
+        siteId,
+        Object.entries(expected).map(([path, revision]) => ({ path, revision })),
       )
     : sql`true`;
   const writes = files.map(({ path, values }, i) => {
@@ -580,7 +580,7 @@ export async function createDrafts(
           baseSha,
           baseBlob: '',
           updatedAt,
-          revision: sql`case when ${i === 0 ? captured : sql`true`} and not exists (select 1 from drafts where site_id = ${siteId} and path = ${path} and (contents <> '' or published_sha is null)) and not exists (select 1 from path_reservations r join operations o on o.site_id = r.site_id and o.id = r.operation_id where r.site_id = ${siteId} and r.path = ${path} and o.state <> 'finalized') then lower(hex(randomblob(16))) else null end`,
+          revision: sql`case when ${i === 0 ? captured : sql`true`} and ${noLiveRow(siteId, path)} and ${unreserved(siteId, path)} then lower(hex(randomblob(16))) else null end`,
         })
         // Only a removed row can be at this path: a name a live row holds is never picked again.
         .onConflictDoUpdate({
@@ -600,8 +600,7 @@ export async function createDrafts(
         })
     );
   });
-  const [first, ...rest] = writes;
-  if (first) await db.batch([first, ...rest]);
+  await batchAll(db, writes);
   return { updated_at: updatedAt };
 }
 
@@ -729,9 +728,7 @@ export async function recordRenames(
         })
         .onConflictDoNothing({ target: [pathReservations.siteId, pathReservations.path] })
     : undefined;
-  const guarded = fence ? [fence, ...writes] : writes;
-  const [first, ...rest] = guarded;
-  if (first) await db.batch([first, ...rest]);
+  await batchAll(db, fence ? [fence, ...writes] : writes);
 }
 
 /** Without this the open draft would publish the language back on against a moved base blob. */
