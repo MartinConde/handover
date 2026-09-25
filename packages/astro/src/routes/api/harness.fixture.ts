@@ -1,6 +1,6 @@
 import type { EmailSender, Mailer } from '@handover/core';
 import type { APIContext } from 'astro';
-import { vi } from 'vitest';
+import { afterEach, vi } from 'vitest';
 import type { HandoverConfig } from '../../index.js';
 
 // The row GET should overlay; `rows` is the same keyed by path when the languages differ in state.
@@ -22,7 +22,7 @@ export type MemberRow = {
   invitedAt: number;
 };
 
-// The ~34 values a test reassigns wholesale (`x = ...`) between calling a route and asserting
+// The ~31 values a test reassigns wholesale (`x = ...`) between calling a route and asserting
 // on it. One shared, mutable instance per test *file* (Vitest gives every test file its own
 // fresh copy of this module): mock builders below close over `state` directly, and test bodies
 // read and write `state.<name>` the same way -- a static import and the `vi.hoisted` dynamic
@@ -51,9 +51,7 @@ type State = {
   storeRefusal: Error | undefined;
   dbRefusal: Error | undefined;
   cloudflareToken: string | undefined;
-  cloudflareWorker: string | undefined;
   setPassword: (args: unknown) => Promise<unknown>;
-  facts: { hasPassword: boolean; sessions: unknown[] };
   memberRows: MemberRow[];
   read: unknown[];
   holder: { userId: string; name: string; expiresAt: number; tab?: string } | undefined;
@@ -62,7 +60,6 @@ type State = {
   asked: unknown[];
   createUserRefusal: unknown;
   magicLinkRefusal: unknown;
-  setRoleRefusal: unknown;
 };
 
 function defaultState(): State {
@@ -89,9 +86,7 @@ function defaultState(): State {
     storeRefusal: undefined,
     dbRefusal: undefined,
     cloudflareToken: 'cf-token',
-    cloudflareWorker: 'acct/handover-demo',
     setPassword: async () => ({ status: true }),
-    facts: { hasPassword: true, sessions: [] },
     memberRows: [],
     read: [],
     holder: undefined,
@@ -100,7 +95,6 @@ function defaultState(): State {
     asked: [],
     createUserRefusal: undefined,
     magicLinkRefusal: undefined,
-    setRoleRefusal: undefined,
   };
 }
 
@@ -439,7 +433,6 @@ export {
   publish,
   publishDrafts,
   readyDrafts,
-  recordDelete,
   resolveConflict,
   resolveDrift,
   restoreCommit,
@@ -457,7 +450,7 @@ export {
 };
 
 export const state: State = defaultState();
-export function resetState() {
+function resetState() {
   Object.assign(state, defaultState());
 }
 
@@ -630,9 +623,7 @@ export function cloudflareMock() {
       get CLOUDFLARE_API_TOKEN() {
         return state.cloudflareToken;
       },
-      get CLOUDFLARE_WORKER() {
-        return state.cloudflareWorker;
-      },
+      CLOUDFLARE_WORKER: 'acct/handover-demo',
       get R2_ACCOUNT_ID() {
         return state.bucketed ? 'acct-1' : undefined;
       },
@@ -682,7 +673,6 @@ export function authMock(original: Record<string, unknown>) {
           return { user: { id: 'new', email: String(args.body.email).toLowerCase() } };
         }
         if (name === 'signInMagicLink' && state.magicLinkRefusal) throw state.magicLinkRefusal;
-        if (name === 'setRole' && state.setRoleRefusal) throw state.setRoleRefusal;
         return { status: true };
       };
       return {
@@ -776,7 +766,7 @@ export function coreMock(original: Record<string, unknown>) {
     },
     accountFacts: async (..._args: unknown[]) => {
       state.asked = _args.slice(2);
-      return state.facts;
+      return { hasPassword: true, sessions: [] };
     },
     claimLock: async (_site: string, _db: unknown, entry: string, userId: string, tab: string) => {
       beats.push(entry);
@@ -899,7 +889,7 @@ export function coreMock(original: Record<string, unknown>) {
   };
 }
 
-export function resetContainers() {
+function resetContainers() {
   for (const key of Object.keys(stored)) delete stored[key];
   for (const list of Object.values(calls)) list.length = 0;
   logged.length = 0;
@@ -918,7 +908,7 @@ export function resetContainers() {
   for (const path of Object.keys(rows)) delete rows[path];
 }
 
-export function resetMocks() {
+function resetMocks() {
   findMedia.mockClear();
   findMedia.mockResolvedValue(undefined);
   mediaList.mockClear();
@@ -944,6 +934,16 @@ export function resetMocks() {
   setEntryStatus.mockClear();
   resolveConflict.mockClear();
 }
+
+// Every test file loads its own copy of this module, so each gets this hook once.
+afterEach(async () => {
+  vi.unstubAllGlobals();
+  resetContainers();
+  resetMocks();
+  resetState();
+  const { texts } = await import('virtual:handover/index');
+  for (const key of Object.keys(texts)) delete texts[key];
+});
 
 export const owner = {
   user: { id: 'u1', name: 'Martin', email: 'martin@example.com' },

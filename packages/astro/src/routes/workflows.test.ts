@@ -15,10 +15,9 @@ import {
   staticSource,
 } from '@handover/core';
 import type { APIContext } from 'astro';
-import { generateSQLiteDrizzleJson, generateSQLiteMigration } from 'drizzle-kit/api';
 import { eq } from 'drizzle-orm';
-import { Miniflare } from 'miniflare';
-import { afterAll, beforeAll, beforeEach, expect, test, vi } from 'vitest';
+import { beforeAll, beforeEach, expect, test, vi } from 'vitest';
+import { migrateTestD1, newTestD1 } from '../../../core/src/db.fixture.js';
 import * as tables from '../../../core/src/tables.js';
 import { onRequest } from '../middleware.js';
 import { MAX_JSON_BYTES } from './api/body.js';
@@ -78,12 +77,7 @@ vi.mock('@handover/core', async (original) => ({
   createGitClient: () => boundary.repo,
 }));
 
-const mf = new Miniflare({
-  modules: true,
-  script: 'export default {}',
-  d1Databases: { DB: ':memory:' },
-});
-afterAll(() => mf.dispose());
+const mf = newTestD1();
 let binding: Awaited<ReturnType<typeof mf.getD1Database>>;
 let db: ReturnType<typeof openDb>;
 let cookie: string;
@@ -115,11 +109,7 @@ beforeAll(async () => {
   binding = await mf.getD1Database('DB');
   boundary.binding = binding;
   db = openDb('default', binding);
-  const ddl = await generateSQLiteMigration(
-    await generateSQLiteDrizzleJson({}),
-    await generateSQLiteDrizzleJson({ ...tables }),
-  );
-  await binding.batch(ddl.map((sql) => binding.prepare(sql)));
+  await migrateTestD1(binding);
   // Invitations seed users server-side; authOptions intentionally disables public signup.
   await db
     .insert(tables.user)

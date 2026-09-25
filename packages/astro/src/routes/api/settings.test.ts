@@ -1,5 +1,4 @@
-import { texts } from 'virtual:handover/index';
-import { afterEach, expect, test, vi } from 'vitest';
+import { expect, test, vi } from 'vitest';
 import { DELETE, GET, POST, PUT } from '../api.js';
 import {
   commitBuild,
@@ -11,9 +10,6 @@ import {
   logged,
   owner,
   publish,
-  resetContainers,
-  resetMocks,
-  resetState,
   saveDraft,
   sent,
   smtpCalls,
@@ -35,14 +31,6 @@ vi.mock('../../auth.js', async (original) =>
 vi.mock('@handover/core', async (original) =>
   coreMock((await original()) as Record<string, unknown>),
 );
-
-afterEach(() => {
-  vi.unstubAllGlobals();
-  resetContainers();
-  resetMocks();
-  resetState();
-  for (const key of Object.keys(texts)) delete texts[key];
-});
 
 const testEmail = (session?: unknown) =>
   POST(

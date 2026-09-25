@@ -1,4 +1,3 @@
-import { texts } from 'virtual:handover/index';
 import {
   applyDrift,
   formOf,
@@ -6,7 +5,7 @@ import {
   RepoUnreachableError,
   stringifyEntry,
 } from '@handover/core';
-import { afterEach, expect, test, vi } from 'vitest';
+import { expect, test, vi } from 'vitest';
 import { formSchema } from '../../index.js';
 import { GET, POST } from '../api.js';
 import {
@@ -24,9 +23,6 @@ import {
   post,
   publishDrafts,
   readyDrafts,
-  resetContainers,
-  resetMocks,
-  resetState,
   state,
 } from './harness.fixture.js';
 
@@ -43,14 +39,6 @@ vi.mock('../../auth.js', async (original) =>
 vi.mock('@handover/core', async (original) =>
   coreMock((await original()) as Record<string, unknown>),
 );
-
-afterEach(() => {
-  vi.unstubAllGlobals();
-  resetContainers();
-  resetMocks();
-  resetState();
-  for (const key of Object.keys(texts)) delete texts[key];
-});
 
 // The publish holds every file to a schema, and a global's is its own.
 test('publishing is refused when a global is missing something its schema needs', async () => {

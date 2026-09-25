@@ -1,5 +1,4 @@
-import { texts } from 'virtual:handover/index';
-import { afterEach, expect, test, vi } from 'vitest';
+import { expect, test, vi } from 'vitest';
 import { GET, POST } from '../api.js';
 import {
   createDraft,
@@ -11,9 +10,6 @@ import {
   owner,
   post,
   publish,
-  resetContainers,
-  resetMocks,
-  resetState,
   savedTemplates,
   state,
 } from './harness.fixture.js';
@@ -31,14 +27,6 @@ vi.mock('../../auth.js', async (original) =>
 vi.mock('@handover/core', async (original) =>
   coreMock((await original()) as Record<string, unknown>),
 );
-
-afterEach(() => {
-  vi.unstubAllGlobals();
-  resetContainers();
-  resetMocks();
-  resetState();
-  for (const key of Object.keys(texts)) delete texts[key];
-});
 
 test('creating an entry derives its file name and stores it as a draft, uncommitted', async () => {
   createDraft.mockClear();

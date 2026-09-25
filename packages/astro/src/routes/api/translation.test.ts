@@ -1,6 +1,5 @@
-import { texts } from 'virtual:handover/index';
 import { claimResource, ResourceLimitError, releaseResource } from '@handover/core';
-import { afterEach, expect, test, vi } from 'vitest';
+import { expect, test, vi } from 'vitest';
 import { POST } from '../api.js';
 import {
   addressed,
@@ -11,9 +10,6 @@ import {
   home,
   machine,
   post,
-  resetContainers,
-  resetMocks,
-  resetState,
   saveTranslated,
   state,
   stored,
@@ -34,14 +30,6 @@ vi.mock('../../auth.js', async (original) =>
 vi.mock('@handover/core', async (original) =>
   coreMock((await original()) as Record<string, unknown>),
 );
-
-afterEach(() => {
-  vi.unstubAllGlobals();
-  resetContainers();
-  resetMocks();
-  resetState();
-  for (const key of Object.keys(texts)) delete texts[key];
-});
 
 // The whole point of the section: the key the client pasted is the one that translates.
 test('the key stored here is the one DeepL is called with, over the one on the Worker', async () => {

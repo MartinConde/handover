@@ -1,17 +1,6 @@
-import { texts } from 'virtual:handover/index';
 import { createGitClient, openDb } from '@handover/core';
-import { afterEach, expect, test, vi } from 'vitest';
-import {
-  ctx,
-  getFile,
-  post,
-  publish,
-  put,
-  resetContainers,
-  resetMocks,
-  resetState,
-  state,
-} from './api/harness.fixture.js';
+import { expect, test, vi } from 'vitest';
+import { ctx, getFile, post, publish, put, state } from './api/harness.fixture.js';
 import { GET, POST, PUT } from './api.js';
 
 const { workerMailerMock, configMock, indexMock, cloudflareMock, authMock, coreMock } =
@@ -25,14 +14,6 @@ vi.mock('../auth.js', async (original) => authMock((await original()) as Record<
 vi.mock('@handover/core', async (original) =>
   coreMock((await original()) as Record<string, unknown>),
 );
-
-afterEach(() => {
-  vi.unstubAllGlobals();
-  resetContainers();
-  resetMocks();
-  resetState();
-  for (const key of Object.keys(texts)) delete texts[key];
-});
 
 test('ping returns the collection names and who is signed in', async () => {
   const session = {

@@ -11,13 +11,12 @@ import {
 } from '@handover/core';
 import type { APIContext } from 'astro';
 import { z } from 'astro/zod';
-import { generateSQLiteDrizzleJson, generateSQLiteMigration } from 'drizzle-kit/api';
-import { Miniflare } from 'miniflare';
-import { afterAll, beforeAll, beforeEach, expect, test, vi } from 'vitest';
-import * as tables from '../../../../core/src/tables.js';
-import { formSchema } from '../../index.js';
-import { onRequest } from '../../middleware.js';
-import { DELETE, GET, POST, PUT } from '../api.js';
+import { beforeAll, beforeEach, expect, test, vi } from 'vitest';
+import { migrateTestD1, newTestD1 } from '../../../core/src/db.fixture.js';
+import * as tables from '../../../core/src/tables.js';
+import { formSchema } from '../index.js';
+import { onRequest } from '../middleware.js';
+import { DELETE, GET, POST, PUT } from './api.js';
 
 // The workflows harness with a third language: a legacy mark can then name a non-source one.
 const boundary = vi.hoisted(() => ({
@@ -45,7 +44,7 @@ vi.mock('cloudflare:workers', () => ({
 }));
 vi.mock('virtual:handover/config', async () => {
   const { z } = await import('astro/zod');
-  const { blocks, defineBlock } = await import('../../index.js');
+  const { blocks, defineBlock } = await import('../index.js');
   return {
     default: {
       i18n: {
@@ -104,12 +103,7 @@ vi.mock('@handover/core', async (original) => ({
   },
 }));
 
-const mf = new Miniflare({
-  modules: true,
-  script: 'export default {}',
-  d1Databases: { DB: ':memory:' },
-});
-afterAll(() => mf.dispose());
+const mf = newTestD1();
 let db: ReturnType<typeof openDb>;
 let owner: string;
 let editor: string;
@@ -178,11 +172,7 @@ beforeAll(async () => {
   const binding = await mf.getD1Database('DB');
   boundary.binding = binding;
   db = openDb('default', binding);
-  const ddl = await generateSQLiteMigration(
-    await generateSQLiteDrizzleJson({}),
-    await generateSQLiteDrizzleJson({ ...tables }),
-  );
-  await binding.batch(ddl.map((sql) => binding.prepare(sql)));
+  await migrateTestD1(binding);
   owner = await signIn('owner', 'owner');
   editor = await signIn('editor', 'editor');
 });

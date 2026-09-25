@@ -1,7 +1,6 @@
-import { texts } from 'virtual:handover/index';
 import { RepoUnreachableError } from '@handover/core';
 import type { APIContext } from 'astro';
-import { afterEach, expect, test, vi } from 'vitest';
+import { expect, test, vi } from 'vitest';
 import { GET, POST } from '../api.js';
 import {
   blobs,
@@ -20,9 +19,6 @@ import {
   owner,
   pendingDrafts,
   post,
-  resetContainers,
-  resetMocks,
-  resetState,
   resolveConflict,
   restoreCommit,
   restoreDraft,
@@ -46,14 +42,6 @@ vi.mock('../../auth.js', async (original) =>
 vi.mock('@handover/core', async (original) =>
   coreMock((await original()) as Record<string, unknown>),
 );
-
-afterEach(() => {
-  vi.unstubAllGlobals();
-  resetContainers();
-  resetMocks();
-  resetState();
-  for (const key of Object.keys(texts)) delete texts[key];
-});
 
 // Per-field staleness: the entry response says *which* languages are behind.
 test('the fields a translation is behind on are read from the source it was made from', async () => {

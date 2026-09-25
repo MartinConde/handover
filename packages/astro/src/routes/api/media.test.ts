@@ -1,7 +1,6 @@
-import { texts } from 'virtual:handover/index';
 import { releaseUploadIntent } from '@handover/core';
 import type { APIContext } from 'astro';
-import { afterEach, expect, test, vi } from 'vitest';
+import { expect, test, vi } from 'vitest';
 import { DELETE, GET, PATCH, POST, PUT } from '../api.js';
 import {
   confirmUpload,
@@ -17,9 +16,6 @@ import {
   post,
   privateUploads,
   put,
-  resetContainers,
-  resetMocks,
-  resetState,
   setMediaDetails,
   state,
 } from './harness.fixture.js';
@@ -44,14 +40,6 @@ const patch = (path: string, body: unknown, locals: Record<string, unknown> = {}
     new Request(`https://x/admin/api/${path}`, { method: 'PATCH', body: JSON.stringify(body) }),
     locals,
   );
-
-afterEach(() => {
-  vi.unstubAllGlobals();
-  resetContainers();
-  resetMocks();
-  resetState();
-  for (const key of Object.keys(texts)) delete texts[key];
-});
 
 const declared = JSON.stringify({
   hash: HASH,

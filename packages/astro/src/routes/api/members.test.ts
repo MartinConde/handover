@@ -1,6 +1,5 @@
-import { texts } from 'virtual:handover/index';
 import type { APIContext } from 'astro';
-import { afterEach, expect, test, vi } from 'vitest';
+import { expect, test, vi } from 'vitest';
 import { DELETE, GET, POST } from '../api.js';
 import {
   calls,
@@ -12,9 +11,6 @@ import {
   type MemberRow,
   owner,
   released,
-  resetContainers,
-  resetMocks,
-  resetState,
   sent,
   state,
 } from './harness.fixture.js';
@@ -32,14 +28,6 @@ vi.mock('../../auth.js', async (original) =>
 vi.mock('@handover/core', async (original) =>
   coreMock((await original()) as Record<string, unknown>),
 );
-
-afterEach(() => {
-  vi.unstubAllGlobals();
-  resetContainers();
-  resetMocks();
-  resetState();
-  for (const key of Object.keys(texts)) delete texts[key];
-});
 
 test('the account route refuses a caller with no session', async () => {
   const res = await GET(ctx('account', undefined, {}));

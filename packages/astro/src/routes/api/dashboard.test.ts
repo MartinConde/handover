@@ -1,16 +1,7 @@
 import { texts } from 'virtual:handover/index';
-import { afterEach, expect, test, vi } from 'vitest';
+import { expect, test, vi } from 'vitest';
 import { GET } from '../api.js';
-import {
-  ctx,
-  heldDrafts,
-  overlayRows,
-  pendingDrafts,
-  resetContainers,
-  resetMocks,
-  resetState,
-  state,
-} from './harness.fixture.js';
+import { ctx, heldDrafts, overlayRows, pendingDrafts, state } from './harness.fixture.js';
 
 const { workerMailerMock, configMock, indexMock, cloudflareMock, authMock, coreMock } =
   await vi.hoisted(async () => import('./harness.fixture.js'));
@@ -25,14 +16,6 @@ vi.mock('../../auth.js', async (original) =>
 vi.mock('@handover/core', async (original) =>
   coreMock((await original()) as Record<string, unknown>),
 );
-
-afterEach(() => {
-  vi.unstubAllGlobals();
-  resetContainers();
-  resetMocks();
-  resetState();
-  for (const key of Object.keys(texts)) delete texts[key];
-});
 
 // The site settings list: the cards, in cms.config.ts order.
 test('the globals list names each global and the languages it has a file in', async () => {

@@ -1,20 +1,7 @@
-import { texts } from 'virtual:handover/index';
 import { parseEntry } from '@handover/core';
-import { afterEach, expect, test, vi } from 'vitest';
+import { expect, test, vi } from 'vitest';
 import { DELETE, GET, POST, PUT } from '../api.js';
-import {
-  ctx,
-  files,
-  logged,
-  owner,
-  pendingDrafts,
-  post,
-  publish,
-  put,
-  resetContainers,
-  resetMocks,
-  resetState,
-} from './harness.fixture.js';
+import { ctx, files, logged, owner, pendingDrafts, post, publish, put } from './harness.fixture.js';
 
 const { workerMailerMock, configMock, indexMock, cloudflareMock, authMock, coreMock } =
   await vi.hoisted(async () => import('./harness.fixture.js'));
@@ -29,14 +16,6 @@ vi.mock('../../auth.js', async (original) =>
 vi.mock('@handover/core', async (original) =>
   coreMock((await original()) as Record<string, unknown>),
 );
-
-afterEach(() => {
-  vi.unstubAllGlobals();
-  resetContainers();
-  resetMocks();
-  resetState();
-  for (const key of Object.keys(texts)) delete texts[key];
-});
 
 // Manual redirect rules use redirects.yaml.
 
