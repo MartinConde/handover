@@ -15,8 +15,7 @@ import { type RedirectRule, redirectRule } from '../content/redirects.js';
 import { checkReserved } from '../content/reserved.js';
 import type { Form } from '../content/schema.js';
 import { machineFilled } from '../content/translate.js';
-import { chunksOf, D1_MAX_BOUND_PARAMETERS } from '../d1-limits.js';
-import type { Db, Draft } from '../db.js';
+import { chunksOf, D1_MAX_BOUND_PARAMETERS, type Db, type Draft } from '../db.js';
 import { blobSha, type GitClient } from '../publishing/git.js';
 import { drafts, media, pathReservations, user } from '../tables.js';
 

@@ -1,8 +1,7 @@
 import { and, desc, eq, inArray, isNotNull, like, lt, or } from 'drizzle-orm';
 import { entryKey } from '../content/entries.js';
 import { newId } from '../content/reserved.js';
-import { chunksOf, D1_MAX_BOUND_PARAMETERS } from '../d1-limits.js';
-import type { Db } from '../db.js';
+import { chunksOf, D1_MAX_BOUND_PARAMETERS, type Db } from '../db.js';
 import type { Role } from '../identity/auth.js';
 import { activity, operations, user } from '../tables.js';
 

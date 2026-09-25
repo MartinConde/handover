@@ -2,8 +2,7 @@ import { and, eq, gt, inArray, isNotNull, ne, or, sql } from 'drizzle-orm';
 import { entryKey } from '../content/entries.js';
 import { parseEntry, stringifyEntry, writtenEntry } from '../content/entry-format.js';
 import { REDIRECTS, type RedirectRule } from '../content/redirects.js';
-import { chunksOf, D1_MAX_BOUND_PARAMETERS } from '../d1-limits.js';
-import type { Db, Draft } from '../db.js';
+import { chunksOf, D1_MAX_BOUND_PARAMETERS, type Db, type Draft } from '../db.js';
 import { keptSource, loadDraft, nextRevision } from '../drafts/drafts.js';
 import {
   beginOperation,

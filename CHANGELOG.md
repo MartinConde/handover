@@ -11,6 +11,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Internal: a raw NUL byte in core's conflict resolver is written as `\u0000`, so git and grep
   read the file as text.
 - Internal: the dated September security review is removed from the repository.
+- Internal: core's D1 chunking helpers live in `db.ts`, and the schema-version tests sit with
+  the table tests.
 - `handover init` reads Wrangler JSONC and TOML with standard parsers, preserving comment
   characters inside quoted values and reporting invalid configuration before provisioning.
 - The published `astro-handover` package excludes route test fixtures. Core modules are
