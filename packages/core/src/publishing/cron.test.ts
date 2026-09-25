@@ -4,7 +4,7 @@ import { newTestD1, resetTestD1 } from '../db.fixtures.js';
 import { type Db, openDb } from '../db.js';
 import type { R2Store } from '../media/media.js';
 import * as tables from '../tables.js';
-import { JOB_NAMES, runDue, runJob } from './cron.js';
+import { findHiddenLong, JOB_NAMES, lastHiddenLong, runDue, runJob } from './cron.js';
 
 // The same harness the other D1 files use.
 const mf = newTestD1();
@@ -288,4 +288,103 @@ test('the hidden job writes what it found into its activity row', async () => {
   expect(await kinds()).toEqual([
     `cron-hidden {"done":1,"entries":[{"path":"${path}","since":"${since}"}]}`,
   ]);
+});
+
+// hidden-long: dated from each hidden file's own commits.
+
+const ago = (days: number) => new Date(NOW - days * DAY).toISOString();
+const hidden = '_status: "hidden"\ntitle: "Put away"\n';
+const title = 'title: "The Mill House"\n';
+const file = (collection: string, locale: string, name: string) =>
+  `src/content/${collection}/${locale}/${name}.yaml`;
+
+function repo(
+  tip: Record<string, string>,
+  log: Record<string, { sha: string; date: string }[]>,
+  versions: Record<string, string> = {},
+) {
+  const asked: string[] = [];
+  return {
+    asked,
+    git: {
+      contentFiles: async () => Object.entries(tip).map(([path, contents]) => ({ path, contents })),
+      fileCommits: async (path: string) => {
+        asked.push(`log ${path}`);
+        return (log[path] ?? []).map((c) => ({ ...c, message: 'x' }));
+      },
+      getFile: async (path: string, ref?: string) => {
+        asked.push(`file ${path}@${ref}`);
+        const contents = versions[`${path}@${ref}`];
+        return contents === undefined ? undefined : { contents, blob_sha: 'b' };
+      },
+    },
+  };
+}
+
+test('the job finds a file hidden 91 days ago and not one hidden 89 days ago', async () => {
+  const barn = file('listings', 'en', 'old-barn');
+  const cafe = file('listings', 'en', 'cafe-bar');
+  const { git, asked } = repo(
+    {
+      [barn]: hidden,
+      [cafe]: hidden,
+      [file('listings', 'en', 'mill-house')]: title,
+    },
+    { [barn]: [{ sha: 'h1', date: ago(91) }], [cafe]: [{ sha: 'h2', date: ago(89) }] },
+  );
+
+  expect(await findHiddenLong('default', git, NOW)).toEqual({
+    done: 1,
+    entries: [{ path: barn, since: ago(91) }],
+  });
+  // A live file's history is never read, and the tip's own version is never read back.
+  expect(asked).toEqual([`log ${barn}`, `log ${cafe}`]);
+});
+
+test('an edit after the hide keeps the date of the hide', async () => {
+  const barn = file('listings', 'en', 'old-barn');
+  const { git } = repo(
+    { [barn]: hidden },
+    {
+      [barn]: [
+        { sha: 'edit', date: ago(5) },
+        { sha: 'hide', date: ago(100) },
+      ],
+    },
+    { [`${barn}@hide`]: hidden },
+  );
+
+  expect((await findHiddenLong('default', git, NOW)).entries).toEqual([
+    { path: barn, since: ago(100) },
+  ]);
+});
+
+test('a page shown and hidden again counts from the newer hide', async () => {
+  const barn = file('listings', 'en', 'old-barn');
+  const { git } = repo(
+    { [barn]: hidden },
+    {
+      [barn]: [
+        { sha: 'hide', date: ago(10) },
+        { sha: 'shown', date: ago(100) },
+      ],
+    },
+    { [`${barn}@shown`]: title },
+  );
+
+  expect((await findHiddenLong('default', git, NOW)).entries).toEqual([]);
+});
+
+test('a site with no repository configured has nothing for the job to read', async () => {
+  expect(await findHiddenLong('default', undefined, NOW)).toEqual({ done: 0, entries: [] });
+});
+
+test('the drawer reads the list the job wrote this week, not an older one or a failed run', async () => {
+  const row = (id: string, at: number, detail: unknown) =>
+    db.insert(tables.activity).values({ id, siteId: 'default', at, kind: 'cron-hidden', detail });
+  await row('old', NOW - 3 * DAY, { done: 1, entries: [{ path: 'a', since: ago(100) }] });
+  await row('fresh', NOW - DAY, { done: 1, entries: [{ path: 'b', since: ago(100) }] });
+  await row('failed', NOW - 60_000, { error: 'the repository could not be reached' });
+
+  expect(await lastHiddenLong('default', db, NOW)).toEqual([{ path: 'b', since: ago(100) }]);
 });

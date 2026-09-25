@@ -1,11 +1,12 @@
-import { and, eq, isNotNull, isNull, lte, or } from 'drizzle-orm';
+import { and, desc, eq, gt, isNotNull, isNull, lte, or } from 'drizzle-orm';
+import { entryParts } from '../content/entries.js';
+import { isObject } from '../content/entry-format.js';
 import { newId } from '../content/reserved.js';
 import type { Db } from '../db.js';
 import { sweepOrphans } from '../drafts/drafts.js';
 import { type R2Store, reconcileMedia } from '../media/media.js';
-import { cronState } from '../tables.js';
+import { activity, cronState } from '../tables.js';
 import { expireActivity, logActivity } from './activity.js';
-import { findHiddenLong } from './checks.js';
 import type { GitClient } from './git.js';
 
 /** Jobs receive shared dependencies and ignore what they do not need. */
@@ -143,4 +144,65 @@ export async function runDue(siteId: string, deps: JobDeps): Promise<CronReport>
     }
   }
   return report;
+}
+
+const DAY = 24 * 60 * 60 * 1000;
+const LONG_HIDDEN = 90 * DAY;
+// Top-level only, so a `_status` inside a block does not match; quoted or not.
+const HIDDEN = /^_status:\s*["']?hidden["']?\s*$/m;
+
+export interface HiddenLong {
+  path: string;
+  since: string;
+}
+
+/** Dated from the file's own commits, walked newest first until a shown or old-enough version. */
+export async function findHiddenLong(
+  _siteId: string,
+  git: Pick<GitClient, 'contentFiles' | 'fileCommits' | 'getFile'> | undefined,
+  now = Date.now(),
+): Promise<{ done: number; entries: HiddenLong[] }> {
+  const entries: HiddenLong[] = [];
+  if (!git) return { done: 0, entries };
+  const files = (await git.contentFiles()).filter(
+    (f) => entryParts(f.path) && HIDDEN.test(f.contents),
+  );
+  for (const { path } of files) {
+    let since: string | undefined;
+    for (const [i, commit] of (await git.fileCommits(path)).entries()) {
+      if (i > 0 && !HIDDEN.test((await git.getFile(path, commit.sha))?.contents ?? '')) break;
+      since = commit.date;
+      if (now - Date.parse(since) > LONG_HIDDEN) break;
+    }
+    if (since && now - Date.parse(since) > LONG_HIDDEN) entries.push({ path, since });
+  }
+  return { done: entries.length, entries };
+}
+
+/** A failed run leaves the last answer standing; after two days there is nothing current. */
+export async function lastHiddenLong(
+  siteId: string,
+  db: Db,
+  now = Date.now(),
+): Promise<HiddenLong[]> {
+  const rows = await db
+    .select({ detail: activity.detail })
+    .from(activity)
+    .where(
+      and(
+        eq(activity.siteId, siteId),
+        eq(activity.kind, 'cron-hidden'),
+        gt(activity.at, now - 2 * DAY),
+      ),
+    )
+    .orderBy(desc(activity.at));
+  for (const { detail } of rows) {
+    const list = isObject(detail) ? detail.entries : undefined;
+    if (Array.isArray(list))
+      return list.filter(
+        (e): e is HiddenLong =>
+          isObject(e) && typeof e.path === 'string' && typeof e.since === 'string',
+      );
+  }
+  return [];
 }

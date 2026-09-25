@@ -274,11 +274,10 @@ export type {
   CheckResult,
   CheckSeverity,
   CheckSite,
-  HiddenLong,
 } from './publishing/checks.js';
-export { CHECKS, lastHiddenLong, runChecks } from './publishing/checks.js';
-export type { CronReport, JobDeps } from './publishing/cron.js';
-export { runDue } from './publishing/cron.js';
+export { CHECKS, runChecks } from './publishing/checks.js';
+export type { CronReport, HiddenLong, JobDeps } from './publishing/cron.js';
+export { lastHiddenLong, runDue } from './publishing/cron.js';
 export type {
   CommitComparison,
   CommitPage,

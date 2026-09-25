@@ -1,6 +1,6 @@
 // Mostly warnings and notes; an error is what the drawer will not publish past.
 
-import { and, desc, eq, gt, inArray } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { type ContentIndex, entryParts, type IndexEntry } from '../content/entries.js';
 import { isObject, parseEntry } from '../content/entry-format.js';
 import { type I18nRouting, previewTarget } from '../content/names.js';
@@ -15,8 +15,8 @@ import {
 } from '../content/seo.js';
 import type { Db } from '../db.js';
 import { objectExists, type R2Store } from '../media/media.js';
-import { activity, media } from '../tables.js';
-import type { GitClient } from './git.js';
+import { media } from '../tables.js';
+import type { HiddenLong } from './cron.js';
 
 export type CheckSeverity = 'error' | 'warn' | 'info';
 
@@ -178,65 +178,6 @@ export async function runChecks(
 }
 
 const DAY = 24 * 60 * 60 * 1000;
-const LONG_HIDDEN = 90 * DAY;
-// Top-level only, so a `_status` inside a block does not match; quoted or not.
-const HIDDEN = /^_status:\s*["']?hidden["']?\s*$/m;
-
-export interface HiddenLong {
-  path: string;
-  since: string;
-}
-
-/** Dated from the file's own commits, walked newest first until a shown or old-enough version. */
-export async function findHiddenLong(
-  _siteId: string,
-  git: Pick<GitClient, 'contentFiles' | 'fileCommits' | 'getFile'> | undefined,
-  now = Date.now(),
-): Promise<{ done: number; entries: HiddenLong[] }> {
-  const entries: HiddenLong[] = [];
-  if (!git) return { done: 0, entries };
-  const files = (await git.contentFiles()).filter(
-    (f) => entryParts(f.path) && HIDDEN.test(f.contents),
-  );
-  for (const { path } of files) {
-    let since: string | undefined;
-    for (const [i, commit] of (await git.fileCommits(path)).entries()) {
-      if (i > 0 && !HIDDEN.test((await git.getFile(path, commit.sha))?.contents ?? '')) break;
-      since = commit.date;
-      if (now - Date.parse(since) > LONG_HIDDEN) break;
-    }
-    if (since && now - Date.parse(since) > LONG_HIDDEN) entries.push({ path, since });
-  }
-  return { done: entries.length, entries };
-}
-
-/** A failed run leaves the last answer standing; after two days there is nothing current. */
-export async function lastHiddenLong(
-  siteId: string,
-  db: Db,
-  now = Date.now(),
-): Promise<HiddenLong[]> {
-  const rows = await db
-    .select({ detail: activity.detail })
-    .from(activity)
-    .where(
-      and(
-        eq(activity.siteId, siteId),
-        eq(activity.kind, 'cron-hidden'),
-        gt(activity.at, now - 2 * DAY),
-      ),
-    )
-    .orderBy(desc(activity.at));
-  for (const { detail } of rows) {
-    const list = isObject(detail) ? detail.entries : undefined;
-    if (Array.isArray(list))
-      return list.filter(
-        (e): e is HiddenLong =>
-          isObject(e) && typeof e.path === 'string' && typeof e.since === 'string',
-      );
-  }
-  return [];
-}
 
 // The entry's to settle, not one file's: it is reported once, on a file the publish carries.
 function unresolved(source: Extract<EntrySource, { problem: string }>): string {
