@@ -46,6 +46,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   route module, and the source-language and workflow suites use core's test D1.
 - Internal: the unused admin `Preview` component, its styles, its messages and
   `formatElapsedTime` are removed; Canvas is the admin's only preview.
+- Internal: 18 admin messages nothing displays are removed from both catalogs.
 - `@handover/core`: `setEntryStatus` no longer takes a `deps` argument, and `claimResource` no
   longer takes `windowMs`; the window is always one hour.
 - `@handover/core`: `clearPublished` now requires the deployment's git client as its fourth
