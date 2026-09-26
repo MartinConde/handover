@@ -77,6 +77,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Internal: the Canvas browser tests are split into lifecycle, block-control and admin-screen
   files, and every test that serves a Canvas preview goes through one helper.
 - Internal: the astro Canvas component tests drop two duplicate renders.
+- Internal: the in-page Canvas entry no longer re-exports the admin renderer, the bridge or the
+  plain-text runtime, which only a test fixture used. Its initial graph drops from 371,281 to 362,311 bytes
+  decoded (118,405 to 115,444 gzip, 103,671 to 100,959 Brotli).
 - `@handover/core`: `setEntryStatus` no longer takes a `deps` argument, and `claimResource` no
   longer takes `windowMs`; the window is always one hour.
 - `@handover/core`: `clearPublished` now requires the deployment's git client as its fourth

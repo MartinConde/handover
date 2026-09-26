@@ -1,11 +1,5 @@
 ---
-import assets from 'virtual:handover/ui';
-
 export const prerender = false;
-
-const canvas = assets.entries.canvas;
-if (!canvas) return new Response('Canvas entry missing', { status: 500 });
-const canvasUrl = `/admin/_assets/${canvas.script}`;
 ---
 
 <!doctype html>
@@ -21,8 +15,9 @@ const canvasUrl = `/admin/_assets/${canvas.script}`;
     <output id="selection-state" aria-live="polite"></output>
     <div id="canvas-stage" aria-label="Canvas stage"></div>
     <output id="canvas-state" aria-live="polite"></output>
-    <script is:inline type="module" define:vars={{ canvasUrl }}>
-      const canvas = await import(canvasUrl);
+    <script>
+      import { createCanvasRenderer } from '../../../../../../ui/src/canvas/canvas-renderer';
+
       const stage = document.querySelector('#canvas-stage');
       const output = document.querySelector('#canvas-state');
       const structure = document.querySelector('#selection-structure');
@@ -52,7 +47,7 @@ const canvasUrl = `/admin/_assets/${canvas.script}`;
           },
         };
       };
-      const renderer = canvas.createCanvasRenderer({
+      const renderer = createCanvasRenderer({
         stage,
         timeoutMs: 1500,
         contentVersion: () => version,

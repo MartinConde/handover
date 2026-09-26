@@ -14,9 +14,6 @@ import { createEntryDirectoryReader } from './entry-directory';
 import { messageOptions } from './i18n';
 import * as m from './paraglide/messages.js';
 
-export * from './canvas/canvas-bridge';
-export * from './canvas/canvas-renderer';
-export * from './canvas/runtime/canvas-plain-text';
 export * from './canvas/runtime/canvas-selection';
 export const loadCanvasRichTextEditor = () => import('./canvas/runtime/canvas-rich-text');
 
