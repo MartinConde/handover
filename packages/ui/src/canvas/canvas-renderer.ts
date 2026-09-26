@@ -232,10 +232,6 @@ export function createCanvasRenderer(options: CanvasRendererOptions) {
   const root = options.document ?? document;
   const timeoutMs = options.timeoutMs ?? 10_000;
   const renderDelayMs = options.renderDelayMs ?? 200;
-  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0)
-    throw new Error('Canvas render timeout must be positive.');
-  if (!Number.isFinite(renderDelayMs) || renderDelayMs < 0)
-    throw new Error('Canvas render delay must not be negative.');
 
   let state: CanvasRendererState = { phase: 'idle' };
   let active: RenderFrame | undefined;
@@ -253,9 +249,6 @@ export function createCanvasRenderer(options: CanvasRendererOptions) {
   let problemAddresses: string[] = [];
   let lostStop = false;
   const setInteractionState = (next: Partial<CanvasInteractionState>) => {
-    for (const value of Object.values(next))
-      if (value !== undefined && typeof value !== 'boolean')
-        throw new Error('Canvas interaction state must contain booleans.');
     interaction = { ...interaction, ...next };
     if (candidate) settle(candidate);
   };
@@ -391,8 +384,6 @@ export function createCanvasRenderer(options: CanvasRendererOptions) {
     requestId = identifier(options.requestId?.() ?? randomId(), 'request ID'),
   ): Promise<CanvasRenderResult> => {
     if (disposed) throw new Error('Canvas renderer is disposed.');
-    if (request.snapshot.mode !== 'canvas' || request.snapshot.protocol !== CANVAS_PROTOCOL)
-      throw new Error('Canvas render snapshot is invalid.');
     if (candidate) finishFailure(candidate, 'superseded', {}, false);
     lastRequest = request;
 

@@ -210,11 +210,17 @@ const REFUSALS = new Set<CanvasCommandRefusal>([
 const BASE = ['protocol', 'requestId', 'epoch', 'entry', 'locale', 'contentVersion'];
 const record = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
-const keys = (value: Record<string, unknown>, expected: readonly string[]) =>
-  Object.keys(value).length === expected.length &&
-  Object.keys(value).every((key) => expected.includes(key));
+const keys = (
+  value: Record<string, unknown>,
+  required: readonly string[],
+  optional: readonly string[] = [],
+) =>
+  required.every((key) => Object.hasOwn(value, key)) &&
+  Object.keys(value).every((key) => required.includes(key) || optional.includes(key));
 const id = (value: unknown): value is string =>
   typeof value === 'string' && value.length > 0 && value.length <= 200;
+const count = (value: unknown): value is number =>
+  Number.isSafeInteger(value) && (value as number) >= 0;
 const address = (value: unknown): value is string =>
   typeof value === 'string' && value.length > 0 && value.length <= CANVAS_ADDRESS_LIMIT;
 const documentIdentity = (value: unknown): value is CanvasDocumentIdentity =>
@@ -227,12 +233,7 @@ const location = (value: unknown): value is CanvasLocation =>
   address(value.address);
 const target = (value: unknown): value is CanvasTarget =>
   record(value) &&
-  keys(
-    value,
-    value.occurrence === undefined
-      ? ['document', 'locale', 'address']
-      : ['document', 'locale', 'address', 'occurrence'],
-  ) &&
+  keys(value, ['document', 'locale', 'address'], ['occurrence']) &&
   documentIdentity(value.document) &&
   id(value.locale) &&
   address(value.address) &&
@@ -262,19 +263,11 @@ const selection = (value: unknown): value is CanvasSelection =>
   target(value.target);
 const structureNode = (value: unknown): value is CanvasStructureNode =>
   record(value) &&
-  keys(value, [
-    'id',
-    'kind',
-    'target',
-    'label',
-    'depth',
-    'position',
-    'setSize',
-    'occurrences',
-    ...(value.parentId === undefined ? [] : ['parentId']),
-    ...(value.empty === undefined ? [] : ['empty']),
-    ...(value.container === undefined ? [] : ['container']),
-  ]) &&
+  keys(
+    value,
+    ['id', 'kind', 'target', 'label', 'depth', 'position', 'setSize', 'occurrences'],
+    ['parentId', 'empty', 'container'],
+  ) &&
   id(value.id) &&
   annotationKind(value.kind) &&
   target(value.target) &&
@@ -331,20 +324,13 @@ const wireValue = (value: unknown, seen = new Set<object>()): boolean => {
 };
 const textSelection = (value: unknown): value is CanvasTextSelection =>
   record(value) &&
-  keys(value, value.kind === undefined ? ['anchor', 'head'] : ['kind', 'anchor', 'head']) &&
+  keys(value, ['anchor', 'head'], ['kind']) &&
   (value.kind === undefined || value.kind === 'node' || value.kind === 'text') &&
-  Number.isSafeInteger(value.anchor) &&
-  (value.anchor as number) >= 0 &&
-  Number.isSafeInteger(value.head) &&
-  (value.head as number) >= 0;
+  count(value.anchor) &&
+  count(value.head);
 const textHistory = (value: unknown): value is CanvasTextHistory =>
   record(value) &&
-  keys(value, [
-    'kind',
-    ...(value.group === undefined ? [] : ['group']),
-    ...(value.before === undefined ? [] : ['before']),
-    ...(value.after === undefined ? [] : ['after']),
-  ]) &&
+  keys(value, ['kind'], ['group', 'before', 'after']) &&
   (value.kind === 'composition' ||
     value.kind === 'format' ||
     value.kind === 'paste' ||
@@ -354,7 +340,7 @@ const textHistory = (value: unknown): value is CanvasTextHistory =>
   (value.after === undefined || textSelection(value.after));
 const textUpdate = (value: unknown): value is CanvasTextUpdate =>
   record(value) &&
-  keys(value, value.selection === undefined ? ['value'] : ['value', 'selection']) &&
+  keys(value, ['value'], ['selection']) &&
   typeof value.value === 'string' &&
   (value.selection === undefined || textSelection(value.selection));
 const linkValue = (value: unknown): value is CanvasLinkValue =>
@@ -365,34 +351,23 @@ const linkValue = (value: unknown): value is CanvasLinkValue =>
   typeof value.href === 'string' &&
   typeof value.label === 'string' &&
   typeof value.newTab === 'boolean';
-const textField = (value: unknown): value is CanvasTextField => {
-  if (!record(value) || !target(value.target)) return false;
-  if (value.kind === 'link')
-    return keys(value, ['target', 'value', 'kind']) && linkValue(value.value);
-  return (
-    keys(
-      value,
-      value.kind === 'richtext' ? ['target', 'value', 'kind', 'tier'] : ['target', 'value', 'kind'],
-    ) &&
-    typeof value.value === 'string' &&
-    (value.kind === 'text' ||
-      (value.kind === 'richtext' && (value.tier === 'basic' || value.tier === 'full')))
-  );
-};
+const textField = (value: unknown): value is CanvasTextField =>
+  record(value) &&
+  keys(value, ['kind', 'target', 'value'], ['tier']) &&
+  target(value.target) &&
+  (value.kind === 'link'
+    ? value.tier === undefined && linkValue(value.value)
+    : typeof value.value === 'string' &&
+      (value.kind === 'text'
+        ? value.tier === undefined
+        : value.kind === 'richtext' && (value.tier === 'basic' || value.tier === 'full')));
 const editingState = (value: unknown): value is CanvasEditingState =>
   record(value) &&
-  keys(
-    value,
-    value.dragging === undefined
-      ? ['inlineEditing', 'composing']
-      : ['inlineEditing', 'composing', 'dragging'],
-  ) &&
+  keys(value, ['inlineEditing', 'composing'], ['dragging']) &&
   typeof value.inlineEditing === 'boolean' &&
   typeof value.composing === 'boolean' &&
   (value.dragging === undefined || typeof value.dragging === 'boolean') &&
   (!value.composing || value.inlineEditing);
-const interactionMode = (value: unknown): value is CanvasInteractionMode =>
-  value === 'edit' || value === 'interact';
 const absoluteUrl = (value: unknown): value is string => {
   if (typeof value !== 'string' || value.length === 0 || value.length > 8_192) return false;
   try {
@@ -401,22 +376,6 @@ const absoluteUrl = (value: unknown): value is string => {
   } catch {
     return false;
   }
-};
-const navigationRequest = (value: unknown): value is CanvasNavigationRequest => {
-  if (!record(value)) return false;
-  if (value.kind === 'link')
-    return (
-      keys(value, ['kind', 'href', 'newTab', 'download']) &&
-      absoluteUrl(value.href) &&
-      typeof value.newTab === 'boolean' &&
-      typeof value.download === 'boolean'
-    );
-  return (
-    value.kind === 'form' &&
-    keys(value, ['kind', 'href', 'method']) &&
-    absoluteUrl(value.href) &&
-    (value.method === 'get' || value.method === 'post')
-  );
 };
 const mutation = (value: unknown): value is CanvasMutation => {
   if (!record(value)) return false;
@@ -427,16 +386,12 @@ const mutation = (value: unknown): value is CanvasMutation => {
     );
   return (
     value.type === 'field' &&
-    keys(
-      value,
-      value.history === undefined ? ['type', 'changes'] : ['type', 'changes', 'history'],
-    ) &&
+    keys(value, ['type', 'changes'], ['history']) &&
     Array.isArray(value.changes) &&
     value.changes.every(
       (change) =>
         record(change) &&
-        keys(change, change.path === undefined ? ['value'] : ['path', 'value']) &&
-        Object.hasOwn(change, 'value') &&
+        keys(change, ['value'], ['path']) &&
         (change.path === undefined ||
           (Array.isArray(change.path) && change.path.every((part) => typeof part === 'string'))) &&
         wireValue(change.value),
@@ -444,6 +399,12 @@ const mutation = (value: unknown): value is CanvasMutation => {
     (value.history === undefined || textHistory(value.history))
   );
 };
+const canvasAnchor = (value: unknown): value is CanvasAnchor =>
+  record(value) &&
+  keys(value, ['left', 'top', 'width', 'height']) &&
+  Object.values(value).every((part) => typeof part === 'number' && Number.isFinite(part)) &&
+  (value.width as number) >= 0 &&
+  (value.height as number) >= 0;
 const identity = (
   value: Record<string, unknown>,
 ): value is Record<string, unknown> & CanvasIdentity =>
@@ -452,270 +413,187 @@ const identity = (
   id(value.epoch) &&
   documentIdentity(value.entry) &&
   id(value.locale) &&
-  Number.isSafeInteger(value.contentVersion) &&
-  (value.contentVersion as number) >= 0;
-const ready = (value: unknown): value is CanvasIdentity & { type: 'handover:canvas:ready' } =>
-  record(value) &&
-  keys(value, ['type', ...BASE]) &&
-  value.type === 'handover:canvas:ready' &&
-  identity(value);
-const command = (value: unknown): value is CanvasCommandMessage =>
-  record(value) &&
-  keys(value, ['type', ...BASE, 'commandId', 'target', 'command']) &&
-  value.type === 'handover:canvas:command' &&
-  identity(value) &&
-  id(value.commandId) &&
-  target(value.target) &&
-  mutation(value.command);
-const acknowledgement = (value: unknown): CanvasAcknowledgement | undefined => {
-  if (!record(value) || value.type !== 'handover:canvas:ack' || !identity(value)) return;
-  const common = ['type', ...BASE, 'commandId', 'target', 'ok'];
-  if (!id(value.commandId) || !target(value.target)) return;
-  const valid =
-    value.ok === true
-      ? keys(
-          value,
-          value.update === undefined
-            ? [...common, 'acceptedVersion']
-            : [...common, 'acceptedVersion', 'update'],
-        ) &&
-        Number.isSafeInteger(value.acceptedVersion) &&
-        (value.acceptedVersion as number) >= 0 &&
-        (value.update === undefined || textUpdate(value.update))
-      : value.ok === false &&
-        keys(
-          value,
-          value.acceptedVersion === undefined
-            ? [...common, 'reason']
-            : value.update === undefined
-              ? [...common, 'reason', 'acceptedVersion']
-              : [...common, 'reason', 'acceptedVersion', 'update'],
-        ) &&
-        REFUSALS.has(value.reason as CanvasCommandRefusal) &&
-        (value.acceptedVersion === undefined ||
-          (Number.isSafeInteger(value.acceptedVersion) &&
-            (value.acceptedVersion as number) >= 0)) &&
-        (value.update === undefined || textUpdate(value.update));
-  if (valid) return value as unknown as CanvasAcknowledgement;
-};
-const textFieldMessage = (
+  count(value.contentVersion);
+
+type Envelope<Type extends string, Body = unknown> = CanvasIdentity & {
+  type: `handover:canvas:${Type}`;
+} & Body;
+type ReadyMessage = Envelope<'ready'>;
+type TextFieldMessage = Envelope<'text-field', { field: CanvasTextField | null }>;
+type EditingMessage = Envelope<
+  'editing',
+  { target: CanvasTarget; state: CanvasEditingState; interactionId?: string }
+>;
+type SelectionMessage = Envelope<'selection', { selection: CanvasSelection }>;
+type StructureMessage = Envelope<'structure', { nodes: CanvasStructureNode[] }>;
+type ActionsMessage = Envelope<'actions', CanvasActionCapability>;
+type SelectMessage = Envelope<'select', { selection: CanvasSelection; scroll?: boolean }>;
+type ModeMessage = Envelope<'mode', { mode: CanvasInteractionMode }>;
+type CanvasProblemsMessage = Envelope<'problems', { addresses: string[] }>;
+
+const envelope = <T extends { type: string }>(
   value: unknown,
-):
-  | (CanvasIdentity & { type: 'handover:canvas:text-field'; field: CanvasTextField | null })
-  | undefined => {
+  type: T['type'],
+  required: readonly string[],
+  optional: readonly string[],
+  valid: (value: Record<string, unknown>) => boolean,
+): T | undefined => {
   if (
     record(value) &&
-    keys(value, ['type', ...BASE, 'field']) &&
-    value.type === 'handover:canvas:text-field' &&
+    value.type === type &&
+    keys(value, ['type', ...BASE, ...required], optional) &&
     identity(value) &&
-    (value.field === null || textField(value.field))
+    valid(value)
   )
-    return value as unknown as CanvasIdentity & {
-      type: 'handover:canvas:text-field';
-      field: CanvasTextField | null;
-    };
+    return value as unknown as T;
 };
-const editingMessage = (
-  value: unknown,
-):
-  | (CanvasIdentity & {
-      type: 'handover:canvas:editing';
-      target: CanvasTarget;
-      state: CanvasEditingState;
-      interactionId?: string;
-    })
-  | undefined => {
-  if (
-    record(value) &&
-    keys(value, [
-      'type',
-      ...BASE,
-      'target',
-      'state',
-      ...(value.interactionId === undefined ? [] : ['interactionId']),
-    ]) &&
-    value.type === 'handover:canvas:editing' &&
-    identity(value) &&
-    target(value.target) &&
-    editingState(value.state) &&
-    (value.interactionId === undefined || id(value.interactionId))
-  )
-    return value as unknown as CanvasIdentity & {
-      type: 'handover:canvas:editing';
-      target: CanvasTarget;
-      state: CanvasEditingState;
-      interactionId?: string;
-    };
-};
-const selectionMessage = (
-  value: unknown,
-):
-  | (CanvasIdentity & { type: 'handover:canvas:selection'; selection: CanvasSelection })
-  | undefined => {
-  if (
-    record(value) &&
-    keys(value, ['type', ...BASE, 'selection']) &&
-    value.type === 'handover:canvas:selection' &&
-    identity(value) &&
-    selection(value.selection)
-  )
-    return value as unknown as CanvasIdentity & {
-      type: 'handover:canvas:selection';
-      selection: CanvasSelection;
-    };
-};
-const structureMessage = (
-  value: unknown,
-):
-  | (CanvasIdentity & { type: 'handover:canvas:structure'; nodes: CanvasStructureNode[] })
-  | undefined => {
-  if (
-    record(value) &&
-    keys(value, ['type', ...BASE, 'nodes']) &&
-    value.type === 'handover:canvas:structure' &&
-    identity(value) &&
-    structure(value.nodes)
-  )
-    return value as unknown as CanvasIdentity & {
-      type: 'handover:canvas:structure';
-      nodes: CanvasStructureNode[];
-    };
-};
-const canvasAnchor = (value: unknown): value is CanvasAnchor =>
-  record(value) &&
-  keys(value, ['left', 'top', 'width', 'height']) &&
-  Object.values(value).every((part) => typeof part === 'number' && Number.isFinite(part)) &&
-  (value.width as number) >= 0 &&
-  (value.height as number) >= 0;
-const actionMessage = (value: unknown): CanvasActionMessage | undefined => {
-  if (
-    record(value) &&
-    keys(
-      value,
-      value.action === 'move'
-        ? ['type', ...BASE, 'action', 'selection', 'destination']
-        : value.action === 'edit-media'
-          ? ['type', ...BASE, 'action', 'selection', 'anchor']
-          : ['type', ...BASE, 'action', 'selection'],
-    ) &&
-    value.type === 'handover:canvas:action' &&
-    identity(value) &&
-    blockAction(value.action) &&
-    selection(value.selection) &&
-    (value.action !== 'move' || selection(value.destination)) &&
-    (value.action !== 'edit-media' || canvasAnchor(value.anchor))
-  )
-    return value as unknown as CanvasActionMessage;
-};
-const navigationMessage = (value: unknown): CanvasNavigationMessage | undefined => {
-  if (
-    record(value) &&
-    keys(
-      value,
-      value.kind === 'link'
-        ? ['type', ...BASE, 'kind', 'href', 'newTab', 'download']
-        : ['type', ...BASE, 'kind', 'href', 'method'],
-    ) &&
-    value.type === 'handover:canvas:navigate' &&
-    identity(value) &&
-    navigationRequest(
-      value.kind === 'link'
-        ? {
-            kind: value.kind,
-            href: value.href,
-            newTab: value.newTab,
-            download: value.download,
-          }
-        : { kind: value.kind, href: value.href, method: value.method },
-    )
-  )
-    return value as unknown as CanvasNavigationMessage;
-};
-const actionCapabilityMessage = (
-  value: unknown,
-): (CanvasIdentity & { type: 'handover:canvas:actions' } & CanvasActionCapability) | undefined => {
-  if (
-    record(value) &&
-    keys(value, ['type', ...BASE, 'selection', 'actions']) &&
-    value.type === 'handover:canvas:actions' &&
-    identity(value) &&
-    selection(value.selection) &&
-    Array.isArray(value.actions) &&
-    value.actions.length <= 11 &&
-    value.actions.every(blockAction) &&
-    new Set(value.actions).size === value.actions.length
-  )
-    return value as unknown as CanvasIdentity & {
-      type: 'handover:canvas:actions';
-    } & CanvasActionCapability;
-};
-const selectMessage = (
-  value: unknown,
-):
-  | (CanvasIdentity & {
-      type: 'handover:canvas:select';
-      selection: CanvasSelection;
-      scroll?: boolean;
-    })
-  | undefined => {
-  if (
-    record(value) &&
-    keys(value, [
-      'type',
-      ...BASE,
-      'selection',
-      ...(value.scroll === undefined ? [] : ['scroll']),
-    ]) &&
-    value.type === 'handover:canvas:select' &&
-    identity(value) &&
-    selection(value.selection) &&
-    (value.scroll === undefined || typeof value.scroll === 'boolean')
-  )
-    return value as unknown as CanvasIdentity & {
-      type: 'handover:canvas:select';
-      selection: CanvasSelection;
-      scroll?: boolean;
-    };
-};
-const modeMessage = (
-  value: unknown,
-): (CanvasIdentity & { type: 'handover:canvas:mode'; mode: CanvasInteractionMode }) | undefined => {
-  if (
-    record(value) &&
-    keys(value, ['type', ...BASE, 'mode']) &&
-    value.type === 'handover:canvas:mode' &&
-    identity(value) &&
-    interactionMode(value.mode)
-  )
-    return value as unknown as CanvasIdentity & {
-      type: 'handover:canvas:mode';
-      mode: CanvasInteractionMode;
-    };
-};
-type CanvasProblemsMessage = CanvasIdentity & {
-  type: 'handover:canvas:problems';
-  addresses: string[];
-};
-const problemsMessage = (value: unknown): CanvasProblemsMessage | undefined => {
-  if (
-    record(value) &&
-    keys(value, ['type', ...BASE, 'addresses']) &&
-    value.type === 'handover:canvas:problems' &&
-    identity(value) &&
-    Array.isArray(value.addresses) &&
-    value.addresses.every(address)
-  )
-    return value as unknown as CanvasProblemsMessage;
-};
-const uiLocaleMessage = (value: unknown): CanvasUiLocaleMessage | undefined => {
-  if (
-    record(value) &&
-    keys(value, ['type', ...BASE, 'uiLocale']) &&
-    value.type === 'handover:canvas:ui-locale' &&
-    identity(value) &&
-    isUiLocale(value.uiLocale)
-  )
-    return value as unknown as CanvasUiLocaleMessage;
+const ready = (value: unknown) =>
+  envelope<ReadyMessage>(value, 'handover:canvas:ready', [], [], () => true);
+const command = (value: unknown) =>
+  envelope<CanvasCommandMessage>(
+    value,
+    'handover:canvas:command',
+    ['commandId', 'target', 'command'],
+    [],
+    (message) => id(message.commandId) && target(message.target) && mutation(message.command),
+  );
+const acknowledgement = (value: unknown) =>
+  envelope<CanvasAcknowledgement>(
+    value,
+    'handover:canvas:ack',
+    ['commandId', 'target', 'ok'],
+    ['acceptedVersion', 'reason', 'update'],
+    (message) =>
+      id(message.commandId) &&
+      target(message.target) &&
+      (message.acceptedVersion === undefined || count(message.acceptedVersion)) &&
+      (message.update === undefined || textUpdate(message.update)) &&
+      (message.ok === true
+        ? message.acceptedVersion !== undefined && message.reason === undefined
+        : message.ok === false &&
+          REFUSALS.has(message.reason as CanvasCommandRefusal) &&
+          (message.update === undefined || message.acceptedVersion !== undefined)),
+  );
+const textFieldMessage = (value: unknown) =>
+  envelope<TextFieldMessage>(
+    value,
+    'handover:canvas:text-field',
+    ['field'],
+    [],
+    (message) => message.field === null || textField(message.field),
+  );
+const editingMessage = (value: unknown) =>
+  envelope<EditingMessage>(
+    value,
+    'handover:canvas:editing',
+    ['target', 'state'],
+    ['interactionId'],
+    (message) =>
+      target(message.target) &&
+      editingState(message.state) &&
+      (message.interactionId === undefined || id(message.interactionId)),
+  );
+const selectionMessage = (value: unknown) =>
+  envelope<SelectionMessage>(value, 'handover:canvas:selection', ['selection'], [], (message) =>
+    selection(message.selection),
+  );
+const structureMessage = (value: unknown) =>
+  envelope<StructureMessage>(value, 'handover:canvas:structure', ['nodes'], [], (message) =>
+    structure(message.nodes),
+  );
+const actionMessage = (value: unknown) =>
+  envelope<CanvasActionMessage>(
+    value,
+    'handover:canvas:action',
+    ['action', 'selection'],
+    ['destination', 'anchor'],
+    (message) =>
+      blockAction(message.action) &&
+      selection(message.selection) &&
+      (message.action === 'move'
+        ? selection(message.destination)
+        : message.destination === undefined) &&
+      (message.action === 'edit-media'
+        ? canvasAnchor(message.anchor)
+        : message.anchor === undefined),
+  );
+const navigationMessage = (value: unknown) =>
+  envelope<CanvasNavigationMessage>(
+    value,
+    'handover:canvas:navigate',
+    ['kind', 'href'],
+    ['newTab', 'download', 'method'],
+    (message) =>
+      absoluteUrl(message.href) &&
+      (message.kind === 'link'
+        ? typeof message.newTab === 'boolean' &&
+          typeof message.download === 'boolean' &&
+          message.method === undefined
+        : message.kind === 'form' &&
+          (message.method === 'get' || message.method === 'post') &&
+          message.newTab === undefined &&
+          message.download === undefined),
+  );
+const actionCapabilityMessage = (value: unknown) =>
+  envelope<ActionsMessage>(
+    value,
+    'handover:canvas:actions',
+    ['selection', 'actions'],
+    [],
+    (message) =>
+      selection(message.selection) &&
+      Array.isArray(message.actions) &&
+      message.actions.every(blockAction) &&
+      new Set(message.actions).size === message.actions.length,
+  );
+const selectMessage = (value: unknown) =>
+  envelope<SelectMessage>(
+    value,
+    'handover:canvas:select',
+    ['selection'],
+    ['scroll'],
+    (message) =>
+      selection(message.selection) &&
+      (message.scroll === undefined || typeof message.scroll === 'boolean'),
+  );
+const modeMessage = (value: unknown) =>
+  envelope<ModeMessage>(
+    value,
+    'handover:canvas:mode',
+    ['mode'],
+    [],
+    (message) => message.mode === 'edit' || message.mode === 'interact',
+  );
+const problemsMessage = (value: unknown) =>
+  envelope<CanvasProblemsMessage>(
+    value,
+    'handover:canvas:problems',
+    ['addresses'],
+    [],
+    (message) => Array.isArray(message.addresses) && message.addresses.every(address),
+  );
+const uiLocaleMessage = (value: unknown) =>
+  envelope<CanvasUiLocaleMessage>(value, 'handover:canvas:ui-locale', ['uiLocale'], [], (message) =>
+    isUiLocale(message.uiLocale),
+  );
+
+const childMessage = (value: unknown) => {
+  switch (record(value) && value.type) {
+    case 'handover:canvas:ready':
+      return ready(value);
+    case 'handover:canvas:command':
+      return command(value);
+    case 'handover:canvas:selection':
+      return selectionMessage(value);
+    case 'handover:canvas:structure':
+      return structureMessage(value);
+    case 'handover:canvas:action':
+      return actionMessage(value);
+    case 'handover:canvas:navigate':
+      return navigationMessage(value);
+    case 'handover:canvas:editing':
+      return editingMessage(value);
+  }
 };
 
 const copyDocument = (value: CanvasDocumentIdentity): CanvasDocumentIdentity => ({
@@ -829,25 +707,9 @@ export function createCanvasParentBridge(options: CanvasParentBridgeOptions) {
     if (disposed) return;
     if (event.origin !== origin) return reject('foreign-origin', event.data);
     if (event.source !== frame) return reject('foreign-window', event.data);
-    const readyMessage = ready(event.data);
-    const commandMessage = command(event.data);
-    const selectedMessage = selectionMessage(event.data);
-    const inventoryMessage = structureMessage(event.data);
-    const requestedAction = actionMessage(event.data);
-    const requestedNavigation = navigationMessage(event.data);
-    const editing = editingMessage(event.data);
-    if (
-      !readyMessage &&
-      !commandMessage &&
-      !selectedMessage &&
-      !inventoryMessage &&
-      !requestedAction &&
-      !requestedNavigation &&
-      !editing
-    )
-      return reject('malformed', event.data);
-    if (readyMessage) {
-      const message = event.data as CanvasIdentity & { type: 'handover:canvas:ready' };
+    const message = childMessage(event.data);
+    if (!message) return reject('malformed', event.data);
+    if (message.type === 'handover:canvas:ready') {
       const reason = stale(message, manifest, options.contentVersion());
       if (reason) return reject(reason, message);
       if (connected) return;
@@ -857,88 +719,86 @@ export function createCanvasParentBridge(options: CanvasParentBridgeOptions) {
       options.onReady?.();
       return;
     }
-    if (selectedMessage) {
-      const reason = stale(selectedMessage, manifest, options.contentVersion());
-      if (reason) return reject(reason, selectedMessage);
-      if (!connected) return reject('not-ready', selectedMessage);
-      options.onSelection?.(selectedMessage.selection);
+    if (message.type === 'handover:canvas:selection') {
+      const reason = stale(message, manifest, options.contentVersion());
+      if (reason) return reject(reason, message);
+      if (!connected) return reject('not-ready', message);
+      options.onSelection?.(message.selection);
       return;
     }
-    if (inventoryMessage) {
-      const message = inventoryMessage;
+    if (message.type === 'handover:canvas:structure') {
       const reason = stale(message, manifest, options.contentVersion());
       if (reason) return reject(reason, message);
       if (!connected) return reject('not-ready', message);
       options.onStructure?.(message.nodes);
       return;
     }
-    if (requestedAction) {
-      const reason = stale(requestedAction, manifest, options.contentVersion());
-      if (reason) return reject(reason, requestedAction);
-      if (!connected) return reject('not-ready', requestedAction);
+    if (message.type === 'handover:canvas:action') {
+      const reason = stale(message, manifest, options.contentVersion());
+      if (reason) return reject(reason, message);
+      if (!connected) return reject('not-ready', message);
       const current = options.currentTarget();
-      if (!current || !sameCanvasTarget(requestedAction.selection.target, current))
-        return reject('stale-target', requestedAction);
-      options.onAction?.(requestedAction);
+      if (!current || !sameCanvasTarget(message.selection.target, current))
+        return reject('stale-target', message);
+      options.onAction?.(message);
       return;
     }
-    if (requestedNavigation) {
-      const reason = stale(requestedNavigation, manifest, options.contentVersion());
-      if (reason) return reject(reason, requestedNavigation);
-      if (!connected) return reject('not-ready', requestedNavigation);
-      options.onNavigate?.(requestedNavigation);
+    if (message.type === 'handover:canvas:navigate') {
+      const reason = stale(message, manifest, options.contentVersion());
+      if (reason) return reject(reason, message);
+      if (!connected) return reject('not-ready', message);
+      options.onNavigate?.(message);
       return;
     }
-    if (editing) {
+    if (message.type === 'handover:canvas:editing') {
       const ending =
-        !editing.state.inlineEditing &&
-        !editing.state.composing &&
-        editing.state.dragging === undefined;
+        !message.state.inlineEditing &&
+        !message.state.composing &&
+        message.state.dragging === undefined;
       const ownedEnd =
         ending &&
         editingOwner &&
-        sameCanvasTarget(editing.target, editingOwner.target) &&
-        editing.interactionId === editingOwner.interactionId;
+        sameCanvasTarget(message.target, editingOwner.target) &&
+        message.interactionId === editingOwner.interactionId;
       // A drag end changes nothing, so a version bump mid-drag must not strand it.
       const draggingEnd =
-        editing.state.dragging === false &&
-        !editing.state.inlineEditing &&
-        !editing.state.composing;
+        message.state.dragging === false &&
+        !message.state.inlineEditing &&
+        !message.state.composing;
       const currentVersion = options.contentVersion();
       const reason = stale(
-        editing,
+        message,
         manifest,
-        ownedEnd || draggingEnd ? editing.contentVersion : currentVersion,
+        ownedEnd || draggingEnd ? message.contentVersion : currentVersion,
       );
-      if (reason) return reject(reason, editing);
+      if (reason) return reject(reason, message);
       if (
         ownedEnd &&
         editingOwner &&
-        (editing.contentVersion < editingOwner.startVersion ||
-          editing.contentVersion > stopVersionCeiling)
+        (message.contentVersion < editingOwner.startVersion ||
+          message.contentVersion > stopVersionCeiling)
       )
-        return reject('stale-version', editing);
-      if (!connected) return reject('not-ready', editing);
+        return reject('stale-version', message);
+      if (!connected) return reject('not-ready', message);
       const current = options.currentTarget();
-      if (!ownedEnd && !draggingEnd && (!current || !sameCanvasTarget(editing.target, current)))
-        return reject('stale-target', editing);
-      if (ending && editingOwner && !ownedEnd) return reject('stale-target', editing);
-      if (editing.state.inlineEditing)
+      if (!ownedEnd && !draggingEnd && (!current || !sameCanvasTarget(message.target, current)))
+        return reject('stale-target', message);
+      if (ending && editingOwner && !ownedEnd) return reject('stale-target', message);
+      if (message.state.inlineEditing)
         editingOwner = {
-          target: editing.target,
-          interactionId: editing.interactionId,
+          target: message.target,
+          interactionId: message.interactionId,
           startVersion:
             editingOwner &&
-            sameCanvasTarget(editing.target, editingOwner.target) &&
-            editing.interactionId === editingOwner.interactionId
+            sameCanvasTarget(message.target, editingOwner.target) &&
+            message.interactionId === editingOwner.interactionId
               ? editingOwner.startVersion
               : currentVersion,
         };
       else if (ownedEnd) editingOwner = undefined;
-      options.onEditing?.(editing.target, editing.state);
+      options.onEditing?.(message.target, message.state);
       return;
     }
-    const message = event.data as CanvasCommandMessage;
     const identityReason = stale(message, manifest, message.contentVersion);
     if (identityReason) return refusal(message, identityReason);
     if (seen.has(message.commandId)) return refusal(message, 'duplicate-command');
@@ -952,14 +812,6 @@ export function createCanvasParentBridge(options: CanvasParentBridgeOptions) {
     const reply = Promise.resolve()
       .then(() => options.onCommand(message))
       .then<CanvasAcknowledgement>((result) => {
-        if (
-          !record(result) ||
-          typeof result.ok !== 'boolean' ||
-          (result.ok
-            ? !Number.isSafeInteger(result.contentVersion) || result.contentVersion < 0
-            : !REFUSALS.has(result.reason))
-        )
-          throw new Error('Invalid Canvas command result');
         if (result.ok) {
           childVersion = result.contentVersion;
           stopVersionCeiling = Math.max(stopVersionCeiling, childVersion);
@@ -997,13 +849,12 @@ export function createCanvasParentBridge(options: CanvasParentBridgeOptions) {
     connected: () => connected && !disposed,
     receive,
     select(value: CanvasSelection, settings: { scroll?: boolean } = {}) {
-      const selected = copySelection(value);
-      if (disposed || !connected || !selection(selected)) return false;
+      if (disposed || !connected) return false;
       frame.postMessage(
         {
           ...base(manifest, options.contentVersion()),
           type: 'handover:canvas:select',
-          selection: selected,
+          selection: copySelection(value),
           ...(settings.scroll === undefined ? {} : { scroll: settings.scroll }),
         },
         origin,
@@ -1011,7 +862,7 @@ export function createCanvasParentBridge(options: CanvasParentBridgeOptions) {
       return true;
     },
     textField(value?: CanvasTextField) {
-      if (disposed || !connected || (value !== undefined && !textField(value))) return false;
+      if (disposed || !connected) return false;
       childVersion = options.contentVersion();
       stopVersionCeiling = Math.max(stopVersionCeiling, childVersion);
       frame.postMessage(
@@ -1025,21 +876,12 @@ export function createCanvasParentBridge(options: CanvasParentBridgeOptions) {
       return true;
     },
     actions(value: CanvasSelection, actions: CanvasBlockAction[]) {
-      const selected = copySelection(value);
-      if (
-        disposed ||
-        !connected ||
-        !selection(selected) ||
-        actions.length > 11 ||
-        !actions.every(blockAction) ||
-        new Set(actions).size !== actions.length
-      )
-        return false;
+      if (disposed || !connected) return false;
       frame.postMessage(
         {
           ...base(manifest, options.contentVersion()),
           type: 'handover:canvas:actions',
-          selection: selected,
+          selection: copySelection(value),
           actions: [...actions],
         },
         origin,
@@ -1047,7 +889,7 @@ export function createCanvasParentBridge(options: CanvasParentBridgeOptions) {
       return true;
     },
     mode(value: CanvasInteractionMode) {
-      if (disposed || !connected || !interactionMode(value)) return false;
+      if (disposed || !connected) return false;
       frame.postMessage(
         {
           ...base(manifest, options.contentVersion()),
@@ -1072,7 +914,7 @@ export function createCanvasParentBridge(options: CanvasParentBridgeOptions) {
       return true;
     },
     uiLocale(value: UiLocale) {
-      if (disposed || !connected || !isUiLocale(value)) return false;
+      if (disposed || !connected) return false;
       frame.postMessage(
         {
           ...base(manifest, childVersion),
@@ -1122,47 +964,48 @@ export function createCanvasChildBridge(options: CanvasChildBridgeOptions) {
   let started = false;
   let disposed = false;
   let replyPort: MessagePort | undefined;
-  let deferredField: NonNullable<ReturnType<typeof textFieldMessage>> | undefined;
-  // Problems can be stamped ahead of this child while a command is in flight; apply them after.
-  let deferredProblems: NonNullable<ReturnType<typeof problemsMessage>> | undefined;
-  let deferredUiLocale: NonNullable<ReturnType<typeof uiLocaleMessage>> | undefined;
-  const applyField = (message: NonNullable<ReturnType<typeof textFieldMessage>>) => {
+  // Updates can be stamped ahead of this child while a command is in flight; apply them after.
+  const held = new Map<
+    'field' | 'problems' | 'uiLocale',
+    { contentVersion: number; apply: () => void }
+  >();
+  const hold = (
+    kind: 'field' | 'problems' | 'uiLocale',
+    message: CanvasIdentity,
+    apply: () => void,
+  ) => {
+    if (stale(message, manifest, message.contentVersion) || message.contentVersion < version)
+      return;
+    if (!pending.size) return apply();
+    const prior = held.get(kind);
+    if (!prior || message.contentVersion >= prior.contentVersion)
+      held.set(kind, { contentVersion: message.contentVersion, apply });
+  };
+  const applyField = (message: TextFieldMessage) => {
     if (message.contentVersion < version) return;
     version = message.contentVersion;
     options.onTextField?.(message.field ?? undefined);
   };
   const acceptReply = (value: unknown) => {
     const reply = acknowledgement(value);
-    const held = reply && pending.get(reply.commandId);
+    const sent = reply && pending.get(reply.commandId);
     if (
       !reply ||
-      !held ||
+      !sent ||
       reply.protocol !== CANVAS_PROTOCOL ||
-      stale(reply, manifest, held.version) ||
-      !sameCanvasTarget(reply.target, held.target)
+      stale(reply, manifest, sent.version) ||
+      !sameCanvasTarget(reply.target, sent.target)
     )
       return;
     pending.delete(reply.commandId);
     if (reply.ok) version = reply.acceptedVersion;
     else if (reply.acceptedVersion !== undefined) version = reply.acceptedVersion;
     if (!pending.size) {
-      if (deferredField) {
-        const message = deferredField;
-        deferredField = undefined;
-        applyField(message);
-      }
-      if (deferredProblems) {
-        const message = deferredProblems;
-        deferredProblems = undefined;
-        options.onProblems?.(message.addresses);
-      }
-      if (deferredUiLocale) {
-        const message = deferredUiLocale;
-        deferredUiLocale = undefined;
-        options.onUiLocale?.(message.uiLocale);
-      }
+      const updates = (['field', 'problems', 'uiLocale'] as const).map((kind) => held.get(kind));
+      held.clear();
+      for (const update of updates) update?.apply();
     }
-    held.resolve(reply);
+    sent.resolve(reply);
   };
   const receive = (event: MessageEvent) => {
     if (disposed || event.origin !== origin || event.source !== parent) return;
@@ -1177,17 +1020,7 @@ export function createCanvasChildBridge(options: CanvasChildBridgeOptions) {
         options.onSelect?.(requested.selection, { scroll: requested.scroll !== false });
       return;
     }
-    if (configured) {
-      const identityReason = stale(configured, manifest, configured.contentVersion);
-      if (identityReason || configured.contentVersion < version) return;
-      if (pending.size) {
-        if (!deferredField || configured.contentVersion >= deferredField.contentVersion)
-          deferredField = configured;
-        return;
-      }
-      applyField(configured);
-      return;
-    }
+    if (configured) return hold('field', configured, () => applyField(configured));
     if (configuredActions) {
       if (!stale(configuredActions, manifest, version))
         options.onActions?.({
@@ -1200,34 +1033,14 @@ export function createCanvasChildBridge(options: CanvasChildBridgeOptions) {
       if (!stale(configuredMode, manifest, version)) options.onMode?.(configuredMode.mode);
       return;
     }
-    if (configuredProblems) {
-      const identityReason = stale(configuredProblems, manifest, configuredProblems.contentVersion);
-      if (identityReason || configuredProblems.contentVersion < version) return;
-      if (pending.size) {
-        if (
-          !deferredProblems ||
-          configuredProblems.contentVersion >= deferredProblems.contentVersion
-        )
-          deferredProblems = configuredProblems;
-        return;
-      }
-      options.onProblems?.(configuredProblems.addresses);
-      return;
-    }
-    if (configuredUiLocale) {
-      const identityReason = stale(configuredUiLocale, manifest, configuredUiLocale.contentVersion);
-      if (identityReason || configuredUiLocale.contentVersion < version) return;
-      if (pending.size) {
-        if (
-          !deferredUiLocale ||
-          configuredUiLocale.contentVersion >= deferredUiLocale.contentVersion
-        )
-          deferredUiLocale = configuredUiLocale;
-        return;
-      }
-      options.onUiLocale?.(configuredUiLocale.uiLocale);
-      return;
-    }
+    if (configuredProblems)
+      return hold('problems', configuredProblems, () =>
+        options.onProblems?.(configuredProblems.addresses),
+      );
+    if (configuredUiLocale)
+      return hold('uiLocale', configuredUiLocale, () =>
+        options.onUiLocale?.(configuredUiLocale.uiLocale),
+      );
     acceptReply(event.data);
   };
   if (options.listen !== false) owner.addEventListener('message', receive);
@@ -1249,7 +1062,7 @@ export function createCanvasChildBridge(options: CanvasChildBridgeOptions) {
       }
     },
     selection(value: CanvasSelection) {
-      if (!started || disposed || !selection(value)) return false;
+      if (!started || disposed) return false;
       parent.postMessage(
         { ...base(manifest, version), type: 'handover:canvas:selection', selection: value },
         origin,
@@ -1257,7 +1070,7 @@ export function createCanvasChildBridge(options: CanvasChildBridgeOptions) {
       return true;
     },
     structure(nodes: CanvasStructureNode[]) {
-      if (!started || disposed || !structure(nodes)) return false;
+      if (!started || disposed) return false;
       parent.postMessage(
         { ...base(manifest, version), type: 'handover:canvas:structure', nodes },
         origin,
@@ -1292,8 +1105,6 @@ export function createCanvasChildBridge(options: CanvasChildBridgeOptions) {
     },
     command(targetValue: CanvasTarget, change: CanvasMutation) {
       if (!started || disposed) throw new Error('Canvas bridge is not connected.');
-      if (!target(targetValue) || !mutation(change))
-        throw new Error('Canvas command is malformed.');
       const commandId = options.commandId?.() ?? crypto.randomUUID();
       if (!id(commandId) || pending.has(commandId))
         throw new Error('Canvas command ID is not unique.');
@@ -1311,7 +1122,7 @@ export function createCanvasChildBridge(options: CanvasChildBridgeOptions) {
       return response;
     },
     interaction(targetValue: CanvasTarget, state: CanvasEditingState) {
-      if (!started || disposed || !target(targetValue) || !editingState(state)) return false;
+      if (!started || disposed) return false;
       if (
         state.inlineEditing &&
         (!interactionOwner || !sameCanvasTarget(targetValue, interactionOwner.target))
@@ -1338,7 +1149,7 @@ export function createCanvasChildBridge(options: CanvasChildBridgeOptions) {
       return true;
     },
     navigate(request: CanvasNavigationRequest) {
-      if (!started || disposed || !navigationRequest(request)) return false;
+      if (!started || disposed) return false;
       parent.postMessage(
         { ...base(manifest, version), type: 'handover:canvas:navigate', ...request },
         origin,
@@ -1352,15 +1163,13 @@ export function createCanvasChildBridge(options: CanvasChildBridgeOptions) {
       owner.removeEventListener('message', receive);
       replyPort?.close();
       replyPort = undefined;
-      deferredField = undefined;
-      deferredProblems = undefined;
-      deferredUiLocale = undefined;
-      for (const [commandId, held] of pending)
-        held.resolve({
-          ...base(manifest, held.version),
+      held.clear();
+      for (const [commandId, sent] of pending)
+        sent.resolve({
+          ...base(manifest, sent.version),
           type: 'handover:canvas:ack',
           commandId,
-          target: held.target,
+          target: sent.target,
           ok: false,
           reason: 'not-ready',
         });

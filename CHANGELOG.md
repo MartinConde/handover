@@ -64,6 +64,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   folders, and its components share one `capitalise`.
 - Internal: the admin language picker's styles live in `tokens.css`, and the stylesheet drops
   selectors nothing renders and rules a later copy overrides.
+- Internal: the Canvas bridge and renderer no longer re-check their own typed calls, each bridge
+  message declares its keys once, and the bridge tests share one setup.
 - `@handover/core`: `setEntryStatus` no longer takes a `deps` argument, and `claimResource` no
   longer takes `windowMs`; the window is always one hour.
 - `@handover/core`: `clearPublished` now requires the deployment's git client as its fourth

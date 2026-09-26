@@ -1,6 +1,8 @@
 import { afterEach, expect, test, vi } from 'vitest';
 import {
+  type CanvasChildBridgeOptions,
   type CanvasCommandMessage,
+  type CanvasParentBridgeOptions,
   type CanvasStructureNode,
   type CanvasSuccessManifest,
   type CanvasTarget,
@@ -37,16 +39,21 @@ const ready = {
 } as const;
 
 const command = (overrides: Partial<CanvasCommandMessage> = {}): CanvasCommandMessage => ({
+  ...ready,
   type: 'handover:canvas:command',
-  protocol: 1,
-  requestId: 'render-1',
-  epoch: 'session-1',
-  entry: { collection: 'pages', id: 'home' },
-  locale: 'en',
-  contentVersion: 4,
   commandId: 'command-1',
   target,
   command: { type: 'field', changes: [{ value: 'A brighter coast' }] },
+  ...overrides,
+});
+
+const ack = (overrides: Record<string, unknown> = {}) => ({
+  ...ready,
+  type: 'handover:canvas:ack',
+  commandId: 'command-1',
+  target,
+  ok: true,
+  acceptedVersion: 5,
   ...overrides,
 });
 
@@ -54,6 +61,43 @@ const event = (source: Window, origin: string, data: unknown) =>
   ({ source, origin, data }) as MessageEvent;
 
 const frame = () => ({ postMessage: vi.fn() }) as unknown as Window;
+
+const connect = (
+  overrides: Partial<CanvasParentBridgeOptions> = {},
+  { ready: handshake = true } = {},
+) => {
+  const candidate = overrides.frame ?? frame();
+  const rejected = vi.fn();
+  const bridge = createCanvasParentBridge({
+    manifest,
+    frame: candidate,
+    origin: 'https://cms.example',
+    contentVersion: () => 4,
+    currentTarget: () => target,
+    onCommand: vi.fn(),
+    onRejected: rejected,
+    listen: false,
+    ...overrides,
+  });
+  const send = (data: unknown, origin = 'https://cms.example', source = candidate) =>
+    bridge.receive(event(source, origin, data));
+  if (handshake) send(ready);
+  return { bridge, candidate, rejected, send };
+};
+
+const child = (overrides: Partial<CanvasChildBridgeOptions> = {}) => {
+  const parent = overrides.parent ?? frame();
+  const bridge = createCanvasChildBridge({
+    manifest,
+    parent,
+    origin: 'https://cms.example',
+    listen: false,
+    ...overrides,
+  });
+  const send = (data: unknown, origin = 'https://cms.example', source = parent) =>
+    bridge.receive(event(source, origin, data));
+  return { bridge, parent, send };
+};
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -67,25 +111,12 @@ const settle = async () => {
 };
 
 test('the parent handshake accepts only the expected origin, frame, request and epoch', () => {
-  const candidate = frame();
-  const other = frame();
-  const rejected = vi.fn();
   const onReady = vi.fn();
-  const bridge = createCanvasParentBridge({
-    manifest,
-    frame: candidate,
-    origin: 'https://cms.example',
-    contentVersion: () => 4,
-    currentTarget: () => target,
-    onCommand: vi.fn(),
-    onReady,
-    onRejected: rejected,
-    listen: false,
-  });
+  const { bridge, rejected, send } = connect({ onReady }, { ready: false });
 
-  bridge.receive(event(candidate, 'https://attacker.example', ready));
-  bridge.receive(event(other, 'https://cms.example', ready));
-  bridge.receive(event(candidate, 'https://cms.example', { ...ready, epoch: 'replaced-session' }));
+  send(ready, 'https://attacker.example');
+  send(ready, 'https://cms.example', frame());
+  send({ ...ready, epoch: 'replaced-session' });
   expect(bridge.connected()).toBe(false);
   expect(rejected.mock.calls.map(([reason]) => reason)).toEqual([
     'foreign-origin',
@@ -93,31 +124,24 @@ test('the parent handshake accepts only the expected origin, frame, request and 
     'stale-epoch',
   ]);
 
-  bridge.receive(event(candidate, 'https://cms.example', ready));
-  bridge.receive(event(candidate, 'https://cms.example', ready));
+  send(ready);
+  send(ready);
   expect(bridge.connected()).toBe(true);
   expect(onReady).toHaveBeenCalledOnce();
 });
 
 test('interface locale crosses only the current connected Canvas identity', () => {
-  const candidate = frame();
   let contentVersion = 4;
-  const parent = createCanvasParentBridge({
-    manifest,
-    frame: candidate,
-    origin: 'https://cms.example',
-    contentVersion: () => contentVersion,
-    currentTarget: () => target,
-    onCommand: vi.fn(),
-    listen: false,
-  });
+  const { bridge, candidate, send } = connect(
+    { contentVersion: () => contentVersion },
+    { ready: false },
+  );
 
-  expect(parent.uiLocale('de')).toBe(false);
-  parent.receive(event(candidate, 'https://cms.example', ready));
-  expect(parent.uiLocale('de')).toBe(true);
+  expect(bridge.uiLocale('de')).toBe(false);
+  send(ready);
+  expect(bridge.uiLocale('de')).toBe(true);
   contentVersion = 5;
-  expect(parent.uiLocale('en')).toBe(true);
-  expect(parent.uiLocale('fr' as never)).toBe(false);
+  expect(bridge.uiLocale('en')).toBe(true);
   expect(candidate.postMessage).toHaveBeenCalledTimes(2);
   expect(candidate.postMessage).toHaveBeenNthCalledWith(
     1,
@@ -138,31 +162,23 @@ test('interface locale crosses only the current connected Canvas identity', () =
     'https://cms.example',
   );
 
-  const browserParent = frame();
-  const other = frame();
   const onUiLocale = vi.fn();
-  const child = createCanvasChildBridge({
-    manifest,
-    parent: browserParent,
-    origin: 'https://cms.example',
-    onUiLocale,
-    listen: false,
-  });
+  const page = child({ onUiLocale });
   const localeMessage = {
     ...ready,
     type: 'handover:canvas:ui-locale',
     uiLocale: 'de',
   } as const;
-  child.receive(event(other, 'https://cms.example', localeMessage));
-  child.receive(event(browserParent, 'https://attacker.example', localeMessage));
-  child.receive(event(browserParent, 'https://cms.example', { ...localeMessage, epoch: 'old' }));
-  child.receive(event(browserParent, 'https://cms.example', { ...localeMessage, uiLocale: 'fr' }));
+  page.send(localeMessage, 'https://cms.example', frame());
+  page.send(localeMessage, 'https://attacker.example');
+  page.send({ ...localeMessage, epoch: 'old' });
+  page.send({ ...localeMessage, uiLocale: 'fr' });
   expect(onUiLocale).not.toHaveBeenCalled();
 
-  child.receive(event(browserParent, 'https://cms.example', localeMessage));
+  page.send(localeMessage);
   expect(onUiLocale).toHaveBeenCalledOnce();
   expect(onUiLocale).toHaveBeenCalledWith('de');
-  expect(child.contentVersion()).toBe(4);
+  expect(page.bridge.contentVersion()).toBe(4);
 });
 
 test('a controlled render error manifest is available to the candidate lifecycle', () => {
@@ -189,22 +205,11 @@ test('the Canvas manifest accepts the authenticated site-base entry directory', 
 });
 
 test('malformed messages are refused before they can reach a command handler', () => {
-  const candidate = frame();
   const onCommand = vi.fn();
-  const rejected = vi.fn();
-  const bridge = createCanvasParentBridge({
-    manifest,
-    frame: candidate,
-    origin: 'https://cms.example',
-    contentVersion: () => 4,
-    currentTarget: () => target,
-    onCommand,
-    onRejected: rejected,
-    listen: false,
-  });
+  const { candidate, rejected, send } = connect({ onCommand }, { ready: false });
 
-  bridge.receive(event(candidate, 'https://cms.example', { ...command(), extra: true }));
-  bridge.receive(event(candidate, 'https://cms.example', { type: 'handover:canvas:command' }));
+  send({ ...command(), extra: true });
+  send({ type: 'handover:canvas:command' });
 
   expect(onCommand).not.toHaveBeenCalled();
   expect(rejected).toHaveBeenCalledTimes(2);
@@ -213,22 +218,12 @@ test('malformed messages are refused before they can reach a command handler', (
 });
 
 test('selection and structure cross only the connected versioned bridge', () => {
-  const candidate = frame();
   const onSelection = vi.fn();
   const onStructure = vi.fn();
-  const rejected = vi.fn();
-  const bridge = createCanvasParentBridge({
-    manifest,
-    frame: candidate,
-    origin: 'https://cms.example',
-    contentVersion: () => 4,
-    currentTarget: () => target,
-    onCommand: vi.fn(),
-    onSelection,
-    onStructure,
-    onRejected: rejected,
-    listen: false,
-  });
+  const { bridge, candidate, rejected, send } = connect(
+    { onSelection, onStructure },
+    { ready: false },
+  );
   const selected = { kind: 'field' as const, target };
   const node = {
     ...selected,
@@ -239,38 +234,12 @@ test('selection and structure cross only the connected versioned bridge', () => 
     setSize: 1,
     occurrences: 2,
   };
-  const identity = {
-    protocol: 1,
-    requestId: manifest.requestId,
-    epoch: manifest.epoch,
-    entry: manifest.entry,
-    locale: manifest.locale,
-    contentVersion: manifest.contentVersion,
-  };
 
-  bridge.receive(
-    event(candidate, 'https://cms.example', {
-      ...identity,
-      type: 'handover:canvas:selection',
-      selection: selected,
-    }),
-  );
+  send({ ...ready, type: 'handover:canvas:selection', selection: selected });
   expect(onSelection).not.toHaveBeenCalled();
-  bridge.receive(event(candidate, 'https://cms.example', ready));
-  bridge.receive(
-    event(candidate, 'https://cms.example', {
-      ...identity,
-      type: 'handover:canvas:structure',
-      nodes: [node],
-    }),
-  );
-  bridge.receive(
-    event(candidate, 'https://cms.example', {
-      ...identity,
-      type: 'handover:canvas:selection',
-      selection: selected,
-    }),
-  );
+  send(ready);
+  send({ ...ready, type: 'handover:canvas:structure', nodes: [node] });
+  send({ ...ready, type: 'handover:canvas:selection', selection: selected });
 
   expect(onStructure).toHaveBeenCalledWith([node]);
   expect(onSelection).toHaveBeenCalledWith(selected);
@@ -284,19 +253,11 @@ test('selection and structure cross only the connected versioned bridge', () => 
 
 test('parent controls copy reactive values before crossing the structured-clone boundary', () => {
   const posted: unknown[] = [];
-  const candidate = {
-    postMessage: vi.fn((message: unknown) => posted.push(structuredClone(message))),
-  } as unknown as Window;
-  const bridge = createCanvasParentBridge({
-    manifest,
-    frame: candidate,
-    origin: 'https://cms.example',
-    contentVersion: () => 4,
-    currentTarget: () => target,
-    onCommand: vi.fn(),
-    listen: false,
+  const { bridge } = connect({
+    frame: {
+      postMessage: vi.fn((message: unknown) => posted.push(structuredClone(message))),
+    } as unknown as Window,
   });
-  bridge.receive(event(candidate, 'https://cms.example', ready));
   const reactiveTarget = new Proxy(target, {});
   const selected = new Proxy({ kind: 'field' as const, target: reactiveTarget }, {});
 
@@ -325,17 +286,7 @@ test('parent controls copy reactive values before crossing the structured-clone 
 });
 
 test('select and actions accept a Structure node and send only kind and target', () => {
-  const candidate = frame();
-  const bridge = createCanvasParentBridge({
-    manifest,
-    frame: candidate,
-    origin: 'https://cms.example',
-    contentVersion: () => 4,
-    currentTarget: () => target,
-    onCommand: vi.fn(),
-    listen: false,
-  });
-  bridge.receive(event(candidate, 'https://cms.example', ready));
+  const { bridge, candidate } = connect();
   const node: CanvasStructureNode = {
     kind: 'block',
     target,
@@ -369,20 +320,13 @@ test('select and actions accept a Structure node and send only kind and target',
 });
 
 test('the child accepts a current parent selection and publishes validated navigation state', () => {
-  const parent = frame();
   const onSelect = vi.fn();
-  const child = createCanvasChildBridge({
-    manifest,
-    parent,
-    origin: 'https://cms.example',
-    onSelect,
-    listen: false,
-  });
+  const { bridge, parent, send } = child({ onSelect });
   const selected = { kind: 'field' as const, target };
-  child.start();
-  expect(child.selection(selected)).toBe(true);
+  bridge.start();
+  expect(bridge.selection(selected)).toBe(true);
   expect(
-    child.structure([
+    bridge.structure([
       {
         ...selected,
         id: 'target-1',
@@ -394,33 +338,13 @@ test('the child accepts a current parent selection and publishes validated navig
       },
     ]),
   ).toBe(true);
-  child.receive(
-    event(parent, 'https://cms.example', {
-      ...ready,
-      type: 'handover:canvas:select',
-      selection: selected,
-    }),
-  );
+  send({ ...ready, type: 'handover:canvas:select', selection: selected });
 
   expect(onSelect).toHaveBeenCalledWith(selected, { scroll: true });
-  child.receive(
-    event(parent, 'https://cms.example', {
-      ...ready,
-      type: 'handover:canvas:select',
-      selection: selected,
-      scroll: false,
-    }),
-  );
+  send({ ...ready, type: 'handover:canvas:select', selection: selected, scroll: false });
   expect(onSelect).toHaveBeenLastCalledWith(selected, { scroll: false });
   onSelect.mockClear();
-  child.receive(
-    event(parent, 'https://cms.example', {
-      ...ready,
-      type: 'handover:canvas:select',
-      selection: selected,
-      scroll: 'false',
-    }),
-  );
+  send({ ...ready, type: 'handover:canvas:select', selection: selected, scroll: 'false' });
   expect(onSelect).not.toHaveBeenCalled();
   expect(parent.postMessage).toHaveBeenCalledWith(
     expect.objectContaining({ type: 'handover:canvas:selection', selection: selected }),
@@ -433,19 +357,12 @@ test('the child accepts a current parent selection and publishes validated navig
 });
 
 test('block actions cross only the connected bridge for the current selection', () => {
-  const parent = frame();
   const onActions = vi.fn();
-  const child = createCanvasChildBridge({
-    manifest,
-    parent,
-    origin: 'https://cms.example',
-    onActions,
-    listen: false,
-  });
+  const page = child({ onActions });
   const selected = { kind: 'block' as const, target };
-  child.start();
-  expect(child.action('insert-after', selected)).toBe(true);
-  expect(parent.postMessage).toHaveBeenLastCalledWith(
+  page.bridge.start();
+  expect(page.bridge.action('insert-after', selected)).toBe(true);
+  expect(page.parent.postMessage).toHaveBeenLastCalledWith(
     expect.objectContaining({
       type: 'handover:canvas:action',
       action: 'insert-after',
@@ -454,29 +371,17 @@ test('block actions cross only the connected bridge for the current selection', 
     'https://cms.example',
   );
 
-  const candidate = frame();
   const onAction = vi.fn();
-  const rejected = vi.fn();
-  const bridge = createCanvasParentBridge({
-    manifest,
-    frame: candidate,
-    origin: 'https://cms.example',
-    contentVersion: () => 4,
-    currentTarget: () => target,
-    onCommand: vi.fn(),
-    onAction,
-    onRejected: rejected,
-    listen: false,
-  });
+  const { bridge, candidate, rejected, send } = connect({ onAction }, { ready: false });
   const message = {
     ...ready,
     type: 'handover:canvas:action',
     action: 'replace',
     selection: selected,
   };
-  bridge.receive(event(candidate, 'https://cms.example', message));
+  send(message);
   expect(onAction).not.toHaveBeenCalled();
-  bridge.receive(event(candidate, 'https://cms.example', ready));
+  send(ready);
   expect(bridge.actions(selected, ['insert-after', 'replace'])).toBe(true);
   expect(candidate.postMessage).toHaveBeenLastCalledWith(
     expect.objectContaining({
@@ -486,21 +391,14 @@ test('block actions cross only the connected bridge for the current selection', 
     }),
     'https://cms.example',
   );
-  child.receive(
-    event(parent, 'https://cms.example', {
-      ...ready,
-      type: 'handover:canvas:actions',
-      selection: selected,
-      actions: ['insert-after', 'replace'],
-    }),
-  );
-  bridge.receive(event(candidate, 'https://cms.example', message));
-  bridge.receive(
-    event(candidate, 'https://cms.example', {
-      ...message,
-      action: 'convert-automatically',
-    }),
-  );
+  page.send({
+    ...ready,
+    type: 'handover:canvas:actions',
+    selection: selected,
+    actions: ['insert-after', 'replace'],
+  });
+  send(message);
+  send({ ...message, action: 'convert-automatically' });
 
   expect(onAction).toHaveBeenCalledOnce();
   expect(onAction).toHaveBeenCalledWith(message);
@@ -512,21 +410,15 @@ test('block actions cross only the connected bridge for the current selection', 
 });
 
 test('same-list pointer moves carry one stable destination and reject malformed drops', () => {
-  const parent = frame();
-  const child = createCanvasChildBridge({
-    manifest,
-    parent,
-    origin: 'https://cms.example',
-    listen: false,
-  });
+  const page = child();
   const selected = { kind: 'block' as const, target };
   const destination = {
     kind: 'block' as const,
     target: { ...target, address: 'blocks[_id=second]' },
   };
-  child.start();
-  expect(child.action('move', selected, destination)).toBe(true);
-  expect(parent.postMessage).toHaveBeenLastCalledWith(
+  page.bridge.start();
+  expect(page.bridge.action('move', selected, destination)).toBe(true);
+  expect(page.parent.postMessage).toHaveBeenLastCalledWith(
     expect.objectContaining({
       type: 'handover:canvas:action',
       action: 'move',
@@ -535,24 +427,11 @@ test('same-list pointer moves carry one stable destination and reject malformed 
     }),
     'https://cms.example',
   );
-  expect(child.action('move', selected)).toBe(false);
-  expect(child.action('delete', selected, destination)).toBe(false);
+  expect(page.bridge.action('move', selected)).toBe(false);
+  expect(page.bridge.action('delete', selected, destination)).toBe(false);
 
-  const candidate = frame();
   const onAction = vi.fn();
-  const rejected = vi.fn();
-  const bridge = createCanvasParentBridge({
-    manifest,
-    frame: candidate,
-    origin: 'https://cms.example',
-    contentVersion: () => 4,
-    currentTarget: () => target,
-    onCommand: vi.fn(),
-    onAction,
-    onRejected: rejected,
-    listen: false,
-  });
-  bridge.receive(event(candidate, 'https://cms.example', ready));
+  const { rejected, send } = connect({ onAction });
   const moved = {
     ...ready,
     type: 'handover:canvas:action',
@@ -560,15 +439,10 @@ test('same-list pointer moves carry one stable destination and reject malformed 
     selection: selected,
     destination,
   };
-  bridge.receive(event(candidate, 'https://cms.example', moved));
-  bridge.receive(event(candidate, 'https://cms.example', { ...moved, destination: null }));
-  bridge.receive(
-    event(candidate, 'https://cms.example', {
-      ...moved,
-      destination: { ...destination, kind: 'unknown' },
-    }),
-  );
-  bridge.receive(event(candidate, 'https://cms.example', { ...moved, action: 'delete' }));
+  send(moved);
+  send({ ...moved, destination: null });
+  send({ ...moved, destination: { ...destination, kind: 'unknown' } });
+  send({ ...moved, action: 'delete' });
 
   expect(onAction).toHaveBeenCalledOnce();
   expect(onAction).toHaveBeenCalledWith(moved);
@@ -580,33 +454,20 @@ test('same-list pointer moves carry one stable destination and reject malformed 
 });
 
 test('interaction mode and navigation intents cross only the current connected bridge', () => {
-  const parent = frame();
   const onMode = vi.fn();
-  const child = createCanvasChildBridge({
-    manifest,
-    parent,
-    origin: 'https://cms.example',
-    onMode,
-    listen: false,
-  });
-  child.start();
-  child.receive(
-    event(parent, 'https://cms.example', {
-      ...ready,
-      type: 'handover:canvas:mode',
-      mode: 'interact',
-    }),
-  );
+  const page = child({ onMode });
+  page.bridge.start();
+  page.send({ ...ready, type: 'handover:canvas:mode', mode: 'interact' });
   expect(onMode).toHaveBeenCalledWith('interact');
   expect(
-    child.navigate({
+    page.bridge.navigate({
       kind: 'link',
       href: 'https://cms.example/de/home',
       newTab: false,
       download: false,
     }),
   ).toBe(true);
-  expect(parent.postMessage).toHaveBeenLastCalledWith(
+  expect(page.parent.postMessage).toHaveBeenLastCalledWith(
     expect.objectContaining({
       type: 'handover:canvas:navigate',
       kind: 'link',
@@ -615,21 +476,8 @@ test('interaction mode and navigation intents cross only the current connected b
     'https://cms.example',
   );
 
-  const candidate = frame();
   const onNavigate = vi.fn();
-  const rejected = vi.fn();
-  const bridge = createCanvasParentBridge({
-    manifest,
-    frame: candidate,
-    origin: 'https://cms.example',
-    contentVersion: () => 4,
-    currentTarget: () => target,
-    onCommand: vi.fn(),
-    onNavigate,
-    onRejected: rejected,
-    listen: false,
-  });
-  bridge.receive(event(candidate, 'https://cms.example', ready));
+  const { bridge, candidate, rejected, send } = connect({ onNavigate });
   expect(bridge.mode('interact')).toBe(true);
   expect(candidate.postMessage).toHaveBeenLastCalledWith(
     expect.objectContaining({ type: 'handover:canvas:mode', mode: 'interact' }),
@@ -643,8 +491,8 @@ test('interaction mode and navigation intents cross only the current connected b
     newTab: false,
     download: false,
   };
-  bridge.receive(event(candidate, 'https://cms.example', navigation));
-  bridge.receive(event(candidate, 'https://cms.example', { ...navigation, href: '' }));
+  send(navigation);
+  send({ ...navigation, href: '' });
 
   expect(onNavigate).toHaveBeenCalledOnce();
   expect(onNavigate).toHaveBeenCalledWith(navigation);
@@ -652,43 +500,32 @@ test('interaction mode and navigation intents cross only the current connected b
 });
 
 test('plain-text capability and editing state cross only the current selected bridge', () => {
-  const parent = frame();
   const onTextField = vi.fn();
-  const child = createCanvasChildBridge({
-    manifest,
-    parent,
-    origin: 'https://cms.example',
-    onTextField,
-    listen: false,
+  const page = child({ onTextField });
+  page.bridge.start();
+  page.send({
+    ...ready,
+    type: 'handover:canvas:text-field',
+    field: { kind: 'text', target, value: 'A brighter coast' },
   });
-  child.start();
-  child.receive(
-    event(parent, 'https://cms.example', {
-      ...ready,
-      type: 'handover:canvas:text-field',
-      field: { kind: 'text', target, value: 'A brighter coast' },
-    }),
-  );
   expect(onTextField).toHaveBeenCalledWith({
     kind: 'text',
     target,
     value: 'A brighter coast',
   });
-  child.receive(
-    event(parent, 'https://cms.example', {
-      ...ready,
-      type: 'handover:canvas:text-field',
-      field: { kind: 'richtext', target, value: '**A brighter coast**', tier: 'basic' },
-    }),
-  );
+  page.send({
+    ...ready,
+    type: 'handover:canvas:text-field',
+    field: { kind: 'richtext', target, value: '**A brighter coast**', tier: 'basic' },
+  });
   expect(onTextField).toHaveBeenLastCalledWith({
     kind: 'richtext',
     target,
     value: '**A brighter coast**',
     tier: 'basic',
   });
-  expect(child.interaction(target, { inlineEditing: true, composing: false })).toBe(true);
-  expect(parent.postMessage).toHaveBeenLastCalledWith(
+  expect(page.bridge.interaction(target, { inlineEditing: true, composing: false })).toBe(true);
+  expect(page.parent.postMessage).toHaveBeenLastCalledWith(
     expect.objectContaining({
       type: 'handover:canvas:editing',
       target,
@@ -697,19 +534,8 @@ test('plain-text capability and editing state cross only the current selected br
     'https://cms.example',
   );
 
-  const candidate = frame();
   const onEditing = vi.fn();
-  const bridge = createCanvasParentBridge({
-    manifest,
-    frame: candidate,
-    origin: 'https://cms.example',
-    contentVersion: () => 4,
-    currentTarget: () => target,
-    onCommand: vi.fn(),
-    onEditing,
-    listen: false,
-  });
-  bridge.receive(event(candidate, 'https://cms.example', ready));
+  const { bridge, candidate, send } = connect({ onEditing });
   expect(bridge.textField({ kind: 'text', target, value: 'A brighter coast' })).toBe(true);
   expect(
     bridge.textField({ kind: 'richtext', target, value: '**A brighter coast**', tier: 'basic' }),
@@ -756,17 +582,12 @@ test('plain-text capability and editing state cross only the current selected br
     }),
     'https://cms.example',
   );
-  expect(bridge.textField({ kind: 'richtext', target, value: 'Missing tier' } as never)).toBe(
-    false,
-  );
-  bridge.receive(
-    event(candidate, 'https://cms.example', {
-      ...ready,
-      type: 'handover:canvas:editing',
-      target,
-      state: { inlineEditing: true, composing: true },
-    }),
-  );
+  send({
+    ...ready,
+    type: 'handover:canvas:editing',
+    target,
+    state: { inlineEditing: true, composing: true },
+  });
   expect(onEditing).toHaveBeenCalledWith(target, {
     inlineEditing: true,
     composing: true,
@@ -774,23 +595,14 @@ test('plain-text capability and editing state cross only the current selected br
 });
 
 test('the active editor can stop after parent selection moves to another target', () => {
-  const candidate = frame();
   let selected = target;
   let version = 4;
   const onEditing = vi.fn();
-  const rejected = vi.fn();
-  const bridge = createCanvasParentBridge({
-    manifest,
-    frame: candidate,
-    origin: 'https://cms.example',
+  const { rejected, send } = connect({
     contentVersion: () => version,
     currentTarget: () => selected,
-    onCommand: vi.fn(),
     onEditing,
-    onRejected: rejected,
-    listen: false,
   });
-  bridge.receive(event(candidate, 'https://cms.example', ready));
   const editing = (address: string, inlineEditing: boolean, interactionId = 'edit-1') => ({
     ...ready,
     type: 'handover:canvas:editing',
@@ -798,56 +610,23 @@ test('the active editor can stop after parent selection moves to another target'
     state: { inlineEditing, composing: false },
     interactionId,
   });
-  bridge.receive(event(candidate, 'https://cms.example', editing(target.address, true)));
+  send(editing(target.address, true));
   selected = { ...target, address: 'body' };
   version = 5;
-  bridge.receive(
-    event(candidate, 'https://cms.example', {
-      ...editing(target.address, false),
-      contentVersion: 6,
-    }),
-  );
-  bridge.receive(
-    event(candidate, 'https://cms.example', {
-      ...editing(target.address, false),
-      contentVersion: 3,
-    }),
-  );
+  send({ ...editing(target.address, false), contentVersion: 6 });
+  send({ ...editing(target.address, false), contentVersion: 3 });
   expect(onEditing).toHaveBeenCalledTimes(1);
   expect(rejected).toHaveBeenCalledWith('stale-version', expect.anything());
-  bridge.receive(
-    event(candidate, 'https://cms.example', {
-      ...editing(target.address, false),
-      contentVersion: 4,
-    }),
-  );
+  send({ ...editing(target.address, false), contentVersion: 4 });
   expect(onEditing).toHaveBeenCalledTimes(2);
   expect(onEditing).toHaveBeenLastCalledWith(target, { inlineEditing: false, composing: false });
-  bridge.receive(
-    event(candidate, 'https://cms.example', {
-      ...editing(target.address, false),
-      contentVersion: 5,
-    }),
-  );
+  send({ ...editing(target.address, false), contentVersion: 5 });
   expect(rejected).toHaveBeenCalledWith('stale-target', expect.anything());
 });
 
 test('a delayed stop from a previous edit cannot end a newer interaction', () => {
-  const candidate = frame();
   const onEditing = vi.fn();
-  const rejected = vi.fn();
-  const bridge = createCanvasParentBridge({
-    manifest,
-    frame: candidate,
-    origin: 'https://cms.example',
-    contentVersion: () => 4,
-    currentTarget: () => target,
-    onCommand: vi.fn(),
-    onEditing,
-    onRejected: rejected,
-    listen: false,
-  });
-  bridge.receive(event(candidate, 'https://cms.example', ready));
+  const { rejected, send } = connect({ onEditing });
   const editing = (interactionId: string, inlineEditing: boolean) => ({
     ...ready,
     type: 'handover:canvas:editing',
@@ -855,32 +634,19 @@ test('a delayed stop from a previous edit cannot end a newer interaction', () =>
     state: { inlineEditing, composing: false },
     interactionId,
   });
-  bridge.receive(event(candidate, 'https://cms.example', editing('first', true)));
-  bridge.receive(event(candidate, 'https://cms.example', editing('second', true)));
-  bridge.receive(event(candidate, 'https://cms.example', editing('first', false)));
+  send(editing('first', true));
+  send(editing('second', true));
+  send(editing('first', false));
   expect(onEditing).toHaveBeenCalledTimes(2);
   expect(rejected).toHaveBeenCalledWith('stale-target', expect.anything());
-  bridge.receive(event(candidate, 'https://cms.example', editing('second', false)));
+  send(editing('second', false));
   expect(onEditing).toHaveBeenCalledTimes(3);
 });
 
 test('an owned stop is not refused as stale after the admin switches to a lower-versioned locale', () => {
-  const candidate = frame();
   const onEditing = vi.fn();
-  const rejected = vi.fn();
   let version = 4;
-  const bridge = createCanvasParentBridge({
-    manifest,
-    frame: candidate,
-    origin: 'https://cms.example',
-    contentVersion: () => version,
-    currentTarget: () => target,
-    onCommand: vi.fn(),
-    onEditing,
-    onRejected: rejected,
-    listen: false,
-  });
-  bridge.receive(event(candidate, 'https://cms.example', ready));
+  const { bridge, rejected, send } = connect({ contentVersion: () => version, onEditing });
   // Raises this frame's own high-water mark to 6, independent of whichever locale is selected later.
   version = 6;
   bridge.textField({ kind: 'text', target, value: 'A brighter coast' });
@@ -892,50 +658,33 @@ test('an owned stop is not refused as stale after the admin switches to a lower-
     contentVersion: 6,
     interactionId: 'i1',
   });
-  bridge.receive(event(candidate, 'https://cms.example', editing(true)));
+  send(editing(true));
   // The admin switches locale; the new locale's own version is lower than this frame's.
   version = 0;
-  bridge.receive(event(candidate, 'https://cms.example', editing(false)));
+  send(editing(false));
   expect(rejected).not.toHaveBeenCalledWith('stale-version', expect.anything());
   expect(onEditing).toHaveBeenLastCalledWith(target, { inlineEditing: false, composing: false });
 });
 
 test('a drag end is accepted after the content version changes mid-drag', () => {
-  const candidate = frame();
   const onEditing = vi.fn();
-  const rejected = vi.fn();
   let version = 4;
-  const bridge = createCanvasParentBridge({
-    manifest,
-    frame: candidate,
-    origin: 'https://cms.example',
-    contentVersion: () => version,
-    currentTarget: () => target,
-    onCommand: vi.fn(),
-    onEditing,
-    onRejected: rejected,
-    listen: false,
+  const { rejected, send } = connect({ contentVersion: () => version, onEditing });
+  send({
+    ...ready,
+    type: 'handover:canvas:editing',
+    target,
+    state: { inlineEditing: false, composing: false, dragging: true },
   });
-  bridge.receive(event(candidate, 'https://cms.example', ready));
-  bridge.receive(
-    event(candidate, 'https://cms.example', {
-      ...ready,
-      type: 'handover:canvas:editing',
-      target,
-      state: { inlineEditing: false, composing: false, dragging: true },
-    }),
-  );
   // A drag end carries no interactionId, so without owned-interaction handling this drag-end
   // message is checked against the admin's now-different version and refused as stale.
   version = 6;
-  bridge.receive(
-    event(candidate, 'https://cms.example', {
-      ...ready,
-      type: 'handover:canvas:editing',
-      target,
-      state: { inlineEditing: false, composing: false, dragging: false },
-    }),
-  );
+  send({
+    ...ready,
+    type: 'handover:canvas:editing',
+    target,
+    state: { inlineEditing: false, composing: false, dragging: false },
+  });
   expect(rejected).not.toHaveBeenCalled();
   expect(onEditing).toHaveBeenLastCalledWith(target, {
     inlineEditing: false,
@@ -945,66 +694,36 @@ test('a drag end is accepted after the content version changes mid-drag', () => 
 });
 
 test('nested annotation addresses cross the bridge and addresses beyond its bound fail visibly', () => {
-  const candidate = frame();
   const onSelection = vi.fn();
-  const rejected = vi.fn();
-  const bridge = createCanvasParentBridge({
-    manifest,
-    frame: candidate,
-    origin: 'https://cms.example',
-    contentVersion: () => 4,
-    currentTarget: () => target,
-    onCommand: vi.fn(),
-    onSelection,
-    onRejected: rejected,
-    listen: false,
-  });
-  bridge.receive(event(candidate, 'https://cms.example', ready));
+  const { rejected, send } = connect({ onSelection });
   const address = `blocks${'[_id=abcdefgh].blocks'.repeat(12)}[_id=abcdefgh].heading`;
-  bridge.receive(
-    event(candidate, 'https://cms.example', {
-      ...ready,
-      type: 'handover:canvas:selection',
-      selection: { kind: 'field', target: { ...target, address } },
-    }),
-  );
+  send({
+    ...ready,
+    type: 'handover:canvas:selection',
+    selection: { kind: 'field', target: { ...target, address } },
+  });
   expect(onSelection).toHaveBeenCalledWith({ kind: 'field', target: { ...target, address } });
   expect(rejected).not.toHaveBeenCalled();
-  bridge.receive(
-    event(candidate, 'https://cms.example', {
-      ...ready,
-      type: 'handover:canvas:selection',
-      selection: { kind: 'field', target: { ...target, address: 'a'.repeat(4_097) } },
-    }),
-  );
+  send({
+    ...ready,
+    type: 'handover:canvas:selection',
+    selection: { kind: 'field', target: { ...target, address: 'a'.repeat(4_097) } },
+  });
   expect(onSelection).toHaveBeenCalledTimes(1);
   expect(rejected).toHaveBeenCalledWith('malformed', expect.anything());
 });
 
 test('stale commands and targets receive explicit acknowledgements without mutating', () => {
-  const candidate = frame();
   const onCommand = vi.fn();
-  const bridge = createCanvasParentBridge({
-    manifest,
-    frame: candidate,
-    origin: 'https://cms.example',
-    contentVersion: () => 5,
-    currentTarget: () => target,
-    onCommand,
-    listen: false,
-  });
-  bridge.receive(event(candidate, 'https://cms.example', { ...ready, contentVersion: 5 }));
-  bridge.receive(event(candidate, 'https://cms.example', command()));
-  bridge.receive(
-    event(
-      candidate,
-      'https://cms.example',
-      command({
-        commandId: 'command-2',
-        contentVersion: 5,
-        target: { ...target, address: 'blocks[_id=hero-1].summary' },
-      }),
-    ),
+  const { candidate, send } = connect({ contentVersion: () => 5, onCommand }, { ready: false });
+  send({ ...ready, contentVersion: 5 });
+  send(command());
+  send(
+    command({
+      commandId: 'command-2',
+      contentVersion: 5,
+      target: { ...target, address: 'blocks[_id=hero-1].summary' },
+    }),
   );
 
   expect(onCommand).not.toHaveBeenCalled();
@@ -1026,26 +745,16 @@ test('stale commands and targets receive explicit acknowledgements without mutat
 });
 
 test('a reused command ID is refused and never runs twice', async () => {
-  const candidate = frame();
   let version = 4;
   const onCommand = vi.fn(() => {
     version = 5;
     return { ok: true as const, contentVersion: version };
   });
-  const bridge = createCanvasParentBridge({
-    manifest,
-    frame: candidate,
-    origin: 'https://cms.example',
-    contentVersion: () => version,
-    currentTarget: () => target,
-    onCommand,
-    listen: false,
-  });
-  bridge.receive(event(candidate, 'https://cms.example', ready));
-  bridge.receive(event(candidate, 'https://cms.example', command()));
-  bridge.receive(event(candidate, 'https://cms.example', command()));
+  const { candidate, send } = connect({ contentVersion: () => version, onCommand });
+  send(command());
+  send(command());
   await settle();
-  bridge.receive(event(candidate, 'https://cms.example', command()));
+  send(command());
   await settle();
 
   expect(onCommand).toHaveBeenCalledTimes(1);
@@ -1068,19 +777,9 @@ test('a reused command ID is refused and never runs twice', async () => {
 });
 
 test('session refusals are acknowledged and the bridge performs no server write', async () => {
-  const candidate = frame();
   const fetch = vi.spyOn(globalThis, 'fetch');
-  const bridge = createCanvasParentBridge({
-    manifest,
-    frame: candidate,
-    origin: 'https://cms.example',
-    contentVersion: () => 4,
-    currentTarget: () => target,
-    onCommand: () => ({ ok: false, reason: 'readonly' }),
-    listen: false,
-  });
-  bridge.receive(event(candidate, 'https://cms.example', ready));
-  bridge.receive(event(candidate, 'https://cms.example', command()));
+  const { candidate, send } = connect({ onCommand: () => ({ ok: false, reason: 'readonly' }) });
+  send(command());
   await settle();
 
   expect(candidate.postMessage).toHaveBeenCalledWith(
@@ -1091,92 +790,29 @@ test('session refusals are acknowledged and the bridge performs no server write'
 });
 
 test('the iframe bridge ignores foreign and stale acknowledgements, then accepts its own', async () => {
-  const parent = frame();
-  const child = createCanvasChildBridge({
-    manifest,
-    parent,
-    origin: 'https://cms.example',
-    listen: false,
-    commandId: () => 'command-1',
-  });
-  child.start();
+  const { bridge, parent, send } = child({ commandId: () => 'command-1' });
+  bridge.start();
   expect(parent.postMessage).toHaveBeenCalledWith(
     ready,
     'https://cms.example',
     expect.arrayContaining([expect.any(MessagePort)]),
   );
 
-  const pending = child.command(target, {
+  const pending = bridge.command(target, {
     type: 'field',
     changes: [{ value: 'A brighter coast' }],
   });
-  child.receive(
-    event(parent, 'https://attacker.example', {
-      ...command(),
-      type: 'handover:canvas:ack',
-      ok: true,
-      acceptedVersion: 5,
-      command: undefined,
-    }),
-  );
-  child.receive(
-    event(parent, 'https://cms.example', {
-      type: 'handover:canvas:ack',
-      protocol: 1,
-      requestId: 'old-render',
-      epoch: 'session-1',
-      entry: manifest.entry,
-      locale: 'en',
-      contentVersion: 4,
-      commandId: 'command-1',
-      target,
-      ok: true,
-      acceptedVersion: 5,
-    }),
-  );
-  child.receive(
-    event(parent, 'https://cms.example', {
-      type: 'handover:canvas:ack',
-      protocol: 1,
-      requestId: 'render-1',
-      epoch: 'session-1',
-      entry: manifest.entry,
-      locale: 'en',
-      contentVersion: 4,
-      commandId: 'command-1',
-      target,
-      ok: true,
-      acceptedVersion: 5,
-    }),
-  );
+  send(ack(), 'https://attacker.example');
+  send(ack({ requestId: 'old-render' }));
+  send(ack());
 
   await expect(pending).resolves.toEqual(expect.objectContaining({ ok: true, acceptedVersion: 5 }));
-  expect(child.contentVersion()).toBe(5);
+  expect(bridge.contentVersion()).toBe(5);
 });
 
 test('a structure node crosses with its optional keys and is refused any key beyond them', () => {
-  const candidate = frame();
   const onStructure = vi.fn();
-  const bridge = createCanvasParentBridge({
-    manifest,
-    frame: candidate,
-    origin: 'https://cms.example',
-    contentVersion: () => 4,
-    currentTarget: () => target,
-    onCommand: vi.fn(),
-    onSelection: vi.fn(),
-    onStructure,
-    onRejected: vi.fn(),
-    listen: false,
-  });
-  const identity = {
-    protocol: 1,
-    requestId: manifest.requestId,
-    epoch: manifest.epoch,
-    entry: manifest.entry,
-    locale: manifest.locale,
-    contentVersion: manifest.contentVersion,
-  };
+  const { send } = connect({ onStructure });
   const root = {
     kind: 'block' as const,
     target: { ...target, address: 'blocks[_id=hero-1]' },
@@ -1199,37 +835,20 @@ test('a structure node crosses with its optional keys and is refused any key bey
     occurrences: 1,
     empty: true,
   };
-  const send = (nodes: unknown[]) =>
-    bridge.receive(
-      event(candidate, 'https://cms.example', {
-        ...identity,
-        type: 'handover:canvas:structure',
-        nodes,
-      }),
-    );
-  bridge.receive(event(candidate, 'https://cms.example', ready));
+  const sendNodes = (nodes: unknown[]) =>
+    send({ ...ready, type: 'handover:canvas:structure', nodes });
 
-  send([{ ...root, container: true }, node]);
+  sendNodes([{ ...root, container: true }, node]);
   expect(onStructure).toHaveBeenCalledWith([{ ...root, container: true }, node]);
-  send([{ ...root, container: 'true' }, node]);
+  sendNodes([{ ...root, container: 'true' }, node]);
   expect(onStructure).toHaveBeenCalledTimes(1);
 
-  send([root, { ...node, named: 'Blocks' }]);
+  sendNodes([root, { ...node, named: 'Blocks' }]);
   expect(onStructure).toHaveBeenCalledTimes(1);
 });
 
 test('problems() still sends the addresses within bound when another exceeds it', () => {
-  const candidate = frame();
-  const bridge = createCanvasParentBridge({
-    manifest,
-    frame: candidate,
-    origin: 'https://cms.example',
-    contentVersion: () => 4,
-    currentTarget: () => target,
-    onCommand: vi.fn(),
-    listen: false,
-  });
-  bridge.receive(event(candidate, 'https://cms.example', ready));
+  const { bridge, candidate } = connect();
   expect(bridge.problems([target.address, 'a'.repeat(4_097)])).toBe(true);
   expect(candidate.postMessage).toHaveBeenLastCalledWith(
     expect.objectContaining({ type: 'handover:canvas:problems', addresses: [target.address] }),
@@ -1238,128 +857,55 @@ test('problems() still sends the addresses within bound when another exceeds it'
 });
 
 test('a problems update stamped ahead of a pending command is applied once it acks', () => {
-  const parent = frame();
   const onProblems = vi.fn();
-  const child = createCanvasChildBridge({
-    manifest,
-    parent,
-    origin: 'https://cms.example',
-    onProblems,
-    listen: false,
-    commandId: () => 'command-1',
-  });
-  child.start();
-  void child.command(target, { type: 'field', changes: [{ value: 'A brighter coast' }] });
+  const { bridge, send } = child({ onProblems, commandId: () => 'command-1' });
+  bridge.start();
+  void bridge.command(target, { type: 'field', changes: [{ value: 'A brighter coast' }] });
 
-  child.receive(
-    event(parent, 'https://cms.example', {
-      ...ready,
-      type: 'handover:canvas:problems',
-      addresses: [target.address],
-      contentVersion: 5,
-    }),
-  );
+  send({
+    ...ready,
+    type: 'handover:canvas:problems',
+    addresses: [target.address],
+    contentVersion: 5,
+  });
   expect(onProblems).not.toHaveBeenCalled();
 
-  child.receive(
-    event(parent, 'https://cms.example', {
-      type: 'handover:canvas:ack',
-      protocol: 1,
-      requestId: manifest.requestId,
-      epoch: manifest.epoch,
-      entry: manifest.entry,
-      locale: 'en',
-      contentVersion: 4,
-      commandId: 'command-1',
-      target,
-      ok: true,
-      acceptedVersion: 5,
-    }),
-  );
+  send(ack());
   expect(onProblems).toHaveBeenCalledWith([target.address]);
 });
 
 test('an interface language stamped ahead of a pending command is applied once it acks', () => {
-  const parent = frame();
   const onUiLocale = vi.fn();
-  const child = createCanvasChildBridge({
-    manifest,
-    parent,
-    origin: 'https://cms.example',
-    onUiLocale,
-    listen: false,
-    commandId: () => 'command-1',
-  });
-  child.start();
-  void child.command(target, { type: 'field', changes: [{ value: 'A brighter coast' }] });
+  const { bridge, send } = child({ onUiLocale, commandId: () => 'command-1' });
+  bridge.start();
+  void bridge.command(target, { type: 'field', changes: [{ value: 'A brighter coast' }] });
 
-  child.receive(
-    event(parent, 'https://cms.example', {
-      ...ready,
-      type: 'handover:canvas:ui-locale',
-      uiLocale: 'de',
-      contentVersion: 5,
-    }),
-  );
+  send({ ...ready, type: 'handover:canvas:ui-locale', uiLocale: 'de', contentVersion: 5 });
   expect(onUiLocale).not.toHaveBeenCalled();
 
-  child.receive(
-    event(parent, 'https://cms.example', {
-      type: 'handover:canvas:ack',
-      protocol: 1,
-      requestId: manifest.requestId,
-      epoch: manifest.epoch,
-      entry: manifest.entry,
-      locale: 'en',
-      contentVersion: 4,
-      commandId: 'command-1',
-      target,
-      ok: true,
-      acceptedVersion: 5,
-    }),
-  );
+  send(ack());
   expect(onUiLocale).toHaveBeenCalledWith('de');
 });
 
 test('validation updates are scoped to the active frame and accept clearing all problems', () => {
-  const browserParent = frame();
   const onProblems = vi.fn();
-  const child = createCanvasChildBridge({
-    manifest,
-    parent: browserParent,
-    origin: 'https://cms.example',
-    onProblems,
-    listen: false,
-  });
+  const { bridge, send } = child({ onProblems });
   const message = { ...ready, type: 'handover:canvas:problems', addresses: [target.address] };
-  child.receive(event(frame(), 'https://cms.example', message));
-  child.receive(event(browserParent, 'https://attacker.example', message));
-  child.receive(event(browserParent, 'https://cms.example', { ...message, epoch: 'old' }));
-  child.receive(event(browserParent, 'https://cms.example', { ...message, addresses: [null] }));
+  send(message, 'https://cms.example', frame());
+  send(message, 'https://attacker.example');
+  send({ ...message, epoch: 'old' });
+  send({ ...message, addresses: [null] });
   expect(onProblems).not.toHaveBeenCalled();
-  child.receive(event(browserParent, 'https://cms.example', message));
+  send(message);
   expect(onProblems).toHaveBeenLastCalledWith([target.address]);
-  child.receive(event(browserParent, 'https://cms.example', { ...message, addresses: [] }));
+  send({ ...message, addresses: [] });
   expect(onProblems).toHaveBeenLastCalledWith([]);
-  child.dispose();
+  bridge.dispose();
 });
 
 test('image activation validates its geometry and retains the normal target boundary', () => {
-  const candidate = frame();
   const onAction = vi.fn();
-  const rejected = vi.fn();
-  const bridge = createCanvasParentBridge({
-    manifest,
-    frame: candidate,
-    origin: 'https://cms.example',
-    contentVersion: () => 4,
-    currentTarget: () => target,
-    onCommand: vi.fn(),
-    onAction,
-    onRejected: rejected,
-    listen: false,
-  });
-  bridge.receive(event(candidate, 'https://cms.example', ready));
+  const { bridge, rejected, send } = connect({ onAction });
   const message = {
     ...ready,
     type: 'handover:canvas:action',
@@ -1367,31 +913,19 @@ test('image activation validates its geometry and retains the normal target boun
     selection: { kind: 'field', target },
     anchor: { left: 20, top: 30, width: 300, height: 200 },
   };
-  bridge.receive(
-    event(candidate, 'https://cms.example', {
-      ...message,
-      anchor: { ...message.anchor, width: NaN },
-    }),
-  );
-  bridge.receive(
-    event(candidate, 'https://cms.example', {
-      ...message,
-      anchor: { ...message.anchor, height: -1 },
-    }),
-  );
-  bridge.receive(
-    event(candidate, 'https://cms.example', {
-      ...message,
-      selection: { kind: 'field', target: { ...target, address: 'another-image' } },
-    }),
-  );
+  send({ ...message, anchor: { ...message.anchor, width: NaN } });
+  send({ ...message, anchor: { ...message.anchor, height: -1 } });
+  send({
+    ...message,
+    selection: { kind: 'field', target: { ...target, address: 'another-image' } },
+  });
   expect(onAction).not.toHaveBeenCalled();
   expect(rejected.mock.calls.map(([reason]) => reason)).toEqual([
     'malformed',
     'malformed',
     'stale-target',
   ]);
-  bridge.receive(event(candidate, 'https://cms.example', message));
+  send(message);
   expect(onAction).toHaveBeenCalledWith(message);
   bridge.dispose();
 });
