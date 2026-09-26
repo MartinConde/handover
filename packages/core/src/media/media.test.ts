@@ -235,8 +235,9 @@ test('PDF bytes are verified and the final object is forced to download', async 
 });
 
 test('the widest crop at a ratio is what a picture is measured by, not its longest side', () => {
-  // A landscape source: the 16:9 crop is limited by the height it has to fill.
   expect(cropWidth(2400, 1600, '16:9')).toBe(2400);
+  // A panorama: the 16:9 crop is limited by the height it has to fill.
+  expect(cropWidth(2400, 900, '16:9')).toBe(1600);
   expect(cropWidth(800, 450, '16:9')).toBe(800);
   // The phone photo the rule exists for: 1600 px tall, and still only a 900 px hero.
   expect(cropWidth(900, 1600, '16:9')).toBe(900);

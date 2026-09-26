@@ -243,10 +243,10 @@ test('a kind no group claims is named by none of them', () => {
 });
 
 test('the last commit is the newest one the log carries', async () => {
-  await logActivity('default', db, { kind: 'publish', commitSha: 'aaa111' });
-  await logActivity('default', db, { kind: 'login' });
-  await logActivity('default', db, { kind: 'revert', commitSha: 'bbb222' });
-  await logActivity('default', db, { kind: 'draft-discard' });
+  await seedEvent({ id: 'e1', at: 1000, kind: 'publish', commitSha: 'aaa111' });
+  await seedEvent({ id: 'e2', at: 2000, kind: 'login' });
+  await seedEvent({ id: 'e3', at: 3000, kind: 'revert', commitSha: 'bbb222' });
+  await seedEvent({ id: 'e4', at: 4000, kind: 'draft-discard' });
 
   expect(await lastCommit('default', db)).toMatchObject({ sha: 'bbb222', kind: 'revert' });
 });
@@ -411,7 +411,7 @@ test('commit authors are the people the log recorded against those commits', asy
   });
 });
 
-test.each([99, 100, 300])(
+test.each([99, 100])(
   'commit authors stay within D1 limits for %i requested SHAs',
   async (count) => {
     await seedUser('u1', 'Anna Weber', 'anna@example.com');

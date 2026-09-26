@@ -326,13 +326,13 @@ const variants = {
 } satisfies Record<string, Variant>;
 
 export type SixLanguageVariant = keyof typeof variants;
-export const SIX_LANGUAGE_VARIANTS = Object.keys(variants) as SixLanguageVariant[];
+const SIX_LANGUAGE_VARIANTS = Object.keys(variants) as SixLanguageVariant[];
 
 // Every call is a deep copy, so one test's typing never reaches the next test's entry.
 const variant = (name: SixLanguageVariant): Variant => structuredClone(variants[name]);
 
 /** The source each variant resolves to by the rules of `entrySource`, worked out by hand. */
-export const SIX_LANGUAGE_SOURCES: Record<SixLanguageVariant, string> = {
+const SIX_LANGUAGE_SOURCES: Record<SixLanguageVariant, string> = {
   base: 'en',
   twoMissing: 'en',
   germanFirst: 'de',

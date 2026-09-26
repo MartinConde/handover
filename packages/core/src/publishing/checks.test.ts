@@ -281,6 +281,30 @@ test('a picture that has been archived is a warning, and the bucket is not asked
   expect(found?.message).toContain('Photo');
 });
 
+test('a hundredth picture is still looked up in the table, past D1’s parameter limit', async () => {
+  const hashes = Array.from({ length: 100 }, (_, i) => i.toString(16).padStart(64, '0'));
+  const last = hashes[99] ?? '';
+  await db.insert(tables.media).values({
+    id: last,
+    siteId: 'default',
+    r2Key: picture(last),
+    mime: 'image/webp',
+    archived: 1,
+    createdAt: Date.now(),
+  });
+  const r2 = bucket(hashes.map(picture));
+  const results = await run(
+    hashes.map((hash, i) => entryOf(`listings/house-${i}`, { en: title + image(hash) })),
+    { store },
+    { fetch: r2.fetch },
+  );
+
+  expect(r2.asked).not.toContain(picture(last));
+  expect(results.filter((r) => r.check === 'media-archived').map((r) => r.path)).toEqual([
+    file('listings', 'en', 'house-99'),
+  ]);
+});
+
 test('a deletion tombstone is missing media and is never adopted from a stray object', async () => {
   const hash = 'e'.repeat(64);
   await db.insert(tables.media).values({

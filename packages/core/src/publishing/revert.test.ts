@@ -256,7 +256,7 @@ test('a published row is cleared once the build carrying it is live', async () =
   expect(await only(db)).toBe(undefined);
 });
 
-test.each([19, 20, 61])(
+test.each([14, 15, 61])(
   'published cleanup stays within D1 limits for %i locale files',
   async (count) => {
     const db = await fresh();

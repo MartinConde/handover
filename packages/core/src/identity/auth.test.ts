@@ -1023,6 +1023,8 @@ test('a reset the password rules refused is no event, and leaves the link usable
 
   expect(refused.status).toBe(400);
   expect(await activityRows()).toEqual([]);
+  const retried = await call('/reset-password', { newPassword: 'a-brand-new-password', token });
+  expect(retried.status).toBe(200);
 });
 
 // A second GitHub sign-in updates the account row; only the two password endpoints set a password.
