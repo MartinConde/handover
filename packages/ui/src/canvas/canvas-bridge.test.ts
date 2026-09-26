@@ -1025,7 +1025,7 @@ test('stale commands and targets receive explicit acknowledgements without mutat
   );
 });
 
-test('a repeated command replays its acknowledgement and never runs twice', async () => {
+test('a reused command ID is refused and never runs twice', async () => {
   const candidate = frame();
   let version = 4;
   const onCommand = vi.fn(() => {
@@ -1043,22 +1043,16 @@ test('a repeated command replays its acknowledgement and never runs twice', asyn
   });
   bridge.receive(event(candidate, 'https://cms.example', ready));
   bridge.receive(event(candidate, 'https://cms.example', command()));
+  bridge.receive(event(candidate, 'https://cms.example', command()));
   await settle();
   bridge.receive(event(candidate, 'https://cms.example', command()));
   await settle();
-  bridge.receive(
-    event(
-      candidate,
-      'https://cms.example',
-      command({ command: { type: 'field', changes: [{ value: 'A different reuse' }] } }),
-    ),
-  );
 
   expect(onCommand).toHaveBeenCalledTimes(1);
   expect(candidate.postMessage).toHaveBeenCalledTimes(3);
   expect(candidate.postMessage).toHaveBeenNthCalledWith(
     1,
-    expect.objectContaining({ commandId: 'command-1', ok: true, acceptedVersion: 5 }),
+    expect.objectContaining({ commandId: 'command-1', ok: false, reason: 'duplicate-command' }),
     'https://cms.example',
   );
   expect(candidate.postMessage).toHaveBeenNthCalledWith(
@@ -1069,141 +1063,6 @@ test('a repeated command replays its acknowledgement and never runs twice', asyn
   expect(candidate.postMessage).toHaveBeenNthCalledWith(
     3,
     expect.objectContaining({ commandId: 'command-1', ok: false, reason: 'duplicate-command' }),
-    'https://cms.example',
-  );
-});
-
-test('commands with different undefined values cannot reuse a command ID', async () => {
-  const candidate = frame();
-  const onCommand = vi.fn(() => ({ ok: true as const, contentVersion: 4 }));
-  const bridge = createCanvasParentBridge({
-    manifest,
-    frame: candidate,
-    origin: 'https://cms.example',
-    contentVersion: () => 4,
-    currentTarget: () => target,
-    onCommand,
-    listen: false,
-  });
-  bridge.receive(event(candidate, 'https://cms.example', ready));
-  const send = (commandId: string, value: unknown) =>
-    bridge.receive(
-      event(
-        candidate,
-        'https://cms.example',
-        command({ commandId, command: { type: 'field', changes: [{ value }] } }),
-      ),
-    );
-  send('object', { a: undefined });
-  await settle();
-  send('object', {});
-  send('array', [undefined]);
-  await settle();
-  send('array', [null]);
-  send('sparse', Array(1));
-  await settle();
-  send('sparse', [undefined]);
-  expect(onCommand).toHaveBeenCalledTimes(3);
-  expect(candidate.postMessage).toHaveBeenNthCalledWith(
-    2,
-    expect.objectContaining({ commandId: 'object', reason: 'duplicate-command' }),
-    'https://cms.example',
-  );
-  expect(candidate.postMessage).toHaveBeenNthCalledWith(
-    4,
-    expect.objectContaining({ commandId: 'array', reason: 'duplicate-command' }),
-    'https://cms.example',
-  );
-  expect(candidate.postMessage).toHaveBeenNthCalledWith(
-    6,
-    expect.objectContaining({ commandId: 'sparse', reason: 'duplicate-command' }),
-    'https://cms.example',
-  );
-});
-
-test('a duplicate while its original command is pending waits for the same acknowledgement', async () => {
-  const candidate = frame();
-  let resolve!: (result: { ok: true; contentVersion: number }) => void;
-  const onCommand = vi.fn(
-    () =>
-      new Promise<{ ok: true; contentVersion: number }>((done) => {
-        resolve = done;
-      }),
-  );
-  const bridge = createCanvasParentBridge({
-    manifest,
-    frame: candidate,
-    origin: 'https://cms.example',
-    contentVersion: () => 4,
-    currentTarget: () => target,
-    onCommand,
-    listen: false,
-  });
-  bridge.receive(event(candidate, 'https://cms.example', ready));
-  bridge.receive(event(candidate, 'https://cms.example', command()));
-  bridge.receive(event(candidate, 'https://cms.example', command()));
-  bridge.receive(
-    event(
-      candidate,
-      'https://cms.example',
-      command({
-        command: { type: 'field', changes: [{ value: 'different' }] },
-      }),
-    ),
-  );
-  await settle();
-  expect(onCommand).toHaveBeenCalledTimes(1);
-  expect(candidate.postMessage).toHaveBeenCalledWith(
-    expect.objectContaining({ reason: 'duplicate-command' }),
-    'https://cms.example',
-  );
-  resolve({ ok: true, contentVersion: 5 });
-  await settle();
-  expect(candidate.postMessage).toHaveBeenCalledTimes(3);
-  expect(candidate.postMessage).toHaveBeenNthCalledWith(
-    2,
-    expect.objectContaining({ ok: true, acceptedVersion: 5 }),
-    'https://cms.example',
-  );
-  expect(candidate.postMessage).toHaveBeenNthCalledWith(
-    3,
-    expect.objectContaining({ ok: true, acceptedVersion: 5 }),
-    'https://cms.example',
-  );
-});
-
-test('an oversized recovery reply becomes a duplicate tombstone without replaying or rerunning', async () => {
-  const candidate = frame();
-  const onCommand = vi.fn(() => ({
-    ok: true as const,
-    contentVersion: 5,
-    update: { value: 'x'.repeat(150_000) },
-  }));
-  const bridge = createCanvasParentBridge({
-    manifest,
-    frame: candidate,
-    origin: 'https://cms.example',
-    contentVersion: () => 4,
-    currentTarget: () => target,
-    onCommand,
-    listen: false,
-  });
-  bridge.receive(event(candidate, 'https://cms.example', ready));
-  const large = command({
-    command: { type: 'field', changes: [{ value: 'a'.repeat(100_000) }] },
-  });
-  bridge.receive(event(candidate, 'https://cms.example', large));
-  await settle();
-  bridge.receive(event(candidate, 'https://cms.example', large));
-  expect(onCommand).toHaveBeenCalledOnce();
-  expect(candidate.postMessage).toHaveBeenNthCalledWith(
-    1,
-    expect.objectContaining({ ok: true, update: { value: 'x'.repeat(150_000) } }),
-    'https://cms.example',
-  );
-  expect(candidate.postMessage).toHaveBeenNthCalledWith(
-    2,
-    expect.objectContaining({ ok: false, reason: 'duplicate-command' }),
     'https://cms.example',
   );
 });

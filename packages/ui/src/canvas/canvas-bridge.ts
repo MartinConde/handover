@@ -208,55 +208,6 @@ const REFUSALS = new Set<CanvasCommandRefusal>([
   'structural',
 ]);
 const BASE = ['protocol', 'requestId', 'epoch', 'entry', 'locale', 'contentVersion'];
-const MAX_RETAINED_REPLY_BYTES = 256 * 1024;
-const fingerprint = (value: CanvasCommandMessage) => {
-  let a = 0x811c9dc5,
-    b = 0x9e3779b9,
-    c = 0x85ebca6b,
-    d = 0xc2b2ae35;
-  let length = 0;
-  const feed = (part: string) => {
-    length += part.length;
-    for (let index = 0; index < part.length; index += 1) {
-      const code = part.charCodeAt(index);
-      a = Math.imul(a ^ code, 0x01000193);
-      b = Math.imul(b ^ code, 0x5bd1e995);
-      c = Math.imul(c ^ code, 0x27d4eb2d);
-      d = Math.imul(d ^ code, 0x165667b1);
-    }
-  };
-  const write = (item: unknown): void => {
-    if (item === null) {
-      feed('z;');
-      return;
-    }
-    if (item === undefined) {
-      feed('u;');
-      return;
-    }
-    if (typeof item === 'boolean') {
-      feed(item ? 't;' : 'f;');
-      return;
-    }
-    if (typeof item === 'number') {
-      feed(`n${Object.is(item, -0) ? '-0' : item};`);
-      return;
-    }
-    if (typeof item === 'string') {
-      feed(`s${item.length}:`);
-      feed(item);
-      return;
-    }
-    const keys = Object.keys(item as object);
-    feed(Array.isArray(item) ? `a${item.length}:${keys.length}:` : `o${keys.length}:`);
-    for (const key of keys) {
-      write(key);
-      write((item as Record<string, unknown>)[key]);
-    }
-  };
-  write(value);
-  return `${length}:${[a, b, c, d].map((part) => (part >>> 0).toString(16).padStart(8, '0')).join('')}`;
-};
 const record = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
 const keys = (value: Record<string, unknown>, expected: readonly string[]) =>
@@ -839,30 +790,7 @@ export interface CanvasParentBridgeOptions {
 export function createCanvasParentBridge(options: CanvasParentBridgeOptions) {
   const { manifest, frame, origin } = options;
   const owner = options.owner ?? window;
-  const completed = new Map<
-    string,
-    {
-      fingerprint: string;
-      reply?: Promise<CanvasAcknowledgement>;
-      bytes: number;
-    }
-  >();
-  let retainedReplyBytes = 0;
-  const trimCompleted = () => {
-    while (completed.size > 500) {
-      const oldest = completed.keys().next().value as string;
-      const entry = completed.get(oldest);
-      if (entry) retainedReplyBytes -= entry.bytes;
-      completed.delete(oldest);
-    }
-    for (const entry of completed.values()) {
-      if (retainedReplyBytes <= MAX_RETAINED_REPLY_BYTES) break;
-      if (!entry.bytes) continue;
-      retainedReplyBytes -= entry.bytes;
-      entry.bytes = 0;
-      entry.reply = undefined;
-    }
-  };
+  const seen = new Set<string>();
   let connected = false;
   let disposed = false;
   let replyPort: MessagePort | undefined;
@@ -1013,14 +941,7 @@ export function createCanvasParentBridge(options: CanvasParentBridgeOptions) {
     const message = event.data as CanvasCommandMessage;
     const identityReason = stale(message, manifest, message.contentVersion);
     if (identityReason) return refusal(message, identityReason);
-    const commandFingerprint = fingerprint(message);
-    const prior = completed.get(message.commandId);
-    if (prior) {
-      if (prior.fingerprint !== commandFingerprint) return refusal(message, 'duplicate-command');
-      if (!prior.reply) return refusal(message, 'duplicate-command');
-      void prior.reply.then(post);
-      return;
-    }
+    if (seen.has(message.commandId)) return refusal(message, 'duplicate-command');
     const reason = stale(message, manifest, options.contentVersion());
     if (reason) return refusal(message, reason);
     const current = options.currentTarget();
@@ -1067,16 +988,8 @@ export function createCanvasParentBridge(options: CanvasParentBridgeOptions) {
           reason: 'handler-error',
         }),
       );
-    completed.set(message.commandId, { fingerprint: commandFingerprint, reply, bytes: 0 });
-    trimCompleted();
-    void reply.then((ack) => {
-      const entry = completed.get(message.commandId);
-      if (!entry || entry.reply !== reply) return;
-      entry.reply = Promise.resolve(ack);
-      entry.bytes = JSON.stringify(ack).length * 2;
-      retainedReplyBytes += entry.bytes;
-      trimCompleted();
-    });
+    seen.add(message.commandId);
+    if (seen.size > 500) seen.delete(seen.values().next().value as string);
     void reply.then(post);
   };
   if (options.listen !== false) owner.addEventListener('message', receive);
@@ -1177,8 +1090,7 @@ export function createCanvasParentBridge(options: CanvasParentBridgeOptions) {
       replyPort?.close();
       replyPort = undefined;
       editingOwner = undefined;
-      completed.clear();
-      retainedReplyBytes = 0;
+      seen.clear();
     },
   };
 }

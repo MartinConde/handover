@@ -6,6 +6,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Canvas: **Review fields** scrolls the page to the problem field again, and inserting or moving
   a block from Structure keeps the page's selection and its action buttons.
+- Canvas refuses a reused command ID with `duplicate-command` instead of replaying the first
+  acknowledgement.
 - Discarding a draft, holding or releasing an entry and taking over an edit lock now answer 503
   with the repository's message when GitHub cannot be reached, instead of a generic 500.
 - Internal: a raw NUL byte in core's conflict resolver is written as `\u0000`, so git and grep
@@ -116,9 +118,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `aria-owns`) and support Enter/Space activation, fixing an `aria-required-children`
   violation on rows with a drag handle.
 - Canvas continues updating after inline editing ends on a different Structure selection.
-  Command deduplication uses compact fingerprints and a bounded reply cache to reduce memory
-  retained while editing long text. Deeply nested field addresses are supported up to 4,096
-  UTF-16 code units; longer addresses fail explicitly, and long Structure labels are shortened.
+  The bridge remembers recent command IDs, not their replies, so long text edits retain little
+  memory. Deeply nested field addresses are supported up to 4,096 UTF-16 code units; longer
+  addresses fail explicitly, and long Structure labels are shortened.
 - Canvas reports renderer and inline rich-text download failures with a way to continue editing
   without losing pending changes. Structure supports arrow-key, Home, and End navigation with
   one focused row and accessible nested groups. Review fields opens the affected Inspector field.
@@ -820,7 +822,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Add the versioned Canvas browser bridge. Handshakes and commands are bound to the expected
   origin, iframe, render request, entry, locale, session epoch, content version, and selected
-  target; every accepted or refused command is acknowledged, and exact retries cannot run twice.
+  target; every accepted or refused command is acknowledged, and a reused command ID never runs
+  twice.
 
 - Let `<Blocks />` carry an optional Canvas edit context through custom block components without
   adding wrapper markup. Fields and explicit empty lists can annotate existing elements, repeated
