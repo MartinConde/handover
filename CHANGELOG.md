@@ -82,6 +82,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   decoded (118,405 to 115,444 gzip, 103,671 to 100,959 Brotli).
 - Internal: core tests cover a height-limited crop, the publish checks' second media chunk, the
   exact published-cleanup chunk boundary and a refused reset link being used again.
+- Internal: the rich-text recovery browser test waits for the heading to become editable before
+  typing into it.
 - `@handover/core`: `setEntryStatus` no longer takes a `deps` argument, and `claimResource` no
   longer takes `windowMs`; the window is always one hour.
 - `@handover/core`: `clearPublished` now requires the deployment's git client as its fourth

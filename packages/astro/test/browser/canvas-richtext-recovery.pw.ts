@@ -9,6 +9,7 @@ test('a failed inline rich-text download explains recovery and leaves Inspector 
   await openCanvas(page);
   const frame = page.locator('iframe[data-handover-canvas-frame="active"]').contentFrame();
   await frame.locator('h1').click();
+  await expect(frame.locator('h1')).toHaveAttribute('contenteditable', 'true');
   await frame.locator('h1').fill('Title kept through editor failure');
   await frame.locator('h1').press('Escape');
   await expect(frame.locator('h1')).toHaveText('Title kept through editor failure');
