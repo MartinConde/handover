@@ -1,16 +1,12 @@
 import type { Field } from '@handover/core';
-import { flushSync, mount, tick, unmount } from 'svelte';
+import { flushSync, type mount, tick, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
-import { createEntrySession } from '../editor/entry-session.svelte';
-import CanvasWorkspace from './CanvasWorkspace.svelte';
 import type { CanvasStructureNode } from './canvas-bridge';
-import type { CanvasRenderRequest } from './canvas-renderer';
+import { canvasNodeKey, visibleCanvasNodes } from './canvas-structure';
+import { session as entrySession, mockRenderer, mountWorkspace } from './workspace.fixture';
 
-const fields = [
-  { path: ['title'], label: 'Title', type: 'text', required: false },
-] satisfies Field[];
 let app: ReturnType<typeof mount>;
-let render: ReturnType<typeof vi.fn>;
+let render: ReturnType<typeof mockRenderer>['renderer']['render'];
 afterEach(() => {
   if (app) unmount(app);
   document.body.innerHTML = '';
@@ -19,50 +15,13 @@ afterEach(() => {
 
 /** Mounts CanvasWorkspace with a mocked renderer and returns its onStructureChange hook. */
 async function mountWithMockedRenderer(
-  session: ReturnType<typeof createEntrySession>,
+  session: ReturnType<typeof entrySession>,
   blocks: Record<string, Field[]> = {},
 ) {
-  let options: import('./canvas-renderer').CanvasRendererOptions | undefined;
-  vi.doMock('./canvas-renderer', () => ({
-    createCanvasRenderer: (given: typeof options) => {
-      options = given;
-      render = vi.fn();
-      return {
-        render,
-        mode: vi.fn(),
-        textField: vi.fn(),
-        actions: vi.fn(),
-        select: vi.fn(),
-        uiLocale: vi.fn(),
-        problems: vi.fn(),
-        pause: vi.fn(),
-        flushScheduled: vi.fn(),
-        dispose: vi.fn(),
-      };
-    },
-  }));
-  app = mount(CanvasWorkspace, {
-    target: document.body,
-    props: {
-      active: true,
-      fullscreen: true,
-      locale: 'en',
-      url: '/',
-      request: (): CanvasRenderRequest => ({ url: '/preview', snapshot: {} as never }),
-      currentVersion: () => session.contentVersion('en'),
-      entryDocument: { collection: 'pages', id: 'home' },
-      ownerLabel: 'Home',
-      sourceLocale: 'en',
-      session,
-      blocks,
-      onform: () => {},
-      onreviewproblems: () => {},
-      onnavigateentry: () => {},
-    },
-  });
-  await vi.waitFor(() => expect(options).toBeDefined());
-  if (!options) throw new Error('Canvas renderer was not created');
-  return options;
+  const { renderer, created } = mockRenderer();
+  render = renderer.render;
+  app = mountWorkspace(session, { blocks });
+  return created();
 }
 
 const targetFor = (address: string) => ({
@@ -72,13 +31,7 @@ const targetFor = (address: string) => ({
 });
 
 test('Structure uses one tree focus and navigates visible nested rows', async () => {
-  const session = createEntrySession({
-    document: 'pages/home',
-    sourceLocale: 'en',
-    data: { title: 'Draft' },
-    translations: {},
-    form: { fields, blocks: {} },
-  });
+  const session = entrySession({ title: 'Draft' });
   const options = await mountWithMockedRenderer(session);
   const nodes: CanvasStructureNode[] = [
     {
@@ -194,23 +147,20 @@ const movableBlockFields = {
 } satisfies Record<string, Field[]>;
 
 function movableSession() {
-  return createEntrySession({
-    document: 'pages/home',
-    sourceLocale: 'en',
-    data: {
+  return entrySession(
+    {
       blocks: [
         { _id: 'a', _type: 'section', title: 'One' },
         { _id: 'b', _type: 'section', title: 'Two' },
       ],
     },
-    translations: {},
-    form: {
+    {
       fields: [
         { path: ['blocks'], label: 'Blocks', type: 'blocks', required: false, types: ['section'] },
       ],
       blocks: movableBlockFields,
     },
-  });
+  );
 }
 
 const movableNodes: CanvasStructureNode[] = [
@@ -331,4 +281,36 @@ test('a refused drag redraws the page from the session', async () => {
     destination: { kind: 'block', target: targetFor('blocks[_id=gone]') },
   } as never);
   await vi.waitFor(() => expect(render.mock.calls.length).toBe(renders + 1));
+});
+
+test('collapsing a branch hides every row beneath it, however deep', () => {
+  const node = (id: string, address: string, parentId?: string) => ({
+    id,
+    kind: 'block' as const,
+    target: targetFor(address),
+    label: id,
+    ...(parentId ? { parentId } : {}),
+    depth: 1,
+    position: 1,
+    setSize: 1,
+    occurrences: 1,
+  });
+  const nodes = [
+    node('a', 'blocks[_id=a]'),
+    node('b', 'blocks[_id=a].columns[_id=b]', 'a'),
+    node('c', 'blocks[_id=a].columns[_id=b].blocks[_id=c]', 'b'),
+    node('d', 'blocks[_id=d]'),
+  ];
+
+  expect(visibleCanvasNodes(nodes, {}).map((row) => row.id)).toEqual(['a', 'b', 'c', 'd']);
+  expect(
+    visibleCanvasNodes(nodes, { [canvasNodeKey(nodes[1] as (typeof nodes)[0])]: true }).map(
+      (row) => row.id,
+    ),
+  ).toEqual(['a', 'b', 'd']);
+  expect(
+    visibleCanvasNodes(nodes, { [canvasNodeKey(nodes[0] as (typeof nodes)[0])]: true }).map(
+      (row) => row.id,
+    ),
+  ).toEqual(['a', 'd']);
 });

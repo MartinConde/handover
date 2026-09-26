@@ -72,6 +72,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Internal: Canvas wire types live in the bridge, staged block resolution sits with the Canvas
   commands, and two runtime files are renamed for what they edit.
 - Internal: Canvas's three undo/redo key handlers share one key parser.
+- Internal: the Canvas workspace tests share one fixture, and a browser test that repeated the
+  renderer chunk-failure unit test is gone.
 - `@handover/core`: `setEntryStatus` no longer takes a `deps` argument, and `claimResource` no
   longer takes `windowMs`; the window is always one hour.
 - `@handover/core`: `clearPublished` now requires the deployment's git client as its fourth

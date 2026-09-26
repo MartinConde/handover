@@ -1,13 +1,7 @@
-import type { Field } from '@handover/core';
-import { mount, unmount } from 'svelte';
+import { type mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
-import { createEntrySession } from '../editor/entry-session.svelte';
-import CanvasWorkspace from './CanvasWorkspace.svelte';
-import type { CanvasRenderRequest } from './canvas-renderer';
+import { session as entrySession, mountWorkspace } from './workspace.fixture';
 
-const fields = [
-  { path: ['title'], label: 'Title', type: 'text', required: false },
-] satisfies Field[];
 let app: ReturnType<typeof mount>;
 afterEach(() => {
   if (app) unmount(app);
@@ -19,33 +13,9 @@ test('shows renderer chunk failure and retains the editable session in Form', as
   vi.doMock('./canvas-renderer', () => {
     throw new Error('chunk unavailable');
   });
-  const session = createEntrySession({
-    document: 'pages/home',
-    sourceLocale: 'en',
-    data: { title: 'Draft' },
-    translations: {},
-    form: { fields, blocks: {} },
-  });
+  const session = entrySession({ title: 'Draft' });
   const onform = vi.fn();
-  app = mount(CanvasWorkspace, {
-    target: document.body,
-    props: {
-      active: true,
-      fullscreen: true,
-      locale: 'en',
-      url: '/',
-      request: (): CanvasRenderRequest => ({ url: '/preview', snapshot: {} as never }),
-      currentVersion: () => session.contentVersion('en'),
-      entryDocument: { collection: 'pages', id: 'home' },
-      ownerLabel: 'Home',
-      sourceLocale: 'en',
-      session,
-      blocks: {},
-      onform,
-      onreviewproblems: () => {},
-      onnavigateentry: () => {},
-    },
-  });
+  app = mountWorkspace(session, { onform });
   await vi.waitFor(() => expect(document.querySelector('.canvas-failure')).not.toBeNull());
   expect(document.querySelector('.canvas-render-state')?.textContent).not.toBe('Preparing Canvas…');
   expect(document.querySelector('.canvas-failure')?.textContent).toContain(

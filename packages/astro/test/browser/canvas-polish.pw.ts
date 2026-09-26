@@ -45,28 +45,6 @@ test('Structure keyboard moves one focus position with arrows, Home, and End', a
   await expect(items.nth(1)).toBeFocused();
 });
 
-test('a renderer chunk failure offers recovery while the session keeps unsaved text', async ({
-  page,
-}) => {
-  let blocked = 0;
-  await page.route('**/*canvas-renderer*.js', (route) => {
-    blocked += 1;
-    return route.abort();
-  });
-  await page.goto('/canvas-shell');
-  const title = page.getByLabel('Title');
-  await title.fill('Unsaved before the renderer failed');
-  await page.getByRole('button', { name: 'Canvas', exact: true }).click();
-  await expect(page.locator('.canvas-failure')).toBeVisible();
-  await expect(page.locator('.canvas-failure')).toContainText('Canvas could not start');
-  await expect(
-    page.locator('.canvas-failure').getByRole('button', { name: 'Retry', exact: true }),
-  ).toHaveCount(0);
-  expect(blocked).toBeGreaterThan(0);
-  await page.locator('.canvas-failure').getByRole('button', { name: 'Go to Form' }).click();
-  await expect(page.getByLabel('Title')).toHaveValue('Unsaved before the renderer failed');
-});
-
 test('Canvas fills the viewport and keeps Structure beside a contained media inspector', async ({
   page,
 }, testInfo) => {

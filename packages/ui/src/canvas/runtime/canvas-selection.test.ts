@@ -1,6 +1,5 @@
 import { afterEach, expect, test, vi } from 'vitest';
 import type { CanvasTarget } from '../canvas-bridge';
-import { canvasNodeKey, visibleCanvasNodes } from '../canvas-structure';
 import { createCanvasSelectionRuntime } from './canvas-selection';
 import { createCanvasUiLocaleState } from './canvas-ui-locale';
 
@@ -357,38 +356,6 @@ test('trimming a long block name to the wire limit does not split a surrogate pa
   expect(lastUnit).not.toBeGreaterThanOrEqual(0xd800);
   expect(label).toBe('A'.repeat(199));
   runtime.dispose();
-});
-
-test('collapsing a branch hides every row beneath it, however deep', () => {
-  const node = (id: string, address: string, parentId?: string) => ({
-    id,
-    kind: 'block' as const,
-    target: target(address),
-    label: id,
-    ...(parentId ? { parentId } : {}),
-    depth: 1,
-    position: 1,
-    setSize: 1,
-    occurrences: 1,
-  });
-  const nodes = [
-    node('a', 'blocks[_id=a]'),
-    node('b', 'blocks[_id=a].columns[_id=b]', 'a'),
-    node('c', 'blocks[_id=a].columns[_id=b].blocks[_id=c]', 'b'),
-    node('d', 'blocks[_id=d]'),
-  ];
-
-  expect(visibleCanvasNodes(nodes, {}).map((row) => row.id)).toEqual(['a', 'b', 'c', 'd']);
-  expect(
-    visibleCanvasNodes(nodes, { [canvasNodeKey(nodes[1] as (typeof nodes)[0])]: true }).map(
-      (row) => row.id,
-    ),
-  ).toEqual(['a', 'b', 'd']);
-  expect(
-    visibleCanvasNodes(nodes, { [canvasNodeKey(nodes[0] as (typeof nodes)[0])]: true }).map(
-      (row) => row.id,
-    ),
-  ).toEqual(['a', 'd']);
 });
 
 test('a list annotated on its own block element is ordered under that block, not before it', () => {

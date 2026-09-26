@@ -1,13 +1,13 @@
-import type { Field } from '@handover/core';
 import { flushSync, mount, tick, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
-import { createEntrySession } from '../editor/entry-session.svelte';
 import CanvasWorkspace from './CanvasWorkspace.svelte';
 import type { CanvasRenderRequest } from './canvas-renderer';
-
-const fields = [
-  { path: ['title'], label: 'Title', type: 'text', required: false },
-] satisfies Field[];
+import {
+  session as entrySession,
+  mockRenderer,
+  mountWorkspace,
+  workspaceProps,
+} from './workspace.fixture';
 
 let app: ReturnType<typeof mount>;
 
@@ -22,13 +22,7 @@ afterEach(async () => {
 });
 
 test('checks locale and version before materializing, then lazily renders the final burst', async () => {
-  const session = createEntrySession({
-    document: 'pages/home',
-    sourceLocale: 'en',
-    data: { title: 'Home' },
-    translations: {},
-    form: { fields, blocks: {} },
-  });
+  const session = entrySession();
   const materialize = vi.fn(
     (): CanvasRenderRequest => ({
       url: '/preview',
@@ -44,24 +38,7 @@ test('checks locale and version before materializing, then lazily renders the fi
     }),
   );
 
-  app = mount(CanvasWorkspace, {
-    target: document.body,
-    props: {
-      active: true,
-      locale: 'en',
-      url: '/',
-      request: materialize,
-      currentVersion: () => session.contentVersion('en'),
-      entryDocument: { collection: 'pages', id: 'home' },
-      ownerLabel: 'Home',
-      sourceLocale: 'en',
-      session,
-      blocks: {},
-      onform: () => {},
-      onreviewproblems: () => {},
-      onnavigateentry: () => {},
-    },
-  });
+  app = mountWorkspace(session, { fullscreen: undefined, request: materialize });
   await vi.waitFor(() => expect(materialize).toHaveBeenCalledOnce());
 
   void app.schedule('continuous');
@@ -95,13 +72,7 @@ test('checks locale and version before materializing, then lazily renders the fi
 });
 
 test('a discrete completion launches the pending version without rebuilding it', async () => {
-  const session = createEntrySession({
-    document: 'pages/home',
-    sourceLocale: 'en',
-    data: { title: 'Home' },
-    translations: {},
-    form: { fields, blocks: {} },
-  });
+  const session = entrySession();
   const materialize = vi.fn(
     (): CanvasRenderRequest => ({
       url: '/preview',
@@ -116,24 +87,7 @@ test('a discrete completion launches the pending version without rebuilding it',
       },
     }),
   );
-  app = mount(CanvasWorkspace, {
-    target: document.body,
-    props: {
-      active: true,
-      locale: 'en',
-      url: '/',
-      request: materialize,
-      currentVersion: () => session.contentVersion('en'),
-      entryDocument: { collection: 'pages', id: 'home' },
-      ownerLabel: 'Home',
-      sourceLocale: 'en',
-      session,
-      blocks: {},
-      onform: () => {},
-      onreviewproblems: () => {},
-      onnavigateentry: () => {},
-    },
-  });
+  app = mountWorkspace(session, { fullscreen: undefined, request: materialize });
   await vi.waitFor(() => expect(materialize).toHaveBeenCalledOnce());
   vi.useFakeTimers();
 
@@ -154,13 +108,7 @@ test('a discrete completion launches the pending version without rebuilding it',
 });
 
 test('switches workspace text and the existing frame title without rendering content again', async () => {
-  const session = createEntrySession({
-    document: 'pages/home',
-    sourceLocale: 'en',
-    data: { title: 'Home' },
-    translations: {},
-    form: { fields, blocks: {} },
-  });
+  const session = entrySession();
   const materialize = vi.fn(
     (): CanvasRenderRequest => ({
       url: '/preview',
@@ -175,23 +123,7 @@ test('switches workspace text and the existing frame title without rendering con
       },
     }),
   );
-  const props = $state({
-    active: true,
-    fullscreen: true,
-    locale: 'en',
-    uiLocale: 'en' as 'en' | 'de',
-    url: '/',
-    request: materialize,
-    currentVersion: () => session.contentVersion('en'),
-    entryDocument: { collection: 'pages', id: 'home' },
-    ownerLabel: 'Home',
-    sourceLocale: 'en',
-    session,
-    blocks: {},
-    onform: () => {},
-    onreviewproblems: () => {},
-    onnavigateentry: () => {},
-  });
+  const props = $state(workspaceProps(session, { uiLocale: 'en', request: materialize }));
   app = mount(CanvasWorkspace, { target: document.body, props });
   await vi.waitFor(() => expect(materialize).toHaveBeenCalledOnce());
   const frame = document.querySelector('iframe');
@@ -210,13 +142,7 @@ test('switches workspace text and the existing frame title without rendering con
 });
 
 test('reformats retained renderer recovery while preserving exact diagnostic detail', async () => {
-  const session = createEntrySession({
-    document: 'pages/home',
-    sourceLocale: 'en',
-    data: { title: 'Home' },
-    translations: {},
-    form: { fields, blocks: {} },
-  });
+  const session = entrySession();
   const materialize = vi.fn(
     (): CanvasRenderRequest => ({
       url: 'https://outside.example/preview',
@@ -231,22 +157,9 @@ test('reformats retained renderer recovery while preserving exact diagnostic det
       },
     }),
   );
-  const props = $state({
-    active: true,
-    locale: 'en',
-    uiLocale: 'en' as 'en' | 'de',
-    url: '/',
-    request: materialize,
-    currentVersion: () => session.contentVersion('en'),
-    entryDocument: { collection: 'pages', id: 'home' },
-    ownerLabel: 'Home',
-    sourceLocale: 'en',
-    session,
-    blocks: {},
-    onform: () => {},
-    onreviewproblems: () => {},
-    onnavigateentry: () => {},
-  });
+  const props = $state(
+    workspaceProps(session, { fullscreen: undefined, uiLocale: 'en', request: materialize }),
+  );
   app = mount(CanvasWorkspace, { target: document.body, props });
   await vi.waitFor(() =>
     expect(document.querySelector('.canvas-failure')?.textContent).toContain(
@@ -271,61 +184,21 @@ test('reformats retained renderer recovery while preserving exact diagnostic det
 });
 
 test('Split shows the page to look at: no editing, Inspector or navigation until Canvas', async () => {
-  const renderer = {
-    mode: vi.fn(),
-    textField: vi.fn(),
-    actions: vi.fn(),
-    select: vi.fn(),
-    uiLocale: vi.fn(),
-    problems: vi.fn(),
-    render: vi.fn(async () => ({ ok: true })),
-    schedule: vi.fn(),
-    flushScheduled: vi.fn(),
-    pause: vi.fn(),
-    dispose: vi.fn(),
-  };
-  let options: import('./canvas-renderer').CanvasRendererOptions | undefined;
-  vi.doMock('./canvas-renderer', () => ({
-    createCanvasRenderer: (given: typeof options) => {
-      options = given;
-      return renderer;
-    },
-  }));
-  const session = createEntrySession({
-    document: 'pages/home',
-    sourceLocale: 'en',
-    data: { title: 'Home' },
-    translations: {},
-    form: { fields, blocks: {} },
-  });
-  const props = $state({
-    active: true,
-    fullscreen: false,
-    locale: 'en',
-    url: '/',
-    request: (): CanvasRenderRequest => ({ url: '/preview', snapshot: {} as never }),
-    currentVersion: () => session.contentVersion('en'),
-    entryDocument: { collection: 'pages', id: 'home' },
-    ownerLabel: 'Home',
-    sourceLocale: 'en',
-    session,
-    blocks: {},
-    onform: () => {},
-    onreviewproblems: () => {},
-    onnavigateentry: vi.fn(),
-  });
+  const { renderer, created } = mockRenderer();
+  const session = entrySession();
+  const props = $state(workspaceProps(session, { fullscreen: false, onnavigateentry: vi.fn() }));
   app = mount(CanvasWorkspace, { target: document.body, props });
-  await vi.waitFor(() => expect(options).toBeDefined());
-  options?.onStateChange?.({ phase: 'ready', requestId: 'r1', contentVersion: 0 });
+  const options = await created();
+  options.onStateChange?.({ phase: 'ready', requestId: 'r1', contentVersion: 0 });
   flushSync();
 
   expect(renderer.mode).toHaveBeenLastCalledWith('interact');
   // A shared global is the selection that would open the Inspector on its own in Canvas.
-  options?.onSelectionChange?.({
+  options.onSelectionChange?.({
     kind: 'field',
     target: { document: { collection: 'globals', id: 'site' }, locale: 'en', address: 'name' },
   });
-  await options?.onNavigate?.({
+  await options.onNavigate?.({
     kind: 'form',
     href: 'http://localhost/contact',
     method: 'post',
@@ -341,60 +214,20 @@ test('Split shows the page to look at: no editing, Inspector or navigation until
 });
 
 test('does not re-post identical validation problems on every keystroke', async () => {
-  const renderer = {
-    mode: vi.fn(),
-    textField: vi.fn(),
-    actions: vi.fn(),
-    select: vi.fn(),
-    uiLocale: vi.fn(),
-    problems: vi.fn(),
-    render: vi.fn(async () => ({ ok: true })),
-    schedule: vi.fn(),
-    flushScheduled: vi.fn(),
-    pause: vi.fn(),
-    dispose: vi.fn(),
-  };
-  let options: import('./canvas-renderer').CanvasRendererOptions | undefined;
-  vi.doMock('./canvas-renderer', () => ({
-    createCanvasRenderer: (given: typeof options) => {
-      options = given;
-      return renderer;
-    },
-  }));
-  const session = createEntrySession({
-    document: 'pages/home',
-    sourceLocale: 'en',
-    data: { title: '', body: '' },
-    translations: {},
-    form: {
+  const { renderer, created } = mockRenderer();
+  const session = entrySession(
+    { title: '', body: '' },
+    {
       fields: [
         { path: ['title'], label: 'Title', type: 'text', required: true },
         { path: ['body'], label: 'Body', type: 'text', required: false },
       ],
       blocks: {},
     },
-  });
-  app = mount(CanvasWorkspace, {
-    target: document.body,
-    props: {
-      active: true,
-      fullscreen: true,
-      locale: 'en',
-      url: '/',
-      request: (): CanvasRenderRequest => ({ url: '/preview', snapshot: {} as never }),
-      currentVersion: () => session.contentVersion('en'),
-      entryDocument: { collection: 'pages', id: 'home' },
-      ownerLabel: 'Home',
-      sourceLocale: 'en',
-      session,
-      blocks: {},
-      onform: () => {},
-      onreviewproblems: () => {},
-      onnavigateentry: () => {},
-    },
-  });
-  await vi.waitFor(() => expect(options).toBeDefined());
-  options?.onStateChange?.({ phase: 'ready', requestId: 'r1', contentVersion: 0 });
+  );
+  app = mountWorkspace(session);
+  const options = await created();
+  options.onStateChange?.({ phase: 'ready', requestId: 'r1', contentVersion: 0 });
   flushSync();
   const callsAfterReady = renderer.problems.mock.calls.length;
   expect(callsAfterReady).toBeGreaterThan(0);
@@ -411,36 +244,12 @@ test('does not re-post identical validation problems on every keystroke', async 
 });
 
 test('reviews a missing unrendered field in the canvas inspector and clears validation after editing', async () => {
-  const session = createEntrySession({
-    document: 'pages/home',
-    sourceLocale: 'en',
-    data: { title: '' },
-    translations: {},
-    form: {
-      fields: [{ path: ['title'], label: 'Title', type: 'text', required: true }],
-      blocks: {},
-    },
-  });
+  const session = entrySession(
+    { title: '' },
+    { fields: [{ path: ['title'], label: 'Title', type: 'text', required: true }], blocks: {} },
+  );
   const leaveCanvas = vi.fn();
-  app = mount(CanvasWorkspace, {
-    target: document.body,
-    props: {
-      active: true,
-      fullscreen: true,
-      locale: 'en',
-      url: '/',
-      request: (): CanvasRenderRequest => ({ url: '/preview', snapshot: {} as never }),
-      currentVersion: () => session.contentVersion('en'),
-      entryDocument: { collection: 'pages', id: 'home' },
-      ownerLabel: 'Home',
-      sourceLocale: 'en',
-      session,
-      blocks: {},
-      onform: leaveCanvas,
-      onreviewproblems: leaveCanvas,
-      onnavigateentry: () => {},
-    },
-  });
+  app = mountWorkspace(session, { onform: leaveCanvas, onreviewproblems: leaveCanvas });
   await tick();
   document.querySelector<HTMLButtonElement>('.canvas-validation button')?.click();
   await tick();
@@ -459,36 +268,12 @@ test('reviews a missing unrendered field in the canvas inspector and clears vali
 });
 
 test('Review fields in Live preview hands off to the Form review instead of opening a second Inspector', async () => {
-  const session = createEntrySession({
-    document: 'pages/home',
-    sourceLocale: 'en',
-    data: { title: '' },
-    translations: {},
-    form: {
-      fields: [{ path: ['title'], label: 'Title', type: 'text', required: true }],
-      blocks: {},
-    },
-  });
+  const session = entrySession(
+    { title: '' },
+    { fields: [{ path: ['title'], label: 'Title', type: 'text', required: true }], blocks: {} },
+  );
   const reviewProblems = vi.fn();
-  app = mount(CanvasWorkspace, {
-    target: document.body,
-    props: {
-      active: true,
-      fullscreen: false,
-      locale: 'en',
-      url: '/',
-      request: (): CanvasRenderRequest => ({ url: '/preview', snapshot: {} as never }),
-      currentVersion: () => session.contentVersion('en'),
-      entryDocument: { collection: 'pages', id: 'home' },
-      ownerLabel: 'Home',
-      sourceLocale: 'en',
-      session,
-      blocks: {},
-      onform: () => {},
-      onreviewproblems: reviewProblems,
-      onnavigateentry: () => {},
-    },
-  });
+  app = mountWorkspace(session, { fullscreen: false, onreviewproblems: reviewProblems });
   await tick();
   document.querySelector<HTMLButtonElement>('.canvas-validation button')?.click();
   await tick();
@@ -497,35 +282,11 @@ test('Review fields in Live preview hands off to the Form review instead of open
 });
 
 test('the reviewed-problems list exposes a role for its ungrouped buttons', async () => {
-  const session = createEntrySession({
-    document: 'pages/home',
-    sourceLocale: 'en',
-    data: { title: '' },
-    translations: {},
-    form: {
-      fields: [{ path: ['title'], label: 'Title', type: 'text', required: true }],
-      blocks: {},
-    },
-  });
-  app = mount(CanvasWorkspace, {
-    target: document.body,
-    props: {
-      active: true,
-      fullscreen: true,
-      locale: 'en',
-      url: '/',
-      request: (): CanvasRenderRequest => ({ url: '/preview', snapshot: {} as never }),
-      currentVersion: () => session.contentVersion('en'),
-      entryDocument: { collection: 'pages', id: 'home' },
-      ownerLabel: 'Home',
-      sourceLocale: 'en',
-      session,
-      blocks: {},
-      onform: () => {},
-      onreviewproblems: () => {},
-      onnavigateentry: () => {},
-    },
-  });
+  const session = entrySession(
+    { title: '' },
+    { fields: [{ path: ['title'], label: 'Title', type: 'text', required: true }], blocks: {} },
+  );
+  app = mountWorkspace(session);
   await tick();
   document.querySelector<HTMLButtonElement>('.canvas-validation button')?.click();
   await tick();
