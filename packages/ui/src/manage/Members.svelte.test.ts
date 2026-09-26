@@ -213,7 +213,6 @@ test('an owner beside another owner is offered both on the other row', async () 
 
   expect(root.querySelector('button[aria-label="Actions for martin@example.com"]')).toBe(null);
   const theirs = actions(root, 'anna@example.com');
-  expect(theirs.querySelector('.menu-note')).toBe(null);
   expect(button(theirs, 'Change role').getAttribute('aria-disabled')).toBe(null);
   expect(button(theirs, 'Remove').getAttribute('aria-disabled')).toBe(null);
 });

@@ -34,9 +34,3 @@ const choose = async (event: Event) => {
     <option value="de">{m.account_language_german({}, messageOptions(locale))}</option>
   </select>
 </label>
-
-<style>
-  .language-control { display: grid; gap: .35rem; }
-  .language-control > span { font-size: .8rem; font-weight: 650; }
-  :global(.auth-page) .language-control { width: min(220px, 100%); margin: 0 0 var(--s-3) auto; }
-</style>

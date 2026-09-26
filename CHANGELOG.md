@@ -60,6 +60,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Internal: the admin UI words a failure's status and technical detail in one place.
 - Internal: the admin UI's dashboard, manage screens and dev fixtures page moved to their own
   folders, and its components share one `capitalise`.
+- Internal: the admin language picker's styles live in `tokens.css`, and the stylesheet drops
+  selectors nothing renders and rules a later copy overrides.
 - `@handover/core`: `setEntryStatus` no longer takes a `deps` argument, and `claimResource` no
   longer takes `windowMs`; the window is always one hour.
 - `@handover/core`: `clearPublished` now requires the deployment's git client as its fourth
