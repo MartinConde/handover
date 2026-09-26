@@ -9,6 +9,7 @@ import {
   type UiMessage,
 } from '../errors.js';
 import {
+  capitalise,
   collectionName,
   formatExactTime,
   formatLanguageName,
@@ -108,7 +109,6 @@ $effect(() => {
   if (tab === 'deleted') loadDeleted(collection);
 });
 
-const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const plural = $derived(collectionName(collection, uiLocale));
 const collectionLabel = $derived(
   uiLocale === 'en' ? collectionName(collection, uiLocale, 'singular') : plural,

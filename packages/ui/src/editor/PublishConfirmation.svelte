@@ -43,14 +43,6 @@ let {
 const options = $derived(messageOptions(uiLocale));
 const language = (locale: string) => formatLanguageName(locale, uiLocale);
 const feedbackText = (message: UiMessage) => messageText(message, uiLocale);
-const readiness = $derived(choice.readiness);
-const later = $derived(choice.later);
-const going = $derived(choice.going);
-const notReady = $derived(choice.notReady);
-const waitable = $derived(choice.waitable);
-const leftOut = $derived(choice.leftOut);
-const kept = $derived(choice.kept);
-const unready = $derived(choice.unready);
 const errors = $derived(lines.filter((c) => c.severity === 'error'));
 const warnings = $derived(lines.filter((c) => c.severity === 'warn'));
 </script>
@@ -66,46 +58,46 @@ const warnings = $derived(lines.filter((c) => c.severity === 'warn'));
   <p>
     {m.pending_publish_entry_intro({}, options)}
   </p>
-  {#if many && going.length}
+  {#if many && choice.going.length}
     <ul class="publish-set">
       <li>
         <span class="visually-hidden">{m.check_languages({}, options)}</span>
         <span class="chips">
-          {#each kept as of (of)}<span class="chip">{of.toUpperCase()}</span>{/each}
+          {#each choice.kept as of (of)}<span class="chip">{of.toUpperCase()}</span>{/each}
         </span>
-        {kept.length === 1
-          ? m.pending_language_file({ language: language(kept[0] ?? '') }, options)
-          : leftOut.length
-            ? m.pending_language_files_some({ count: kept.length }, options)
-            : m.pending_language_files({ count: kept.length }, options)}
+        {choice.kept.length === 1
+          ? m.pending_language_file({ language: language(choice.kept[0] ?? '') }, options)
+          : choice.leftOut.length
+            ? m.pending_language_files_some({ count: choice.kept.length }, options)
+            : m.pending_language_files({ count: choice.kept.length }, options)}
       </li>
-      {#if leftOut.length}
+      {#if choice.leftOut.length}
         <li>
           <span class="visually-hidden">{m.check_languages({}, options)}</span>
           <span class="chips">
-            {#each leftOut as of (of)}<span class="chip">{of.toUpperCase()}</span>{/each}
+            {#each choice.leftOut as of (of)}<span class="chip">{of.toUpperCase()}</span>{/each}
           </span>
-          {m.pending_languages_later({ count: leftOut.length }, options)}
+          {m.pending_languages_later({ count: choice.leftOut.length }, options)}
         </li>
       {/if}
     </ul>
   {/if}
-  {#if many && notReady.length}
+  {#if many && choice.notReady.length}
     <fieldset class="publish-later">
       <legend class="group-title">{m.pending_not_ready({}, options)}</legend>
-      {#each notReady as of (of)}
+      {#each choice.notReady as of (of)}
         <div class="later-row">
-          {#if waitable.includes(of)}
+          {#if choice.waitable.includes(of)}
             <label>
-              <input type="checkbox" checked={later.includes(of)} disabled={sending} onchange={() => onchoose(of)}>
+              <input type="checkbox" checked={choice.later.includes(of)} disabled={sending} onchange={() => onchoose(of)}>
               {m.pending_publish_later({ language: language(of) }, options)}
             </label>
-            <span class="hint">{m.pending_language_unfinished({ count: readiness?.[of]?.problems.length ?? 0 }, options)}</span>
+            <span class="hint">{m.pending_language_unfinished({ count: choice.readiness?.[of]?.problems.length ?? 0 }, options)}</span>
           {:else}
             <span>{language(of)}</span>
-            <span class="hint">{readiness?.[of]?.reason === 'source'
+            <span class="hint">{choice.readiness?.[of]?.reason === 'source'
               ? m.pending_language_kept_source({}, options)
-              : readiness?.[of]?.reason === 'published'
+              : choice.readiness?.[of]?.reason === 'published'
                 ? m.pending_language_kept_published({}, options)
                 : m.pending_language_kept_alone({}, options)}</span>
           {/if}
@@ -136,14 +128,14 @@ const warnings = $derived(lines.filter((c) => c.severity === 'warn'));
     <button
       class="btn btn-primary"
       type="button"
-      disabled={sending || errors.length > 0 || unready.length > 0 || pending()}
+      disabled={sending || errors.length > 0 || choice.unready.length > 0 || pending()}
       onclick={onpublish}
     >
       {#if sending}{m.pending_publishing({}, options)}
       {:else if errors.length}{m.pending_fix_errors({ count: errors.length }, options)}
-      {:else if unready.length}{unready.every((of) => waitable.includes(of))
-        ? m.pending_finish_or_leave_out({ count: unready.length }, options)
-        : m.pending_finish_languages({ count: unready.length }, options)}
+      {:else if choice.unready.length}{choice.unready.every((of) => choice.waitable.includes(of))
+        ? m.pending_finish_or_leave_out({ count: choice.unready.length }, options)
+        : m.pending_finish_languages({ count: choice.unready.length }, options)}
       {:else if warnings.length}{m.pending_publish_anyway({ count: warnings.length }, options)}
       {:else}{m.pending_publish_this_entry({}, options)}{/if}
     </button>

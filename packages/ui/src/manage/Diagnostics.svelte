@@ -1,6 +1,7 @@
 <script lang="ts">
 import { onMount } from 'svelte';
 import {
+  capitalise,
   formatCalendarDate,
   formatLanguageName,
   formatRelativeTime,
@@ -414,7 +415,6 @@ function says(row: Key): string {
     : m.diagnostics_key_assist_off({}, options);
 }
 
-const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const mailerName = (provider: string) => {
   if (provider === 'resend') return 'Resend';
   if (provider === 'smtp') return 'SMTP';

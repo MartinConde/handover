@@ -1,6 +1,6 @@
 <script lang="ts">
 // Stands in for a site's own screen: it prints what the shell handed it and calls its fetch.
-import type { ScreenProps } from '../screen.js';
+import type { ScreenProps } from './screen.js';
 
 let { session, request, uiLocale }: ScreenProps = $props();
 let answer = $state('');

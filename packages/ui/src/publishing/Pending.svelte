@@ -2,12 +2,18 @@
 import type { DiffGroup, Labels } from '@handover/core';
 import { onDestroy } from 'svelte';
 import { messageLine, responseMessage, type UiMessage } from '../errors.js';
-import { collectionName, formatFieldTime, messageOptions, type UiLocale } from '../i18n.js';
+import {
+  capitalise,
+  collectionName,
+  formatFieldTime,
+  messageOptions,
+  type UiLocale,
+} from '../i18n.js';
 import { coordinateEntryPublish, coordinateEntryReplacement } from '../navigate';
 import * as m from '../paraglide/messages.js';
 import { request as fetch, uncertainResponse } from '../request.js';
+import BuildPill, { type Build } from '../shared/BuildPill.svelte';
 import Modal from '../shared/Modal.svelte';
-import BuildPill, { type Build } from '../shell/BuildPill.svelte';
 import CheckLines, {
   type CheckItem,
   type CheckLine,
@@ -128,7 +134,6 @@ let reading = $state('');
 // Only the changes of mind are stored: a stored selection could not drop a refused row.
 let toggled = $state<string[]>([]);
 
-const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const midnight = (at: number) => new Date(at).setHours(0, 0, 0, 0);
 const holdAge = (since: number) => {
   const days = Math.round((midnight(Date.now()) - midnight(since)) / 86_400_000);

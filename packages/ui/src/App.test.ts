@@ -3,7 +3,7 @@ import { afterEach, expect, test, vi } from 'vitest';
 import App from './App.svelte';
 import { SIX, sixLanguageRows, sixLanguages } from './editor/six-languages.fixture';
 import { type CollectionLabels, rememberUiLocale, type UiLocale } from './i18n.js';
-import Screen from './shell/screen.fixture.svelte';
+import Screen from './screen.fixture.svelte';
 import { HELD, isLock, settle } from './test-helpers.fixture.js';
 
 let app: ReturnType<typeof mount>;

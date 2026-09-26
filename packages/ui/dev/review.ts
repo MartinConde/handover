@@ -2,10 +2,10 @@
 import { type Field, type Form, isUiLocale } from '@handover/core';
 import { mount } from 'svelte';
 import App, { type Session } from '../src/App.svelte';
-import type { Member } from '../src/account/Members.svelte';
+import type { Member } from '../src/manage/Members.svelte';
 import type { LibraryItem } from '../src/media/upload.js';
 import type { PendingEntry } from '../src/publishing/Pending.svelte';
-import type { Build } from '../src/shell/BuildPill.svelte';
+import type { Build } from '../src/shared/BuildPill.svelte';
 import '../src/tokens.css';
 
 if (!import.meta.env.DEV) throw new Error('The design preview is only available in development');

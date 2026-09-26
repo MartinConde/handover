@@ -37,7 +37,7 @@ import {
   type PickEntry,
   readEntryDirectory,
 } from '../entry-directory.js';
-import { collectionName, formatLanguageName, messageOptions, type UiLocale } from '../i18n.js';
+import { capitalise, collectionName, formatLanguageName, messageOptions, type UiLocale } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
 import Modal from '../shared/Modal.svelte';
 import PagePicker from './PagePicker.svelte';
@@ -87,7 +87,6 @@ let lastAdded = $state('');
 const options = $derived(messageOptions(uiLocale));
 
 const menu = $derived(menus[tab]);
-const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 let known = $state.raw<Pickable>({ entries: [], locales: [] });
 let knownCurrent = $state(false);
 let knownError = $state(false);

@@ -31,10 +31,10 @@ Core source and colocated tests are grouped under `content/`, `drafts/`, `publis
 `media/`, and `identity/`. Database wiring and tables stay at the source root. Consumers
 use the package's root exports, which remain independent of those internal paths.
 
-`pnpm --filter @handover/ui fixtures` serves `packages/ui/index.html`: the per-field diff over
-one fixture entry, and the page picker in the shapes the fields open it in — the only way to see
-either component outside the admin. It is a dev server only — the admin bundle's entry is
-`src/main.ts` and never that page.
+`pnpm --filter @handover/ui fixtures` serves `packages/ui/index.html` (`dev/fixtures.ts`): the
+per-field diff over one fixture entry, and the page picker in the shapes the fields open it in.
+The same server serves the design preview at `/review.html` (see `packages/ui/dev/README.md`).
+It is a dev server only — the admin bundle's entry is `src/main.ts` and never those pages.
 
 ### Admin UI messages
 

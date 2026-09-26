@@ -146,7 +146,6 @@ export function createEntryLock({
         }
         taking = false;
         lock = (await res.json()) as EntryLock;
-        takeBusy = false;
         await onchanged();
       } finally {
         takeBusy = false;

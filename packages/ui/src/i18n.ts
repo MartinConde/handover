@@ -28,6 +28,8 @@ export const useCollectionLabels = (labels: CollectionLabels = {}) => {
   collectionLabels = labels;
 };
 
+export const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
 /** As the name reads mid-sentence; `capitalise` makes a heading of it. */
 export function collectionName(
   name: string,

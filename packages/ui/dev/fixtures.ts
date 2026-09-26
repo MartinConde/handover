@@ -1,10 +1,10 @@
 import { diffEntry, type Form } from '@handover/core';
 import { mount } from 'svelte';
-import PagePicker from './content/PagePicker.svelte';
-import Fields from './editor/fields/Fields.svelte';
-import type { PickEntry } from './entry-directory.js';
-import Diff from './publishing/Diff.svelte';
-import './tokens.css';
+import PagePicker from '../src/content/PagePicker.svelte';
+import Fields from '../src/editor/fields/Fields.svelte';
+import type { PickEntry } from '../src/entry-directory.js';
+import Diff from '../src/publishing/Diff.svelte';
+import '../src/tokens.css';
 
 // Every shape the form can produce, so the page below shows what each one's diff reads like.
 const everything: Form = {

@@ -11,7 +11,7 @@ import {
 import * as m from '../paraglide/messages.js';
 import { request as fetch, sitePath } from '../request.js';
 import { activityGroupLabel, initials, said } from '../shared/activity-line';
-import BuildPill, { type Build } from './BuildPill.svelte';
+import BuildPill, { type Build } from '../shared/BuildPill.svelte';
 import SourceLanguagesTile from './SourceLanguagesTile.svelte';
 
 type Recent = {

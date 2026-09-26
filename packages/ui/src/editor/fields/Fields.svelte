@@ -26,7 +26,7 @@ import Menus, { type Menu } from '../../content/Menus.svelte';
 import PagePicker from '../../content/PagePicker.svelte';
 import { EMPTY_ENTRY_DIRECTORY, type Pickable, readEntryDirectory } from '../../entry-directory.js';
 import type { UiLocale } from '../../i18n.js';
-import { formatFieldTime, messageOptions } from '../../i18n.js';
+import { capitalise, formatFieldTime, messageOptions } from '../../i18n.js';
 import Focal from '../../media/Focal.svelte';
 import Media from '../../media/Media.svelte';
 import { fileSize, type MediaItem } from '../../media/upload.js';
@@ -262,7 +262,6 @@ const num = (at: readonly string[]) => {
   const v = read(at);
   return typeof v === 'number' ? v : '';
 };
-const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 const rows = (at: readonly string[]): unknown[] => {
   const v = read(at);

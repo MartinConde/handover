@@ -3,13 +3,11 @@ import { type Labels, labelIn, type Preset, type UiLocale } from '@handover/core
 import type { Component } from 'svelte';
 import { on } from 'svelte/events';
 import Account from './account/Account.svelte';
-import Activity from './account/Activity.svelte';
-import Diagnostics from './account/Diagnostics.svelte';
 import Login, { type LoginMethods } from './account/Login.svelte';
-import Members from './account/Members.svelte';
 import EntryList from './content/EntryList.svelte';
 import Globals from './content/Globals.svelte';
 import Redirects from './content/Redirects.svelte';
+import Dashboard from './dashboard/Dashboard.svelte';
 import type { CreatedAll } from './editor/Editor.svelte';
 import type { EditorEntry } from './editor/entry-payload';
 import SourceRecovery, { type SourceProblem } from './editor/SourceRecovery.svelte';
@@ -17,6 +15,7 @@ import { invalidateEntryDirectory } from './entry-directory.js';
 import { messageDetail } from './errors.js';
 import {
   type CollectionLabels,
+  capitalise,
   collectionName,
   formatRelativeTime,
   type UiLocale as InterfaceLocale,
@@ -28,15 +27,17 @@ import {
   showUiLocale,
   useCollectionLabels,
 } from './i18n.js';
+import Activity from './manage/Activity.svelte';
+import Diagnostics from './manage/Diagnostics.svelte';
+import Members from './manage/Members.svelte';
 import Library from './media/Library.svelte';
 import { coordinateEntryReplacement, flushNavigation, navigate } from './navigate';
 import * as m from './paraglide/messages.js';
 import Pending from './publishing/Pending.svelte';
 import { request as fetch, localPath, sitePath, uncertainResponse } from './request.js';
 import type { ScreenProps } from './screen.js';
+import BuildPill, { type Build } from './shared/BuildPill.svelte';
 import Modal from './shared/Modal.svelte';
-import BuildPill, { type Build } from './shell/BuildPill.svelte';
-import Dashboard from './shell/Dashboard.svelte';
 
 export interface Session {
   collections: string[];
@@ -621,7 +622,6 @@ const manageLabel = (label: (typeof MANAGE)[number]['label']) =>
 const oldest = $derived(Math.min(...pending.map((e) => e.updated_at)));
 const held = $derived(pending.filter((e) => e.held_by).length);
 
-const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 /** The editor's title getter, tied to its entry so the next one never shows the last name. */
 let titled = $state<{ entry: string; read: () => string }>();
 const crumb = $derived(
