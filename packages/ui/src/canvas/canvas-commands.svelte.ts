@@ -4,12 +4,12 @@ import type {
   CanvasBlockAction,
   CanvasCommandMessage,
   CanvasCommandResult,
+  CanvasInteractionMode,
   CanvasSelection,
   CanvasTarget,
   CanvasTextField,
   CanvasTextSelection,
 } from './canvas-bridge';
-import type { CanvasInteractionMode } from './runtime/canvas-navigation';
 
 type CanvasCommandDeps = {
   session: () => EntrySession;
@@ -21,6 +21,9 @@ type CanvasCommandDeps = {
   interactionMode: () => CanvasInteractionMode;
   blocks: () => Record<string, import('@handover/core').Field[]>;
 };
+
+const isRow = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 export const read = (root: Record<string, unknown>, path: readonly string[]) =>
   path.reduce<unknown>((node, key) => {
@@ -39,21 +42,61 @@ function parseBlockAddress(address: string) {
 }
 
 function findBlockRow(rows: unknown[], id: string) {
-  const index = rows.findIndex(
-    (row) =>
-      typeof row === 'object' &&
-      row !== null &&
-      !Array.isArray(row) &&
-      (row as Record<string, unknown>)._id === id,
-  );
+  const index = rows.findIndex((row) => isRow(row) && row._id === id);
   if (index < 0) return;
   return { index, row: rows[index] };
 }
 
-const rowType = (row: unknown) =>
-  typeof row === 'object' && row !== null && !Array.isArray(row)
-    ? String((row as Record<string, unknown>)._type ?? '')
-    : undefined;
+const rowType = (row: unknown) => (isRow(row) ? String(row._type ?? '') : undefined);
+
+const equal = (left: unknown, right: unknown): boolean => {
+  if (Object.is(left, right)) return true;
+  if (Array.isArray(left) || Array.isArray(right))
+    return (
+      Array.isArray(left) &&
+      Array.isArray(right) &&
+      left.length === right.length &&
+      left.every((value, index) => equal(value, right[index]))
+    );
+  if (!isRow(left) || !isRow(right)) return false;
+  const keys = Object.keys(left);
+  return (
+    keys.length === Object.keys(right).length &&
+    keys.every((key) => Object.hasOwn(right, key) && equal(left[key], right[key]))
+  );
+};
+
+export type StagedBlockTarget =
+  | { mode: 'replace'; targetId: string; original: unknown }
+  | { mode: 'insert'; placement: 'before' | 'after'; anchorId: string }
+  | { mode: 'insert'; placement: 'empty' };
+
+type StagedBlockIndexResult =
+  | { ok: true; index: number }
+  | { ok: false; reason: 'ambiguous' | 'deleted' | 'stale' };
+
+/** Resolve a staged Canvas action against the current list without trusting its old position. */
+export function resolveStagedBlockIndex(
+  target: StagedBlockTarget,
+  rows: readonly unknown[],
+): StagedBlockIndexResult {
+  if (target.mode === 'insert' && target.placement === 'empty')
+    return rows.length ? { ok: false, reason: 'stale' } : { ok: true, index: 0 };
+
+  const id = target.mode === 'replace' ? target.targetId : target.anchorId;
+  const matches = rows
+    .map((row, index) => (isRow(row) && row._id === id ? index : -1))
+    .filter((index) => index >= 0);
+  if (!matches.length) return { ok: false, reason: 'deleted' };
+  if (matches.length > 1) return { ok: false, reason: 'ambiguous' };
+
+  const index = matches[0] as number;
+  if (target.mode === 'replace') {
+    if (!equal(rows[index], target.original)) return { ok: false, reason: 'stale' };
+    return { ok: true, index };
+  }
+  return { ok: true, index: target.placement === 'after' ? index + 1 : index };
+}
 
 export function createCanvasCommands(deps: CanvasCommandDeps) {
   const { session, entryDocument, locale, sourceLocale, locked, active, interactionMode, blocks } =
@@ -220,12 +263,8 @@ export function createCanvasCommands(deps: CanvasCommandDeps) {
       return;
     const current = read(session().snapshot(locale()), resolved.target.path);
     if (resolved.target.field.type === 'link') {
-      if (
-        current !== undefined &&
-        (typeof current !== 'object' || current === null || Array.isArray(current))
-      )
-        return;
-      const link = (current as Record<string, unknown> | undefined) ?? {};
+      if (current !== undefined && !isRow(current)) return;
+      const link = current ?? {};
       const label = link.label;
       if (label !== undefined && typeof label !== 'string') return;
       if (locale() === sourceLocale())
@@ -273,11 +312,7 @@ export function createCanvasCommands(deps: CanvasCommandDeps) {
     if (!resolved.ok || !['text', 'richtext', 'link'].includes(resolved.target.field.type)) return;
     const value = read(session().snapshot(target.locale), resolved.target.path);
     const text =
-      resolved.target.field.type === 'link'
-        ? typeof value === 'object' && value !== null && !Array.isArray(value)
-          ? (value as Record<string, unknown>).label
-          : undefined
-        : value;
+      resolved.target.field.type === 'link' ? (isRow(value) ? value.label : undefined) : value;
     if (text !== undefined && typeof text !== 'string') return;
     const matches =
       selection?.document === session().documentIdentity() &&

@@ -1,6 +1,6 @@
 import { afterEach, expect, test, vi } from 'vitest';
 import type { CanvasAcknowledgement, CanvasFieldMutation, CanvasTarget } from '../canvas-bridge';
-import { createCanvasLinkRuntime } from './canvas-link';
+import { createCanvasLinkRuntime } from './canvas-link-field';
 import { createCanvasUiLocaleState } from './canvas-ui-locale';
 
 const target: CanvasTarget = {

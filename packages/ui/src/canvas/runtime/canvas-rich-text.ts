@@ -22,7 +22,7 @@ import type {
 } from '../canvas-bridge';
 import { sameCanvasTarget } from '../canvas-target';
 import { type CanvasLinkEditorFeedback, createCanvasLinkEditor } from './canvas-link-editor';
-import { pinWrapping, readWrapping } from './canvas-text';
+import { pinWrapping, readWrapping } from './canvas-plain-text';
 import type { CanvasUiLocaleState } from './canvas-ui-locale';
 
 type RichField = Extract<CanvasTextField, { kind: 'richtext' }>;

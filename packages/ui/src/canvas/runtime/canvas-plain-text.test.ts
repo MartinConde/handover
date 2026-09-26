@@ -5,7 +5,7 @@ import type {
   CanvasSelection,
   CanvasTarget,
 } from '../canvas-bridge';
-import { createCanvasPlainTextRuntime } from './canvas-text';
+import { createCanvasPlainTextRuntime } from './canvas-plain-text';
 import { createCanvasUiLocaleState } from './canvas-ui-locale';
 
 const target: CanvasTarget = {

@@ -10,12 +10,14 @@ const index = {
     {
       collection: 'pages',
       path: 'pages/home',
+      title: 'Home',
       locales: ['en', 'de'],
       urls: { en: '/coastal/home', de: '/coastal/de/start' },
     },
     {
       collection: 'listings',
       path: 'listings/sea-view',
+      title: 'Sea view',
       locales: ['en', 'de'],
       urls: { en: '/coastal/listings/sea-view', de: '/coastal/de/listings/meerblick' },
     },
@@ -24,11 +26,13 @@ const index = {
     {
       collection: 'listings',
       path: 'listings',
+      title: 'Listings',
       index: true as const,
       locales: ['en', 'de'],
       urls: { en: '/coastal/listings', de: '/coastal/de/listings' },
     },
   ],
+  locales: ['en', 'de'],
 };
 
 afterEach(() => {

@@ -5,10 +5,10 @@
  */
 import { createCanvasChildBridge, readCanvasManifest } from './canvas/canvas-bridge';
 import { sameCanvasTarget } from './canvas/canvas-target';
-import { createCanvasLinkRuntime } from './canvas/runtime/canvas-link';
+import { createCanvasLinkRuntime } from './canvas/runtime/canvas-link-field';
 import { createCanvasNavigationRuntime } from './canvas/runtime/canvas-navigation';
+import { createCanvasPlainTextRuntime } from './canvas/runtime/canvas-plain-text';
 import { createCanvasSelectionRuntime } from './canvas/runtime/canvas-selection';
-import { createCanvasPlainTextRuntime } from './canvas/runtime/canvas-text';
 import { createCanvasUiLocaleState } from './canvas/runtime/canvas-ui-locale';
 import { createEntryDirectoryReader } from './entry-directory';
 import { messageOptions } from './i18n';
@@ -16,8 +16,8 @@ import * as m from './paraglide/messages.js';
 
 export * from './canvas/canvas-bridge';
 export * from './canvas/canvas-renderer';
+export * from './canvas/runtime/canvas-plain-text';
 export * from './canvas/runtime/canvas-selection';
-export * from './canvas/runtime/canvas-text';
 export const loadCanvasRichTextEditor = () => import('./canvas/runtime/canvas-rich-text');
 
 // A successful Canvas POST is same-origin and carries the route-verified identity in its manifest.
@@ -38,7 +38,7 @@ if (typeof window !== 'undefined' && window.parent !== window) {
       | undefined;
     let richTextLoad: ReturnType<typeof loadCanvasRichTextEditor> | undefined;
     let field: import('./canvas/canvas-bridge').CanvasTextField | undefined;
-    let mode: import('./canvas/runtime/canvas-navigation').CanvasInteractionMode = 'edit';
+    let mode: import('./canvas/canvas-bridge').CanvasInteractionMode = 'edit';
     let requested:
       | {
           selection: import('./canvas/canvas-bridge').CanvasSelection;

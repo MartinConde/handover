@@ -1,11 +1,24 @@
 import { isUiLocale, type RichtextTier, type UiLocale } from '@handover/core';
 import type { FieldCommandFailure } from '../editor/entry-session.svelte';
 import { sameCanvasDocument, sameCanvasTarget } from './canvas-target';
-import type { CanvasInteractionMode, CanvasNavigationRequest } from './runtime/canvas-navigation';
 
 export const CANVAS_PROTOCOL = 1 as const;
 /** Maximum UTF-16 code units in a complete Canvas field address. */
 export const CANVAS_ADDRESS_LIMIT = 4_096;
+export type CanvasInteractionMode = 'edit' | 'interact';
+
+export type CanvasNavigationRequest =
+  | {
+      kind: 'link';
+      href: string;
+      newTab: boolean;
+      download: boolean;
+    }
+  | {
+      kind: 'form';
+      href: string;
+      method: 'get' | 'post';
+    };
 export interface CanvasDocumentIdentity {
   collection: string;
   id: string;

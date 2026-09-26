@@ -7,6 +7,7 @@ import {
   type CanvasCommandResult,
   type CanvasDocumentIdentity,
   type CanvasEditingState,
+  type CanvasInteractionMode,
   type CanvasNavigationMessage,
   type CanvasParentBridgeOptions,
   type CanvasSelection,
@@ -18,7 +19,6 @@ import {
   readCanvasResultManifest,
 } from './canvas-bridge';
 import { sameCanvasDocument, sameCanvasSelection, sameCanvasTarget } from './canvas-target';
-import type { CanvasInteractionMode } from './runtime/canvas-navigation';
 
 export interface CanvasRenderSnapshot {
   mode: 'canvas';

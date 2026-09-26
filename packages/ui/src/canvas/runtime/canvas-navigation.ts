@@ -1,30 +1,5 @@
-export type CanvasInteractionMode = 'edit' | 'interact';
-
-export type CanvasNavigationRequest =
-  | {
-      kind: 'link';
-      href: string;
-      newTab: boolean;
-      download: boolean;
-    }
-  | {
-      kind: 'form';
-      href: string;
-      method: 'get' | 'post';
-    };
-
-export interface CanvasNavigationEntry {
-  collection: string;
-  path: string;
-  locales: string[];
-  urls: Record<string, string>;
-  index?: true;
-}
-
-export interface CanvasNavigationIndex {
-  entries: CanvasNavigationEntry[];
-  indexes?: CanvasNavigationEntry[];
-}
+import type { Pickable } from '../../entry-directory';
+import type { CanvasInteractionMode, CanvasNavigationRequest } from '../canvas-bridge';
 
 export type CanvasNavigationDestination =
   | {
@@ -58,7 +33,7 @@ export function canvasDocumentUrl(value: string | URL): URL {
 /** Match an exact localized page address from the same index used by Handover's page picker. */
 export function classifyCanvasNavigation(
   href: string,
-  index: CanvasNavigationIndex,
+  index: Pickable,
   origin: string,
 ): CanvasNavigationDestination {
   const url = new URL(href, origin);

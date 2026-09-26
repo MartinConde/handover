@@ -2,7 +2,7 @@
 import { onMount, type Snippet, tick, untrack } from 'svelte';
 import { cubicOut } from 'svelte/easing';
 import { fly } from 'svelte/transition';
-import { readEntryDirectory } from '../entry-directory';
+import { EMPTY_ENTRY_DIRECTORY, readEntryDirectory } from '../entry-directory';
 import { messageOptions, type UiLocale } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
 import { previewPath } from '../request';
@@ -10,17 +10,22 @@ import CanvasBlockEditor from './CanvasBlockEditor.svelte';
 import CanvasIcon from './CanvasIcon.svelte';
 import CanvasImagePopover from './CanvasImagePopover.svelte';
 import CanvasInspector from './CanvasInspector.svelte';
-import { resolveStagedBlockIndex, type StagedBlockTarget } from './canvas-block-target';
 import type {
   CanvasActionMessage,
   CanvasAnchor,
   CanvasBlockAction,
   CanvasEditingState,
+  CanvasInteractionMode,
   CanvasNavigationMessage,
   CanvasSelection,
   CanvasStructureNode,
 } from './canvas-bridge';
-import { createCanvasCommands, read } from './canvas-commands.svelte';
+import {
+  createCanvasCommands,
+  read,
+  resolveStagedBlockIndex,
+  type StagedBlockTarget,
+} from './canvas-commands.svelte';
 import type {
   CanvasRendererState,
   CanvasRenderRequest,
@@ -29,9 +34,7 @@ import type {
 import { buildStructureIndex, structuralName } from './canvas-structure';
 import { sameCanvasSelection } from './canvas-target';
 import {
-  type CanvasInteractionMode,
   type CanvasNavigationDestination,
-  type CanvasNavigationIndex,
   classifyCanvasNavigation,
 } from './runtime/canvas-navigation';
 import StructureTree from './StructureTree.svelte';
@@ -797,7 +800,7 @@ async function canvasNavigate(message: CanvasNavigationMessage) {
     navigationBusy = false;
     return;
   }
-  let index: CanvasNavigationIndex = { entries: [] };
+  let index = EMPTY_ENTRY_DIRECTORY;
   try {
     index = await readEntryDirectory();
   } catch {

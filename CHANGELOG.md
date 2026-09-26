@@ -68,6 +68,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   message declares its keys once, and the bridge tests share one setup.
 - Internal: the Canvas renderer and inline text runtimes drop options, methods and exports no
   caller uses.
+- Internal: Canvas wire types live in the bridge, staged block resolution sits with the Canvas
+  commands, and two runtime files are renamed for what they edit.
 - `@handover/core`: `setEntryStatus` no longer takes a `deps` argument, and `claimResource` no
   longer takes `windowMs`; the window is always one hour.
 - `@handover/core`: `clearPublished` now requires the deployment's git client as its fourth

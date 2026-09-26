@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { resolveStagedBlockIndex, type StagedBlockTarget } from './canvas-block-target';
+import { resolveStagedBlockIndex, type StagedBlockTarget } from './canvas-commands.svelte';
 
 const replacement: StagedBlockTarget = {
   mode: 'replace',
