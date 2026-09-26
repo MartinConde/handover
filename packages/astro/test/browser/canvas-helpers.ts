@@ -1,4 +1,4 @@
-import { expect, type Page } from '@playwright/test';
+import { type BrowserContext, expect, type Page } from '@playwright/test';
 
 type PreviewData = {
   title?: string;
@@ -6,7 +6,52 @@ type PreviewData = {
   body?: string;
   legacy?: string;
   button?: { type?: string; href?: string; label?: string };
+  blocks?: Record<string, unknown>[];
 };
+
+type Target = {
+  document: { collection: string; id: string };
+  locale: string;
+  address: string;
+  occurrence?: Target;
+};
+
+type PreviewSnapshot = {
+  protocol: number;
+  requestId: string;
+  epoch: string;
+  entry: { collection: string; id: string };
+  locale: string;
+  contentVersion: number;
+  snapshots: Record<string, PreviewData>;
+};
+
+type RenderResult = Record<string, unknown>;
+
+declare global {
+  interface Window {
+    canvasLifecycle: {
+      render(
+        title: string,
+        behavior?: string,
+        layout?: Record<string, number>,
+      ): Promise<RenderResult>;
+      schedule(title: string): Promise<RenderResult>;
+      interaction(state: Record<string, boolean>): void;
+      resize(width: number, height: number): void;
+      advance(): void;
+    };
+    canvasFailNextSave(): void;
+    canvasDraftWrites: Array<{
+      data?: {
+        blocks?: Array<{
+          _id?: string;
+          columns?: Array<{ _id?: string; blocks?: Array<{ _id?: string }> }>;
+        }>;
+      };
+    }>;
+  }
+}
 
 export async function loadCanvasScript(page: Page) {
   await page.goto('/canvas-assets');
@@ -16,43 +61,77 @@ export async function loadCanvasScript(page: Page) {
   return `/admin/_assets/${entries.canvas?.script ?? ''}`;
 }
 
+export async function openLifecycle(page: Page) {
+  await page.goto('/canvas-lifecycle');
+  await expect(page.locator('html')).toHaveAttribute('data-lifecycle-ready', 'true');
+}
+
+// Renders each POSTed snapshot; `body` returns the page markup or an error for the manifest.
 export async function serveCanvasPreview(
   page: Page,
-  body: (data: PreviewData, marker: (address: string) => string) => string,
-  { pattern = '**/_preview/canvas-fixture', shell = '/canvas-shell', head = '' } = {},
+  body: (
+    data: PreviewData,
+    marker: (target: string | Target) => string,
+    snapshot: PreviewSnapshot,
+  ) => string | { error: { status: number; message: string } },
+  {
+    pattern = '**/_preview/canvas-fixture',
+    shell = '/canvas-shell',
+    head = '',
+    get,
+    routes = page,
+  }: {
+    pattern?: string;
+    shell?: string;
+    head?: string;
+    get?: () => string;
+    routes?: Page | BrowserContext;
+  } = {},
 ) {
   const canvasScript = await loadCanvasScript(page);
-  await page.route(pattern, async (route) => {
+  let posts = 0;
+  await routes.route(pattern, async (route) => {
+    if (get && route.request().method() === 'GET')
+      return route.fulfill({ contentType: 'text/html', body: get() });
+    posts += 1;
     const encoded = new URLSearchParams(route.request().postData() ?? '');
-    const snapshot = JSON.parse(encoded.get('snapshot') ?? '{}') as {
-      protocol: number;
-      requestId: string;
-      epoch: string;
-      entry: { collection: string; id: string };
-      locale: string;
-      contentVersion: number;
-      snapshots: Record<string, PreviewData>;
-    };
-    const marker = (address: string) =>
-      JSON.stringify({ document: snapshot.entry, locale: snapshot.locale, address })
+    const snapshot = JSON.parse(encoded.get('snapshot') ?? '{}') as PreviewSnapshot;
+    const { protocol, requestId, epoch, entry, locale, contentVersion } = snapshot;
+    const marker = (target: string | Target) =>
+      JSON.stringify(
+        typeof target === 'string' ? { document: entry, locale, address: target } : target,
+      )
         .replace(/&/g, '&amp;')
         .replace(/'/g, '&#39;');
-    const manifest = JSON.stringify({
-      mode: 'canvas',
-      status: 'success',
-      protocol: snapshot.protocol,
-      requestId: snapshot.requestId,
-      epoch: snapshot.epoch,
-      entry: snapshot.entry,
-      locale: snapshot.locale,
-      contentVersion: snapshot.contentVersion,
-    }).replace(/</g, '\\u003c');
+    const rendered = body(snapshot.snapshots[locale] ?? {}, marker, snapshot);
+    const ok = typeof rendered === 'string';
+    const manifest = ok
+      ? {
+          mode: 'canvas',
+          status: 'success',
+          protocol,
+          requestId,
+          epoch,
+          entry,
+          locale,
+          contentVersion,
+        }
+      : {
+          mode: 'canvas',
+          status: 'error',
+          protocol,
+          requestId,
+          epoch,
+          contentVersion,
+          error: rendered.error,
+        };
     await route.fulfill({
       contentType: 'text/html',
-      body: `<!doctype html><html>${head}<body>${body(snapshot.snapshots[snapshot.locale] ?? {}, marker)}<script type="application/json" data-handover-canvas-manifest>${manifest}</script><script type="module" src="${canvasScript}"></script></body></html>`,
+      body: `<!doctype html><html>${head}<body>${ok ? rendered : ''}<script type="application/json" data-handover-canvas-manifest>${JSON.stringify(manifest).replace(/</g, '\\u003c')}</script>${ok ? `<script type="module" src="${canvasScript}"></script>` : ''}</body></html>`,
     });
   });
   await page.goto(shell);
+  return { posts: () => posts };
 }
 
 export async function openCanvas(page: Page, query = '') {
