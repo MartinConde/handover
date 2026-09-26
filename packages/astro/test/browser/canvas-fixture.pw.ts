@@ -526,9 +526,7 @@ test('Canvas selection follows explicit nested annotations, repeated roots, empt
 
 test('50 and 200 block Canvas fixtures stay within the local render and overlay budgets', async ({
   page,
-  browserName,
 }) => {
-  test.skip(browserName !== 'chromium', 'C32 performance measurements run in Chromium.');
   await page.goto('/canvas-lifecycle');
   await expect(page.locator('html')).toHaveAttribute('data-lifecycle-ready', 'true');
   const render = (count: number) =>

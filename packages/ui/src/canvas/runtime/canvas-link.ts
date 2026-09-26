@@ -110,7 +110,6 @@ export function createCanvasLinkRuntime(options: CanvasLinkOptions) {
   };
 
   return {
-    start() {},
     configure(field?: LinkField) {
       configured = field;
       if (active && (!field || !sameCanvasTarget(active.field.target, field.target))) finish();

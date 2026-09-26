@@ -2,27 +2,20 @@ import { unsafeLinkScheme } from '@handover/core';
 import { createEntryDirectoryReader, type Pickable, type PickEntry } from '../../entry-directory';
 import { messageOptions, type UiLocale } from '../../i18n';
 import * as m from '../../paraglide/messages.js';
+import type { CanvasLinkValue } from '../canvas-bridge';
 import type { CanvasUiLocaleState } from './canvas-ui-locale';
-
-export interface CanvasLinkDraft {
-  type: 'entry' | 'url';
-  ref: string;
-  href: string;
-  label: string;
-  newTab: boolean;
-}
 
 type CloseReason = 'applied' | 'cancel' | 'outside' | 'removed';
 export type CanvasLinkEditorFeedback = string | ((locale: UiLocale) => string);
 
 export interface CanvasLinkEditorOpen {
   anchor: Element | (() => DOMRect);
-  value: CanvasLinkDraft;
+  value: CanvasLinkValue;
   locale: string;
   allowNewTab?: boolean;
   allowRemove?: boolean;
   onApply: (
-    value: CanvasLinkDraft,
+    value: CanvasLinkValue,
   ) => CanvasLinkEditorFeedback | undefined | Promise<CanvasLinkEditorFeedback | undefined>;
   onRemove?: () => void | Promise<void>;
   onClose?: (reason: CloseReason) => void;
@@ -35,7 +28,7 @@ export interface CanvasLinkEditorOptions {
   uiLocale?: CanvasUiLocaleState;
 }
 
-const copy = (value: CanvasLinkDraft): CanvasLinkDraft => ({ ...value });
+const copy = (value: CanvasLinkValue): CanvasLinkValue => ({ ...value });
 
 /** A site-style-proof link editor shared by rich-text links and schema link fields in Canvas. */
 export function createCanvasLinkEditor(options: CanvasLinkEditorOptions = {}) {
@@ -89,7 +82,7 @@ export function createCanvasLinkEditor(options: CanvasLinkEditorOptions = {}) {
   panel.hidden = true;
 
   let opened: CanvasLinkEditorOpen | undefined;
-  let draft: CanvasLinkDraft | undefined;
+  let draft: CanvasLinkValue | undefined;
   let directory: PickEntry[] | undefined;
   let touchedDestination = false;
   let refreshTranslation = () => {};

@@ -1,6 +1,6 @@
 import { richtextErrors } from '@handover/core';
 import { Editor, Extension, type JSONContent } from '@tiptap/core';
-import { type Selection, TextSelection } from '@tiptap/pm/state';
+import { TextSelection } from '@tiptap/pm/state';
 import type { EditorView } from '@tiptap/pm/view';
 import {
   proseSelection,
@@ -48,8 +48,6 @@ const proseSoftBreaks = (node: JSONContent): JSONContent => ({
   ...(node.type === 'text' && node.text ? { text: node.text.replace(/\r?\n/g, ' ') } : {}),
   ...(node.content ? { content: node.content.map(proseSoftBreaks) } : {}),
 });
-
-const historySelection = (selection: Selection): CanvasTextSelection => proseSelection(selection);
 
 const domSelection = (view: EditorView): CanvasTextSelection | undefined => {
   const selection = view.dom.ownerDocument.getSelection();
@@ -145,7 +143,7 @@ export function createCanvasRichTextRuntime(options: CanvasRichTextOptions) {
 
   const apply = (value: string, selection?: CanvasTextSelection) => {
     if (!active || composing || reconciling) return;
-    const held = selection ?? historySelection(active.editor.state.selection);
+    const held = selection ?? proseSelection(active.editor.state.selection);
     reconciling = true;
     try {
       if (active.editor.getMarkdown() !== value)
@@ -224,7 +222,7 @@ export function createCanvasRichTextRuntime(options: CanvasRichTextOptions) {
           kind,
           ...(group ? { group } : {}),
           before: before ?? previousSelection,
-          after: historySelection(active.editor.state.selection),
+          after: proseSelection(active.editor.state.selection),
         },
       },
       value,
@@ -316,7 +314,7 @@ export function createCanvasRichTextRuntime(options: CanvasRichTextOptions) {
       allowRemove: remove,
       onApply: (value) => {
         nextIntent = 'format';
-        pendingBefore = historySelection(selection);
+        pendingBefore = proseSelection(selection);
         let applied = false;
         try {
           const linkType = editor.schema.marks.link;
@@ -352,7 +350,7 @@ export function createCanvasRichTextRuntime(options: CanvasRichTextOptions) {
       },
       onRemove: () => {
         nextIntent = 'format';
-        pendingBefore = historySelection(selection);
+        pendingBefore = proseSelection(selection);
         const linkType = editor.schema.marks.link;
         if (!linkType) {
           nextIntent = undefined;
@@ -495,7 +493,7 @@ export function createCanvasRichTextRuntime(options: CanvasRichTextOptions) {
       button.addEventListener('click', () => {
         if (!active) return;
         nextIntent = 'format';
-        pendingBefore = historySelection(active.editor.state.selection);
+        pendingBefore = proseSelection(active.editor.state.selection);
         spec.run(active.editor);
         nextIntent = undefined;
         refreshToolbar();
@@ -628,12 +626,12 @@ export function createCanvasRichTextRuntime(options: CanvasRichTextOptions) {
                 replay(direction);
                 return true;
               }
-              pendingBefore = domSelection(view) ?? historySelection(view.state.selection);
+              pendingBefore = domSelection(view) ?? proseSelection(view.state.selection);
               return false;
             },
             compositionstart: (view) => {
               composing = true;
-              compositionBefore = domSelection(view) ?? historySelection(view.state.selection);
+              compositionBefore = domSelection(view) ?? proseSelection(view.state.selection);
               compositionGroup = `composition-${crypto.randomUUID()}`;
               publish({ inlineEditing: true, composing: true });
               return false;
@@ -655,16 +653,16 @@ export function createCanvasRichTextRuntime(options: CanvasRichTextOptions) {
           },
         },
         onCreate: ({ editor }) => {
-          previousSelection = historySelection(editor.state.selection);
+          previousSelection = proseSelection(editor.state.selection);
         },
         onTransaction: ({ editor, transaction }) => {
           if (transaction.docChanged && !reconciling && !pendingBefore)
             pendingBefore = previousSelection;
-          previousSelection = historySelection(editor.state.selection);
+          previousSelection = proseSelection(editor.state.selection);
           refreshToolbar();
         },
         onPaste: () => {
-          pendingBefore = domSelection(editor.view) ?? historySelection(editor.state.selection);
+          pendingBefore = domSelection(editor.view) ?? proseSelection(editor.state.selection);
           nextIntent = 'paste';
           queueMicrotask(() => {
             if (nextIntent === 'paste') nextIntent = undefined;

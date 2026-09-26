@@ -130,7 +130,6 @@ const replaceSelection = (element: HTMLElement, value: string) => {
 export function createCanvasPlainTextRuntime(options: CanvasPlainTextOptions) {
   const root = options.root ?? document;
   let configured: PlainField | undefined;
-  let requested: { selection: CanvasSelection; element: HTMLElement; caret?: number } | undefined;
   let active:
     | {
         element: HTMLElement;
@@ -277,12 +276,14 @@ export function createCanvasPlainTextRuntime(options: CanvasPlainTextOptions) {
   };
 
   const activate = (selection: CanvasSelection, element: Element, caret?: number) => {
-    if (disposed || selection.kind !== 'field' || !(element instanceof HTMLElement)) return false;
-    if (!configured || !sameCanvasTarget(selection.target, configured.target)) {
-      requested = { selection, element, caret };
-      return true;
-    }
-    requested = undefined;
+    if (
+      disposed ||
+      selection.kind !== 'field' ||
+      !(element instanceof HTMLElement) ||
+      !configured ||
+      !sameCanvasTarget(selection.target, configured.target)
+    )
+      return false;
     if (active?.element === element) return true;
     if (active) deactivate();
     active = {
@@ -421,15 +422,6 @@ export function createCanvasPlainTextRuntime(options: CanvasPlainTextOptions) {
     },
     configure(field?: PlainField) {
       configured = field;
-      const pending = requested;
-      if (pending) {
-        if (field && sameCanvasTarget(pending.selection.target, field.target)) {
-          requested = undefined;
-          activate(pending.selection, pending.element, pending.caret);
-        } else if (!field) {
-          requested = undefined;
-        }
-      }
       if (!active) return;
       if (!field || !sameCanvasTarget(active.target, field.target)) {
         if (!queued && !composing) deactivate();
@@ -439,19 +431,12 @@ export function createCanvasPlainTextRuntime(options: CanvasPlainTextOptions) {
       active.accepted = field.value;
       if (!queued && !composing) apply(field.value);
     },
-    requestActivation(selection: CanvasSelection, element: Element, caret?: number) {
-      if (disposed || selection.kind !== 'field' || !(element instanceof HTMLElement)) return false;
-      configured = undefined;
-      requested = { selection, element, caret };
-      return true;
-    },
     activate,
     active: () => active !== undefined,
     composing: () => composing,
     dispose() {
       if (disposed) return;
       disposed = true;
-      requested = undefined;
       generation += 1;
       if (active) deactivate();
       root.removeEventListener('beforeinput', onBeforeInput, true);

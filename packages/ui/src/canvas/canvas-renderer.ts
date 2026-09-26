@@ -94,10 +94,7 @@ export interface CanvasRendererOptions {
   timeoutMs?: number;
   /** Quiet period used to coalesce continuous edits into one fresh render. */
   renderDelayMs?: number;
-  owner?: Window;
-  document?: Document;
   requestId?: () => string;
-  frameName?: () => string;
 }
 
 interface RenderFrame {
@@ -134,11 +131,6 @@ interface CanvasViewState {
   maximumTop: number;
   anchor?: { target: CanvasTarget; left: number; top: number };
 }
-
-const identifier = (value: string, label: string) => {
-  if (!value || value.length > 200) throw new Error(`Canvas ${label} is invalid.`);
-  return value;
-};
 
 const sameManifest = (a: CanvasSuccessManifest, b: CanvasSuccessManifest) =>
   a.protocol === b.protocol &&
@@ -228,8 +220,6 @@ const editorOpen = (frame: HTMLIFrameElement) => {
  * handshake.
  */
 export function createCanvasRenderer(options: CanvasRendererOptions) {
-  const owner = options.owner ?? window;
-  const root = options.document ?? document;
   const timeoutMs = options.timeoutMs ?? 10_000;
   const renderDelayMs = options.renderDelayMs ?? 200;
 
@@ -238,8 +228,6 @@ export function createCanvasRenderer(options: CanvasRendererOptions) {
   let candidate: RenderFrame | undefined;
   let pending: PendingRender | undefined;
   let disposed = false;
-  let sequence = 0;
-  let lastRequest: CanvasRenderRequest | undefined;
   let interaction: CanvasInteractionState = {
     inlineEditing: false,
     composing: false,
@@ -313,7 +301,7 @@ export function createCanvasRenderer(options: CanvasRendererOptions) {
 
     const previous = active;
     const view = previous ? captureView(previous, options.currentTarget()) : undefined;
-    const focused = root.activeElement;
+    const focused = document.activeElement;
 
     held.settled = true;
     candidate = undefined;
@@ -345,7 +333,7 @@ export function createCanvasRenderer(options: CanvasRendererOptions) {
         options.onSelectionChange?.(undefined);
       }
     }
-    if (focused instanceof HTMLElement && focused.isConnected && root.activeElement !== focused)
+    if (focused instanceof HTMLElement && focused.isConnected && document.activeElement !== focused)
       focused.focus({ preventScroll: true });
     update({
       phase: 'ready',
@@ -372,20 +360,12 @@ export function createCanvasRenderer(options: CanvasRendererOptions) {
     if (active === held && candidate && interaction.inlineEditing) settle(candidate);
   };
 
-  const frameName = () => {
-    sequence += 1;
-    const supplied = options.frameName?.() ?? randomId();
-    const safe = identifier(supplied, 'frame name').replace(/[^a-zA-Z0-9_-]/g, '-');
-    return `handover-canvas-${sequence}-${safe}`;
-  };
-
   const startRender = (
     request: CanvasRenderRequest,
-    requestId = identifier(options.requestId?.() ?? randomId(), 'request ID'),
+    requestId = options.requestId?.() ?? randomId(),
   ): Promise<CanvasRenderResult> => {
     if (disposed) throw new Error('Canvas renderer is disposed.');
     if (candidate) finishFailure(candidate, 'superseded', {}, false);
-    lastRequest = request;
 
     const manifest: CanvasSuccessManifest = {
       mode: 'canvas',
@@ -397,12 +377,12 @@ export function createCanvasRenderer(options: CanvasRendererOptions) {
       locale: request.snapshot.locale,
       contentVersion: request.snapshot.contentVersion,
     };
-    const targetUrl = new URL(request.url, owner.location.href);
-    if (targetUrl.origin !== owner.location.origin)
+    const targetUrl = new URL(request.url, window.location.href);
+    if (targetUrl.origin !== window.location.origin)
       throw new Error('Canvas render URL must be same-origin.');
     const serialized = JSON.stringify({ ...request.snapshot, requestId });
-    const frame = root.createElement('iframe');
-    frame.name = frameName();
+    const frame = document.createElement('iframe');
+    frame.name = `handover-canvas-${randomId()}`;
     frame.title = frameTitle(options.uiLocale());
     frame.dataset.handoverCanvasFrame = 'candidate';
     frame.setAttribute('aria-hidden', 'true');
@@ -440,7 +420,7 @@ export function createCanvasRenderer(options: CanvasRendererOptions) {
     const bridge = createCanvasParentBridge({
       manifest,
       frame: contentWindow,
-      origin: owner.location.origin,
+      origin: window.location.origin,
       contentVersion: options.contentVersion,
       currentTarget: options.currentTarget,
       onCommand: options.onCommand,
@@ -484,7 +464,6 @@ export function createCanvasRenderer(options: CanvasRendererOptions) {
         options.onInteractionChange?.(state);
       },
       onRejected: rejected,
-      owner,
     });
     const onload = () => {
       if (candidate !== held || held.settled) return;
@@ -532,12 +511,12 @@ export function createCanvasRenderer(options: CanvasRendererOptions) {
       contentVersion: manifest.contentVersion,
     });
 
-    const form = root.createElement('form');
+    const form = document.createElement('form');
     form.method = 'post';
     form.action = targetUrl.href;
     form.target = frame.name;
     form.hidden = true;
-    const input = root.createElement('input');
+    const input = document.createElement('input');
     input.type = 'hidden';
     input.name = 'snapshot';
     input.value = serialized;
@@ -600,7 +579,7 @@ export function createCanvasRenderer(options: CanvasRendererOptions) {
       return new Promise<CanvasRenderResult>((resolve, reject) => {
         if (pending) {
           pending.request = request;
-          pending.requestId = identifier(options.requestId?.() ?? randomId(), 'request ID');
+          pending.requestId = options.requestId?.() ?? randomId();
           pending.waiters.push({ resolve, reject });
           clearTimeout(pending.timer);
           pending.timer = setTimeout(launchPending, renderDelayMs);
@@ -608,7 +587,7 @@ export function createCanvasRenderer(options: CanvasRendererOptions) {
         }
         pending = {
           request,
-          requestId: identifier(options.requestId?.() ?? randomId(), 'request ID'),
+          requestId: options.requestId?.() ?? randomId(),
           waiters: [{ resolve, reject }],
           timer: setTimeout(launchPending, renderDelayMs),
         };
@@ -645,14 +624,9 @@ export function createCanvasRenderer(options: CanvasRendererOptions) {
     setInteractionState(next: Partial<CanvasInteractionState>) {
       setInteractionState(next);
     },
-    retry(): Promise<CanvasRenderResult> {
-      if (!lastRequest) throw new Error('Canvas has no render to retry.');
-      return render(lastRequest);
-    },
     state: () => state,
     activeFrame: () => active?.frame,
     candidateFrame: () => candidate?.frame,
-    structure: () => active?.structure ?? [],
     select(value: CanvasSelection) {
       if (!active) return false;
       return active.bridge.select(value);

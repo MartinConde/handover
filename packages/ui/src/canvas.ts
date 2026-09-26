@@ -195,7 +195,6 @@ if (typeof window !== 'undefined' && window.parent !== window) {
     });
     bridge.start();
     text.start();
-    link.start();
     selection.start();
     navigation.start();
   }

@@ -11,7 +11,7 @@ import type {
 } from './canvas-bridge';
 import type { CanvasInteractionMode } from './runtime/canvas-navigation';
 
-export type CanvasCommandDeps = {
+type CanvasCommandDeps = {
   session: () => EntrySession;
   entryDocument: () => { collection: string; id: string };
   locale: () => string;
@@ -339,8 +339,6 @@ export function createCanvasCommands(deps: CanvasCommandDeps) {
     blockEditorFor,
     blockActionsFor,
     textField,
-    updateFor,
-    historySelection,
     canvasCommand,
   };
 }
