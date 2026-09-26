@@ -35,3 +35,16 @@ const targetIdentity = (target: CanvasTarget) => [
 
 export const canvasSelectionKey = (selection: CanvasSelection) =>
   JSON.stringify([selection.kind, targetIdentity(selection.target)]);
+
+export const historyDirection = (event: KeyboardEvent) => {
+  if (!event.ctrlKey && !event.metaKey) return;
+  const key = event.key.toLowerCase();
+  if (key === 'z') return event.shiftKey ? 'redo' : 'undo';
+  if (key === 'y') return 'redo';
+};
+
+export const editableTarget = (target: EventTarget | null) =>
+  target instanceof HTMLInputElement ||
+  target instanceof HTMLTextAreaElement ||
+  target instanceof HTMLSelectElement ||
+  (target instanceof HTMLElement && target.isContentEditable);

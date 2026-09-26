@@ -32,7 +32,7 @@ import type {
   createCanvasRenderer,
 } from './canvas-renderer';
 import { buildStructureIndex, structuralName } from './canvas-structure';
-import { sameCanvasSelection } from './canvas-target';
+import { editableTarget, historyDirection, sameCanvasSelection } from './canvas-target';
 import {
   type CanvasNavigationDestination,
   classifyCanvasNavigation,
@@ -729,24 +729,8 @@ function replay(direction: 'redo' | 'undo') {
 }
 
 function historyShortcut(event: KeyboardEvent) {
-  if (!active || event.defaultPrevented || (!event.ctrlKey && !event.metaKey)) return;
-  const target = event.target;
-  if (
-    target instanceof HTMLInputElement ||
-    target instanceof HTMLTextAreaElement ||
-    target instanceof HTMLSelectElement ||
-    (target instanceof HTMLElement && target.isContentEditable)
-  )
-    return;
-  const key = event.key.toLowerCase();
-  const direction =
-    key === 'z' && event.shiftKey
-      ? 'redo'
-      : key === 'z'
-        ? 'undo'
-        : key === 'y'
-          ? 'redo'
-          : undefined;
+  if (!active || event.defaultPrevented || editableTarget(event.target)) return;
+  const direction = historyDirection(event);
   if (!direction || (direction === 'undo' ? !session.canUndo() : !session.canRedo())) return;
   event.preventDefault();
   replay(direction);

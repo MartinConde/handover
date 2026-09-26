@@ -10,7 +10,7 @@ import type {
   CanvasTextHistory,
   CanvasTextSelection,
 } from '../canvas-bridge';
-import { sameCanvasTarget } from '../canvas-target';
+import { historyDirection, sameCanvasTarget } from '../canvas-target';
 import type { CanvasUiLocaleState } from './canvas-ui-locale';
 
 type PlainField = Extract<CanvasTextField, { kind: 'text' }>;
@@ -393,10 +393,11 @@ export function createCanvasPlainTextRuntime(options: CanvasPlainTextOptions) {
       finish();
       return;
     }
-    const modifier = event.metaKey || event.ctrlKey;
-    if (!modifier || event.altKey || event.key.toLowerCase() !== 'z') return;
+    if (event.altKey) return;
+    const direction = historyDirection(event);
+    if (!direction) return;
     event.preventDefault();
-    void enqueue({ type: 'history', direction: event.shiftKey ? 'redo' : 'undo' });
+    void enqueue({ type: 'history', direction });
   };
 
   const onFocusOut = (event: FocusEvent) => {

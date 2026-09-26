@@ -8,6 +8,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   a block from Structure keeps the page's selection and its action buttons.
 - Canvas refuses a reused command ID with `duplicate-command` instead of replaying the first
   acknowledgement.
+- Ctrl+Y redoes in Canvas plain-text fields.
 - Discarding a draft, holding or releasing an entry and taking over an edit lock now answer 503
   with the repository's message when GitHub cannot be reached, instead of a generic 500.
 - Internal: a raw NUL byte in core's conflict resolver is written as `\u0000`, so git and grep
@@ -70,6 +71,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   caller uses.
 - Internal: Canvas wire types live in the bridge, staged block resolution sits with the Canvas
   commands, and two runtime files are renamed for what they edit.
+- Internal: Canvas's three undo/redo key handlers share one key parser.
 - `@handover/core`: `setEntryStatus` no longer takes a `deps` argument, and `claimResource` no
   longer takes `windowMs`; the window is always one hour.
 - `@handover/core`: `clearPublished` now requires the deployment's git client as its fourth

@@ -6,7 +6,13 @@ import type {
   CanvasStructureNode,
   CanvasTarget,
 } from '../canvas-bridge';
-import { canvasSelectionKey, sameCanvasDocument, sameCanvasSelection } from '../canvas-target';
+import {
+  canvasSelectionKey,
+  editableTarget,
+  historyDirection,
+  sameCanvasDocument,
+  sameCanvasSelection,
+} from '../canvas-target';
 import { createCanvasDragController, type DragAnnouncement } from './canvas-drag';
 import {
   humanize,
@@ -87,16 +93,6 @@ function icon(d: string): SVGSVGElement {
   svg.append(path);
   return svg;
 }
-
-const eligibleKey = (event: KeyboardEvent) => {
-  const target = event.target;
-  return !(
-    target instanceof HTMLInputElement ||
-    target instanceof HTMLTextAreaElement ||
-    target instanceof HTMLSelectElement ||
-    (target instanceof HTMLElement && target.isContentEditable)
-  );
-};
 
 export function createCanvasSelectionRuntime(options: CanvasSelectionRuntimeOptions = {}) {
   const root = options.root ?? document;
@@ -871,22 +867,12 @@ export function createCanvasSelectionRuntime(options: CanvasSelectionRuntimeOpti
         .some((node) => node instanceof HTMLElement && node.hasAttribute('data-canvas-ancestor'))
     )
       return;
-    if (!eligibleKey(event)) return;
-    if (event.ctrlKey || event.metaKey) {
-      const key = event.key.toLowerCase();
-      const action =
-        key === 'z' && event.shiftKey
-          ? 'redo'
-          : key === 'z'
-            ? 'undo'
-            : key === 'y'
-              ? 'redo'
-              : undefined;
-      if (action && selected && allowedActions.includes(action)) {
-        event.preventDefault();
-        options.onAction?.(action, selected);
-        return;
-      }
+    if (editableTarget(event.target)) return;
+    const action = historyDirection(event);
+    if (action && selected && allowedActions.includes(action)) {
+      event.preventDefault();
+      options.onAction?.(action, selected);
+      return;
     }
     if (event.key === 'Escape' && drag.active()) {
       event.preventDefault();

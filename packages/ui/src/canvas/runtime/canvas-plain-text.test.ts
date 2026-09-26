@@ -199,6 +199,30 @@ test('a refused acknowledgement restores accepted content and session undo resto
   runtime.dispose();
 });
 
+test('Ctrl+Y redoes in a plain-text field', async () => {
+  document.body.innerHTML = '<h1>Sea</h1>';
+  const heading = fixture('h1');
+  const command = vi
+    .fn<(target: CanvasTarget, command: CanvasMutation) => Promise<CanvasAcknowledgement>>()
+    .mockResolvedValue(reply('command-1', 1, { ok: true }));
+  const runtime = createCanvasPlainTextRuntime({ command, interaction: vi.fn() });
+  runtime.start();
+  runtime.configure({ kind: 'text', target, value: 'Sea' });
+  runtime.activate(selected, heading);
+  const key = new KeyboardEvent('keydown', {
+    bubbles: true,
+    key: 'y',
+    ctrlKey: true,
+    cancelable: true,
+  });
+  heading.dispatchEvent(key);
+  expect(key.defaultPrevented).toBe(true);
+  await vi.waitFor(() =>
+    expect(command).toHaveBeenCalledWith(target, { type: 'history', direction: 'redo' }),
+  );
+  runtime.dispose();
+});
+
 test('live locale changes retranslate retained feedback without disturbing composition or content language', async () => {
   document.documentElement.lang = 'en';
   document.body.innerHTML = '<h1>Sea</h1>';
