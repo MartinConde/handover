@@ -11,7 +11,7 @@ const identity = {
   contentVersion: 4,
 };
 
-test('editing helpers include the verified document and stable nested address in Canvas', async () => {
+test('editing helpers carry the verified document, nested address and block names in Canvas', async () => {
   const container = await AstroContainer.create();
   const html = await container.renderToString(EditContext, {
     locals: { handoverCanvas: identity },
@@ -25,26 +25,19 @@ test('editing helpers include the verified document and stable nested address in
   expect(html).toContain('&quot;id&quot;:&quot;home&quot;');
   expect(html).toContain('&quot;locale&quot;:&quot;en&quot;');
   expect(html).toContain('&quot;address&quot;:&quot;blocks[_id=hero-1].heading&quot;');
-});
-
-test("a block carries the name Handover shows for it: the author's _label, else its type", async () => {
-  const container = await AstroContainer.create();
-  const html = await container.renderToString(EditContext, {
-    locals: { handoverCanvas: identity },
-  });
-
+  // A block's name is the author's _label, else its type.
   expect(html).toContain('data-handover-name="Feature Grid"');
   expect(html).toContain('data-handover-name="Walk to the harbour"');
   // A block annotated by id alone has no name to carry; Canvas falls back to its position.
   expect(html.match(/data-handover-name=/g)).toHaveLength(2);
 });
 
-test.each([
-  ['public SSR', new Request('https://example.com/home')],
-  ['build-time prerender', new Request('https://example.com/home')],
-])('%s output is inert when no verified Canvas local exists', async (_name, request) => {
+test('output is inert when no verified Canvas local exists', async () => {
   const container = await AstroContainer.create();
-  const html = await container.renderToString(EditContext, { request, locals: {} });
+  const html = await container.renderToString(EditContext, {
+    request: new Request('https://example.com/home'),
+    locals: {},
+  });
 
   expect(html).toContain('data-is-canvas="false"');
   expect(html).not.toContain('data-handover-field');
