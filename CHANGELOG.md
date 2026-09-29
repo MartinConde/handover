@@ -4,6 +4,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- `unpublished-install.md` allows the `esbuild` and `workerd` build scripts in its
+  `pnpm-workspace.yaml` example and says it assumes pnpm 11 or later, where the install otherwise
+  stops with `ERR_PNPM_IGNORED_BUILDS`.
 - `rendering.md` shows how a template draws a picture and keeps its focal point in frame.
 - An entry that fails to open (a 500, GitHub's 503 or a lost connection) offers **Retry**, which
   reads it again. *No such entry* offers none.

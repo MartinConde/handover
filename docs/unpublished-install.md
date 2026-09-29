@@ -7,7 +7,10 @@ source checkout. A local development site can use the shorter checkout link in
 Build before packing: each archive contains generated JavaScript and declarations, and
 `astro-handover` also contains the built admin assets. `@handover/ui` is the exception: it
 ships the admin SPA's Svelte source and its compiled interface messages, so a site that
-declares admin screens can build the SPA again with its own components compiled in. From the
+declares admin screens can build the SPA again with its own components compiled in.
+
+The steps assume pnpm 11 or later, which stops an install whose dependencies' build scripts
+have not been allowed; the `allowBuilds` setting below needs pnpm 10.26 or later. From the
 site directory:
 
 ```sh
@@ -31,10 +34,15 @@ Point the direct dependency at its archive in `package.json`:
 ```
 
 The packed manifest names `@handover/core`, `@handover/cli` and `@handover/ui` as version
-`0.0.0` too. They are private packages, so add root overrides in `pnpm-workspace.yaml`; merge
-these with any existing workspace settings:
+`0.0.0` too. They are private packages, so add root overrides in `pnpm-workspace.yaml`. The
+same file allows the build scripts of `esbuild` and `workerd`, which Astro and the Cloudflare
+adapter need; `pnpm approve-builds esbuild workerd` writes those lines too. Merge these with any
+existing workspace settings:
 
 ```yaml
+allowBuilds:
+  esbuild: true
+  workerd: true
 overrides:
   '@handover/core': file:vendor/handover-core-0.0.0.tgz
   '@handover/cli': file:vendor/handover-cli-0.0.0.tgz
