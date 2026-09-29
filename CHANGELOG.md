@@ -4,6 +4,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- `init` run again on a project it finished says the site is already set up, with its schema
+  version, and points at `handover db generate`, instead of refusing for a missing initialization
+  record.
 - `unpublished-install.md` allows the `esbuild` and `workerd` build scripts in its
   `pnpm-workspace.yaml` example and says it assumes pnpm 11 or later, where the install otherwise
   stops with `ERR_PNPM_IGNORED_BUILDS`.

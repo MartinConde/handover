@@ -66,8 +66,11 @@ Existing Wrangler configuration can use JSON, JSONC, or TOML. Comments and trail
 are accepted in JSONC, and comment characters inside quoted values are preserved. Invalid
 syntax is reported with the configuration filename before resources are provisioned.
 
-It refuses outright on a project that already has a `migrations/` folder without the matching
-initialization record, rather than guess how to merge the numbering. It also validates an
+Run again on a project it finished, it stops and says the site is already set up, with the
+schema version `migrations/handover.json` records; later changes to the package's tables go
+through [`db generate`](cli.md#handover-db-generate). It refuses outright on a project that
+has a `migrations/` folder without `handover.json` or an initialization record, rather than
+guess how to merge the numbering. It also validates an
 existing `drizzle.config.ts` before recording a schema version: the dialect must be SQLite, the
 schema must be `./node_modules/astro-handover/dist/schema.js`, and output must be
 `./migrations`.

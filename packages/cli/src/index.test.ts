@@ -324,7 +324,26 @@ test('init refuses a project that already has migrations/, before creating anyth
 
   expect(code).toBe(1);
   expect(ran).toEqual([]);
-  expect(out).toContain('migrations/ is already here');
+  expect(out).toContain(
+    'migrations/ is already here without a Handover initialization record. Nothing changed; keep it and follow docs/deploy.md by hand.',
+  );
+});
+
+test('init on a project it already set up says so and points at db generate', async () => {
+  const cwd = site({
+    'package.json': '{ "name": "my-site" }',
+    'migrations/0000_x.sql': '',
+    'migrations/handover.json': '{ "schemaVersion": 5 }',
+  });
+  const ran: string[][] = [];
+  const { code, out } = await run(['init', 'you@example.com'], cwd, ran);
+
+  expect(code).toBe(1);
+  expect(ran).toEqual([]);
+  expect(out).toContain(
+    'This site is already set up: migrations/handover.json records schema version 5. Nothing changed. After an upgrade changes the package tables, run npx handover db generate.',
+  );
+  expect(out).not.toContain('without a Handover initialization record');
 });
 
 test('init leaves a wrangler config it did not write alone and prints the block to paste', async () => {

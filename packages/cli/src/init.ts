@@ -56,6 +56,11 @@ export function init(env: Env, email: string): number {
     throw new Error(
       `${INIT_DRIZZLE} or ${INIT_MIGRATIONS}/ already exists without an initialization record. Nothing changed.`,
     );
+  const done = !saved && readJson(join(env.cwd, MIGRATION_MARKER));
+  if (done)
+    throw new Error(
+      `This site is already set up: ${MIGRATION_MARKER} records schema version ${done.schemaVersion}. Nothing changed. After an upgrade changes the package tables, run npx handover db generate.`,
+    );
   if (existsSync(join(env.cwd, 'migrations')) && !saved)
     throw new Error(
       'migrations/ is already here without a Handover initialization record. Nothing changed; keep it and follow docs/deploy.md by hand.',
