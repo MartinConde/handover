@@ -4,6 +4,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- A header **Publish this entry** refused as a conflict leaves **Resolve** and **Discard** on
+  that entry's row in *Unpublished changes*, instead of offering them only after a publish from
+  the drawer is refused too.
 - `init` run again on a project it finished says the site is already set up, with its schema
   version, and points at `handover db generate`, instead of refusing for a missing initialization
   record.

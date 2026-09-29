@@ -1,6 +1,6 @@
 <script lang="ts">
 import type { DiffGroup, Labels } from '@handover/core';
-import { onDestroy } from 'svelte';
+import { onDestroy, untrack } from 'svelte';
 import { messageLine, responseMessage, type UiMessage } from '../errors.js';
 import {
   capitalise,
@@ -46,6 +46,7 @@ let {
   defaultLocale = '',
   mediaBase = '',
   build,
+  conflicted = [],
   uiLocale = 'en',
   onclose: closed,
   onpublished,
@@ -59,13 +60,15 @@ let {
   mediaBase?: string;
   /** The shell's build status, repeated here beside the commit it is of. */
   build?: Build | null;
+  /** Entries a header publish was refused over since, which this drawer did not see. */
+  conflicted?: string[];
   uiLocale?: UiLocale;
   onclose: () => void;
   onpublished: (count: number) => void | Promise<void>;
   /** Undo the commit this drawer just made; the shell owns the confirmation. */
   onrevert: (commitSha: string) => void;
   /** A draft was discarded or overwritten, so the entry must be reread wherever it is open. */
-  ondiscarded: () => void;
+  ondiscarded: (key: string) => void;
 } = $props();
 const options = $derived(messageOptions(uiLocale));
 
@@ -108,7 +111,10 @@ let published = $state(0);
 /** The commit this drawer made, which is what Revert is of. */
 let committed = $state('');
 /** Entries the last publish was refused over; each one is offered the way out. */
-let conflicts = $state<string[]>([]);
+// Seeded once: the drawer is remounted each time it opens.
+let conflicts = $state<string[]>(
+  untrack(() => conflicted.filter((key) => entries.some((e) => e.key === key))),
+);
 /** What the pre-publish checks found over the selected set, newest answer wins. */
 let checks = $state<CheckItem[]>([]);
 /** The pass could not be run at all — which holds nothing back: it is a lint, not a gate. */
@@ -369,7 +375,7 @@ async function discard() {
   conflicts = conflicts.filter((k) => k !== entry.key);
   // The refusal is about the entries still in it, so it is written again rather than kept.
   error = conflicts.length ? refusal(conflicts) : undefined;
-  ondiscarded();
+  ondiscarded(entry.key);
 }
 
 // Read once and kept: the list does not move while the drawer is open.
@@ -400,7 +406,7 @@ function resolved(entry: PendingEntry) {
   error = conflicts.length ? refusal(conflicts) : undefined;
   // What it changed is the merge now, not what was read before it.
   delete changes[entry.key];
-  ondiscarded();
+  ondiscarded(entry.key);
 }
 
 function toggle(entry: PendingEntry) {

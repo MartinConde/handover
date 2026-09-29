@@ -76,6 +76,7 @@ let {
   onpending,
   oncommitted,
   onpublished,
+  onconflict,
   onrestored,
   restored,
   onsourcechanged,
@@ -111,6 +112,8 @@ let {
   oncommitted?: () => void | Promise<void>;
   /** This entry went out from its header, named the way the shell should say it. */
   onpublished?: (title: string) => void | Promise<void>;
+  /** Its header publish was refused over a file changed in the repository; the drawer resolves it. */
+  onconflict?: () => void;
   /** A version went into the drafts; the shell remembers its git date past the reload. */
   onrestored?: (date: string) => void;
   /** The date of the version the unpublished changes were restored from, while they wait. */
@@ -1233,6 +1236,7 @@ async function publishEntry() {
     if (Array.isArray(parsed.paths) && parsed.paths.length) {
       closePublish();
       conflicted = true;
+      onconflict?.();
       return;
     }
     publishFailed = await retainedFailure(res, 'PUBLISH_REF_MOVED');

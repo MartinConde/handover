@@ -18,7 +18,8 @@ change pushed a moment earlier is caught rather than read as no change at all:
 - **The refusal is about that entry, not about the batch.** A refused entry takes itself
   out of the set — its checkbox goes off and cannot go back on — so pressing Publish again
   sends the rest. **Publish this entry** in the header has no rest to send, so it puts the
-  same badge on the entry header and points at the drawer
+  same badge on the entry header and points at the drawer, where that entry's row already
+  carries **Resolve** and **Discard** without a second publish
 - **A refused entry has two ways out: Resolve and Discard.** *Resolve* opens the
   three-way view [below](#resolving-it-field-by-field) and keeps what you wrote; *Discard*
   throws that entry's unpublished changes away and reads it from the repository again, so

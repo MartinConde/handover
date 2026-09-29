@@ -1241,6 +1241,80 @@ test('discarding a draft loads the entry again instead of leaving the old one on
   expect(root.querySelector<HTMLInputElement>('#f-title')?.value).toBe('Repository title');
 });
 
+// The header points at the drawer, so the drawer must offer the way out without a second publish.
+const conflictShell = () => {
+  const PATH = 'src/content/listings/en/mill-house.yaml';
+  const state = { publishes: 0, discarded: false };
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string, init?: RequestInit) => {
+      if (url === '/admin/api/ping') return Response.json({ ok: true, collections: ['listings'] });
+      // Still listed after a discard: a stale refusal would only show on a row that is there.
+      if (url === '/admin/api/drafts')
+        return Response.json({ entries: [pendingEntry('listings/mill-house')] });
+      if (url === '/admin/api/publish/checks') return Response.json({ results: [] });
+      if (url === '/admin/api/publish') {
+        state.publishes += 1;
+        return Response.json({ error: 'refused', paths: [PATH] }, { status: 409 });
+      }
+      if (init?.method === 'DELETE') {
+        state.discarded = true;
+        return Response.json({});
+      }
+      if (isLock(url)) return Response.json(HELD);
+      if (url === '/admin/api/entries/listings/mill-house')
+        return Response.json(entryAnswer({ pending: state.discarded ? [] : ['en'] }));
+      return Response.json({});
+    }),
+  );
+  return state;
+};
+const publishFromHeader = async (root: HTMLElement) => {
+  await vi.dynamicImportSettled();
+  await settle(3);
+  root.querySelector<HTMLButtonElement>('.entry-header .actions .btn-primary')?.click();
+  await settle(3);
+  root.querySelector<HTMLButtonElement>('.dialog .btn-primary')?.click();
+  await settle(3);
+  expect(root.querySelector('.entry-header .badge-danger')?.textContent).toBe(
+    'Changed in the repository since you opened it',
+  );
+};
+
+test('a header publish refused as a conflict leaves Resolve on the drawer row', async () => {
+  const state = conflictShell();
+  const root = show(session(), '/admin/c/listings/mill-house');
+  await publishFromHeader(root);
+
+  root.querySelector<HTMLButtonElement>('button.indicator')?.click();
+  flushSync();
+
+  expect(root.querySelector('[aria-label="Resolve mill-house"]')).not.toBeNull();
+  expect(state.publishes).toBe(1);
+});
+
+test('a conflict discarded in the drawer is not offered again when it reopens', async () => {
+  const state = conflictShell();
+  const root = show(session(), '/admin/c/listings/mill-house');
+  await publishFromHeader(root);
+  root.querySelector<HTMLButtonElement>('button.indicator')?.click();
+  flushSync();
+  root
+    .querySelector<HTMLButtonElement>('[aria-label="Discard your changes to mill-house"]')
+    ?.click();
+  flushSync();
+  root.querySelector<HTMLButtonElement>('.dialog .btn-danger')?.click();
+  await settle(3);
+  expect(state.discarded).toBe(true);
+  root.querySelector<HTMLButtonElement>('.drawer-head [aria-label="Close"]')?.click();
+  await settle(3);
+
+  root.querySelector<HTMLButtonElement>('button.indicator')?.click();
+  flushSync();
+
+  expect(root.querySelector('[aria-label="Resolve mill-house"]')).toBeNull();
+});
+
 // A queue opened from the filtered list: the entry, the collection's rows, and a save that can fail.
 const queueShell = (slug: string, { offline = false } = {}) => {
   const state = { created: false, entryLoads: 0 };

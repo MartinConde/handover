@@ -422,6 +422,8 @@ let pendingRequest = 0;
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
 
+/** Entries a header publish was refused over, which the drawer offers to resolve when it opens. */
+let conflicted = $state<string[]>([]);
 const isPendingEnvelope = (
   value: unknown,
 ): value is { entries?: typeof pending; defaultLocale?: string } =>
@@ -451,6 +453,7 @@ async function loadPending() {
     return;
   }
   pending = body.entries ?? [];
+  conflicted = conflicted.filter((key) => pending.some((e) => e.key === key));
   defaultLocale = body.defaultLocale ?? '';
   pendingKnown = true;
   pendingStatus = 'ready';
@@ -865,6 +868,7 @@ const initial = $derived(
             await reloadEntry();
           }}
           onpending={loadPending}
+          onconflict={() => (conflicted = [...new Set([...conflicted, editingAt])])}
           oncommitted={commitChanged}
           onpublished={async (title) => {
             notify({ code: 'PUBLISHED_ENTRY', name: title });
@@ -980,6 +984,7 @@ const initial = $derived(
       {uiLocale}
       mediaBase={session?.mediaBase ?? ''}
       {build}
+      {conflicted}
       onrevert={askRevert}
       onclose={() => {
         drawer = false;
@@ -989,7 +994,8 @@ const initial = $derived(
         notify({ code: 'PUBLISHED_CHANGES', count });
         await commitChanged();
       }}
-      ondiscarded={async () => {
+      ondiscarded={async (key) => {
+        conflicted = conflicted.filter((k) => k !== key);
         invalidateEntryDirectory();
         await loadPending();
       }}
