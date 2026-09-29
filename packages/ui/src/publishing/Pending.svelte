@@ -113,7 +113,7 @@ const errorText = $derived(error ? messageLine(error, uiLocale) : '');
 let published = $state(0);
 /** The commit this drawer made, which is what Revert is of. */
 let committed = $state('');
-/** Entries the last publish was refused over; each one is offered the way out. */
+/** Entries a publish was refused over that Resolve or Discard has not settled yet. */
 // Seeded once: the drawer is remounted each time it opens.
 let conflicts = $state<string[]>(
   untrack(() => conflicted.filter((key) => entries.some((e) => e.key === key))),
@@ -334,9 +334,11 @@ async function publish() {
     error = { code: parsed.code, count: entriesOf(parsed.paths ?? []).length };
     return;
   }
-  conflicts = entriesOf(parsed.paths ?? []);
-  onrefused?.(conflicts);
-  error = conflicts.length
+  const refused = entriesOf(parsed.paths ?? []);
+  // An earlier refusal still stands: its entry was not in this publish.
+  conflicts = [...new Set([...conflicts, ...refused])];
+  onrefused?.(refused);
+  error = refused.length
     ? refusal(conflicts)
     : {
         code: parsed.code ?? res.headers.get('x-handover-error-code') ?? 'PUBLISH_REF_MOVED',

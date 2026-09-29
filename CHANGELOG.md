@@ -4,6 +4,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- A second publish refused in *Unpublished changes* keeps **Resolve** on the entry the first
+  refusal named, instead of putting that entry back in the set to publish.
 - A publish refused as a conflict in *Unpublished changes* keeps **Resolve** on the entry's row
   after the drawer is closed and opened again, instead of offering the entry for publishing again.
 - **Live preview** on a translation lays the form flush beside the page, as it does for the

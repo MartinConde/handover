@@ -1336,6 +1336,48 @@ test('a conflict refused in the drawer is still offered after it closes and reop
   );
 });
 
+test('a second refused publish in the drawer keeps the first refusal', async () => {
+  const refusedOver = [
+    'src/content/listings/en/mill-house.yaml',
+    'src/content/listings/en/barn.yaml',
+  ];
+  let publishes = 0;
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      if (url === '/admin/api/ping') return Response.json({ ok: true, collections: ['listings'] });
+      if (url === '/admin/api/drafts')
+        return Response.json({
+          entries: [pendingEntry('listings/mill-house'), pendingEntry('listings/barn')],
+        });
+      if (url === '/admin/api/publish/checks') return Response.json({ results: [] });
+      if (url === '/admin/api/publish')
+        return Response.json(
+          { error: 'refused', paths: [refusedOver[publishes++]] },
+          { status: 409 },
+        );
+      return Response.json({});
+    }),
+  );
+  const root = show(session(), '/admin');
+  await settle(3);
+  root.querySelector<HTMLButtonElement>('button.indicator')?.click();
+  flushSync();
+
+  root.querySelector<HTMLButtonElement>('.drawer-foot .btn-primary')?.click();
+  await settle(3);
+  root.querySelector<HTMLButtonElement>('.drawer-foot .btn-primary')?.click();
+  await settle(3);
+
+  expect(publishes).toBe(2);
+  for (const slug of ['mill-house', 'barn']) {
+    expect(root.querySelector(`[aria-label="Resolve ${slug}"]`)).not.toBeNull();
+    expect(root.querySelector<HTMLInputElement>(`#pending-listings\\/${slug}`)?.checked).toBe(
+      false,
+    );
+  }
+});
+
 // A queue opened from the filtered list: the entry, the collection's rows, and a save that can fail.
 const queueShell = (slug: string, { offline = false } = {}) => {
   const state = { created: false, entryLoads: 0 };
