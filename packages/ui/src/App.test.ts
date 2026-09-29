@@ -1315,6 +1315,27 @@ test('a conflict discarded in the drawer is not offered again when it reopens', 
   expect(root.querySelector('[aria-label="Resolve mill-house"]')).toBeNull();
 });
 
+test('a conflict refused in the drawer is still offered after it closes and reopens', async () => {
+  const state = conflictShell();
+  const root = show(session(), '/admin');
+  await settle(3);
+  root.querySelector<HTMLButtonElement>('button.indicator')?.click();
+  flushSync();
+  root.querySelector<HTMLButtonElement>('.drawer-foot .btn-primary')?.click();
+  await settle(3);
+  expect(state.publishes).toBe(1);
+  root.querySelector<HTMLButtonElement>('.drawer-head [aria-label="Close"]')?.click();
+  await settle(3);
+
+  root.querySelector<HTMLButtonElement>('button.indicator')?.click();
+  flushSync();
+
+  expect(root.querySelector('[aria-label="Resolve mill-house"]')).not.toBeNull();
+  expect(root.querySelector<HTMLInputElement>('#pending-listings\\/mill-house')?.checked).toBe(
+    false,
+  );
+});
+
 // A queue opened from the filtered list: the entry, the collection's rows, and a save that can fail.
 const queueShell = (slug: string, { offline = false } = {}) => {
   const state = { created: false, entryLoads: 0 };

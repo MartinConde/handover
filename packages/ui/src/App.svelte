@@ -422,7 +422,7 @@ let pendingRequest = 0;
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
 
-/** Entries a header publish was refused over, which the drawer offers to resolve when it opens. */
+/** Entries a publish was refused over, which the drawer offers to resolve when it opens. */
 let conflicted = $state<string[]>([]);
 const isPendingEnvelope = (
   value: unknown,
@@ -994,6 +994,7 @@ const initial = $derived(
         notify({ code: 'PUBLISHED_CHANGES', count });
         await commitChanged();
       }}
+      onrefused={(keys) => (conflicted = [...new Set([...conflicted, ...keys])])}
       ondiscarded={async (key) => {
         conflicted = conflicted.filter((k) => k !== key);
         invalidateEntryDirectory();

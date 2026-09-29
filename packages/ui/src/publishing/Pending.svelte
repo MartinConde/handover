@@ -52,6 +52,7 @@ let {
   onpublished,
   onrevert,
   ondiscarded,
+  onrefused,
 }: {
   entries: PendingEntry[];
   /** The language a check found in several files opens. */
@@ -60,7 +61,7 @@ let {
   mediaBase?: string;
   /** The shell's build status, repeated here beside the commit it is of. */
   build?: Build | null;
-  /** Entries a header publish was refused over since, which this drawer did not see. */
+  /** Entries a publish was refused over and nothing has settled yet. */
   conflicted?: string[];
   uiLocale?: UiLocale;
   onclose: () => void;
@@ -69,6 +70,8 @@ let {
   onrevert: (commitSha: string) => void;
   /** A draft was discarded or overwritten, so the entry must be reread wherever it is open. */
   ondiscarded: (key: string) => void;
+  /** A publish here was refused over these, which must outlive the drawer. */
+  onrefused?: (keys: string[]) => void;
 } = $props();
 const options = $derived(messageOptions(uiLocale));
 
@@ -332,6 +335,7 @@ async function publish() {
     return;
   }
   conflicts = entriesOf(parsed.paths ?? []);
+  onrefused?.(conflicts);
   error = conflicts.length
     ? refusal(conflicts)
     : {

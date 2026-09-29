@@ -23,8 +23,8 @@ change pushed a moment earlier is caught rather than read as no change at all:
 - **A refused entry has two ways out: Resolve and Discard.** *Resolve* opens the
   three-way view [below](#resolving-it-field-by-field) and keeps what you wrote; *Discard*
   throws that entry's unpublished changes away and reads it from the repository again, so
-  the entry is on their version. Reopening or editing the entry does not clear the refusal
-  — the draft keeps the base it was loaded against until one of the two settles it
+  the entry is on their version. Closing the drawer, reopening or editing the entry does not
+  clear the refusal — the draft keeps the base it was loaded against until one of the two settles it
 - A refusal is recorded: `publish-conflict` for a file that changed, `publish-failed` for
   the repository turning the commit itself down. Both rows expand to say which it was
   ([Activity log](activity.md)). Nothing else about a publish is logged as a failure —
