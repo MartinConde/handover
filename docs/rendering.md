@@ -33,6 +33,43 @@ binary, and a page that renders it on a Worker throws `The WASI method is not
 implemented` — prerendered pages included, since `@astrojs/cloudflare` prerenders inside
 the same runtime.
 
+## Pictures
+
+The package ships no picture component: the template draws its own `<img>`. An image field's
+value is the stored `src` key, `alt`, `width`, `height` and, when the client moved the dot,
+`focal` — `[x, y]` as fractions of the picture. A centred dot is not written, so default it to
+the middle. This is the demo's hero, which keeps the dot in frame as the crop changes:
+
+```astro
+---
+import cms from '../../cms.config';
+
+const { block, edit } = Astro.props;
+const media = (key: string) => `${cms.media?.publicBase}/${key}`;
+const focal = block.image?.focal ?? [0.5, 0.5];
+---
+
+<section class="hero-block" {...(edit ?? {})}>
+  <h1 {...(edit?.field('heading') ?? {})}>{block.heading}</h1>
+  {
+    block.image && (
+      <img
+        {...(edit?.field('image') ?? {})}
+        src={media(block.image.src)}
+        alt={block.image.alt ?? ''}
+        width={block.image.width}
+        height={block.image.height}
+        style={`object-position: ${focal[0] * 100}% ${focal[1] * 100}%`}
+      />
+    )
+  }
+</section>
+```
+
+`object-position` only moves anything under `object-fit: cover` in a box of another shape, so
+style the image that way. To have Cloudflare cut the crop instead of the browser, pass the same
+two numbers as `gravity` ([The focal point](media-library.md#the-focal-point)).
+
 ## Videos and maps
 
 An `embed` field holds a provider and an id — never a URL, never markup. `<Embed />` builds the

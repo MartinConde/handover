@@ -4,6 +4,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- `rendering.md` shows how a template draws a picture and keeps its focal point in frame.
 - An entry that fails to open (a 500, GitHub's 503 or a lost connection) offers **Retry**, which
   reads it again. *No such entry* offers none.
 - `translating.md` says what **Create all N missing languages** does when a change still being
