@@ -161,6 +161,8 @@ authentication codes select specific recovery text. Unknown technical detail sta
 the translated summary where it is useful and safe to show. In particular, an entry read uses the
 specific not-found message only when the response carries `x-handover-error-code:
 ENTRY_NOT_FOUND`; an unidentified `404` keeps the generic localized load summary and status.
+A failed entry read offers **Retry**, which reads the entry again; *No such entry* offers none,
+because reading again cannot change it.
 
 Pending, build, dashboard, and activity reads validate their small response envelopes as well as
 their JSON syntax. `null`, a non-array collection, or an unknown build state enters the same

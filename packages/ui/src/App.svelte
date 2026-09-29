@@ -898,7 +898,8 @@ const initial = $derived(
           </main>
         {:else}
           {@const failure = entryFailure(error)}
-          <main class="main"><p class="notice notice-danger" role="alert">{text(failure)}{#if failure.detail}<span class="technical-detail">{messageDetail(failure, uiLocale)}</span>{/if}</p></main>
+          <!-- A missing entry stays missing, so only a failed read is worth another go. -->
+          <main class="main"><p class="notice notice-danger" role="alert">{text(failure)}{#if failure.detail}<span class="technical-detail">{messageDetail(failure, uiLocale)}</span>{/if}{#if failure.code === 'ENTRY_LOAD_FAILED'}{' '}<button class="btn-link" type="button" onclick={() => (reload += 1)}>{m.common_retry({}, options)}</button>{/if}</p></main>
         {/if}
       {/await}
     {:else if listRoute}

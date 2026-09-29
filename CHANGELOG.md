@@ -4,6 +4,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- An entry that fails to open (a 500, GitHub's 503 or a lost connection) offers **Retry**, which
+  reads it again. *No such entry* offers none.
 - `translating.md` says what **Create all N missing languages** does when a change still being
   saved cannot be saved first: nothing is created and the change stays in its field.
 - Canvas: **Review fields** scrolls the page to the problem field again, and inserting or moving

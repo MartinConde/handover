@@ -611,9 +611,61 @@ test('an unidentified legacy 404 stays a generic localized entry-load failure', 
 
   await vi.waitFor(() =>
     expect(root.querySelector('main [role="alert"]')?.textContent).toBe(
-      'Could not load the entry (404)',
+      'Could not load the entry (404) Retry',
     ),
   );
+});
+
+test('an entry whose first read fails opens on Retry', async () => {
+  // The shell imports the editor lazily; a cold import outlasts waitFor.
+  await import('./editor/Editor.svelte');
+  let entryLoads = 0;
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      if (url === '/admin/api/entries/listings/mill-house') {
+        entryLoads += 1;
+        return entryLoads === 1
+          ? new Response('Unavailable', { status: 500 })
+          : Response.json(entryAnswer());
+      }
+      if (isLock(url)) return Response.json(HELD);
+      return common(url) ?? Response.json({ entries: [] });
+    }),
+  );
+  const root = show(session(), '/admin/c/listings/mill-house');
+  await vi.waitFor(() =>
+    expect(root.querySelector('main [role="alert"]')?.textContent).toContain(
+      'Could not load the entry (500)',
+    ),
+  );
+
+  root.querySelector<HTMLButtonElement>('main [role="alert"] button')?.click();
+
+  await vi.waitFor(() =>
+    expect(root.querySelector<HTMLInputElement>('input#f-title')?.value).toBe('The Mill House'),
+  );
+  expect(entryLoads).toBe(2);
+});
+
+test('an entry that does not exist offers no Retry', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      if (url === '/admin/api/entries/pages/missing')
+        return new Response('Not found', {
+          status: 404,
+          headers: { 'x-handover-error-code': 'ENTRY_NOT_FOUND' },
+        });
+      return common(url) ?? Response.json({ entries: [] });
+    }),
+  );
+  const root = show(session(), '/admin/c/pages/missing');
+
+  await vi.waitFor(() =>
+    expect(root.querySelector('main [role="alert"]')?.textContent).toBe('No such entry'),
+  );
+  expect(root.querySelector('main [role="alert"] button')).toBeNull();
 });
 
 test('an entry whose files disagree about their source opens the recovery panel, not the form', async () => {
