@@ -1783,7 +1783,7 @@ async function saveAddress() {
       {
         'has-pane': !entry.drift.length && (mode === 'split' || (mode === 'form' && !alone && shown !== undefined)),
         'is-canvas': mode === 'canvas',
-        'is-split': mode === 'split' && !alone,
+        'is-split': mode === 'split',
         'is-full': pageShown && beside === 'none' && !alone,
       },
     ]}

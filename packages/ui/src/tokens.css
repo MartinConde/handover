@@ -2368,6 +2368,10 @@ body:has(.is-canvas-fullscreen) .topbar, body:has(.is-canvas-fullscreen) .sideba
     border-radius: 0;
   }
   .main-editor .entry-body.is-split .editor-form-heading { position: sticky; top: var(--entry-header-h); z-index: 3; background: var(--surface); }
+  .main-editor .entry-body.is-split .pane.is-locale { border: 0; border-radius: 0; box-shadow: none; overflow: visible; }
+  .main-editor .entry-body.is-split .pane-head { position: sticky; top: var(--entry-header-h); z-index: 3; min-height: 48px; padding: 8px 20px; border-radius: 0; }
+  .main-editor .entry-body.is-split .pane.is-locale > .form { padding: 20px 20px 28px; gap: 18px; }
+  .main-editor .entry-body.is-split .pane.is-locale > .empty { margin: 20px; }
 }
 
 .canvas-workspace.is-fullscreen .canvas-rail { min-height: 56px; padding: 8px 12px; }

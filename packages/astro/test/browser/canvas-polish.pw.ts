@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { openCanvas } from './canvas-helpers';
+import { openCanvas, serveCanvasPreview } from './canvas-helpers';
 
 test('inline editing can end after Structure selection and Inspector changes promote', async ({
   page,
@@ -457,4 +457,36 @@ test('image clicks open shared controls in a floating panel and preserve edits a
   await page.screenshot({ path: testInfo.outputPath('phone-image-popover.png') });
   await popover.getByRole('button', { name: 'Close image editor' }).click();
   await expect(popover).toHaveCount(0);
+});
+
+test('Live preview lays out a translation flush beside the page, like the source form', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1400, height: 900 });
+  await serveCanvasPreview(page, ({ title = '' }) => `<h1>${title}</h1>`, {
+    pattern: '**/_preview/**',
+    shell: '/canvas-shell?c30',
+  });
+  const preview = page
+    .getByRole('group', { name: 'Beside the form' })
+    .getByRole('button', { name: 'Live preview' });
+  if ((await preview.getAttribute('aria-pressed')) !== 'true') await preview.click();
+  const layout = (formSide: string) =>
+    page.locator(formSide).evaluate((side) => {
+      const body = side.closest('.entry-body')?.getBoundingClientRect();
+      const page = document.querySelector('.canvas-workspace')?.getBoundingClientRect();
+      const box = side.getBoundingClientRect();
+      return {
+        inset: Math.round(box.top - (body?.top ?? 0)),
+        gap: Math.round((page?.left ?? 0) - box.right),
+        radius: getComputedStyle(side).borderTopLeftRadius,
+      };
+    });
+  const flush = { inset: 0, gap: 0, radius: '0px' };
+  // The grid eases between layouts, so read it once it settles.
+  await expect.poll(() => layout('.entry-body > .form')).toEqual(flush);
+
+  await page.getByRole('group', { name: 'Language' }).getByRole('button', { name: /^DE/ }).click();
+  await expect(page.getByRole('heading', { name: 'German' })).toBeVisible();
+  await expect.poll(() => layout('.pane.is-locale')).toEqual(flush);
 });
