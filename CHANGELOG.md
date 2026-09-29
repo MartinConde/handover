@@ -4,6 +4,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- A save refused because the entry changed elsewhere says so once, without a *Technical detail*
+  repeating it.
 - A header **Publish this entry** refused as a conflict leaves **Resolve** and **Discard** on
   that entry's row in *Unpublished changes*, instead of offering them only after a publish from
   the drawer is refused too.

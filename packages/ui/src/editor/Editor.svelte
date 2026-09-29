@@ -669,11 +669,8 @@ async function writeSourceSave(
       if (refusal.kind === 'lock') loseLock(refusal.lock);
       else if (refusal.kind === 'revision') {
         entrySession.freezeHistory();
-        saveError = {
-          code: 'EDITOR_SAVE_REVISION',
-          status: res.status,
-          ...(refusal.error ? { detail: refusal.error } : {}),
-        };
+        // No server detail: its sentence repeats this one.
+        saveError = { code: 'EDITOR_SAVE_REVISION', status: res.status };
       }
       return false;
     }

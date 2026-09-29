@@ -1072,3 +1072,32 @@ test('a rejected status action becomes retryable without discarding the editor',
   flushSync();
   expect(changed).toHaveBeenCalledOnce();
 });
+
+test('a save refused because the entry moved says so once, without the server repeating it', async () => {
+  const { flushNavigation } = await import('../navigate');
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string, init?: RequestInit) => {
+      if (isLock(url)) return Response.json(HELD);
+      if (init?.method === 'PUT')
+        return Response.json(
+          {
+            error:
+              'This entry changed while you were editing. Your changes are not saved; keep them before reloading.',
+            reason: 'revision',
+          },
+          { status: 409 },
+        );
+      return Response.json({});
+    }),
+  );
+  const root = show({ entry: { ...entry, revisions: { en: 'first' } } });
+  type(root, 'input#f-title', 'Moved focal');
+  await flushNavigation();
+  await tick();
+  flushSync();
+
+  expect($(root, '.notice-danger[role="alert"]')?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
+    'This entry changed elsewhere. Copy your unsaved text before reloading. Retry save',
+  );
+});
