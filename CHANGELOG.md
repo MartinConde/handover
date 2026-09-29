@@ -4,6 +4,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- `translating.md` says what **Create all N missing languages** does when a change still being
+  saved cannot be saved first: nothing is created and the change stays in its field.
 - Canvas: **Review fields** scrolls the page to the problem field again, and inserting or moving
   a block from Structure keeps the page's selection and its action buttons.
 - Canvas refuses a reused command ID with `duplicate-command` instead of replaying the first
