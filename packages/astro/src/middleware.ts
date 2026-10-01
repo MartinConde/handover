@@ -23,12 +23,11 @@ const previewLinks = (html: string) =>
 // The shell HTML and its assets stay public: they hold no data and render the login form.
 export const onRequest: MiddlewareHandler = async ({ request, url, locals }, next) => {
   const b = base();
+  // Outside the base the path is gated as written: Astro still routes `/admin/api/*` there.
   const path =
     b && (url.pathname === b || url.pathname.startsWith(`${b}/`))
       ? url.pathname.slice(b.length)
-      : b
-        ? ''
-        : url.pathname;
+      : url.pathname;
   if (request.method === 'GET' && /^\/_preview(?:\/|$)/.test(path)) {
     const res = await next();
     if (!res.ok || !res.headers.get('content-type')?.includes('text/html')) return res;

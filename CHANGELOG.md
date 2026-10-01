@@ -4,6 +4,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Security:** on a site with `i18n.base`, an `/admin/api/` request that left the base off
+  reached the API without signing in. It now needs a session like every other API request.
 - The entry editor's header is two rows instead of three. The breadcrumb names the entry and
   holds **Publish this entry**, whose arrow opens **Ready to publish** and **Hide from site…**;
   a trash button replaces the ⋯ menu. The web address and **Change file name** sit under the

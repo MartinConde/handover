@@ -4,7 +4,8 @@ import { beforeEach, expect, test, vi } from 'vitest';
 import { onRequest } from './middleware.js';
 
 // Better Auth is the boundary here: this file tests which requests ever get to ask it.
-vi.mock('virtual:handover/config', () => ({ default: { i18n: {} } }));
+const config = vi.hoisted(() => ({ i18n: {} as { base?: string } }));
+vi.mock('virtual:handover/config', () => ({ default: config }));
 
 let session: {
   user: {
@@ -19,7 +20,10 @@ let session: {
 const getSession = vi.fn(async () => session);
 vi.mock('./auth.js', () => ({ createAuth: () => ({ api: { getSession } }) }));
 
-beforeEach(() => getSession.mockClear());
+beforeEach(() => {
+  getSession.mockClear();
+  config.i18n = {};
+});
 
 async function run(path: string) {
   const url = new URL(path, 'https://x');
@@ -37,6 +41,17 @@ test('an API call with no session is 401', async () => {
   const result = await run('/admin/api/drafts');
   expect(result).toMatchObject({ status: 401, passed: false });
   expect(result.headers.get('cache-control')).toBe('private, no-store');
+});
+
+// Astro still routes `/admin/api/*` to the API when the request leaves the base off.
+test('on a site with a base, an API call with or without the base and no session is 401', async () => {
+  session = null;
+  config.i18n = { base: '/nested/site' };
+  for (const path of ['/nested/site/admin/api/drafts', '/admin/api/drafts']) {
+    const result = await run(path);
+    expect(result, path).toMatchObject({ status: 401, passed: false });
+    expect(result.headers.get('cache-control'), path).toBe('private, no-store');
+  }
 });
 
 test("the login's own endpoints are reachable without a session", async () => {
