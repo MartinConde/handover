@@ -38,6 +38,7 @@ import { request as fetch, localPath, sitePath, uncertainResponse } from './requ
 import type { ScreenProps } from './screen.js';
 import BuildPill, { type Build } from './shared/BuildPill.svelte';
 import Modal from './shared/Modal.svelte';
+import Skeleton from './shared/Skeleton.svelte';
 
 export interface Session {
   collections: string[];
@@ -845,7 +846,7 @@ const initial = $derived(
     {#key `${editingAt || path}#${reload}`}
     {#if editing}
       {#await Promise.all([openEntry, import('./editor/Editor.svelte')])}
-        <main class="main"><p class="placeholder">{m.common_loading({}, options)}</p></main>
+        <main class="main"><Skeleton label={m.common_loading({}, options)} shape="form" /></main>
       {:then [entry, { default: Editor }]}
         <Editor
           collection={editing.collection}

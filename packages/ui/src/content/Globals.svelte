@@ -3,6 +3,7 @@ import type { Labels } from '@handover/core';
 import { formatExactTime, formatRelativeTime, messageOptions, type UiLocale } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
 import { request as fetch, sitePath } from '../request.js';
+import Skeleton from '../shared/Skeleton.svelte';
 
 let { uiLocale = 'en' }: { uiLocale?: UiLocale } = $props();
 const options = $derived(messageOptions(uiLocale));
@@ -52,7 +53,7 @@ async function load() {
 
   {#if errorStatus}<p class="notice notice-danger" role="alert">{m.globals_load_failed({ status: errorStatus }, options)}</p>{/if}
   {#if loading}
-    <p class="placeholder">{m.common_loading({}, options)}</p>
+    <Skeleton label={m.common_loading({}, options)} />
   {:else}
     {#if !globals.length}
       <p class="list-note">

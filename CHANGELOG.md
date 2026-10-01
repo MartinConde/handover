@@ -4,6 +4,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Screens that are still loading show grey placeholder rows and fields that pulse gently,
+  instead of the word *Loading…*; with reduced motion turned on they stay still.
 - A second publish refused in *Unpublished changes* keeps **Resolve** on the entry the first
   refusal named, instead of putting that entry back in the set to publish.
 - A publish refused as a conflict in *Unpublished changes* keeps **Resolve** on the entry's row

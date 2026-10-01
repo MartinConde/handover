@@ -5,6 +5,7 @@ import { formatRelativeTime, messageOptions, type UiLocale } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
 import { request as fetch, sitePath, uncertainResponse } from '../request.js';
 import Modal from '../shared/Modal.svelte';
+import Skeleton from '../shared/Skeleton.svelte';
 
 export type Member = CoreMember & {
   /** The entries they are holding a lock on right now, by the name the list shows. */
@@ -219,7 +220,7 @@ async function remove() {
     </p>
   {/if}
   {#if loading}
-    <p class="placeholder">{m.common_loading({}, options)}</p>
+    <Skeleton label={m.common_loading({}, options)} />
   {:else}
     <div class="table" role="table" aria-label={m.members_title({}, options)}>
       <!-- role="table" needs a row around its columnheaders; display: contents keeps the grid. -->

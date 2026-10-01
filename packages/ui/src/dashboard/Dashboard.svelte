@@ -12,6 +12,7 @@ import * as m from '../paraglide/messages.js';
 import { request as fetch, sitePath } from '../request.js';
 import { activityGroupLabel, initials, said } from '../shared/activity-line';
 import BuildPill, { type Build } from '../shared/BuildPill.svelte';
+import Skeleton from '../shared/Skeleton.svelte';
 import SourceLanguagesTile from './SourceLanguagesTile.svelte';
 
 type Recent = {
@@ -307,7 +308,7 @@ const oldest = $derived(Math.min(...pending.map((entry) => entry.updated_at)));
     <section class="dtile feed-tile recent-tile" aria-labelledby="d-recent">
       <header><h2 id="d-recent">{m.dashboard_recently_edited({}, options)}</h2></header>
       {#if dashboardLoading && !dashboardKnown}
-        <p class="line">{m.common_loading({}, options)}</p>
+        <Skeleton label={m.common_loading({}, options)} shape="lines" />
       {:else if dashboardError}
         <div class="notice notice-danger dashboard-read-error" role="alert">
           {m.dashboard_recent_failed({}, options)}
@@ -349,7 +350,7 @@ const oldest = $derived(Math.min(...pending.map((entry) => entry.updated_at)));
         <a href={sitePath(`/admin/activity`)}>{m.dashboard_all_activity({}, options)}</a>
       </header>
       {#if activityLoading && !activityKnown}
-        <p class="line">{m.common_loading({}, options)}</p>
+        <Skeleton label={m.common_loading({}, options)} shape="lines" />
       {:else if activityError}
         <div class="notice notice-danger activity-read-error" role="alert">
           {m.dashboard_activity_failed({}, options)}

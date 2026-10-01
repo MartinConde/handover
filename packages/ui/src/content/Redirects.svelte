@@ -5,6 +5,7 @@ import { languageTag, messageOptions, type UiLocale } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
 import { request as fetch, sitePath } from '../request.js';
 import Modal from '../shared/Modal.svelte';
+import Skeleton from '../shared/Skeleton.svelte';
 import PagePicker from './PagePicker.svelte';
 
 let {
@@ -353,7 +354,7 @@ async function remove() {
         </div>
       </div>
       {#if loading && !rulesKnown}
-        <p class="placeholder">{m.common_loading({}, options)}</p>
+        <Skeleton label={m.common_loading({}, options)} />
       {:else if readError && !rulesKnown}
         <p class="placeholder">{m.redirect_unavailable({}, options)}</p>
       {:else if shown.length}

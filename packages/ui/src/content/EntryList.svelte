@@ -22,6 +22,7 @@ import { missing, offered, owes, partial, queueQuery, rowTitle, stale, workFrom 
 import * as m from '../paraglide/messages.js';
 import { request as fetch, sitePath } from '../request.js';
 import Modal from '../shared/Modal.svelte';
+import Skeleton from '../shared/Skeleton.svelte';
 import NewEntry from './NewEntry.svelte';
 import OffsiteDialog, { type Target } from './Offsite.svelte';
 
@@ -423,7 +424,7 @@ async function done() {
   {#if tab === 'deleted'}
     <p class="list-note">{m.entry_list_deleted_note({ collection: plural }, options)}</p>
     {#if deletedLoading && !deleted.length}
-      <p class="placeholder">{m.common_loading({}, options)}</p>
+      <Skeleton label={m.common_loading({}, options)} />
     {:else if deleted.length}
       <div class="table cols-4" role="table" aria-label={m.entry_list_deleted_table({ collection: plural }, options)}>
         <div class="row-head" role="row">
@@ -487,7 +488,7 @@ async function done() {
       </div>
     {/if}
   {:else if loading}
-    <p class="placeholder">{m.common_loading({}, options)}</p>
+    <Skeleton label={m.common_loading({}, options)} />
   {:else if entries.length && !shown.length}
     <p class="placeholder">
       {search.trim()

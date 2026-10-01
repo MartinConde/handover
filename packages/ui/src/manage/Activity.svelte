@@ -5,6 +5,7 @@ import * as m from '../paraglide/messages.js';
 import Diff from '../publishing/Diff.svelte';
 import { request as fetch, sitePath } from '../request.js';
 import { activityGroupLabel, ENTRY, initials, type Person, said } from '../shared/activity-line';
+import Skeleton from '../shared/Skeleton.svelte';
 
 let {
   role,
@@ -198,7 +199,7 @@ const RESTORABLE = ['entry-delete', 'locale-off'];
   {#if failure}<p class="notice notice-danger" role="alert">{m.activity_load_failed_status({ status: failure }, options)}</p>{/if}
   {#if refused}<p class="notice notice-warn" role="alert">{refused.detail ? m.activity_restore_conflict({ detail: refused.detail }, options) : m.activity_restore_failed_status({ status: refused.status }, options)}</p>{/if}
   {#if loading}
-    <p class="placeholder">{m.common_loading({}, options)}</p>
+    <Skeleton label={m.common_loading({}, options)} />
   {:else if events.length === 0}
     <div class="empty">
       <div>

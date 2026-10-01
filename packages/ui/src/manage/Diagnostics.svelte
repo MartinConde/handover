@@ -12,6 +12,7 @@ import {
 import * as m from '../paraglide/messages.js';
 import { request as fetch, sitePath } from '../request.js';
 import Modal from '../shared/Modal.svelte';
+import Skeleton from '../shared/Skeleton.svelte';
 
 let {
   uiLocale = 'en',
@@ -430,7 +431,7 @@ const mailerName = (provider: string) => {
     <p class="list-note">{m.diagnostics_intro({}, options)}</p>
   </header>
   {#await load()}
-    <p class="placeholder">{m.common_loading({}, options)}</p>
+    <Skeleton label={m.common_loading({}, options)} shape="form" />
   {:then config}
     <div class="settings is-wide">
       <div class={['health', { 'is-failing': failing.length > 0, 'is-busy': busy && !failing.length }]}>
