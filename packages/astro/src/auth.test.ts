@@ -104,8 +104,8 @@ async function seedCredentials(email: string, password: string) {
   await seedUser(email);
   await binding
     .prepare(
-      `INSERT INTO account (id, issuer, account_id, provider_id, user_id, password, created_at, updated_at)
-       VALUES (?, 'local:credential', ?, 'credential', ?, ?, 0, 0)`,
+      `INSERT INTO account (id, account_id, provider_id, user_id, password, created_at, updated_at)
+       VALUES (?, ?, 'credential', ?, ?, 0, 0)`,
     )
     .bind(`acc_${email}`, `usr_${email}`, `usr_${email}`, await hashPassword(password))
     .run();

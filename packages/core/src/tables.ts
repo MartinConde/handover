@@ -222,7 +222,7 @@ export const uploadIntents = sqliteTable(
 );
 
 /** Bumped whenever a table changes; the build refuses a stale `migrations/handover.json`. */
-export const SCHEMA_VERSION = 11;
+export const SCHEMA_VERSION = 12;
 
 const GENERATE = 'run `npx handover db generate` and commit migrations/';
 

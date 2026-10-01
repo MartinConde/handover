@@ -129,7 +129,6 @@ beforeAll(async () => {
     userId: 'owner',
     accountId: 'owner',
     providerId: 'credential',
-    issuer: 'local:credential',
     password: await hashPassword('a-test-password'),
     createdAt: new Date(),
     updatedAt: new Date(),

@@ -4,6 +4,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Security:** Better Auth is now 1.7.7, which fixes a critical sign-in bypass
+  ([GHSA-965c-763c-88jm](https://github.com/better-auth/better-auth/security/advisories/GHSA-965c-763c-88jm)).
+  Handover's settings already blocked it, but the fix belongs in the runtime.
+  **Schema version 12** drops `account.issuer` and its unique index, which Better Auth no longer
+  writes: run `npx handover db generate`, apply the migration, then deploy. Pending email links and
+  GitHub sign-ins started before the deploy stop working; request new ones.
 - **Security:** on a site with `i18n.base`, an `/admin/api/` request that left the base off
   reached the API without signing in. It now needs a session like every other API request.
 - The entry editor's header is two rows instead of three. The breadcrumb names the entry and

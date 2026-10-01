@@ -151,7 +151,6 @@ async function signIn(id: string, role: 'owner' | 'editor') {
     userId: id,
     accountId: id,
     providerId: 'credential',
-    issuer: 'local:credential',
     password: await hashPassword('a-test-password'),
     createdAt: new Date(),
     updatedAt: new Date(),

@@ -125,13 +125,13 @@ async function seedUser(email: string, role: string) {
   return id;
 }
 
-/** Without the user's own id as key and issuer `local:credential`, nothing can sign in. */
+/** Without the user's own id as key, nothing can sign in. */
 async function seed(email: string, password: string, role: string) {
   const id = await seedUser(email, role);
   await binding
     .prepare(
-      `INSERT INTO account (id, issuer, account_id, provider_id, user_id, password, created_at, updated_at)
-       VALUES (?, 'local:credential', ?, 'credential', ?, ?, 0, 0)`,
+      `INSERT INTO account (id, account_id, provider_id, user_id, password, created_at, updated_at)
+       VALUES (?, ?, 'credential', ?, ?, 0, 0)`,
     )
     .bind(`acc_${email}`, id, id, await hashPassword(password))
     .run();
@@ -691,8 +691,8 @@ async function seedInvite(email: string, role: string, at = 1_000) {
 async function seedGithub(userId: string, accountId: string) {
   await binding
     .prepare(
-      `INSERT INTO account (id, issuer, account_id, provider_id, user_id, created_at, updated_at)
-       VALUES (?, 'local:oauth:github', ?, 'github', ?, 0, 0)`,
+      `INSERT INTO account (id, account_id, provider_id, user_id, created_at, updated_at)
+       VALUES (?, ?, 'github', ?, 0, 0)`,
     )
     .bind(`acc_gh_${userId}`, accountId, userId)
     .run();
@@ -732,8 +732,8 @@ test('a credential row with no password is not a password', async () => {
   // What `auth.md` warns a hand-seeded account can be: the row exists and the hash does not.
   await binding
     .prepare(
-      `INSERT INTO account (id, issuer, account_id, provider_id, user_id, created_at, updated_at)
-       VALUES ('acc_empty', 'local:credential', ?, 'credential', ?, 0, 0)`,
+      `INSERT INTO account (id, account_id, provider_id, user_id, created_at, updated_at)
+       VALUES ('acc_empty', ?, 'credential', ?, 0, 0)`,
     )
     .bind(id, id)
     .run();

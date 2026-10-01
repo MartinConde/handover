@@ -195,8 +195,8 @@ test('the database check answers with the schema version the tables are at', asy
   expect(await res.json()).toEqual({
     ok: true,
     code: 'DIAGNOSTIC_DATABASE_OK',
-    detail: "The database answered — the admin's tables are there. Schema version 11.",
-    version: 11,
+    detail: "The database answered — the admin's tables are there. Schema version 12.",
+    version: 12,
   });
 });
 

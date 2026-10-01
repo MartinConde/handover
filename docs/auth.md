@@ -58,14 +58,13 @@ console.log(await hashPassword(process.argv[1]));
 ```
 
 ```sql
-INSERT INTO account (id, issuer, account_id, provider_id, user_id, password, created_at, updated_at)
-VALUES ('acc_1', 'local:credential', 'usr_1', 'credential', 'usr_1', '<the hash>', 0, 0);
+INSERT INTO account (id, account_id, provider_id, user_id, password, created_at, updated_at)
+VALUES ('acc_1', 'usr_1', 'credential', 'usr_1', '<the hash>', 0, 0);
 ```
 
-Run each once with `--local` and once with `--remote`: those are two different databases. Three
+Run each once with `--local` and once with `--remote`: those are two different databases. Two
 values are not free choices, and a password that never works is what you get when one is wrong:
-`provider_id` is `credential`, `issuer` is `local:credential`, and `account_id` is the **user's
-own id**, not the email. A password is 12 to 128 characters.
+`provider_id` is `credential`, and `account_id` is the **user's own id**, not the email. A password is 12 to 128 characters.
 
 ## Signing in by emailed link
 
@@ -155,9 +154,9 @@ The session cookie is `HttpOnly`, `SameSite=Lax`, and `Secure` on any site whose
 ## Upgrading authentication
 
 Handover pins Better Auth to the version matching its generated account schema. Do not
-override that dependency independently: Better Auth 1.7.3 no longer writes the required
-`account.issuer` field used by this schema. Upgrading authentication requires regenerating
-and migrating the schema together with the runtime.
+override that dependency independently: a Better Auth upgrade can change the tables it writes,
+so it ships with a new schema version and a migration you generate with
+`npx handover db generate`.
 
 ## Signing out
 

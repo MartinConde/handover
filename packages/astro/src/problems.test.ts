@@ -126,14 +126,14 @@ test.each([
     'exact text while short',
     z.string().length(4),
     'x',
-    'Too small: expected string to have >=4 characters',
+    'Too small: expected string to have exactly 4 characters',
     { code: 'FIELD_TEXT_TOO_SMALL', exact: true, limit: 4 },
   ],
   [
     'exact text while long',
     z.string().length(4),
     'abcdef',
-    'Too big: expected string to have <=4 characters',
+    'Too big: expected string to have exactly 4 characters',
     { code: 'FIELD_TEXT_TOO_BIG', exact: true, limit: 4 },
   ],
   [
