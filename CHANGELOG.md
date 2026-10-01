@@ -4,6 +4,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- `media.md` says what the scheduled reconcile still does with leftover public `uploads/`
+  objects, instead of saying they are no longer adopted at all.
 - The GitHub token Handover asks for reaches only the site's repository, with contents access and
   nothing else, even when the GitHub App is installed on more repositories.
 - A preview page with many unclosed `<a` tags no longer takes seconds of Worker time to have its

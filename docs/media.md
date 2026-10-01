@@ -115,8 +115,10 @@ An upload already in progress must be restarted after this change.
 Previously issued signed URLs can remain usable for five minutes. Block public reads of
 `uploads/` on every public media hostname during the transition, and remove or expire those
 old temporary objects after that window. Do not delete verified `media/` or `files/` objects.
-The old public staging prefix is no longer adopted by confirmation; new uploads use only
-private staging. Remove the public bucket's obsolete PUT CORS permission after deployment.
+Confirmation no longer adopts anything from the old public staging prefix; new uploads use
+only private staging. Until you remove them, the scheduled reconcile still checks leftover
+public `uploads/` objects against their hash and type once they are older than an upload's
+lifetime, adds the ones that pass to the library and deletes the rest. Remove the public bucket's obsolete PUT CORS permission after deployment.
 
 - [Uploads](media-uploads.md): byte limits, verification and recovery
 - [The library](media-library.md): archive, deletion, focal points and cropping
