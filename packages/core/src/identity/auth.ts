@@ -119,8 +119,9 @@ export function authOptions(siteId: string, db: Db, config: AuthConfig): BetterA
     ...(emailing && config.github
       ? { socialProviders: { github: { ...config.github, disableSignUp: true } } }
       : {}),
-    // Linking is what lets closed signup and GitHub sign-in coexist.
-    account: { accountLinking: { enabled: true, trustedProviders: ['github'] } },
+    // Linking is what lets closed signup and GitHub sign-in coexist. No `trustedProviders`: it
+    // would link an address GitHub has not verified, so anybody could claim a member's email.
+    account: { accountLinking: { enabled: true } },
     // `enabled` defaults to `NODE_ENV === 'production'`, which a Worker never sets.
     rateLimit: { enabled: true, storage: 'database' },
     // An expired OAuth state has nowhere to route back to but Better Auth's own error page.

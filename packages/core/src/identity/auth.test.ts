@@ -448,6 +448,24 @@ test('a GitHub account signs in against the row that already carries its verifie
   expect((await userRows()).map((r) => r.email)).toEqual(['owner@example.com']);
 });
 
+test("a GitHub account whose copy of a member's email GitHub has not verified signs nobody in", async () => {
+  emailing();
+  github = { clientId: 'gh_id', clientSecret: 'gh_secret' };
+  await seedUser('owner@example.com', 'owner');
+
+  const res = await githubCallback({
+    login: 'mallory',
+    email: 'owner@example.com',
+    verified: false,
+  });
+
+  expect(res.headers.get('location')).toBe('/admin?error=account_not_linked');
+  expect(res.headers.get('set-cookie') ?? '').not.toMatch(/session_token=[^;]/);
+  expect(
+    (await binding.prepare("SELECT id FROM account WHERE provider_id = 'github'").all()).results,
+  ).toEqual([]);
+});
+
 // setting a first password
 
 /** Sign in by password and keep the cookie, which is how a server-only call proves who asks. */

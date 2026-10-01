@@ -89,7 +89,8 @@ npx wrangler secret put GITHUB_CLIENT_SECRET
 ```
 
 Sign-up is closed here too, so GitHub only works when a `user` row **already carries the same
-email** GitHub reports as verified; it links to that row rather than making a new one. A GitHub
+email** GitHub reports as verified; it links to that row rather than making a new one. The person
+must have opened their invite link once first, which is what proves the row's address. A GitHub
 account nobody invited lands back on the login with the message a dead link gets, and is not told
 whether the address is known here.
 

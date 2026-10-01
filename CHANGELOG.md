@@ -4,6 +4,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Security:** *Continue with GitHub* no longer signs in to a member's account when GitHub has
+  not verified that member's address on the GitHub account. Before, anybody could add the
+  owner's email to their own GitHub account and sign in as the owner.
 - **Security:** Better Auth is now 1.7.7, which fixes a critical sign-in bypass
   ([GHSA-965c-763c-88jm](https://github.com/better-auth/better-auth/security/advisories/GHSA-965c-763c-88jm)).
   Handover's settings already blocked it, but the fix belongs in the runtime.
