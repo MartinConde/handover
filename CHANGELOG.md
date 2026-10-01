@@ -19,8 +19,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `X-Content-Type-Options: nosniff`; the page also sends no referrer to other sites. A site's
   admin screen that loads a script from a CDN must import it instead.
 - **Security:** *Continue with GitHub* no longer signs in to a member's account when GitHub has
-  not verified that member's address on the GitHub account. Before, anybody could add the
-  owner's email to their own GitHub account and sign in as the owner.
+  not verified that member's address on the GitHub account. Before, a GitHub account presenting
+  an unverified copy of a member's address could sign in as that member, the owner included.
 - **Security:** Better Auth is now 1.7.7, which fixes a critical sign-in bypass
   ([GHSA-965c-763c-88jm](https://github.com/better-auth/better-auth/security/advisories/GHSA-965c-763c-88jm)).
   Handover's settings already blocked it, but the fix belongs in the runtime.
