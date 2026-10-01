@@ -25,12 +25,13 @@ beforeEach(() => {
   config.i18n = {};
 });
 
-async function run(path: string) {
+/** `routePattern` is the route Astro matched, which is what a doubled base can disagree with. */
+async function run(path: string, routePattern = '') {
   const url = new URL(path, 'https://x');
   const locals: Record<string, unknown> = {};
   const next = vi.fn(async () => new Response('next'));
   const res = (await onRequest(
-    { request: new Request(url), url, locals } as unknown as APIContext,
+    { request: new Request(url), url, locals, routePattern } as unknown as APIContext,
     next,
   )) as Response;
   return { status: res.status, passed: next.mock.calls.length === 1, locals, headers: res.headers };
@@ -51,6 +52,19 @@ test('on a site with a base, an API call with or without the base and no session
     const result = await run(path);
     expect(result, path).toMatchObject({ status: 401, passed: false });
     expect(result.headers.get('cache-control'), path).toBe('private, no-store');
+  }
+});
+
+// The middleware strips the base once; Astro strips it again and routes to the API anyway.
+test('on a site with a base, a doubled base is gated by the route it reaches', async () => {
+  session = null;
+  config.i18n = { base: '/nested/site' };
+  for (const [path, route] of [
+    ['/nested/site/nested/site/admin/api/screen', '/admin/api/screen'],
+    ['/nested/site/nested/site/admin/api/auth/sign-in/email', '/admin/api/[...path]'],
+  ] as const) {
+    const result = await run(path, route);
+    expect(result, path).toMatchObject({ status: 401, passed: false });
   }
 });
 
@@ -98,7 +112,12 @@ test('authenticated API responses preserve their headers while disabling storage
       }),
   );
   const res = (await onRequest(
-    { request: new Request(url), url, locals: {} } as unknown as APIContext,
+    {
+      request: new Request(url),
+      url,
+      locals: {},
+      routePattern: '/admin/api/[...path]',
+    } as unknown as APIContext,
     next,
   )) as Response;
   expect(res.headers.get('cache-control')).toBe('private, no-store');
@@ -114,7 +133,12 @@ test('unexpected API and authentication errors are generic and cannot be cached'
     };
     const url = new URL(path, 'https://x');
     const response = (await onRequest(
-      { request: new Request(url), url, locals: {} } as unknown as APIContext,
+      {
+        request: new Request(url),
+        url,
+        locals: {},
+        routePattern: '/admin/api/[...path]',
+      } as unknown as APIContext,
       async () => {
         throw new Error('private diagnostic');
       },
@@ -164,7 +188,12 @@ test('a link on a preview page to a page on this site stays in the preview', asy
   );
 
   const res = (await onRequest(
-    { request: new Request(url), url, locals: {} } as unknown as APIContext,
+    {
+      request: new Request(url),
+      url,
+      locals: {},
+      routePattern: '/admin/api/[...path]',
+    } as unknown as APIContext,
     next,
   )) as Response;
 
@@ -185,7 +214,12 @@ test('a preview page full of unclosed links is rewritten in linear time', async 
 
   const started = performance.now();
   const res = (await onRequest(
-    { request: new Request(url), url, locals: {} } as unknown as APIContext,
+    {
+      request: new Request(url),
+      url,
+      locals: {},
+      routePattern: '/admin/api/[...path]',
+    } as unknown as APIContext,
     next,
   )) as Response;
   const html = await res.text();

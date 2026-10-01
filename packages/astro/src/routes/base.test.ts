@@ -29,6 +29,8 @@ const ctx = (path: string, params = '') => {
     request: new Request(url),
     params: { path: params },
     locals: {},
+    // What Astro matched: the API route for an API path, and no API route otherwise.
+    routePattern: url.pathname.includes('/admin/api/') ? '/admin/api/[...path]' : '',
   } as unknown as APIContext;
 };
 

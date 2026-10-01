@@ -272,7 +272,13 @@ async function call(method: string, path: string, body?: unknown, cookies = cook
     },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
-  const ctx = { url, request, params: { path }, locals: {} } as unknown as APIContext;
+  const ctx = {
+    url,
+    request,
+    params: { path },
+    locals: {},
+    routePattern: '/admin/api/[...path]',
+  } as unknown as APIContext;
   const route =
     method === 'GET' ? GET : method === 'PUT' ? PUT : method === 'DELETE' ? DELETE : POST;
   const response = await onRequest(ctx, () => Promise.resolve(route(ctx)));
@@ -291,6 +297,7 @@ test('oversized auth requests are refused before Better Auth reads their body', 
     request,
     params: { path: 'auth/sign-in/email' },
     locals: {},
+    routePattern: '/admin/api/[...path]',
   } as unknown as APIContext;
   const response = await onRequest(ctx, () => Promise.resolve(POST(ctx)));
   expect(response?.status).toBe(413);

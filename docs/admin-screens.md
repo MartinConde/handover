@@ -115,8 +115,9 @@ left; it gets no other context from the shell.
 
 ## Its data
 
-Put the endpoint it reads in your own site, at `src/pages/admin/api/<name>.ts`. Everything
-under `/admin/api/` is behind the admin's session: your endpoint answers `401` without one,
+Put the endpoint it reads in your own site, at `src/pages/admin/api/<name>.ts`. Every route
+under `/admin/api/` is behind the admin's session, whatever address the request used to reach it:
+your endpoint answers `401` without one,
 and `locals.handover` holds the signed-in user and their role, the same as the admin's own
 endpoints see them. It is typed for you — the integration writes the declaration into `.astro/`.
 

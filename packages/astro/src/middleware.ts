@@ -22,7 +22,10 @@ const previewLinks = (html: string) =>
   });
 
 // The shell HTML and its assets stay public: they hold no data and render the login form.
-export const onRequest: MiddlewareHandler = async ({ request, url, locals }, next) => {
+export const onRequest: MiddlewareHandler = async (
+  { request, url, locals, routePattern },
+  next,
+) => {
   const b = base();
   // Outside the base the path is gated as written: Astro still routes `/admin/api/*` there.
   const path =
@@ -57,7 +60,8 @@ export const onRequest: MiddlewareHandler = async ({ request, url, locals }, nex
     headers.delete('content-length');
     return new Response(html, { status: res.status, statusText: res.statusText, headers });
   }
-  if (!path.startsWith('/admin/api/')) return next();
+  // The route Astro matched decides: `/<base><base>/admin/api/x` strips to no API path but routes to one.
+  if (!routePattern.startsWith('/admin/api/') && !path.startsWith('/admin/api/')) return next();
   const privateResponse = async (work: () => Promise<Response>) => {
     let response: Response;
     try {

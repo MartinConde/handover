@@ -223,7 +223,13 @@ async function call(method: string, route: string, body?: unknown, cookies = own
     },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
-  const ctx = { url, request, params: { path: route }, locals: {} } as unknown as APIContext;
+  const ctx = {
+    url,
+    request,
+    params: { path: route },
+    locals: {},
+    routePattern: '/admin/api/[...path]',
+  } as unknown as APIContext;
   const handler =
     method === 'GET' ? GET : method === 'PUT' ? PUT : method === 'DELETE' ? DELETE : POST;
   const response = await onRequest(ctx, () => Promise.resolve(handler(ctx)));

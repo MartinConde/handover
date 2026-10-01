@@ -4,6 +4,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Security:** the admin's session check now goes by the route a request reaches, so every route
+  under `/admin/api/` needs a session. Before, on a site with `i18n.base`, writing the base twice
+  (`/<base><base>/admin/api/…`) reached a site's own `/admin/api/` endpoint without signing in.
 - **Security:** setting a first password from the account page needs a sign-in less than a day
   old, signs the person's other devices out and mails them. Before, a borrowed session could plant
   a password that outlived *Sign out everywhere*.
