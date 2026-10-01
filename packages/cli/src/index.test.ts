@@ -299,6 +299,23 @@ test('init creates the database and the bucket, wires them up and seeds the owne
   expect(out).toContain('you@example.com is an owner');
 });
 
+test('init keeps the secrets files out of git in a project with no .gitignore', async () => {
+  const cwd = site({ 'package.json': '{ "name": "my-site" }' });
+
+  expect((await run(['init', 'you@example.com'], cwd)).code).toBe(0);
+
+  const ignore = join(cwd, '.gitignore');
+  expect(existsSync(ignore) ? readFileSync(ignore, 'utf8') : undefined).toBe('.dev.vars*\n.env*\n');
+});
+
+test('init adds the secrets files to an existing .gitignore and keeps what it had', async () => {
+  const cwd = site({ 'package.json': '{ "name": "my-site" }', '.gitignore': 'dist/\n.env\n' });
+
+  expect((await run(['init', 'you@example.com'], cwd)).code).toBe(0);
+
+  expect(readFileSync(join(cwd, '.gitignore'), 'utf8')).toBe('dist/\n.env\n.dev.vars*\n.env*\n');
+});
+
 test('init seeds one user row and no account row, so the first sign-in is an emailed link', async () => {
   const cwd = site({ 'package.json': '{ "name": "my-site" }' });
   const ran: string[][] = [];

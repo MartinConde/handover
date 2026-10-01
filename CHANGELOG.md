@@ -4,6 +4,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- `init` adds `.dev.vars*` and `.env*` to `.gitignore` (creating it if needed), so the secrets
+  the docs tell you to put in `.dev.vars` are not committed by accident.
 - **Discard** and answering a conflict now wait, with a 409, while somebody else has the entry
   open, as rename, delete, hide and restore already did. Before, they could throw away or
   overwrite a draft another person was typing in.

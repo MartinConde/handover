@@ -80,6 +80,15 @@ export function init(env: Env, email: string): number {
     put(env, 'src/worker.ts', WORKER);
     put(env, 'drizzle.config.ts', DRIZZLE);
     validateDrizzleConfig(env);
+    // The docs tell people to put every secret in .dev.vars; Wrangler also reads .env.
+    const ignoreFile = join(env.cwd, '.gitignore');
+    const ignored = existsSync(ignoreFile) ? readFileSync(ignoreFile, 'utf8') : '';
+    const owed = ['.dev.vars*', '.env*'].filter((line) => !ignored.split(/\r?\n/).includes(line));
+    if (owed.length) {
+      const joint = ignored && !ignored.endsWith('\n') ? '\n' : '';
+      writeFileSync(ignoreFile, `${ignored}${joint}${owed.join('\n')}\n`);
+      env.log(`Added ${owed.join(' and ')} to .gitignore`);
+    }
 
     const account = accountId(env);
     if (saved && saved.accountId !== account)

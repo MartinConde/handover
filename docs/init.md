@@ -32,6 +32,7 @@ Wrote cms.config.ts
 Wrote wrangler.jsonc
 Wrote src/worker.ts
 Wrote drizzle.config.ts
+Added .dev.vars* and .env* to .gitignore
 migrations/handover.json records schema version 1
 you@example.com is an owner. They sign in with an emailed link and set a password on their account page…
 ```
@@ -42,7 +43,8 @@ In order, it:
    conflicting `DB`, bucket/account value, schema source or migrations output stops before
    anything is provisioned
 2. writes the site's own files ([below](#what-it-writes)) — all of them local, and all of
-   them before anything exists in Cloudflare
+   them before anything exists in Cloudflare — and adds `.dev.vars*` and `.env*` to `.gitignore`,
+   creating it if needed, so the secrets you put there never reach git
 3. reads the account from `wrangler whoami`. With more than one, it stops and lists them —
    set `CLOUDFLARE_ACCOUNT_ID` to the one you want and run it again, rather than have the
    database created in the wrong account
