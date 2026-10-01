@@ -344,8 +344,11 @@ export async function resolve(
   collection: string,
   slug: string,
   request: Request,
+  session: App.Locals['handover'],
 ): Promise<Response> {
   if (!schemaOf(collection, slug)) return new Response('Not found', { status: 404 });
+  const held = await heldByAnother(ctx, collection, slug, session, 'resolved');
+  if (held) return held;
   const body = (await readJson(request)) as { answers?: unknown; version?: unknown } | undefined;
   const answers = (Array.isArray(body?.answers) ? body.answers : []).filter(
     (answer): answer is Answer =>

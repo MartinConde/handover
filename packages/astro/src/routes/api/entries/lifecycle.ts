@@ -337,6 +337,8 @@ export async function discard(
   session: App.Locals['handover'],
 ): Promise<Response> {
   if (!schemaOf(collection, slug)) return new Response('Not found', { status: 404 });
+  const held = await heldByAnother(ctx, collection, slug, session, 'discarded');
+  if (held) return held;
   const database = ctx.db();
   // Read before the rows go: a draft-only entry has no file to name it by afterwards.
   const [subject, went] = await Promise.all([

@@ -367,7 +367,7 @@ export async function heldByAnother(
   collection: string,
   slug: string,
   session: App.Locals['handover'],
-  doing: 'renamed' | 'deleted' | 'hidden' | 'shown' | 'restored',
+  doing: 'renamed' | 'deleted' | 'hidden' | 'shown' | 'restored' | 'discarded' | 'resolved',
 ): Promise<Response | undefined> {
   const holder = await lockHolder('default', ctx.db(), `${collection}/${slug}`);
   if (!holder || holder.userId === session?.user.id) return undefined;

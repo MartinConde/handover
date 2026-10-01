@@ -56,6 +56,20 @@ test('discarding a draft drops the row and commits nothing', async () => {
   expect(publish).not.toHaveBeenCalled();
 });
 
+test('discarding waits for the editor who has the entry open', async () => {
+  discardDraft.mockClear();
+  state.holder = { userId: 'someone-else', name: 'Anna Berg', expiresAt: 1755864120000 };
+
+  const res = await DELETE(ctx('drafts/listings/mill-house'));
+
+  expect(res.status).toBe(409);
+  expect(await res.text()).toBe(
+    'Anna Berg is editing this entry — it can be discarded once they are done',
+  );
+  expect(discardDraft).not.toHaveBeenCalled();
+  state.holder = undefined;
+});
+
 test('discarding a draft while the repository is unreachable answers 503 with its message', async () => {
   drifted();
   const message = 'The GitHub App cannot see acme/site.';

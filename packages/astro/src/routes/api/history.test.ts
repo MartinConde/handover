@@ -208,6 +208,26 @@ test('the answers to a conflict are written for the entry', async () => {
   );
 });
 
+test('answering a conflict waits for the editor who has the entry open', async () => {
+  conflicted();
+  resolveConflict.mockClear();
+  state.holder = { userId: 'someone-else', name: 'Anna Berg', expiresAt: 1755864120000 };
+
+  const res = await POST(
+    answers([
+      { path: 'rooms', locale: 'en', side: 'ours' },
+      { path: 'location', locale: 'en', side: 'theirs' },
+    ]),
+  );
+
+  expect(res.status).toBe(409);
+  expect(await res.text()).toBe(
+    'Anna Berg is editing this entry — it can be resolved once they are done',
+  );
+  expect(resolveConflict).not.toHaveBeenCalled();
+  state.holder = undefined;
+});
+
 test('a half-answered conflict is refused and nothing is written', async () => {
   conflicted();
 

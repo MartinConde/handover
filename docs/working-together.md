@@ -33,8 +33,8 @@ What the lock takes away is everything that writes to any of the entry's files: 
 the second language's column, the web address, **Publish…**, and the two answers to a
 language with no file yet. Reading it, switching language and opening it side by side are
 not edits and still work. The same rule holds outside the editor — **an open entry is
-blocked for everyone else**: Rename, Delete, Hide and Show on the list, and Restore from
-the Deleted view or the Activity log, all answer *Anna Berg is editing this entry — it can
+blocked for everyone else**: Rename, Delete, Hide and Show on the list, Discard and Resolve in
+*Unpublished changes*, and Restore from the Deleted view or the Activity log, all answer *Anna Berg is editing this entry — it can
 be renamed once they are done* rather than writing under her.
 
 Changing the account's [interface language](interface-language.md) while an entry is open updates

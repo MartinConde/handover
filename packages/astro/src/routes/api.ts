@@ -386,7 +386,7 @@ export const POST: APIRoute = async ({ params, request, url, locals }) => {
     return answering(() => restoreVersion(ctx, restored[1], restored[2], request, session));
   const settling = groups(params.path, CONFLICT);
   if (settling)
-    return answering(() => resolve(ctx, settling[1], settling[2], request), {
+    return answering(() => resolve(ctx, settling[1], settling[2], request, session), {
       repository: 'CONFLICT_REPOSITORY_UNAVAILABLE',
     });
   const answered = groups(params.path, DRIFT);
