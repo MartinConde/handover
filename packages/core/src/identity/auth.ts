@@ -1,4 +1,5 @@
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
+import { getIP } from 'better-auth/api';
 import type { BetterAuthOptions } from 'better-auth/minimal';
 import { betterAuth } from 'better-auth/minimal';
 import { createAccessControl } from 'better-auth/plugins/access';
@@ -123,7 +124,12 @@ export function authOptions(siteId: string, db: Db, config: AuthConfig): BetterA
     // would link an address GitHub has not verified, so anybody could claim a member's email.
     account: { accountLinking: { enabled: true } },
     // `enabled` defaults to `NODE_ENV === 'production'`, which a Worker never sets.
-    rateLimit: { enabled: true, storage: 'database' },
+    rateLimit: {
+      enabled: true,
+      storage: 'database',
+      // Its key holds the token, a row per guess; `createAuth` keeps one bucket per address instead.
+      customRules: { '/reset-password/*': false },
+    },
     // An expired OAuth state has nowhere to route back to but Better Auth's own error page.
     onAPIError: { errorURL: (config.basePath ?? AUTH_BASE_PATH).replace(/\/api\/auth$/, '') },
     // Impersonation would let an owner act as anybody with the log naming that person.
@@ -220,9 +226,42 @@ export interface MemberApi {
 export const memberApi = (_siteId: string, auth: Auth): MemberApi =>
   auth.api as unknown as MemberApi;
 
+/** A mailed reset link is opened once; ten a minute from one address is somebody guessing. */
+const RESET_LINKS = { window: 60, max: 10 };
+
+/** One row per address, bumped in one statement so parallel requests cannot share a count. */
+async function resetLinkRefused(db: Db, request: Request, options: BetterAuthOptions) {
+  const { rateLimit: table } = authTables;
+  const now = Date.now();
+  const expired = sql`${table.lastRequest} <= ${now - RESET_LINKS.window * 1000}`;
+  const [row] = await db
+    .insert(table)
+    .values({
+      id: crypto.randomUUID(),
+      key: `${getIP(request, options) ?? 'no-trusted-ip'}|/reset-password/*`,
+      count: 1,
+      lastRequest: now,
+    })
+    .onConflictDoUpdate({
+      target: table.key,
+      set: {
+        count: sql`CASE WHEN ${expired} THEN 1 ELSE ${table.count} + 1 END`,
+        lastRequest: sql`CASE WHEN ${expired} THEN ${now} ELSE ${table.lastRequest} END`,
+      },
+    })
+    .returning({ count: table.count, lastRequest: table.lastRequest });
+  if (!row || row.count <= RESET_LINKS.max) return undefined;
+  const retry = Math.ceil((row.lastRequest + RESET_LINKS.window * 1000 - now) / 1000);
+  return Response.json(
+    { message: 'Too many requests. Please try again later.' },
+    { status: 429, headers: { 'X-Retry-After': String(retry) } },
+  );
+}
+
 /** Per request only: a singleton contending with per-request instances over D1 hangs dev. */
 export function createAuth(siteId: string, db: Db, config: AuthConfig): Auth {
-  const auth = betterAuth(authOptions(siteId, db, config));
+  const options = authOptions(siteId, db, config);
+  const auth = betterAuth(options);
   const handler = auth.handler;
   // Plugin administration stays behind the guarded MemberApi, never open to HTTP callers.
   auth.handler = async (request) => {
@@ -246,7 +285,10 @@ export function createAuth(siteId: string, db: Db, config: AuthConfig): Auth {
             path,
           ) ||
             ['/get-session', '/error'].includes(path));
-    return allowed ? handler(request) : new Response('Not found', { status: 404 });
+    if (!allowed) return new Response('Not found', { status: 404 });
+    if (request.method === 'GET' && path.startsWith('/reset-password/'))
+      return (await resetLinkRefused(db, request, options)) ?? handler(request);
+    return handler(request);
   };
   return auth;
 }

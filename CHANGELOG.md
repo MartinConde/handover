@@ -4,6 +4,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Security:** opening password-reset links is limited to 10 a minute from one address, across
+  links. Before, each link had its own counter, so there was no limit, and every request added a
+  row to `rate_limit`.
 - **Security:** the sign-in link form answers a member's address as fast as a stranger's, and the
   same when the mail cannot be sent. Before, a slower answer or a 500 said the address had an
   account. The mail now goes out after the answer.

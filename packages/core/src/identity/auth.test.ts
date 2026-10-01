@@ -321,6 +321,20 @@ test('a reset for an unknown email answers the same and mails nothing', async ()
   expect(resetLinks).toEqual([]);
 });
 
+// Better Auth buckets on the whole path, so every guessed token was a fresh bucket and a new row.
+test('opening reset links from one address is limited across tokens, in one row', async () => {
+  emailing();
+
+  const statuses: number[] = [];
+  for (let i = 1; i <= 11; i += 1)
+    statuses.push((await open(`${SITE}${AUTH_BASE_PATH}/reset-password/guess${i}`)).status);
+  const rows = await binding.prepare('SELECT key FROM rate_limit').all();
+
+  expect(statuses.slice(0, 10)).not.toContain(429);
+  expect(statuses[10]).toBe(429);
+  expect(rows.results).toHaveLength(1);
+});
+
 // An invited row has no `account` at all, and the reset is what gives it one.
 test('an invited user with no account row sets a password and signs in with it', async () => {
   emailing();

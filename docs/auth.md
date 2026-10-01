@@ -145,8 +145,9 @@ account state.
 ## Signing in too often
 
 Password sign-in allows **3 attempts per 10 seconds** from one address, then answers `429` and the
-login says so; asking for an emailed link is limited separately, at 5 a minute. Both counters live
-in the `rate_limit` table in D1, so they are shared across the Worker's isolates rather than being
+login says so; asking for an emailed link is limited separately, at 5 a minute, and opening
+password-reset links at 10 a minute, whichever links they are. The counters live
+in the `rate_limit` table in D1, one row per address and limit, so they are shared across the Worker's isolates rather than being
 per-isolate and meaningless. The address is read from `cf-connecting-ip`, which Cloudflare writes
 and a caller cannot send in.
 
