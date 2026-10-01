@@ -15,7 +15,7 @@ function site(files: Record<string, string>) {
 }
 
 const WHOAMI = JSON.stringify({ loggedIn: true, accounts: [{ id: 'acc0unt1d', name: 'Yours' }] });
-const D1_LIST = JSON.stringify([{ uuid: 'db-uuid', name: 'my-site' }]);
+const D1_LIST = JSON.stringify([{ uuid: '3f2b8c1d-6a4e-4f7b-9c2d-1e5a7b9c0d4f', name: 'my-site' }]);
 interface CloudState {
   database?: boolean;
   bucket?: boolean;
@@ -289,7 +289,7 @@ test('init creates the database and the bucket, wires them up and seeds the owne
   expect(config).toContain('"name": "my-site"');
   expect(config).toContain('"binding": "DB"');
   expect(config).toContain('"database_name": "my-site"');
-  expect(config).toContain('"database_id": "db-uuid"');
+  expect(config).toContain('"database_id": "3f2b8c1d-6a4e-4f7b-9c2d-1e5a7b9c0d4f"');
   expect(config).toContain('"R2_ACCOUNT_ID": "acc0unt1d"');
   expect(config).toContain('"R2_BUCKET": "my-site-media"');
   expect(readFileSync(join(cwd, 'drizzle.config.ts'), 'utf8')).toContain(
@@ -373,14 +373,14 @@ test('init leaves a wrangler config it did not write alone and prints the block 
   expect(code).toBe(1);
   expect(readFileSync(join(cwd, 'wrangler.jsonc'), 'utf8')).toBe(existing);
   expect(out).toContain('wrangler.jsonc is yours');
-  expect(out).toContain('"database_id": "db-uuid"');
+  expect(out).toContain('"database_id": "3f2b8c1d-6a4e-4f7b-9c2d-1e5a7b9c0d4f"');
   expect(out).toContain('npx handover init you@example.com');
   expect(ran.some((a) => a.includes('migrations'))).toBe(false);
   expect(ran.some((a) => a.includes('execute'))).toBe(false);
 
   writeFileSync(
     join(cwd, 'wrangler.jsonc'),
-    `{ "name": "theirs", "vars": { "R2_ACCOUNT_ID": "acc0unt1d", "R2_BUCKET": "my-site-media" }, "d1_databases": [{ "binding": "DB", "database_name": "my-site", "database_id": "db-uuid" }], "r2_buckets": [{ "binding": "MEDIA_UPLOADS", "bucket_name": "my-site-uploads" }] }\n`,
+    `{ "name": "theirs", "vars": { "R2_ACCOUNT_ID": "acc0unt1d", "R2_BUCKET": "my-site-media" }, "d1_databases": [{ "binding": "DB", "database_name": "my-site", "database_id": "3f2b8c1d-6a4e-4f7b-9c2d-1e5a7b9c0d4f" }], "r2_buckets": [{ "binding": "MEDIA_UPLOADS", "bucket_name": "my-site-uploads" }] }\n`,
   );
   const resumed: string[][] = [];
   const result = await run(['init', 'you@example.com'], cwd, resumed, cloud);
@@ -425,7 +425,7 @@ test.each([
 
 test('init accepts matching user-owned Wrangler and Drizzle configs without rewriting them', async () => {
   const wrangler =
-    '{ "name": "custom-worker", "vars": { "R2_ACCOUNT_ID": "acc0unt1d", "R2_BUCKET": "my-site-media" }, "d1_databases": [{ "binding": "DB", "database_name": "my-site", "database_id": "db-uuid" }], "r2_buckets": [{ "binding": "MEDIA_UPLOADS", "bucket_name": "my-site-uploads" }] }\n';
+    '{ "name": "custom-worker", "vars": { "R2_ACCOUNT_ID": "acc0unt1d", "R2_BUCKET": "my-site-media" }, "d1_databases": [{ "binding": "DB", "database_name": "my-site", "database_id": "3f2b8c1d-6a4e-4f7b-9c2d-1e5a7b9c0d4f" }], "r2_buckets": [{ "binding": "MEDIA_UPLOADS", "bucket_name": "my-site-uploads" }] }\n';
   const drizzle = [
     "import { defineConfig } from 'drizzle-kit';",
     'export default defineConfig({',
@@ -559,14 +559,14 @@ test('init resumes after completed migrations moved into place but before their 
       version: 1,
       siteName: 'my-site',
       accountId: 'acc0unt1d',
-      databaseId: 'db-uuid',
+      databaseId: '3f2b8c1d-6a4e-4f7b-9c2d-1e5a7b9c0d4f',
       bucketName: 'my-site-media',
       bucketReady: true,
       ownerEmail: 'you@example.com',
       ownerId: '10516ab2-5108-42a7-9bc2-3828f5a416ba',
     })}\n`,
     'wrangler.jsonc':
-      '{ "vars": { "R2_ACCOUNT_ID": "acc0unt1d", "R2_BUCKET": "my-site-media" }, "d1_databases": [{ "binding": "DB", "database_name": "my-site", "database_id": "db-uuid" }], "r2_buckets": [{ "binding": "MEDIA_UPLOADS", "bucket_name": "my-site-uploads" }] }\n',
+      '{ "vars": { "R2_ACCOUNT_ID": "acc0unt1d", "R2_BUCKET": "my-site-media" }, "d1_databases": [{ "binding": "DB", "database_name": "my-site", "database_id": "3f2b8c1d-6a4e-4f7b-9c2d-1e5a7b9c0d4f" }], "r2_buckets": [{ "binding": "MEDIA_UPLOADS", "bucket_name": "my-site-uploads" }] }\n',
     'drizzle.config.ts':
       "export default { dialect: 'sqlite', schema: './node_modules/astro-handover/dist/schema.js', out: './migrations' };\n",
   });
@@ -582,6 +582,34 @@ test('init resumes after completed migrations moved into place but before their 
   expect(ran.some((argv) => argv[0] === 'drizzle-kit' && argv[1] === 'generate')).toBe(false);
   expect(readFileSync(join(cwd, 'migrations/0000_generated.sql'), 'utf8')).toBe('-- generated\n');
   expect(migration(cwd)).toEqual({ schemaVersion: SCHEMA_VERSION });
+});
+
+// The record is a file in the repository; a planted one must not write its ownerId into SQL.
+test('init refuses a record whose owner id is not a UUID, and runs nothing', async () => {
+  const cwd = site({
+    'package.json': '{ "name": "my-site" }',
+    '.handover-init.json': `${JSON.stringify({
+      version: 1,
+      siteName: 'my-site',
+      accountId: 'acc0unt1d',
+      databaseId: '3f2b8c1d-6a4e-4f7b-9c2d-1e5a7b9c0d4f',
+      bucketName: 'my-site-media',
+      bucketReady: true,
+      ownerEmail: 'you@example.com',
+      ownerId:
+        "00000000-0000-4000-8000-000000000000', 'x', 'you@example.com', 1, 'owner', 0, 0), ('11111111-1111-4111-8111-111111111111', 'attacker', 'attacker@evil.test', 1, 'owner', 0, 0) ON CONFLICT DO NOTHING; --",
+    })}\n`,
+  });
+  const ran: string[][] = [];
+
+  const { code } = await run(['init', 'you@example.com'], cwd, ran, {
+    database: true,
+    bucket: true,
+    uploads: true,
+  });
+
+  expect(code).toBe(1);
+  expect(ran.filter((argv) => argv[2] === 'execute')).toEqual([]);
 });
 
 function migration(cwd: string) {

@@ -170,6 +170,9 @@ function initRecord(env: Env): InitRecord | undefined {
   return readJson(join(env.cwd, INIT_STATE)) as InitRecord | undefined;
 }
 
+// Both ids are written into SQL and wrangler config, and the record is a file anybody can commit.
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 function validateInitRecord(record: InitRecord | undefined, name: string, email: string): void {
   if (!record) return;
   if (
@@ -178,11 +181,10 @@ function validateInitRecord(record: InitRecord | undefined, name: string, email:
     record.bucketName !== `${name}-media` ||
     record.ownerEmail !== email ||
     typeof record.accountId !== 'string' ||
-    (record.databaseId !== undefined && typeof record.databaseId !== 'string') ||
+    (record.databaseId !== undefined && !UUID.test(String(record.databaseId))) ||
     typeof record.bucketReady !== 'boolean' ||
     (record.uploadsReady !== undefined && typeof record.uploadsReady !== 'boolean') ||
-    typeof record.ownerId !== 'string' ||
-    !record.ownerId
+    !UUID.test(String(record.ownerId))
   )
     throw new Error(
       `The interrupted initialization belongs to ${record.siteName}/${record.ownerEmail}, not ${name}/${email}. Nothing changed.`,

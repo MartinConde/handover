@@ -4,6 +4,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Security:** `init` refuses a `.handover-init.json` whose owner or database id is not a UUID.
+  Before, a committed record could put its own SQL into the owner seed.
 - **Security:** *Resend invite*, *Revoke invite* and *Remove* make every earlier emailed link to
   that address stop working. Before, an old invite link still signed in for three days, including
   on a row invited again after a removal.
