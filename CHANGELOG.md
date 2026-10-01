@@ -4,6 +4,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- The admin page now only runs scripts from its own bundle, and it and its assets are sent with
+  `X-Content-Type-Options: nosniff`; the page also sends no referrer to other sites. A site's
+  admin screen that loads a script from a CDN must import it instead.
 - **Security:** *Continue with GitHub* no longer signs in to a member's account when GitHub has
   not verified that member's address on the GitHub account. Before, anybody could add the
   owner's email to their own GitHub account and sign in as the owner.

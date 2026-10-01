@@ -46,8 +46,6 @@ test('the shell HTML links only the admin entry and its stylesheet closure', asy
   const res = await GET(ctx(undefined));
   expect(res.status).toBe(200);
   expect(res.headers.get('content-type')).toBe('text/html; charset=utf-8');
-  expect(res.headers.get('content-security-policy')).toBe("frame-ancestors 'none'");
-  expect(res.headers.get('x-frame-options')).toBe('DENY');
   const html = await res.text();
   expect(html).toContain('<script type="module" src="/admin/_assets/admin.js"></script>');
   expect(html).toContain('<link rel="stylesheet" href="/admin/_assets/admin.css">');
@@ -58,6 +56,16 @@ test('the shell HTML links only the admin entry and its stylesheet closure', asy
   expect(html).toContain(
     `<div id="app" data-base='' data-methods='{"emailLink":false,"github":false}'></div>`,
   );
+});
+
+test('the shell runs only its own scripts, cannot be framed or sniffed, and keeps its address in', async () => {
+  const res = await GET(ctx(undefined));
+  expect(res.headers.get('content-security-policy')).toBe(
+    "script-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+  );
+  expect(res.headers.get('x-frame-options')).toBe('DENY');
+  expect(res.headers.get('x-content-type-options')).toBe('nosniff');
+  expect(res.headers.get('referrer-policy')).toBe('same-origin');
 });
 
 test('any non-asset path gets the same shell', async () => {
@@ -107,6 +115,7 @@ test('entry, shared, Canvas, and lazy assets are served immutable with their con
   expect(js.headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
   expect(js.headers.get('vary')).toBeNull();
   expect(js.headers.get('content-security-policy')).toBeNull();
+  expect(js.headers.get('x-content-type-options')).toBe('nosniff');
   expect(await js.text()).toBe('console.log("shell")');
   const css = await GET(ctx('_assets/shared.css'));
   expect(css.headers.get('content-type')).toBe('text/css; charset=utf-8');

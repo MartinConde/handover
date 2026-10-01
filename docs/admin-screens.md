@@ -175,6 +175,10 @@ two seconds a build. A site with no screens builds nothing extra and ships the a
 the rebuild, reload the page. There is no hot reload — the admin is one bundle, not a module
 graph the site's dev server owns.
 
+The admin only runs scripts from its own bundle (`Content-Security-Policy: script-src 'self'`).
+Import a library into your component rather than loading it from a CDN with a `<script>` tag;
+a remote or inline script is refused.
+
 Three things stop the build, each naming the file:
 
 - a `component` path that is not there, refused before anything is built

@@ -95,6 +95,7 @@ export const GET: APIRoute = ({ params, request }) => {
       headers: {
         'content-type': `${type}; charset=utf-8`,
         'cache-control': 'public, max-age=31536000, immutable',
+        'x-content-type-options': 'nosniff',
       },
     });
   }
@@ -106,8 +107,12 @@ export const GET: APIRoute = ({ params, request }) => {
     headers: {
       'content-type': 'text/html; charset=utf-8',
       'cache-control': 'private, no-store',
-      'content-security-policy': "frame-ancestors 'none'",
+      // Scripts only: the admin shows media from other hosts and frames this site's own previews.
+      'content-security-policy':
+        "script-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
       'x-frame-options': 'DENY',
+      'x-content-type-options': 'nosniff',
+      'referrer-policy': 'same-origin',
       vary: 'Cookie, Accept-Language',
     },
   });
