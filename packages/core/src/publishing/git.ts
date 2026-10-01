@@ -203,8 +203,9 @@ export function createGitClient(
   const { fetch = globalThis.fetch, now = Date.now } = deps;
   const perGitHub = tokens.get(fetch) ?? new Map<string, TokenSlot>();
   tokens.set(fetch, perGitHub);
-  const slot = perGitHub.get(`${app.appId}/${app.installationId}`) ?? {};
-  perGitHub.set(`${app.appId}/${app.installationId}`, slot);
+  const tokenKey = `${app.appId}/${app.installationId}/${app.repo}`;
+  const slot = perGitHub.get(tokenKey) ?? {};
+  perGitHub.set(tokenKey, slot);
   const perBranch =
     successors.get(fetch) ?? new Map<string, Map<string, { sha: string; at: number }>>();
   successors.set(fetch, perBranch);
@@ -225,12 +226,22 @@ export function createGitClient(
     });
   }
 
+  const unreachable = `The GitHub App cannot see ${app.owner}/${app.repo}. Add the repository to installation ${app.installationId}, or correct the repository name.`;
+
   async function token(): Promise<string> {
     if (slot.cached && slot.cached.expiresAt - now() > 60_000) return slot.cached.token;
     slot.pending ??= (async () => {
+      // Narrower than the installation: a leaked token reaches this repository's files and no more.
       const res = await api(`/app/installations/${app.installationId}/access_tokens`, {
         method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          repositories: [app.repo],
+          permissions: { contents: 'write', metadata: 'read' },
+        }),
       });
+      // GitHub refuses a token for a repository outside the installation with a 422.
+      if (res.status === 422) throw new RepoUnreachableError(unreachable);
       if (!res.ok) throw new Error(`GitHub installation token failed: ${res.status}`);
       const body = (await res.json()) as { token: string; expires_at: string };
       slot.cached = { token: body.token, expiresAt: Date.parse(body.expires_at) };
@@ -252,10 +263,7 @@ export function createGitClient(
   let reachable: Promise<boolean> | undefined;
   async function assertRepoReachable(): Promise<void> {
     reachable ??= request(repo).then((res) => res.status !== 404);
-    if (!(await reachable))
-      throw new RepoUnreachableError(
-        `The GitHub App cannot see ${app.owner}/${app.repo}. Add the repository to installation ${app.installationId}, or correct the repository name.`,
-      );
+    if (!(await reachable)) throw new RepoUnreachableError(unreachable);
   }
 
   async function json<T>(path: string, init: RequestInit = {}, what: string): Promise<T> {

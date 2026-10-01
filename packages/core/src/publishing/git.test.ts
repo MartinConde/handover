@@ -228,6 +228,66 @@ test('two clients on the same GitHub share one installation token', async () => 
   expect(gh.minted()).toBe(1);
 });
 
+/** Answers the token request only, recording what it asked for. */
+function tokenOnly(status = 201) {
+  const asked: unknown[] = [];
+  const fetch = (async (url: string, init: RequestInit = {}) => {
+    if (url.endsWith('/access_tokens')) {
+      asked.push(init.body ? JSON.parse(String(init.body)) : undefined);
+      return status === 201
+        ? Response.json(
+            { token: `ghs_${asked.length}`, expires_at: '2099-01-01T00:00:00Z' },
+            { status },
+          )
+        : Response.json(
+            { message: 'There is at least one repository that does not exist' },
+            { status },
+          );
+    }
+    return Response.json({ sha: 'blob', content: '' });
+  }) as unknown as typeof globalThis.fetch;
+  return { fetch, asked };
+}
+
+test('the installation token reaches only the site repository and only its contents', async () => {
+  const gh = tokenOnly();
+
+  await createGitClient('default', { ...app, repo: 'site-only' }, { fetch: gh.fetch }).getFile(
+    'a.yaml',
+  );
+
+  expect(gh.asked).toEqual([
+    { repositories: ['site-only'], permissions: { contents: 'write', metadata: 'read' } },
+  ]);
+});
+
+test('a repository the installation does not hold is named when the token is refused', async () => {
+  const gh = tokenOnly(422);
+
+  await expect(
+    createGitClient('default', { ...app, repo: 'elsewhere' }, { fetch: gh.fetch }).getFile(
+      'a.yaml',
+    ),
+  ).rejects.toThrow(
+    new RepoUnreachableError(
+      'The GitHub App cannot see acme/elsewhere. Add the repository to installation 67890, or correct the repository name.',
+    ),
+  );
+});
+
+test('two repositories on one installation each get their own token', async () => {
+  const gh = tokenOnly();
+
+  await createGitClient('default', { ...app, repo: 'first' }, { fetch: gh.fetch }).getFile(
+    'a.yaml',
+  );
+  await createGitClient('default', { ...app, repo: 'second' }, { fetch: gh.fetch }).getFile(
+    'a.yaml',
+  );
+
+  expect(gh.asked).toHaveLength(2);
+});
+
 // Records the ref PATCH body so a test can prove the update is never forced.
 function fakeGitData(opts: { headMovesTo?: string } = {}) {
   const bodies: Record<string, unknown> = {};

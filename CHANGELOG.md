@@ -4,6 +4,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- The GitHub token Handover asks for reaches only the site's repository, with contents access and
+  nothing else, even when the GitHub App is installed on more repositories.
 - A preview page with many unclosed `<a` tags no longer takes seconds of Worker time to have its
   links pointed at the preview.
 - `init` adds `.dev.vars*` and `.env*` to `.gitignore` (creating it if needed), so the secrets
