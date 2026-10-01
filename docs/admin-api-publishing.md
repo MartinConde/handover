@@ -88,8 +88,9 @@ publish, and `released` names the entries whose hold this publish took off. `409
 repository since its draft was loaded — the body is `{ "error", "paths" }`, naming those
 files so the drawer can mark them and offer the way out — or when the branch moved while
 the commit was being written, which answers with a plain sentence and no paths. `422`
-when a stored draft is not everything its collection schema needs, with the same
-`{ "error", "paths" }` body, and `409` with `{ "error", "paths", "reason": "drift" }` when a
+when a stored draft is not everything its collection schema needs, or holds something the build
+would stop on (a `<<` key, a character such as U+FFFE, a `_ref` to a global the site does not
+declare), with the same `{ "error", "paths" }` body, and `409` with `{ "error", "paths", "reason": "drift" }` when a
 pending file belongs to an entry whose languages have
 [drifted apart](i18n.md#a-block-one-language-only-has) — `reason` is what tells that from a
 file somebody else changed, since the three-way view or Discard is the way out of one and
@@ -98,8 +99,7 @@ the entry's own drift panel is the way out of the other. `409` with
 entry whose files disagree about the language it is written in
 ([The source language](source-language.md#when-the-files-disagree-about-the-source-language)); the drawer's own check
 normally holds such an entry back before the request is made. In all
-of those cases nothing was written and no row was cleared. A path no collection owns —
-`redirects.yaml`, a global — has no schema to be held to and is never the reason for a `422`.
+of those cases nothing was written and no row was cleared. `redirects.yaml` has no schema to be held to, so only what the build would stop on refuses it.
 
 Publish failures retain `error` as diagnostic compatibility text and add a stable `code` for UI
 presentation: `PUBLISH_INCOMPLETE` (`422`), `PUBLISH_DRIFT` (`409`), `PUBLISH_SOURCE_UNRESOLVED` (`409`), `PUBLISH_CONFLICT` (`409`),
@@ -133,7 +133,8 @@ stored draft lacks for the collection schema, and whether it could be left out:
 ```
 
 `reason` is `published` or `source` — the source also covers an entry whose files disagree
-about it. `problems` is what `POST /admin/api/publish` answers `422 PUBLISH_INCOMPLETE` over.
+about it. `problems` is what `POST /admin/api/publish` answers `422 PUBLISH_INCOMPLETE` over;
+one the build would stop on has an empty `path`.
 
 **Past a selection it would refuse to publish, it refuses nothing, and nothing refuses because of it.** The lint is a request of its own so
 that it has its own CPU: a publish too heavily cross-linked to read in one pass costs a check

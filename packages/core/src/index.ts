@@ -48,11 +48,13 @@ export {
 export type { LocaleSeed } from './content/entry-format.js';
 export {
   FORMAT_VERSION,
+  loadedEntry,
   parseEntry,
   stringifyEntry,
   TRANSLATED_PROPS,
   timestampErrors,
   withSource,
+  yamlErrors,
 } from './content/entry-format.js';
 export type { AnsweredPaths } from './content/field-text.js';
 export {

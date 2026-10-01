@@ -113,6 +113,53 @@ test('publishing is refused when a stored draft is not everything the schema nee
   expect(publishDrafts).not.toHaveBeenCalled();
 });
 
+// Each passes the schema, and each stops Astro's build until the publish is reverted.
+const millHouse = 'rooms: 3\naddress:\n  street: "Mill Lane"\n';
+test.each([
+  [
+    'a merge key',
+    'src/content/listings/en/mill-house.yaml',
+    `title: "Mill"\n${millHouse}<<: "boom"\n`,
+  ],
+  [
+    'U+FFFE in a block of text',
+    'src/content/listings/en/mill-house.yaml',
+    `title: |-\n  Mill\uFFFE\n  House\n${millHouse}`,
+  ],
+  [
+    'a _ref to a global the site does not declare',
+    'src/content/pages/en/home.yaml',
+    'title: "Home"\nblocks:\n  - _type: "hero"\n    _id: "q7r8s9t0"\n    heading: "Hi"\n    _ref: "globals/nope"\n',
+  ],
+])('a draft the build would refuse is refused at publish: %s', async (_, path, contents) => {
+  publishDrafts.mockClear();
+  readyDrafts.mockImplementationOnce(async () => [{ path, contents, updatedAt: 1755864000000 }]);
+
+  const res = await POST(post('publish', ''));
+
+  expect(res.status).toBe(422);
+  expect(((await res.json()) as { paths: string[] }).paths).toEqual([path]);
+  expect(publishDrafts).not.toHaveBeenCalled();
+});
+
+// The publish reads without merging; the build merges, and would put the link on the site.
+test('a merge key cannot carry a javascript: link into a global', async () => {
+  publishDrafts.mockClear();
+  readyDrafts.mockImplementationOnce(async () => [
+    {
+      path: 'src/content/globals/en/site.yaml',
+      contents:
+        'footerText: "Coastal Homes"\n<<:\n  button:\n    type: "url"\n    href: "javascript:alert(document.domain)"\n',
+      updatedAt: 1755864000000,
+    },
+  ]);
+
+  const res = await POST(post('publish', ''));
+
+  expect(res.status).toBe(422);
+  expect(publishDrafts).not.toHaveBeenCalled();
+});
+
 // redirects.yaml and the globals share the prefix and belong to no collection.
 test('a pending file no collection owns is not held to a collection schema', async () => {
   publishDrafts.mockClear();

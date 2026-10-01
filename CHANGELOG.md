@@ -4,6 +4,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Security:** a publish refuses a file Astro's build would stop on: a `<<` key, U+FFFE or
+  U+FFFF, or a `_ref` to a global the site does not declare. Before, an editor could publish one
+  and every deploy after it failed until the publish was reverted. A save refuses a `<<` key and
+  takes U+FFFE and U+FFFF out of text.
+- **Security:** the build holds each global to its schema in `cms.config.ts`, reading the file as
+  Astro does, `<<` merges included. Before, a merge could put a value the schema refuses, such as
+  a `javascript:` link, on the site.
 - **Security:** creating an entry from a template accepts only a template name the collection
   offers. Before, an editor could name any `.yaml` file in the site's repository and read it
   back as the new entry.

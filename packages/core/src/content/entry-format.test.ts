@@ -211,6 +211,20 @@ test('strings are normalised so the literal block never falls back to quotes', (
   expect(parseEntry('default', out)).toEqual({ body: 'line one\n\nline two' });
 });
 
+// Astro reads content with js-yaml, which stops on U+FFFE and U+FFFF inside a `|` block.
+test('U+FFFE and U+FFFF are taken out of a string before it is written', () => {
+  expect(stringifyEntry('default', { body: 'Mill\uFFFE\nHouse\uFFFF' })).toBe(
+    'body: |-\n  Mill\n  House\n',
+  );
+});
+
+// js-yaml merges a `<<` key into its map, so the build would read another entry than was saved.
+test('a "<<" key is rejected at serialise time', () => {
+  expect(() => stringifyEntry('default', { title: 'Footer', links: { '<<': 'boom' } })).toThrow(
+    'links.<<',
+  );
+});
+
 test('an array directly inside an array is rejected at serialise time', () => {
   expect(() =>
     stringifyEntry('default', { blocks: [{ _id: 'a0000000', columns: [['x']] }] }),

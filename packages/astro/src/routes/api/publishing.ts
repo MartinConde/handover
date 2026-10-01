@@ -17,7 +17,9 @@ import {
   publishDrafts,
   RefMovedError,
   readyDrafts,
+  refErrors,
   runChecks,
+  yamlErrors,
 } from '@handover/core';
 import type { RequestContext } from '../../environment.js';
 import { mediaStore, workerBuilds } from '../../environment.js';
@@ -169,9 +171,17 @@ const schemaFor = (path: string) => {
   return schemaOf(collection, slug);
 };
 
+// What the build refuses that no schema sees comes first: it would fail every deploy after this one.
 const problemsOf = (row: Pick<Draft, 'path' | 'contents'>) => {
+  if (!row.contents) return [];
+  const unbuildable = [
+    ...yamlErrors('default', row.path, row.contents),
+    ...refErrors('default', row.path, row.contents, Object.keys(config.globals ?? {})),
+  ].map((message) => ({ path: '', message }));
   const schema = schemaFor(row.path);
-  return schema && row.contents ? entryProblems(schema, parseEntry('default', row.contents)) : [];
+  return schema
+    ? [...unbuildable, ...entryProblems(schema, parseEntry('default', row.contents))]
+    : unbuildable;
 };
 
 /** One resolver for the checks and the commit, so the lint is over exactly what goes out. */

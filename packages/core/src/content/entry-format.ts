@@ -9,6 +9,10 @@ export function parseEntry(_siteId: string, contents: string): unknown {
   return data;
 }
 
+/** The file as Astro's loader reads it, `<<` merged, for the build's checks. */
+export const loadedEntry = (_siteId: string, contents: string): unknown =>
+  parse(contents, { merge: true });
+
 // Copied from js-yaml's timestamp.js: a plain scalar matching these is a Date to Astro's loader.
 const YAML_DATE = /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/;
 const YAML_TIMESTAMP =
@@ -41,6 +45,25 @@ export function timestampErrors(_siteId: string, path: string, contents: string)
       );
   };
   walk(parseDocument(contents).contents, '');
+  return errors;
+}
+
+// js-yaml's own list (loader.js), which Astro's loader stops on.
+const NON_PRINTABLE =
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: matching control characters is the point.
+  /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x84\x86-\x9F\uFFFE\uFFFF]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:[^\uD800-\uDBFF]|^)[\uDC00-\uDFFF]/;
+
+/** What Astro's js-yaml stops on or merges, where this package's parser reads it as plain data. */
+export function yamlErrors(_siteId: string, path: string, contents: string): string[] {
+  const errors = NON_PRINTABLE.test(contents)
+    ? [`${path}: holds a character Astro's YAML loader cannot read, such as U+FFFE`]
+    : [];
+  visit(parseDocument(contents), {
+    Pair(_key, pair) {
+      if (isScalar(pair.key) && pair.key.value === '<<' && pair.key.type === 'PLAIN')
+        errors.push(`${path}: "<<" is a merge key to Astro's YAML loader — rename it`);
+    },
+  });
   return errors;
 }
 
@@ -262,6 +285,11 @@ function canonical(value: unknown, path: string): unknown {
       return i === -1 ? RESERVED_KEYS.length : i;
     };
     keys.sort((a, b) => rank(a) - rank(b));
+    for (const k of keys)
+      if (k === '<<' || /[\uFFFE\uFFFF]/.test(k))
+        throw new Error(
+          `${path ? `${path}.${k}` : k}: Astro's YAML loader cannot read this key — rename it`,
+        );
     return Object.fromEntries(keys.map((k) => [k, canonical(obj[k], path ? `${path}.${k}` : k)]));
   }
   return value;
@@ -271,7 +299,7 @@ function canonical(value: unknown, path: string): unknown {
 function normalise(text: string): string {
   return text
     .replace(/\r\n/g, '\n')
-    .replace(/[^\n\t\x20-\uFFFF]/g, '')
+    .replace(/[^\n\t\x20-\uFFFD]/g, '')
     .replace(/[ \t]+$/gm, '')
     .replace(/\n+$/, '');
 }

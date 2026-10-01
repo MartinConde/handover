@@ -44,9 +44,11 @@ Handover always writes the same shape, so a one-field edit is a one-line diff:
 - two-space indent, no line folding
 - an array directly inside an array is not allowed — wrap the inner one in an object
   (`columns: [{ _id, blocks: [...] }]`)
+- a key named `<<`, or one holding U+FFFE or U+FFFF, is refused at save; U+FFFE and U+FFFF
+  are taken out of text. Astro's YAML loader would merge the one and stop on the other
 
 You can hand-edit a file in any valid YAML; Handover rewrites it in this shape on the
-next save.
+next save. Leave out `<<` merges: Handover reads `<<` as a plain key, and Astro merges it.
 
 ## Field types
 

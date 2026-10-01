@@ -25,7 +25,8 @@ export default defineConfig({
 ```
 
 They are also an ordinary collection in `src/content.config.ts`, so the build can read them.
-One schema for the folder — each file is held to its own by the admin and by the publish:
+One schema for the folder — each file is held to its own by the admin, the publish and the build,
+which stops on a global its schema refuses:
 
 ```ts
 globals: defineCollection({

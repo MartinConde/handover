@@ -12,6 +12,7 @@ import {
   type Form,
   formOf,
   indexFrom,
+  loadedEntry,
   mediaUsesFrom,
   modifiedFrom,
   parseEntry,
@@ -31,8 +32,10 @@ import {
 } from '@handover/core';
 import type { uiBuildConfig } from '@handover/ui/build.js';
 import type { AstroIntegration } from 'astro';
+import type { z } from 'astro/zod';
 import type { InlineConfig, Plugin, ViteDevServer } from 'vite';
 import { formSchema, type HandoverConfig, redirects } from './config.js';
+import { entryProblems } from './problems.js';
 
 export const NO_ADAPTER_MESSAGE =
   'astro-handover needs an SSR adapter: add `adapter: cloudflare()` from `@astrojs/cloudflare` to astro.config.';
@@ -269,24 +272,36 @@ export async function contentFiles(root: URL): Promise<ContentFile[]> {
   );
 }
 
+const GLOBAL_FILE = /^src\/content\/globals\/[^/]+\/([^/]+)\.yaml$/;
+
 /** Runs at `astro:config:done`: Astro's content sync would otherwise reach a bad file first. */
 export async function contentErrors(
   root: URL,
-  globals: Iterable<string> = [],
+  globals: Record<string, z.ZodType> = {},
   defaultLocale?: string,
 ): Promise<string[]> {
   const files = await contentFiles(root);
   const paths = new Set(files.map((f) => f.path));
   return [
     ...contentPathErrors('default', paths),
-    ...files.flatMap((f) => [
-      ...timestampErrors('default', f.path, f.contents),
-      ...refErrors('default', f.path, f.contents, globals),
-    ]),
+    ...files.flatMap((f) => {
+      const name = GLOBAL_FILE.exec(f.path)?.[1];
+      const schema = name && Object.hasOwn(globals, name) ? globals[name] : undefined;
+      return [
+        ...timestampErrors('default', f.path, f.contents),
+        ...refErrors('default', f.path, f.contents, Object.keys(globals)),
+        // Astro's own schema for globals cannot tell one file from another.
+        ...(schema
+          ? entryProblems(schema, loadedEntry('default', f.contents)).map(
+              (p) => `${f.path} › ${p.path}: ${p.message}`,
+            )
+          : []),
+      ];
+    }),
     // A declared global with no file is a Site settings card that opens nothing.
     ...(defaultLocale === undefined
       ? []
-      : [...globals]
+      : Object.keys(globals)
           .map((key) => [key, `src/content/globals/${defaultLocale}/${key}.yaml`] as const)
           .filter(([, path]) => !paths.has(path))
           .map(
@@ -404,11 +419,7 @@ export default function handover(cms: HandoverConfig): AstroIntegration {
               slash,
             }
           : undefined;
-        const errors = await contentErrors(
-          root,
-          Object.keys(cms.globals ?? {}),
-          cms.i18n.defaultLocale,
-        );
+        const errors = await contentErrors(root, cms.globals, cms.i18n.defaultLocale);
         if (errors.length) throw new Error(`\n${errors.join('\n')}`);
       },
       // A migrations/ behind the package's tables is caught here, not by the first query.
