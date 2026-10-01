@@ -1,4 +1,11 @@
 import { ContentError } from '@handover/core';
+import idleDirective from 'astro/runtime/client/idle.prebuilt.js';
+import loadDirective from 'astro/runtime/client/load.prebuilt.js';
+import mediaDirective from 'astro/runtime/client/media.prebuilt.js';
+import onlyDirective from 'astro/runtime/client/only.prebuilt.js';
+import visibleDirective from 'astro/runtime/client/visible.prebuilt.js';
+import islandScript from 'astro/runtime/server/astro-island.prebuilt.js';
+import islandScriptDev from 'astro/runtime/server/astro-island.prebuilt-dev.js';
 
 export const CANVAS_PROTOCOL = 1 as const;
 /** Keep in sync with the parent bridge's complete-address bound. */
@@ -300,10 +307,34 @@ const escapeHtml = (value: string) =>
 export const GATE = {
   'cache-control': 'private, no-store',
   'x-robots-tag': 'noindex, nofollow',
-  'content-security-policy': "frame-ancestors 'self'",
+  // A draft that reaches a raw-HTML sink would otherwise run with the owner's session.
+  'content-security-policy': "frame-ancestors 'self'; script-src 'self'",
   // A draft page's links would otherwise hand the preview's address to every site they point at.
   'referrer-policy': 'no-referrer',
 };
+
+// The only inline scripts Astro writes into a page: the island runtime and its directives.
+const ASTRO_SCRIPTS = [
+  islandScript,
+  islandScriptDev,
+  idleDirective,
+  loadDirective,
+  mediaDirective,
+  onlyDirective,
+  visibleDirective,
+];
+let rendered: Promise<string> | undefined;
+
+/** `GATE`'s policy for a rendered draft, with Astro's own scripts allowed by hash. */
+export function renderedPolicy(): Promise<string> {
+  rendered ??= Promise.all(
+    ASTRO_SCRIPTS.map(async (script) => {
+      const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(script));
+      return `'sha256-${btoa(String.fromCharCode(...new Uint8Array(digest)))}'`;
+    }),
+  ).then((hashes) => `${GATE['content-security-policy']} ${hashes.join(' ')}`);
+  return rendered;
+}
 
 export function canvasErrorDocument(manifest: CanvasErrorManifest): string {
   const message = escapeHtml(manifest.error.message);

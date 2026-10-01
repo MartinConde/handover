@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import {
   type AstroContent,
   type ContentSource,
@@ -6,6 +7,13 @@ import {
   globalsAt,
   menusAt,
 } from '@handover/core';
+import idleDirective from 'astro/runtime/client/idle.prebuilt.js';
+import loadDirective from 'astro/runtime/client/load.prebuilt.js';
+import mediaDirective from 'astro/runtime/client/media.prebuilt.js';
+import onlyDirective from 'astro/runtime/client/only.prebuilt.js';
+import visibleDirective from 'astro/runtime/client/visible.prebuilt.js';
+import islandScript from 'astro/runtime/server/astro-island.prebuilt.js';
+import islandScriptDev from 'astro/runtime/server/astro-island.prebuilt-dev.js';
 import { beforeEach, expect, test, vi } from 'vitest';
 import { preview } from './preview.js';
 
@@ -390,16 +398,29 @@ test.each([
   const { headers } = (await get(path)).result as Response;
   expect(headers.get('cache-control')).toBe('private, no-store');
   expect(headers.get('x-robots-tag')).toBe('noindex, nofollow');
-  expect(headers.get('content-security-policy')).toBe("frame-ancestors 'self'");
+  expect(headers.get('content-security-policy')).toBe("frame-ancestors 'self'; script-src 'self'");
   // A draft page's links would otherwise tell every site they point at the preview's address.
   expect(headers.get('referrer-policy')).toBe('no-referrer');
 });
 
-test('a rendered page carries the gate too', async () => {
+// A draft rendered through a site's raw-HTML sink runs with the owner's session; Astro's islands must not.
+const astroScripts = [
+  islandScript,
+  islandScriptDev,
+  idleDirective,
+  loadDirective,
+  mediaDirective,
+  onlyDirective,
+  visibleDirective,
+].map((script) => `'sha256-${createHash('sha256').update(script).digest('base64')}'`);
+
+test("a rendered page carries the gate too, allowing only its own and Astro's scripts", async () => {
   const { response } = await get('listings/mill-house');
   expect(response.headers.get('cache-control')).toBe('private, no-store');
   expect(response.headers.get('x-robots-tag')).toBe('noindex, nofollow');
-  expect(response.headers.get('content-security-policy')).toBe("frame-ancestors 'self'");
+  expect(response.headers.get('content-security-policy')).toBe(
+    `frame-ancestors 'self'; script-src 'self' ${astroScripts.join(' ')}`,
+  );
   expect(response.headers.get('referrer-policy')).toBe('no-referrer');
 });
 
@@ -589,7 +610,7 @@ test.each([
     expect((result as Response).headers.get('cache-control')).toBe('private, no-store');
     expect((result as Response).headers.get('x-robots-tag')).toBe('noindex, nofollow');
     expect((result as Response).headers.get('content-security-policy')).toBe(
-      "frame-ancestors 'self'",
+      "frame-ancestors 'self'; script-src 'self'",
     );
     expect((result as Response).headers.get('referrer-policy')).toBe('no-referrer');
   },

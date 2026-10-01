@@ -1,4 +1,5 @@
 import { type BrowserContext, expect, type Page } from '@playwright/test';
+import { renderedPolicy } from '../../src/canvas';
 
 type PreviewData = {
   title?: string;
@@ -92,7 +93,11 @@ export async function serveCanvasPreview(
   let posts = 0;
   await routes.route(pattern, async (route) => {
     if (get && route.request().method() === 'GET')
-      return route.fulfill({ contentType: 'text/html', body: get() });
+      return route.fulfill({
+        contentType: 'text/html',
+        headers: { 'content-security-policy': await renderedPolicy() },
+        body: get(),
+      });
     posts += 1;
     const encoded = new URLSearchParams(route.request().postData() ?? '');
     const snapshot = JSON.parse(encoded.get('snapshot') ?? '{}') as PreviewSnapshot;
@@ -127,6 +132,8 @@ export async function serveCanvasPreview(
         };
     await route.fulfill({
       contentType: 'text/html',
+      // The policy the real preview sends, so every Canvas test runs under it.
+      headers: { 'content-security-policy': await renderedPolicy() },
       body: `<!doctype html><html>${head}<body>${ok ? rendered : ''}<script type="application/json" data-handover-canvas-manifest>${JSON.stringify(manifest).replace(/</g, '\\u003c')}</script>${ok ? `<script type="module" src="${canvasScript}"></script>` : ''}</body></html>`,
     });
   });

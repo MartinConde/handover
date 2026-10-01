@@ -541,3 +541,23 @@ test('Canvas rich text lazily reuses formatting, selection, composition, and For
   await expect(page.locator('#f-body')).toContainText('Room for everyone.');
   await expect(page.locator('#f-legacy-hint')).toContainText('edited in code');
 });
+
+// A site component that renders draft text as HTML must not run the draft beside the owner's session.
+test('a script in a draft does not run in the Canvas preview, and Canvas still does', async ({
+  page,
+}) => {
+  await serveCanvasPreview(
+    page,
+    ({ title = '' }, marker) =>
+      `<h1 data-handover-field='${marker('title')}'>${title}</h1><script>window.draftRan = 'inline'</script><img alt="" src="data:," onerror="window.draftRan = 'handler'">`,
+  );
+  await page.getByRole('button', { name: 'Canvas', exact: true }).click();
+  const frame = page.locator('iframe[data-handover-canvas-frame="active"]');
+
+  await expect(frame.contentFrame().getByRole('heading', { level: 1 })).toBeVisible();
+  expect(
+    await frame.evaluate(
+      (element) => ((element as HTMLIFrameElement).contentWindow as { draftRan?: string }).draftRan,
+    ),
+  ).toBeUndefined();
+});

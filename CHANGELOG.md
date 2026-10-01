@@ -4,6 +4,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Security:** preview pages run only scripts from the site's own files and Astro's island
+  scripts. Before, a draft rendered through a component that outputs HTML could run a script with
+  the session of whoever previewed it. An inline script or a custom client directive no longer
+  runs in the preview.
 - Internal: CI runs with a read-only token, keeps no git credentials after checkout, and pins
   each action to a commit.
 - A display name is stored without control characters or text-direction marks, and cut to 80

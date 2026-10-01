@@ -19,6 +19,7 @@ import {
   errorManifest,
   GATE,
   type HandoverCanvas,
+  renderedPolicy,
   serializeCanvasManifest,
   successManifest,
 } from '../canvas.js';
@@ -336,6 +337,7 @@ export async function preview(ctx: Ctx, astro: AstroContent<string>): Promise<Re
       : await page.load?.(source, { locale: target.locale, slug: target.address as string });
     if (!props) return fail(404, 'This site serves no page at that address.');
     for (const [key, value] of Object.entries(GATE)) ctx.response.headers.set(key, value);
+    ctx.response.headers.set('content-security-policy', await renderedPolicy());
     return {
       Component,
       props,

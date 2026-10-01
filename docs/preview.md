@@ -41,9 +41,14 @@ brand's real hostname. So:
   route cannot be pointed at content it did not draw.
 - **Never cached, never indexed, never framed, never the referrer.** Every answer carries
   `Cache-Control: private, no-store`, `X-Robots-Tag: noindex, nofollow`,
-  `Content-Security-Policy: frame-ancestors 'self'` and `Referrer-Policy: no-referrer` — the
-  admin frames the preview, nothing else can, and a link followed off a draft page does not
-  hand its address to the site it points at.
+  `Content-Security-Policy: frame-ancestors 'self'; script-src 'self'` and
+  `Referrer-Policy: no-referrer` — the admin frames the preview, nothing else can, and a link
+  followed off a draft page does not hand its address to the site it points at.
+- **Only the site's own scripts run.** A rendered page also allows Astro's island scripts by
+  hash, so `client:*` components hydrate; any other inline script or `on…` attribute does not
+  run. A draft that reaches a component rendering HTML therefore cannot act with the session of
+  whoever is previewing it. An island using a client directive added by another integration does
+  not hydrate in the preview, and a script must come from a file, not be written inline.
 
 ## The address to preview
 
