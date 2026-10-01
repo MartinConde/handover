@@ -58,7 +58,9 @@ for a site that declares none, and `roles` absent where the screen is open to bo
 
 Authentication failures keep Better Auth's `code` alongside its existing `message`. The guarded
 `POST /admin/api/account/set-password` wrapper likewise returns `{ "error", "code" }` for a known
-Better Auth refusal, preserving its `400` status and legacy `error` field. Clients should classify a
+Better Auth refusal, preserving its `400` status and legacy `error` field; a session more than a
+day old gets `403` with `code: "SESSION_NOT_FRESH"`. `POST /admin/api/auth/change-email` from an
+account whose address was never proved gets `403` with `code: "EMAIL_NOT_VERIFIED"`. Clients should classify a
 known failure by `code`, never by matching English prose or by status alone.
 
 `GET /admin/api/account` answers `canChangeEmail: true` when the site can mail, and only then does

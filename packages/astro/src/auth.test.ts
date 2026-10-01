@@ -58,6 +58,9 @@ vi.mock('virtual:handover/config', () => ({
   },
 }));
 
+// `members.ts` reaches the content index through its imports; nothing here reads it.
+vi.mock('virtual:handover/index', () => ({ default: {}, templates: {} }));
+
 const { createAuth } = await import('./auth.js');
 
 let ddl: string[];
@@ -383,4 +386,73 @@ test('a message that went leaves no failure behind', async () => {
   await askForLink('owner@example.com');
 
   expect(await mailFailures()).toEqual([]);
+});
+
+// Setting a first password
+
+const { setPassword } = await import('./routes/api/members.js');
+const { openDb } = await import('@handover/core');
+
+/** Signed in by an emailed link, as an invited member with no password is. */
+async function signInByLink(email: string) {
+  sent.length = 0;
+  await askForLink(email);
+  const link = linkIn(sent[0]?.text ?? '');
+  const res = await createAuth(new URL(link)).handler(new Request(link));
+  sent.length = 0;
+  return res.headers
+    .getSetCookie()
+    .map((c) => c.split(';')[0])
+    .join('; ');
+}
+
+const setFirstPassword = (cookie: string) =>
+  setPassword(
+    { db: () => openDb('default', binding) } as never,
+    new Request('https://demo.example/admin/api/account/set-password', {
+      method: 'POST',
+      headers: { cookie, 'content-type': 'application/json', origin: 'https://demo.example' },
+      body: JSON.stringify({ newPassword: 'a-long-enough-password' }),
+    }),
+    new URL('https://demo.example/admin/api/account/set-password'),
+    undefined,
+    { user: { id: 'usr_lea@example.com' } } as never,
+  );
+
+const sessionOf = async (cookie: string) =>
+  createAuth(new URL('https://demo.example/admin')).api.getSession({
+    headers: new Headers({ cookie }),
+  });
+
+// A cookie lifted from an unattended browser must not turn into a password that outlives it.
+test('a session older than a day cannot set a first password', async () => {
+  await seedUser('lea@example.com');
+  const cookie = await signInByLink('lea@example.com');
+  await binding
+    .prepare('UPDATE session SET created_at = ?')
+    .bind(Date.now() - 2 * 24 * 60 * 60 * 1000)
+    .run();
+
+  const res = await setFirstPassword(cookie);
+  const passwords = await binding
+    .prepare('SELECT password FROM account WHERE password IS NOT NULL')
+    .all();
+
+  expect(res.status).toBe(403);
+  expect(passwords.results).toEqual([]);
+});
+
+test('a first password ends every other session and is mailed to the account', async () => {
+  await seedUser('lea@example.com');
+  const elsewhere = await signInByLink('lea@example.com');
+  const here = await signInByLink('lea@example.com');
+
+  const res = await setFirstPassword(here);
+
+  expect(res.status).toBe(200);
+  expect(await sessionOf(elsewhere)).toBeNull();
+  expect(await sessionOf(here)).not.toBeNull();
+  expect(sent.map((m) => [m.to, m.subject])).toEqual([
+    ['lea@example.com', 'A password was set for your account'],
+  ]);
 });

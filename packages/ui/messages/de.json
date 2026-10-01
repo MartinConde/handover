@@ -31,6 +31,7 @@
   "account_password_changed": "Dein Passwort wurde geändert.",
   "account_password_set": "Dein Passwort wurde festgelegt.",
   "account_password_failed": "Das Passwort konnte nicht gespeichert werden.",
+  "account_password_sign_in_again": "Du hast dich vor mehr als einem Tag angemeldet. Melde dich ab und wieder an, dann lege dein Passwort fest.",
   "account_current_password_wrong": "Das aktuelle Passwort ist nicht richtig.",
   "account_sessions": "Sitzungen",
   "account_sessions_hint": "Hier siehst du deine Anmeldungen. Beim Abmelden auf allen Geräten bleibt dieses Gerät angemeldet.",

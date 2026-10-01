@@ -355,6 +355,69 @@ test('an invited user with no account row sets a password and signs in with it',
   expect(signedIn.status).toBe(200);
 });
 
+/** Invited and never proved: the row `createUser` makes before any link is opened. */
+async function seedUnproven(email: string) {
+  await seedUser(email, 'editor');
+  await binding.prepare('UPDATE user SET email_verified = 0 WHERE email = ?').bind(email).run();
+}
+
+/** A first password through *Forgot password*, which is how an unproven member gets one. */
+async function resetTo(email: string, newPassword: string) {
+  await call('/request-password-reset', { email, redirectTo: `${SITE}/admin/reset` });
+  const token = (resetLinks.at(-1)?.url ?? '').split('/reset-password/')[1]?.split('?')[0] ?? '';
+  return call('/reset-password', { token, newPassword });
+}
+
+// The reset link went to the address, so opening it proves the address as an emailed link does.
+test('a password reset proves the address it was mailed to', async () => {
+  emailing();
+  await seedUnproven('lea@example.com');
+
+  await resetTo('lea@example.com', 'a-brand-new-password');
+  const row = await binding.prepare('SELECT email_verified FROM user').first();
+
+  expect(row).toEqual({ email_verified: 1 });
+});
+
+// Better Auth asks the old address only of a proven account, so an unproven one moved silently.
+test('an account whose address is unproven cannot change its email', async () => {
+  emailing();
+  await seedUnproven('lea@example.com');
+  await binding
+    .prepare(
+      `INSERT INTO account (id, account_id, provider_id, user_id, password, created_at, updated_at)
+       VALUES ('acc_lea', 'usr_lea@example.com', 'credential', 'usr_lea@example.com', ?, 0, 0)`,
+    )
+    .bind(await hashPassword('correct-horse-battery'))
+    .run();
+  const cookie = await sessionCookie('lea@example.com', 'correct-horse-battery');
+
+  const res = await call(
+    '/change-email',
+    { newEmail: 'attacker@evil.example', callbackURL: '/admin/account' },
+    { cookie },
+  );
+
+  expect(res.status).toBe(403);
+  expect([...emailApprovals, ...emailChangeLinks]).toEqual([]);
+});
+
+// Better Auth drops the password of an unproven account when an emailed link proves it.
+test('a member who set a password by reset keeps it after opening a sign-in link', async () => {
+  emailing();
+  await seedUnproven('lea@example.com');
+  await resetTo('lea@example.com', 'a-brand-new-password');
+  await call('/sign-in/magic-link', { email: 'lea@example.com', callbackURL: '/admin' });
+
+  await open(magicLinks[0]?.url ?? '');
+  const signedIn = await call('/sign-in/email', {
+    email: 'lea@example.com',
+    password: 'a-brand-new-password',
+  });
+
+  expect(signedIn.status).toBe(200);
+});
+
 // the account page's two facts
 
 test('an invited user has no password and no session anywhere', async () => {

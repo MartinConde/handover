@@ -678,6 +678,12 @@ export function authMock(original: Record<string, unknown>) {
       return {
         api: {
           setPassword: (args: unknown) => state.setPassword(args),
+          // Signed in a moment ago: the age check has its own test against the real Better Auth.
+          getSession: async () => ({
+            session: { createdAt: new Date() },
+            user: { email: 'owner@example.com' },
+          }),
+          revokeOtherSessions: async () => ({ status: true }),
           createUser: record('createUser'),
           signInMagicLink: record('signInMagicLink'),
           setRole: record('setRole'),

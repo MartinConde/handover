@@ -4,6 +4,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Security:** setting a first password from the account page needs a sign-in less than a day
+  old, signs the person's other devices out and mails them. Before, a borrowed session could plant
+  a password that outlived *Sign out everywhere*.
+- **Security:** an account whose address was never proved can no longer change its email; it
+  used to skip the approval from the old address. A password reset now proves the address, so a
+  member who set their first password through *Forgot password* keeps it after opening a later
+  emailed link, which used to delete it.
 - **Security:** opening password-reset links is limited to 10 a minute from one address, across
   links. Before, each link had its own counter, so there was no limit, and every request added a
   row to `rate_limit`.

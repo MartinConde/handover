@@ -61,6 +61,7 @@ const KNOWN_CODES = new Set([
   'INVALID_EMAIL_OR_PASSWORD',
   'CREDENTIAL_ACCOUNT_NOT_FOUND',
   'INVALID_PASSWORD',
+  'SESSION_NOT_FRESH',
   'PASSWORD_TOO_SHORT',
   'PASSWORD_TOO_LONG',
   'INVALID_TOKEN',
@@ -210,6 +211,8 @@ export function messageText(message: UiMessage, locale: UiLocale): string {
       return m.auth_sign_in_failed({}, options);
     case 'INVALID_PASSWORD':
       return m.account_current_password_wrong({}, options);
+    case 'SESSION_NOT_FRESH':
+      return m.account_password_sign_in_again({}, options);
     case 'PASSWORD_TOO_SHORT':
     case 'AUTH_PASSWORD_TOO_SHORT':
       return m.auth_password_too_short({}, options);

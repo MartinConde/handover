@@ -106,6 +106,14 @@ export function authOptions(siteId: string, db: Db, config: AuthConfig): BetterA
             resetPasswordTokenExpiresIn: 60 * 60,
             // A reset may follow a lost account, so old sessions must not stay signed in.
             revokeSessionsOnPasswordReset: true,
+            // The link went to the address. Unproven, the account could change its email unasked,
+            // and the next emailed link would delete the password just set.
+            onPasswordReset: async ({ user }) => {
+              await db
+                .update(authTables.user)
+                .set({ emailVerified: true })
+                .where(eq(authTables.user.id, user.id));
+            },
           }
         : {}),
     },
@@ -286,6 +294,18 @@ export function createAuth(siteId: string, db: Db, config: AuthConfig): Auth {
           ) ||
             ['/get-session', '/error'].includes(path));
     if (!allowed) return new Response('Not found', { status: 404 });
+    // Better Auth skips the old address's approval for an unproven account; refuse instead.
+    if (path === '/change-email') {
+      const current = await auth.api.getSession({ headers: request.headers });
+      if (current && !current.user.emailVerified)
+        return Response.json(
+          {
+            code: 'EMAIL_NOT_VERIFIED',
+            message: 'Reset your password once with Forgot password: that proves your address',
+          },
+          { status: 403 },
+        );
+    }
     if (request.method === 'GET' && path.startsWith('/reset-password/'))
       return (await resetLinkRefused(db, request, options)) ?? handler(request);
     return handler(request);

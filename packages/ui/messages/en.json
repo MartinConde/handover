@@ -31,6 +31,7 @@
   "account_password_changed": "Your password is changed.",
   "account_password_set": "Your password is set.",
   "account_password_failed": "The password could not be saved.",
+  "account_password_sign_in_again": "You signed in more than a day ago. Sign out, sign in again, then set your password.",
   "account_current_password_wrong": "That current password is not right.",
   "account_sessions": "Sessions",
   "account_sessions_hint": "Where you are signed in. Signing out everywhere keeps this device.",

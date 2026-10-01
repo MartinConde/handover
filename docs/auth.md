@@ -116,13 +116,16 @@ to request a new link; a general reset failure keeps the current form and offers
 Everyone has an account page at `/admin/account`: their display name and role, their email, a
 password form, and their sessions with *Sign out everywhere*. Somebody who signed in
 with a link and has no password yet is offered one there instead of the password form — that is
-how an invited person gets one. Changing a password signs the other devices out.
+how an invited person gets one. Setting that first password needs a sign-in less than a day old,
+signs the other devices out and mails the address that it happened. Changing a password signs the
+other devices out.
 
 A site with a [mailer](email.md) and `HANDOVER_BASE_URL` also lets people change their email there.
 *Change email* first mails the current address a link to approve the change; opening it mails the
 new address a second link, and opening that one makes the change and returns to the account page.
-Both links expire in an hour. An address that was never proved skips the approval and gets the
-second link directly. Without a mailer the email is shown and cannot be changed.
+Both links expire in an hour. An address that was never proved cannot be changed: opening any
+emailed link proves it, a password reset included. Without a mailer the email is shown and cannot
+be changed.
 
 The account row can store an optional English or German interface preference. An unset value stays
 `null`; Handover does not backfill English. The [interface-language controls](interface-language.md)

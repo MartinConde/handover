@@ -34,6 +34,9 @@ function refused(err: unknown): Response {
   return Response.json({ error: body.message ?? body.code, code: body.code }, { status: 400 });
 }
 
+/** Better Auth's `freshAge`, which none of its routed endpoints applies to this one. */
+const FRESH_MS = 24 * 60 * 60 * 1000;
+
 /** Better Auth's `setPassword` is server-only and refuses when a password already exists. */
 export async function setPassword(
   ctx: RequestContext,
@@ -45,21 +48,37 @@ export async function setPassword(
   const { newPassword } = (await readJson(request)) as { newPassword?: unknown };
   if (typeof newPassword !== 'string')
     return Response.json({ error: 'No password was sent' }, { status: 400 });
+  const auth = createAuth(url, cfContext);
+  const current = await auth.api.getSession({ headers: request.headers });
+  if (!current) return new Response('Unauthorized', { status: 401 });
+  // A stolen cookie must not become a password that outlives "Sign out everywhere".
+  if (Date.now() - new Date(current.session.createdAt).getTime() > FRESH_MS)
+    return Response.json(
+      { error: 'Sign in again to set a password', code: 'SESSION_NOT_FRESH' },
+      { status: 403 },
+    );
   try {
-    await createAuth(url, cfContext).api.setPassword({
-      body: { newPassword },
-      headers: request.headers,
-    });
-    await logActivity('default', ctx.db(), {
-      userId: session?.user.id,
-      kind: 'password-set',
-      detail: { how: 'first' },
-    });
-    return Response.json({ ok: true });
+    await auth.api.setPassword({ body: { newPassword }, headers: request.headers });
   } catch (err) {
     // Too short, or already set: either way the account page shows Better Auth's sentence.
     return refused(err);
   }
+  const database = ctx.db();
+  await auth.api.revokeOtherSessions({ headers: request.headers });
+  await logActivity('default', database, {
+    userId: session?.user.id,
+    kind: 'password-set',
+    detail: { how: 'first' },
+  });
+  const email = current.user.email;
+  await mailer()?.({
+    to: email,
+    subject: 'A password was set for your account',
+    text: `A password was set for ${email} from the account page, and every other device was signed out.\n\nIf this was not you, ask the site's owner to remove the password and sign you out everywhere.`,
+  }).catch(() =>
+    logActivity('default', database, { kind: 'mail-failed', detail: { message: 'password set' } }),
+  );
+  return Response.json({ ok: true });
 }
 
 /** Filtered per role, not gated: an editor's id comes off the session, never the query string. */
