@@ -4,6 +4,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Internal: CI runs with a read-only token, keeps no git credentials after checkout, and pins
+  each action to a commit.
 - A display name is stored without control characters or text-direction marks, and cut to 80
   characters. Before, a right-to-left override in a name could make activity-log rows misread.
 - `POST /admin/api/checks/conflict` answers `404` outside the dev server, as its button was
