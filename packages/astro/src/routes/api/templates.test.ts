@@ -5,6 +5,7 @@ import {
   ctx,
   editor,
   files,
+  getFile,
   logged,
   overlayRows,
   owner,
@@ -180,6 +181,24 @@ test('creating from a template no collection declares is 404', async () => {
     post('entries/listings', JSON.stringify({ title: 'Strandhaus', template: 'palace' })),
   );
   expect(res.status).toBe(404);
+  expect(createDraft).not.toHaveBeenCalled();
+});
+
+test('a template name that is a path out of the templates folder is 404 and reads nothing', async () => {
+  createDraft.mockClear();
+  getFile.mockClear();
+  files['src/content/_templates/pages/../../../../.github/workflows/deploy.yaml'] =
+    'name: Deploy\non: push\n';
+
+  const res = await POST(
+    post(
+      'entries/pages',
+      JSON.stringify({ title: 'Leak', template: '../../../../.github/workflows/deploy' }),
+    ),
+  );
+
+  expect(res.status).toBe(404);
+  expect(getFile).not.toHaveBeenCalled();
   expect(createDraft).not.toHaveBeenCalled();
 });
 

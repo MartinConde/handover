@@ -3,6 +3,7 @@ import {
   createDraft,
   formOf,
   loadDraft,
+  logActivity,
   markTranslation,
   openDb,
   type PublishFile,
@@ -740,6 +741,12 @@ test('an entry made from a template records its own language, not the one the te
   trees[head] = {
     'src/content/_templates/pages/landing.yaml': '_version: 1\n_source: de\nbody: "Text"\n',
   };
+  // Saved from the admin: the record is what offers a template the build has not read.
+  await logActivity('default', db, {
+    kind: 'template-saved',
+    subject: path('de'),
+    detail: { template: 'landing' },
+  });
 
   const res = await call('POST', 'entries/pages', { title: 'About', template: 'landing' });
 

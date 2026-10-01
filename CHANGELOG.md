@@ -4,6 +4,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Security:** creating an entry from a template accepts only a template name the collection
+  offers. Before, an editor could name any `.yaml` file in the site's repository and read it
+  back as the new entry.
 - `media.md` says what the scheduled reconcile still does with leftover public `uploads/`
   objects, instead of saying they are no longer adopted at all.
 - The GitHub token Handover asks for reaches only the site's repository, with contents access and

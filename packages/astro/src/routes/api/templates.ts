@@ -170,12 +170,13 @@ export async function createEntry(
   const first = body?.locale === undefined ? defaultLocale : body.locale;
   if (typeof first !== 'string' || !locales.includes(first))
     return new Response(`${String(first)} is not a language this site declares`, { status: 400 });
-  const starter =
-    typeof body?.template === 'string' && body.template
-      ? await startedFrom(ctx, collection, body.template)
-      : {};
-  if (!starter) return new Response('No such template', { status: 404 });
   const database = ctx.db();
+  const template = typeof body?.template === 'string' && body.template ? body.template : undefined;
+  // Only a name the dialog offers: the name becomes a repository path.
+  if (template && !(await templateNames(collection, database)).includes(template))
+    return new Response('No such template', { status: 404 });
+  const starter = template ? await startedFrom(ctx, collection, template) : {};
+  if (!starter) return new Response('No such template', { status: 404 });
   const slug = entryName('default', title, await takenNames(collection, database));
   const { fields } = formOf('default', formSchema(collected.schema));
   // The field the collection lists by is the one the title typed into the dialog belongs in.
