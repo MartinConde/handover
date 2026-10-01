@@ -1166,7 +1166,9 @@ test('a save that makes an entry pending moves the count in the top bar', async 
   const root = show(session(), '/admin/c/listings/mill-house');
   await vi.advanceTimersByTimeAsync(0);
   flushSync();
-  expect(root.querySelector('.indicator .nav-text')?.textContent?.trim()).toBe('No unpublished changes');
+  expect(root.querySelector('.indicator .nav-text')?.textContent?.trim()).toBe(
+    'No unpublished changes',
+  );
   expect(root.querySelector('.indicator .count')?.textContent).toBe('0');
 
   const input = root.querySelector<HTMLInputElement>('input#f-title');
