@@ -12,6 +12,8 @@ let resendKey: string | undefined;
 const sent: { to: string; subject: string; text: string }[] = [];
 // A provider's refusal is the developer's to read in the log, not a person's to see.
 let refuseSend: Error | undefined;
+// A provider that takes its time: the send waits on this before it counts as sent.
+let holdSend: Promise<void> | undefined;
 let binding: Awaited<ReturnType<Miniflare['getD1Database']>>;
 
 const mf = new Miniflare({
@@ -49,6 +51,7 @@ vi.mock('virtual:handover/config', () => ({
     collections: {},
     mailer: async (message: { to: string; subject: string; text: string }) => {
       if (refuseSend) throw refuseSend;
+      await holdSend;
       sent.push(message);
       return { id: 'fake-1' };
     },
@@ -80,6 +83,7 @@ beforeEach(async () => {
   clientSecret = undefined;
   resendKey = undefined;
   refuseSend = undefined;
+  holdSend = undefined;
   sent.length = 0;
   const rows = (await binding.prepare(`SELECT name FROM sqlite_master WHERE type = 'table'`).all())
     .results as { name: string }[];
@@ -276,13 +280,26 @@ const mailFailures = async () =>
     detail: string;
   }[];
 
-test('a sign-in link that could not be sent leaves a row saying so', async () => {
+/** What the Worker keeps running after the answer: the sign-in mail goes out here. */
+function background() {
+  const tasks: Promise<unknown>[] = [];
+  return {
+    waitUntil: (p: Promise<unknown>) => void tasks.push(p),
+    settled: () => Promise.all(tasks),
+  };
+}
+
+// A 500 for a member and a 200 for a stranger would say who has an account.
+test('a known address whose mail cannot be sent answers like an unknown one, and leaves a row', async () => {
   await seedUser('owner@example.com');
   refuseSend = new Error('resend refused: 403');
+  const ctx = background();
 
-  const res = await askForLink('owner@example.com');
+  const known = await askForLink('owner@example.com', undefined, undefined, ctx);
+  const unknown = await askForLink('stranger@example.com', undefined, undefined, ctx);
+  await ctx.settled();
 
-  expect(res.status).toBe(500);
+  expect([known.status, await known.text()]).toEqual([unknown.status, await unknown.text()]);
   expect(await mailFailures()).toEqual([
     expect.objectContaining({
       site_id: 'default',
@@ -293,6 +310,26 @@ test('a sign-in link that could not be sent leaves a row saying so', async () =>
       commit_sha: null,
     }),
   ]);
+});
+
+// Waiting on the provider would make a member's address answer slower than a stranger's.
+test('a known address is answered before a slow mailer has sent', async () => {
+  await seedUser('owner@example.com');
+  let release = () => {};
+  holdSend = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const ctx = background();
+
+  const answer = await Promise.race([
+    askForLink('owner@example.com', undefined, undefined, ctx).then((res) => res.status),
+    new Promise((resolve) => setTimeout(() => resolve('still waiting on the mailer'), 500)),
+  ]);
+  release();
+  await ctx.settled();
+
+  expect(answer).toBe(200);
+  expect(sent.map((m) => m.to)).toEqual(['owner@example.com']);
 });
 
 test('an invite that could not be sent says it was an invite', async () => {

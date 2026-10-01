@@ -69,8 +69,9 @@ values are not free choices, and a password that never works is what you get whe
 ## Signing in by emailed link
 
 Needs a [mailer](email.md) and the base URL above. The login takes an address and answers *Check
-your inbox* — the same answer for every address, so the form never confirms which ones have an
-account. A link is mailed only to an address that does, works **once**, and expires in **15
+your inbox* — the same answer, just as fast, for every address, so the form never confirms which
+ones have an account. The mail is sent after the answer, so a mailer that is down shows up in the
+Worker log and the activity log, not on the login. A link is mailed only to an address that does, works **once**, and expires in **15
 minutes**; the database stores a hash of it, so a copy of the database is not a way in. A used or
 expired link lands back on the login saying so, with *Send a new link* under it.
 

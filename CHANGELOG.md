@@ -4,6 +4,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Security:** the sign-in link form answers a member's address as fast as a stranger's, and the
+  same when the mail cannot be sent. Before, a slower answer or a 500 said the address had an
+  account. The mail now goes out after the answer.
 - **Security:** a publish refuses a file Astro's build would stop on: a `<<` key, U+FFFE or
   U+FFFF, or a `_ref` to a global the site does not declare. Before, an editor could publish one
   and every deploy after it failed until the publish was reverted. A save refuses a `<<` key and
