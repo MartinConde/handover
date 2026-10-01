@@ -349,7 +349,7 @@ test('opening reset links from one address is limited across tokens, in one row'
 
   expect(statuses.slice(0, 10)).not.toContain(429);
   expect(statuses[10]).toBe(429);
-  expect(rows.results).toHaveLength(1);
+  expect(rows.results).toEqual([{ key: '203.0.113.200|/reset-password/*' }]);
 });
 
 // An invited row has no `account` at all, and the reset is what gives it one.
