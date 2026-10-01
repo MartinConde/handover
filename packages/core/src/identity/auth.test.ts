@@ -557,6 +557,28 @@ async function sessionUser(cookie: string) {
   return ((await res.json()) as { user: Record<string, unknown> }).user;
 }
 
+const storedName = async () =>
+  ((await binding.prepare('SELECT name FROM user').first()) as { name: string }).name;
+
+// A name is shown in the activity log, where a right-to-left override would turn the row around.
+test('a profile name is stored without control or direction characters', async () => {
+  await seed('owner@example.com', 'correct-horse-battery', 'owner');
+  const cookie = await sessionCookie('owner@example.com', 'correct-horse-battery');
+
+  await call('/update-user', { name: 'Ada\u0000 \r\nLove\u202Elace\u2066' }, { cookie });
+
+  expect(await storedName()).toBe('Ada Lovelace');
+});
+
+test('a profile name is cut to 80 characters', async () => {
+  await seed('owner@example.com', 'correct-horse-battery', 'owner');
+  const cookie = await sessionCookie('owner@example.com', 'correct-horse-battery');
+
+  await call('/update-user', { name: 'a'.repeat(200) }, { cookie });
+
+  expect(await storedName()).toBe('a'.repeat(80));
+});
+
 test('an owner saves English as a durable interface preference', async () => {
   await seed('owner@example.com', 'correct-horse-battery', 'owner');
   const cookie = await sessionCookie('owner@example.com', 'correct-horse-battery');

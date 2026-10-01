@@ -53,6 +53,9 @@ export interface AuthConfig {
   background?: (promise: Promise<unknown>) => void;
 }
 
+// Control characters and the bidi marks, embeddings, overrides and isolates.
+const UNSHOWABLE = /[\p{Cc}\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]/gu;
+
 // `path` is the endpoint's own path, not the mounted URL; any other path is not a login.
 const SIGN_IN_METHOD: Record<string, string> = {
   '/sign-in/email': 'password',
@@ -153,6 +156,20 @@ export function authOptions(siteId: string, db: Db, config: AuthConfig): BetterA
     },
     // `logActivity` must swallow failures: an after-hook throw answers 500 with the row committed.
     databaseHooks: {
+      // Names are shown in the activity log, where a direction override could reverse a row.
+      user: {
+        update: {
+          before: async (user) =>
+            typeof user.name === 'string'
+              ? {
+                  data: {
+                    ...user,
+                    name: [...user.name.replace(UNSHOWABLE, '')].slice(0, 80).join(''),
+                  },
+                }
+              : undefined,
+        },
+      },
       // The consumed row's `value` is the user id; its other column is the token in the clear.
       verification: {
         delete: {

@@ -114,7 +114,8 @@ Passwords are 12 to 128 characters. Only an invalid, expired, or already-used to
 to request a new link; a general reset failure keeps the current form and offers an ordinary retry.
 
 Everyone has an account page at `/admin/account`: their display name and role, their email, a
-password form, and their sessions with *Sign out everywhere*. Somebody who signed in
+password form, and their sessions with *Sign out everywhere*. A display name is kept to 80
+characters, without control characters or text-direction marks. Somebody who signed in
 with a link and has no password yet is offered one there instead of the password form — that is
 how an invited person gets one. Setting that first password needs a sign-in less than a day old,
 signs the other devices out and mails the address that it happened. Changing a password signs the
