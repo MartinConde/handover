@@ -21,7 +21,7 @@ import {
   referenceText,
   resolveSeo,
 } from '@handover/core';
-import { onMount, tick } from 'svelte';
+import { onMount, type Snippet, tick } from 'svelte';
 import CanvasWorkspace from '../canvas/CanvasWorkspace.svelte';
 import type { CanvasRenderRequest } from '../canvas/canvas-renderer';
 import OffsiteDialog, { type Target } from '../content/Offsite.svelte';
@@ -87,6 +87,7 @@ let {
   uiLocale = 'en',
   onmode,
   ontitle,
+  ontopbar,
 }: {
   collection: string;
   slug: string;
@@ -130,6 +131,8 @@ let {
   onmode?: (mode: EditorMode) => void;
   /** Hands the shell a live read of the title for its top-bar breadcrumb. */
   ontitle?: (read: () => string) => void;
+  /** Hands the shell the address and actions to draw in its top bar; the cleanup takes them back. */
+  ontopbar?: (parts: { lead: Snippet; actions: Snippet }) => () => void;
 } = $props();
 const options = $derived(messageOptions(uiLocale));
 const feedbackText = (message: UiMessage) => messageText(message, uiLocale);
@@ -569,6 +572,7 @@ const title = $derived(
   entry.labels?.[uiLocale] ?? entry.label ?? (typeof named === 'string' && named ? named : slug),
 );
 onMount(() => ontitle?.(() => title));
+onMount(() => ontopbar?.({ lead: topbarLead, actions: topbarActions }));
 // The SEO panel is its own tab, so the Content form omits the field; a global has no tabs.
 const seoField = $derived(!entry.singleton && entry.fields.some((f) => f.type === 'seo'));
 /** The key the seo field sits under, which is what a problem on it is named by. */
@@ -757,12 +761,11 @@ onMount(() => {
 
 // svelte-ignore state_referenced_locally -- the loaded entry is the initial value on purpose
 let hidden = $state(entry.hidden === true);
-let statusMenu = $state(false);
+let publishMenu = $state(false);
 let hiding = $state(false);
 let statusFailed = $state<UiMessage>();
 
 async function setStatus(next: boolean, redirect?: Target) {
-  statusMenu = false;
   busy = true;
   statusFailed = undefined;
   // Everything on screen goes into the rows first: this write rewrites the same files.
@@ -786,7 +789,6 @@ async function setStatus(next: boolean, redirect?: Target) {
 }
 
 // A rename navigates to the new name and a delete to the list, so neither refreshes this screen.
-let moreMenu = $state(false);
 let renaming = $state(false);
 let deleting = $state(false);
 let actionTrigger = $state<HTMLElement>();
@@ -797,7 +799,6 @@ const willBe = $derived(entryName('default', newName, []));
 
 function openRename() {
   rememberActionTrigger();
-  moreMenu = false;
   newName = slug;
   actionFailed = undefined;
   renaming = true;
@@ -805,19 +806,17 @@ function openRename() {
 
 function rememberActionTrigger() {
   const here = document.activeElement as HTMLElement | null;
-  actionTrigger = here?.closest('.pop-anchor')?.querySelector('button') ?? here ?? undefined;
+  const anchor = here?.closest('.pop-anchor');
+  actionTrigger = anchor?.querySelector<HTMLElement>('[aria-haspopup="menu"]') ?? anchor?.querySelector('button') ?? here ?? undefined;
 }
 
 function startHiding() {
   rememberActionTrigger();
-  statusMenu = false;
-  moreMenu = false;
   hiding = true;
 }
 
 function startDeleting() {
   rememberActionTrigger();
-  moreMenu = false;
   actionFailed = undefined;
   deleting = true;
 }
@@ -841,7 +840,6 @@ let sourceFiles = $state<Record<string, Data>>({});
 
 function openSourceChange() {
   rememberActionTrigger();
-  moreMenu = false;
   sourceFailure = undefined;
   sourceFiles = Object.fromEntries(
     present.map((of) => [of, $state.snapshot(entrySession.snapshot(of))]),
@@ -1467,7 +1465,122 @@ async function saveAddress() {
     onclick={askToPublish} bind:this={canvasPublishButton}>{m.editor_publish_short({}, options)}</button>
 {/snippet}
 
-<main class={['main main-editor', { 'is-canvas-fullscreen': mode === 'canvas' }]} style:--entry-header-h={`${headerHeight}px`}>
+{#snippet addressRow()}
+  <!-- Every entry but a global can be renamed, so the row is there even where the address is not editable. -->
+  {#if addressable || !entry.singleton}
+    <div class={['slug-row', { 'is-editing': addressable && editing }]}>
+      {#if addressable && editing}
+        <span class="url">{before}</span>
+        <label class="visually-hidden" for="entry-address">{m.editor_address_label({ language: formatLanguageName(locale, uiLocale) }, options)}</label>
+        <input
+          class="slug-input"
+          id="entry-address"
+          type="text"
+          style={`width: ${Math.max(4, Math.min(28, typed.length + 1))}ch`}
+          bind:this={addressInput}
+          bind:value={typed}
+          placeholder={slug}
+          onkeydown={addressKeydown}
+        />
+        <span class="slug-actions">
+          <button class="btn btn-sm slug-action slug-save" type="button" aria-label={m.editor_address_save({}, options)} title={m.editor_address_save({}, options)} disabled={busy} onclick={saveAddress}>
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m4 10.3 3.5 3.5L16 5.7" /></svg>
+          </button>
+          <button class="btn btn-ghost btn-sm slug-action slug-cancel" type="button" aria-label={m.editor_address_cancel({}, options)} title={m.editor_address_cancel({}, options)} disabled={busy} onclick={cancelAddress}>
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 5 10 10m0-10L5 15" /></svg>
+          </button>
+        </span>
+        {#if addressFailed}<span class="mode is-bad">{feedbackText(addressFailed)} {messageDetail(addressFailed, uiLocale)}</span>{/if}
+      {:else}
+        {#if addressable}
+          <button
+            class="btn-link url slug-edit"
+            type="button"
+            bind:this={addressTrigger}
+            disabled={locked}
+            aria-label={`${m.editor_address_edit({}, options)}: ${url}`}
+            onclick={editAddress}
+          >{url}</button>
+          {#if !address}<span class="mode">{m.editor_address_file_name({}, options)}</span>{/if}
+        {:else if url}
+          <span class="url">{url}</span>
+        {/if}
+        {#if !entry.singleton}{#if addressable || url}<span class="sep" aria-hidden="true">·</span>{/if}<button class="btn-link slug-rename" type="button" disabled={locked || actionBusy} onclick={openRename}>{m.editor_change_file_name({}, options)}</button>{/if}
+      {/if}
+    </div>
+  {/if}
+{/snippet}
+
+{#snippet topbarLead()}
+  {#if hidden && !entry.singleton}<span class="badge">{m.editor_status_hidden({}, options)}</span>{/if}
+  {#if conflicted}<span class="badge badge-danger">{m.pending_changed_repository({}, options)}</span>{/if}
+{/snippet}
+
+{#snippet topbarActions()}
+  {#if missing.length}
+    <button class="problems" type="button" onclick={goToFirst}>
+      {m.editor_problem_count({ count: missing.length }, options)}
+    </button>
+  {/if}
+  <span class={['autosave', { 'is-saving': saving, 'is-offline': saveFailed }]}>
+    {#if saving}{m.editor_save_saving({}, options)}{:else if saveFailed}{m.editor_save_not_saved({}, options)}{:else if sourceUnsaved}{m.editor_save_unsaved_changes({}, options)}{:else}{m.editor_save_saved({}, options)}{/if}
+  </span>
+  <div class="publish-split pop-anchor">
+    <button
+      class="btn btn-primary"
+      type="button"
+      aria-haspopup="dialog"
+      aria-expanded={confirming}
+      disabled={!dirty || saving || missing.length > 0 || entry.drift.length > 0 || locked || actionBusy}
+      title={locked
+        ? m.editor_publish_disabled_locked({}, options)
+        : entry.drift.length
+        ? m.editor_publish_disabled_drift({}, options)
+        : missing.length
+          ? m.editor_publish_disabled_missing({}, options)
+          : undefined}
+      onclick={askToPublish}
+      bind:this={publishButton}
+    >{m.editor_publish({}, options)}</button>
+    <button
+      class="btn btn-primary publish-more"
+      type="button"
+      aria-haspopup="menu"
+      aria-expanded={publishMenu}
+      aria-label={m.editor_ready_to_publish({}, options)}
+      disabled={locked || actionBusy || (entry.singleton && (lost || (!dirty && !held)))}
+      onclick={() => (publishMenu = !publishMenu)}
+    ><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4.5 6 3.5 3.5L11.5 6" /></svg></button>
+    {#if publishMenu}
+      <div class="menu publish-menu" role="menu" aria-label={m.editor_ready_to_publish({}, options)}>
+        <button type="button" role="menuitemcheckbox" aria-checked={!held} aria-describedby={dirty || held ? undefined : 'hold-unavailable'} disabled={lost || (!dirty && !held)} onclick={() => { publishMenu = false; void toggleHold(); }}>
+          <span class="check" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="m4 10.3 3.5 3.5L16 5.7" /></svg></span>
+          {m.editor_ready_to_publish({}, options)}
+          {#if !dirty && !held}<span class="sub" id="hold-unavailable">{m.editor_hold_unavailable({}, options)}</span>{/if}
+        </button>
+        <!-- Nothing lists a global, so there is nothing to take it off the site from. -->
+        {#if !entry.singleton}
+          <button type="button" role="menuitem" onclick={() => { if (hidden) { publishMenu = false; setStatus(false); } else { publishMenu = false; startHiding(); } }}>
+            <span class="check" aria-hidden="true"></span>
+            {hidden ? m.editor_show_on_site({}, options) : m.editor_hide_from_site({}, options)}
+          </button>
+        {/if}
+      </div>
+    {/if}
+  </div>
+  {#if !entry.singleton}
+    <button
+      class="btn btn-ghost more-actions delete-entry"
+      type="button"
+      aria-label={m.editor_delete({}, options)}
+      title={m.editor_delete({}, options)}
+      disabled={locked || actionBusy}
+      onclick={startDeleting}
+    ><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3" /></svg></button>
+  {/if}
+{/snippet}
+
+<main class={['main main-editor', { 'is-canvas-fullscreen': mode === 'canvas' }]} style:--entry-header-h={`calc(var(--topbar-stuck, 0px) + ${headerHeight}px)`}>
   {#if actionFailed && !renaming && !deleting && !offing}<p class="notice notice-danger" role="alert">{feedbackText(actionFailed)} {messageDetail(actionFailed, uiLocale)}</p>{/if}
   {#if holdFailed}<p class="notice notice-danger" role="alert">{feedbackText(holdFailed)} {messageDetail(holdFailed, uiLocale)}</p>{/if}
   {#if saveError}<p class="notice notice-danger" role="alert">{feedbackText(saveError)} {messageDetail(saveError, uiLocale)} <button class="btn-link" type="button" onclick={() => flush()}>{m.editor_save_retry({}, options)}</button></p>{/if}
@@ -1543,150 +1656,18 @@ async function saveAddress() {
     </div>
   {/if}
   <header class={['entry-header', { 'is-held': held }]} bind:offsetHeight={headerHeight}>
-    <div class="heading-row">
-      <div class="title-row">
+    {#if ontopbar}
+      <h1 class="visually-hidden">{title}</h1>
+    {:else}
+      <div class="heading-row">
         <div class="title-stack">
           <h1>{title}</h1>
-          {#if addressable}
-            <div class={['slug-row', { 'is-editing': editing }]}>
-              {#if editing}
-                <span class="url">{before}</span>
-                <label class="visually-hidden" for="entry-address">{m.editor_address_label({ language: formatLanguageName(locale, uiLocale) }, options)}</label>
-                <input
-                  class="slug-input"
-                  id="entry-address"
-                  type="text"
-                  style={`width: ${Math.max(4, Math.min(28, typed.length + 1))}ch`}
-                  bind:this={addressInput}
-                  bind:value={typed}
-                  placeholder={slug}
-                  onkeydown={addressKeydown}
-                />
-                <span class="slug-actions">
-                  <button class="btn btn-sm slug-action slug-save" type="button" aria-label={m.editor_address_save({}, options)} title={m.editor_address_save({}, options)} disabled={busy} onclick={saveAddress}>
-                    <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m4 10.3 3.5 3.5L16 5.7" /></svg>
-                  </button>
-                  <button class="btn btn-ghost btn-sm slug-action slug-cancel" type="button" aria-label={m.editor_address_cancel({}, options)} title={m.editor_address_cancel({}, options)} disabled={busy} onclick={cancelAddress}>
-                    <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 5 10 10m0-10L5 15" /></svg>
-                  </button>
-                </span>
-                {#if addressFailed}<span class="mode is-bad">{feedbackText(addressFailed)} {messageDetail(addressFailed, uiLocale)}</span>{/if}
-              {:else}
-                <button
-                  class="btn-link url slug-edit"
-                  type="button"
-                  bind:this={addressTrigger}
-                  disabled={locked}
-                  aria-label={`${m.editor_address_edit({}, options)}: ${url}`}
-                  onclick={editAddress}
-                >{url}</button>
-                {#if !address}<span class="mode">{m.editor_address_file_name({}, options)}</span>{/if}
-              {/if}
-            </div>
-          {/if}
+          {@render addressRow()}
+          {@render topbarLead()}
         </div>
-        <div class="meta">
-          <!-- Nothing lists a global, so there is nothing to take it off the site from. -->
-          {#if !entry.singleton}
-            <div class="pop-anchor">
-              <button
-                class={['status', { 'status-hidden': hidden }]}
-                type="button"
-                aria-haspopup="menu"
-                aria-expanded={statusMenu}
-                disabled={locked || actionBusy}
-                onclick={() => (statusMenu = !statusMenu)}
-              >
-                <span class="status-value"><span class="dot" aria-hidden="true"></span>{hidden ? m.editor_status_hidden({}, options) : m.editor_status_live({}, options)}</span>
-                <span class="status-chevron" aria-hidden="true">
-                  <svg viewBox="0 0 16 16"><path d="m4.5 6 3.5 3.5L11.5 6" /></svg>
-                </span>
-              </button>
-              {#if statusMenu}
-                <div class="menu status-menu" role="menu" aria-label={m.editor_status_menu({}, options)}>
-                  <button type="button" role="menuitem" aria-current={hidden ? undefined : 'true'} onclick={() => (hidden ? setStatus(false) : (statusMenu = false))}>
-                    <span class="dot dot-live" aria-hidden="true"></span> {m.editor_status_live({}, options)}
-                    <span class="sub">{url ? m.editor_status_live_detail({ url }, options) : m.editor_status_live_no_url({}, options)}</span>
-                  </button>
-                  <button type="button" role="menuitem" aria-current={hidden ? 'true' : undefined} onclick={() => { if (!hidden) startHiding(); else statusMenu = false; }}>
-                    <span class="dot dot-hidden" aria-hidden="true"></span> {m.editor_status_hidden({}, options)}
-                    <span class="sub">{m.editor_status_hidden_detail({}, options)}</span>
-                  </button>
-                </div>
-              {/if}
-            </div>
-          {/if}
-          {#if conflicted}
-            <span class="badge badge-danger">{m.pending_changed_repository({}, options)}</span>
-          {/if}
-          <button
-            class="hold-toggle"
-            type="button"
-            role="switch"
-            aria-checked={!held}
-            disabled={locked || lost || actionBusy || (!dirty && !held)}
-            title={dirty || held ? undefined : m.editor_hold_unavailable({}, options)}
-            onclick={toggleHold}
-          ><span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span><span>{m.editor_ready_to_publish({}, options)}</span></button>
-          {#if missing.length}
-            <button class="problems" type="button" onclick={goToFirst}>
-              {m.editor_problem_count({ count: missing.length }, options)}
-            </button>
-          {/if}
-        </div>
+        <div class="actions">{@render topbarActions()}</div>
       </div>
-      <div class="actions">
-        <span class={['autosave', { 'is-saving': saving, 'is-offline': saveFailed }]}>
-          {#if saving}{m.editor_save_saving({}, options)}{:else if saveFailed}{m.editor_save_not_saved({}, options)}{:else if sourceUnsaved}{m.editor_save_unsaved_changes({}, options)}{:else}{m.editor_save_saved({}, options)}{/if}
-        </span>
-        <button
-          class="btn btn-primary"
-          type="button"
-          aria-haspopup="dialog"
-          aria-expanded={confirming}
-          disabled={!dirty || saving || missing.length > 0 || entry.drift.length > 0 || locked || actionBusy}
-          title={locked
-            ? m.editor_publish_disabled_locked({}, options)
-            : entry.drift.length
-            ? m.editor_publish_disabled_drift({}, options)
-            : missing.length
-              ? m.editor_publish_disabled_missing({}, options)
-              : undefined}
-          onclick={askToPublish}
-          bind:this={publishButton}
-        >{m.editor_publish({}, options)}</button>
-        {#if !entry.singleton}
-          <div class="pop-anchor">
-            <button
-              class="btn btn-ghost more-actions"
-              type="button"
-              aria-haspopup="menu"
-              aria-expanded={moreMenu}
-              aria-label={m.editor_more_actions({}, options)}
-              disabled={locked || actionBusy}
-              onclick={() => (moreMenu = !moreMenu)}
-            ><svg viewBox="0 0 18 18" aria-hidden="true"><circle cx="4" cy="9" r="1.25" /><circle cx="9" cy="9" r="1.25" /><circle cx="14" cy="9" r="1.25" /></svg></button>
-            {#if moreMenu}
-              <div class={['menu', { 'source-menu': many && present.length > 1 }]} role="menu" aria-label={m.editor_more_actions({}, options)}>
-                <button type="button" role="menuitem" onclick={openRename}>{m.editor_rename({}, options)}</button>
-                {#if many && present.length > 1}
-                  <hr />
-                  <button type="button" role="menuitem" aria-describedby="change-source-sub" disabled={sourceBlocked !== undefined} onclick={openSourceChange}>
-                    {m.editor_change_source({}, options)}
-                    <span class="sub" id="change-source-sub">{sourceBlocked ?? m.editor_change_source_sub({ language: language(entry.sourceLocale) }, options)}</span>
-                  </button>
-                  <hr />
-                {/if}
-                <button type="button" role="menuitem" onclick={() => { if (hidden) { moreMenu = false; setStatus(false); } else startHiding(); }}>
-                  {hidden ? m.editor_show({}, options) : m.editor_hide({}, options)}
-                </button>
-                <button type="button" role="menuitem" onclick={startDeleting}>{m.editor_delete({}, options)}</button>
-              </div>
-            {/if}
-          </div>
-        {/if}
-      </div>
-    </div>
+    {/if}
     {#if conflicted}
       <p class="subline">{m.editor_conflict_guidance({}, options)}</p>
     {/if}
@@ -1710,21 +1691,6 @@ async function saveAddress() {
             {#if seoField}<a href={sitePath(`/admin/c/${collection}/${slug}/seo${queueTail}`)} aria-current={section === 'seo' ? 'page' : undefined}>{m.editor_section_seo({}, options)}</a>{/if}
             <a href={sitePath(`/admin/c/${collection}/${slug}/history${queueTail}`)} aria-current={section === 'history' ? 'page' : undefined}>{m.editor_section_history({}, options)}</a>
           </nav>
-        {/if}
-      </div>
-      <div class="toolbar-center">
-        {#if besideOptions.length > 1 || pageShown}
-          <div class="seg editor-beside" role="group" aria-label={m.editor_beside({}, options)}>
-            {#each besideOptions.filter((of) => of !== 'none') as of (of)}
-              <button
-                type="button"
-                class={{ 'btn-sbs': of === 'language' }}
-                aria-pressed={beside === of && mode !== 'canvas'}
-                disabled={entry.drift.length > 0}
-                onclick={() => leaving(() => (of === 'page' && beside === 'page' ? collapse() : setBeside(!pageShown && side && of === 'language' ? 'none' : of)))}
-              ><svg class="workspace-icon" viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="3" width="14" height="14" rx="2" />{#if of === 'page'}<path d="M9 3v14M12 7h2M12 10h2" />{:else if of === 'language'}<path d="M10 3v14M5 7h2M13 7h2M5 10h2M13 10h2" />{:else}<path d="M6 7h8M6 10h8M6 13h5" />{/if}</svg><span>{of === 'page' ? m.editor_workspace_preview({}, options) : m.editor_workspace_translate({}, options)}</span></button>
-            {/each}
-          </div>
         {/if}
       </div>
       <div class="toolbar-end">
@@ -1752,8 +1718,25 @@ async function saveAddress() {
             </div>
           {/if}
         {/if}
-        {#if !entry.singleton && canvasSupported}
-          <button class="btn canvas-open" type="button" disabled={entry.drift.length > 0} onclick={() => setCanvas(true)}>{m.editor_view_canvas({}, options)}</button>
+        {#if besideOptions.length > 1 || pageShown || (!entry.singleton && canvasSupported)}
+          <div class="seg editor-beside" role="group" aria-label={m.editor_beside({}, options)}>
+            {#if besideOptions.length > 1 || pageShown}
+              {#each besideOptions.filter((of) => of !== 'none') as of (of)}
+                {@const label = of === 'page' ? m.editor_workspace_preview({}, options) : m.editor_workspace_translate({}, options)}
+                <button
+                  type="button"
+                  class={{ 'btn-sbs': of === 'language' }}
+                  title={label}
+                  aria-pressed={beside === of && mode !== 'canvas'}
+                  disabled={entry.drift.length > 0}
+                  onclick={() => leaving(() => (of === 'page' && beside === 'page' ? collapse() : setBeside(!pageShown && side && of === 'language' ? 'none' : of)))}
+                ><svg class="workspace-icon" viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="3" width="14" height="14" rx="2" />{#if of === 'page'}<path d="M9 3v14M12 7h2M12 10h2" />{:else}<path d="M10 3v14M5 7h2M13 7h2M5 10h2M13 10h2" />{/if}</svg><span class="visually-hidden">{label}</span></button>
+              {/each}
+            {/if}
+            {#if !entry.singleton && canvasSupported}
+              <button class="canvas-open" type="button" title={m.editor_view_canvas({}, options)} disabled={entry.drift.length > 0} onclick={() => setCanvas(true)}><svg class="workspace-icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M7.5 3H3v4.5M12.5 3H17v4.5M7.5 17H3v-4.5M12.5 17H17v-4.5" /></svg><span class="visually-hidden">{m.editor_view_canvas({}, options)}</span></button>
+            {/if}
+          </div>
         {/if}
       </div>
     </div>
@@ -1814,10 +1797,17 @@ async function saveAddress() {
         >
           <div class="editor-form-heading">
             <div><span class="editor-language-code">{entry.sourceLocale.toUpperCase()}</span><h2>{language(entry.sourceLocale)}</h2></div>
-            <span class="editor-source-label">{m.editor_workspace_source({}, options)}</span>
+            <span class="editor-source-label">
+              {m.editor_workspace_source({}, options)}
+              <!-- The source is a property of this form, so it is changed from the form's own heading. -->
+              {#if many && present.length > 1}
+                <span class="sep" aria-hidden="true">·</span>
+                <button class="btn-link" type="button" disabled={sourceBlocked !== undefined || locked} title={sourceBlocked ?? m.editor_change_source_sub({ language: language(entry.sourceLocale) }, options)} onclick={openSourceChange}>{m.editor_change_source({}, options)}</button>
+              {/if}
+            </span>
           </div>
           <fieldset disabled={locked || entrySession.localeMutationBlocked(entry.sourceLocale)}>
-            <Fields {fields} blocks={shownForm.blocks} blockLabels={shownForm.blockLabels} {problems} {mediaBase} locale={entry.sourceLocale} {uiLocale} session={entrySession} inheritedSeo={inherited(entry.sourceLocale, data)} {site} servedAt={localeUrl(entry.sourceLocale)} bind:root={entrySession.snapshots[entry.sourceLocale]!} structureLocked={entrySession.structureMutationBlocked()} textOnly={entrySession.sourceTextOnly(entry.sourceLocale)} />
+            <Fields {fields} blocks={shownForm.blocks} blockLabels={shownForm.blockLabels} {problems} {mediaBase} locale={entry.sourceLocale} {uiLocale} session={entrySession} inheritedSeo={inherited(entry.sourceLocale, data)} {site} servedAt={localeUrl(entry.sourceLocale)} bind:root={entrySession.snapshots[entry.sourceLocale]!} structureLocked={entrySession.structureMutationBlocked()} textOnly={entrySession.sourceTextOnly(entry.sourceLocale)} afterTitle={ontopbar && locale === entry.sourceLocale ? addressRow : undefined} titleKey={entry.titleField} />
           </fieldset>
         </form>
       {/if}
@@ -1943,6 +1933,8 @@ async function saveAddress() {
               }}
               {mediaBase}
               heading={paneHeading}
+              afterTitle={ontopbar && shown === locale ? addressRow : undefined}
+              titleKey={entry.titleField}
               next={queue ? queueNext : undefined}
               {reference}
               {references}

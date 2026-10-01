@@ -641,7 +641,7 @@ test('turning a language off sends the ones the entry keeps', async () => {
 
   $$<HTMLButtonElement>(root, '[aria-label="Language"] button')[1]?.click();
   flushSync();
-  $<HTMLButtonElement>(root, 'button.btn-link')?.click();
+  $<HTMLButtonElement>(root, '.pane button.btn-link')?.click();
   await tick();
 
   expect(fetchMock).toHaveBeenCalledWith('/admin/api/entries/listings/seaview-cottage/locales', {
@@ -800,7 +800,7 @@ test('a language turned off is struck through and offers no way to write it', ()
   expect($(root, 'button.btn-create')).toBeNull();
   expect($(root, '.pane h2')?.textContent).toContain('German');
   expect($(root, '.pane button.btn')?.textContent).toContain('back on');
-  expect($(root, 'button.btn-link')).toBeNull();
+  expect($(root, '.pane button.btn-link')).toBeNull();
 });
 
 // No English file was ever made, so German is where the structure is edited.
@@ -1022,16 +1022,9 @@ test('typing over a machine-filled field takes its badge off there and then', ()
   expect($(root, '.badge-machine')).toBeNull();
 });
 
-// Entry-editor mockup 17: the source is changed on purpose, from the entry's own menu.
-const openMenu = async (root: ParentNode) => {
-  await tick();
-  $<HTMLButtonElement>(root, '[aria-label="More actions"]')?.click();
-  flushSync();
-};
-const changeSourceItem = (root: ParentNode) =>
-  $$<HTMLButtonElement>(root, '[role="menuitem"]').find((b) =>
-    b.textContent?.includes('Change source language'),
-  );
+// Entry-editor mockup 17: the source is changed on purpose, from the source form's heading.
+const changeSourceButton = (root: ParentNode) =>
+  $<HTMLButtonElement>(root, '.editor-source-label button');
 const sourceCalls = (mock: { mock: { calls: unknown[][] } }) =>
   mock.mock.calls.filter((call) => String(call[0]).endsWith('/source'));
 /** The source route answers `answer`; every other request is the autosave's. */
@@ -1046,10 +1039,10 @@ const sourcing = (answer: () => Response) =>
           : Response.json({ updated_at: 1755864000000, pending: true, problems: [] }),
   );
 const chooseSource = async (root: ParentNode) => {
-  await openMenu(root);
-  // A real click focuses the item, which the menu then removes.
-  changeSourceItem(root)?.focus();
-  changeSourceItem(root)?.click();
+  await tick();
+  // A real click focuses the button, which the dialog hands focus back to.
+  changeSourceButton(root)?.focus();
+  changeSourceButton(root)?.click();
   await vi.waitFor(() => expect($(root, '.source-effects')).not.toBeNull());
 };
 const withRevisions = { ...bilingual, revisions: { en: 'rev-en', de: 'rev-de' } };
@@ -1057,26 +1050,28 @@ const withRevisions = { ...bilingual, revisions: { en: 'rev-en', de: 'rev-de' } 
 test('Change source language is offered only with two languages and two files', async () => {
   vi.stubGlobal('fetch', autosaved());
   const one = show();
-  await openMenu(one);
-  expect(changeSourceItem(one)).toBeUndefined();
+  await tick();
+  expect(changeSourceButton(one)).toBeNull();
   unmount(state.app);
   document.body.innerHTML = '';
 
   const single = show({ entry: { ...bilingual, translations: {} } });
-  await openMenu(single);
-  expect(changeSourceItem(single)).toBeUndefined();
+  await tick();
+  expect(changeSourceButton(single)).toBeNull();
   unmount(state.app);
   document.body.innerHTML = '';
 
   const two = show({ entry: bilingual });
-  await openMenu(two);
-  expect(changeSourceItem(two)?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
-    'Change source language… English is the source: blocks are added and moved there, and Translate works from it.',
+  await tick();
+  expect(changeSourceButton(two)?.textContent?.trim()).toBe('Change source language…');
+  expect(changeSourceButton(two)?.title).toBe(
+    'English is the source: blocks are added and moved there, and Translate works from it.',
   );
-  expect(changeSourceItem(two)?.disabled).toBe(false);
+  expect(changeSourceButton(two)?.disabled).toBe(false);
 });
 
-test('languages that disagree about blocks disable Change source language with the reason', async () => {
+// The drift panel stands in for the form, and with it the heading that offers the change.
+test('languages that disagree about blocks offer no Change source language until settled', async () => {
   vi.stubGlobal('fetch', autosaved());
   const root = show({
     entry: {
@@ -1092,11 +1087,9 @@ test('languages that disagree about blocks disable Change source language with t
       ],
     },
   });
-  await openMenu(root);
-  expect(changeSourceItem(root)?.disabled).toBe(true);
-  expect($(root, '#change-source-sub')?.textContent).toBe(
-    'The languages disagree about blocks — settle that first',
-  );
+  await tick();
+  expect(root.querySelector('.drift')).not.toBe(null);
+  expect(changeSourceButton(root)).toBeNull();
 });
 
 test('a save that failed first sends nothing, then disables Change source language', async () => {
@@ -1120,9 +1113,9 @@ test('a save that failed first sends nothing, then disables Change source langua
   );
   $<HTMLButtonElement>(root, '.source-dialog .actions .btn')?.click();
   flushSync();
-  await openMenu(root);
-  expect(changeSourceItem(root)?.disabled).toBe(true);
-  expect($(root, '#change-source-sub')?.textContent).toBe(
+  await tick();
+  expect(changeSourceButton(root)?.disabled).toBe(true);
+  expect(changeSourceButton(root)?.title).toBe(
     'Your last change could not be saved — that has to work first',
   );
 });
@@ -1223,16 +1216,15 @@ test('after the change a notice says it waits for the entry to publish', () => {
   expect($(published, '.lock-banner[role="status"]')).toBeNull();
 });
 
-test('Escape closes the source dialog and gives focus back to the menu button', async () => {
+test('Escape closes the source dialog and gives focus back to Change source language', async () => {
   vi.stubGlobal('fetch', autosaved());
   const root = show({ entry: bilingual });
-  $<HTMLButtonElement>(root, '[aria-label="More actions"]')?.focus();
   await chooseSource(root);
   document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   flushSync();
 
   expect($(root, '.source-dialog')).toBeNull();
-  expect(document.activeElement).toBe($(root, '[aria-label="More actions"]'));
+  expect(document.activeElement).toBe(changeSourceButton(root));
 });
 
 test('side by side and creating a language never ask to change the source', async () => {

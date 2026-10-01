@@ -38,7 +38,7 @@ languages disagreeing, and the editor asks about it before the publish goes out.
 
 ## Across a rename
 
-Renaming an entry from the ⋯ menu moves its files, and history follows: the list carries on
+Renaming an entry with **Change file name**, under its web address, moves its files, and history follows: the list carries on
 under the old name, and a version from before the rename says which name it is under — *2 weeks
 ago · Anna · as old-mill*. Restoring one writes it under the name the entry has now; the entry
 never moves back. A rename made by hand in the repository, without the admin, is not followed.

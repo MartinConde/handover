@@ -33,18 +33,20 @@ test('renders one labelled input per text field, filled from the entry data', ()
   expect($<HTMLInputElement>(root, 'input#f-seo\\.description')?.value).toBe('Harbour view');
 });
 
-test('a global is drawn without the status chip, the overflow menu or the tab bar', () => {
+test('a global is drawn without Hide, Delete, Change file name or the tab bar', () => {
+  // Held, so the publish menu opens without anything unpublished.
   const root = show({
     collection: 'globals',
     slug: 'site',
-    entry: { ...entry, singleton: true, label: 'Site details' },
+    entry: { ...entry, singleton: true, label: 'Site details', held: true },
   });
 
-  expect($(root, '.status')).toBeNull();
-  expect($(root, '[aria-label="More actions"]')).toBeNull();
+  expect($(root, '.delete-entry')).toBeNull();
+  expect($(root, '.slug-rename')).toBeNull();
   expect($(root, '[role="tablist"]')).toBeNull();
-  expect($(root, '.hold-toggle')).not.toBeNull();
   expect($(root, '.btn-primary')?.textContent).toContain('Publish this entry');
+  openPublishMenu(root);
+  expect(publishMenuItems(root)).toEqual(['Ready to publish']);
 });
 
 test('a global keeps its title state and publishing controls in one header row', () => {
@@ -56,7 +58,7 @@ test('a global keeps its title state and publishing controls in one header row',
 
   const row = $(root, '.entry-header > .heading-row');
   expect(row?.querySelector('h1')?.textContent).toBe('Site details');
-  expect(row?.querySelector('.hold-toggle')).not.toBeNull();
+  expect(row?.querySelector('.publish-more')).not.toBeNull();
   expect(root.querySelector('.workspace-toolbar .seg[aria-label="Language"]')).not.toBeNull();
   expect(row?.querySelector('.btn-primary')?.textContent).toContain('Publish this entry');
 });
@@ -106,7 +108,17 @@ test('an unsupported field shows a marker instead of an input', () => {
 });
 
 const beside = (root: ParentNode) =>
-  $$<HTMLButtonElement>(root, '[aria-label="Beside the form"] button');
+  $$<HTMLButtonElement>(root, '[aria-label="Beside the form"] button:not(.canvas-open)');
+const openPublishMenu = (root: ParentNode) => {
+  $<HTMLButtonElement>(root, '.publish-more')?.click();
+  flushSync();
+};
+const publishMenuItems = (root: ParentNode) =>
+  $$(root, '.publish-menu [role^="menuitem"]').map((b) => b.textContent?.trim());
+const publishMenuItem = (root: ParentNode, name: string) =>
+  $$<HTMLButtonElement>(root, '.publish-menu [role^="menuitem"]').find(
+    (b) => b.textContent?.trim() === name,
+  );
 const pressed = (root: ParentNode) =>
   $(root, '[aria-label="Beside the form"] [aria-pressed="true"]')?.textContent;
 
@@ -469,7 +481,11 @@ test('an entry on hold can still be published from its own header', async () => 
   const root = show({ entry: { ...entry, pending: ['en'], held: true } });
   const button = $<HTMLButtonElement>(root, 'button.btn-primary');
   expect(button?.disabled).toBe(false);
-  expect($(root, '.hold-toggle')?.getAttribute('aria-checked')).toBe('false');
+  openPublishMenu(root);
+  expect($(root, '.publish-menu [role="menuitemcheckbox"]')?.getAttribute('aria-checked')).toBe(
+    'false',
+  );
+  openPublishMenu(root);
   button?.click();
   await tick();
   flushSync();
@@ -933,8 +949,11 @@ test('the inline address editor focuses its value and Escape returns focus to th
   expect(document.activeElement).toBe(body.querySelector('.slug-edit'));
 });
 
-test('a collection without localized slugs has no address row', () => {
-  expect(show({ entry: bilingual }).querySelector('.slug-row')).toBe(null);
+test('a collection without localized slugs has no address to edit, only Change file name', () => {
+  const body = show({ entry: bilingual });
+
+  expect(body.querySelector('.slug-row .slug-edit')).toBe(null);
+  expect(body.querySelector('.slug-row .slug-rename')?.textContent).toBe('Change file name');
 });
 
 // One language's address, not the entry's: the other languages' URLs did not move.
@@ -952,7 +971,8 @@ test('a language the entry has no file in has no address to edit', () => {
 
   switchTo(body, 'DE');
 
-  expect(body.querySelector('.slug-row')).toBe(null);
+  expect(body.querySelector('.slug-row .slug-edit')).toBe(null);
+  expect(body.querySelector('.slug-row .slug-rename')?.textContent).toBe('Change file name');
 });
 
 test('the reason an address was refused is shown against the row', async () => {
@@ -986,9 +1006,8 @@ test('hiding from the header asks where its readers go before it writes', async 
   vi.stubGlobal('fetch', fetcher);
   const root = show({ entry: { ...entry, route: '/listings/[slug]', index: '/listings' } });
 
-  $<HTMLButtonElement>(root, '.status')?.click();
-  flushSync();
-  $$<HTMLButtonElement>(root, '.status-menu button')[1]?.click();
+  openPublishMenu(root);
+  publishMenuItem(root, 'Hide from site…')?.click();
   flushSync();
   expect($(root, '.dialog h2')?.textContent).toBe('Where should visitors to this page go now?');
   $<HTMLButtonElement>(root, '.dialog .btn-primary')?.click();
@@ -1013,7 +1032,7 @@ test('a hidden entry says in the header where it sends its readers', () => {
     entry: { ...entry, hidden: true, redirects: { en: '/listings' } },
   });
 
-  expect($(root, '.status')?.textContent).toContain('Hidden');
+  expect($(root, '.entry-header .badge')?.textContent).toBe('Hidden');
   expect($(root, '.subline')?.textContent?.trim()).toBe('Redirecting to /listings while hidden');
 });
 
@@ -1026,20 +1045,34 @@ test('a hidden entry with no rule says so rather than naming nothing', () => {
   );
 });
 
-// Hide comes before Delete because it is the answer the delete dialog leads with.
-const menuItems = (root: ParentNode) =>
-  $$(root, '[role="menu"][aria-label="More actions"] [role="menuitem"]').map((b) =>
-    b.textContent?.trim(),
-  );
+// Rename lives in the address row, which only a collection with localized slugs draws.
+const renamable = { ...entry, localizedSlugs: true, route: '/listings/[slug]' };
 
-test('the header menu offers Rename, Hide and Delete, in that order', async () => {
+test('the publish menu offers Ready to publish, then Hide from site…', async () => {
+  vi.stubGlobal('fetch', autosaved());
+  const root = show({ entry: { ...entry, pending: ['en'] } });
+  await tick();
+  openPublishMenu(root);
+
+  expect(publishMenuItems(root)).toEqual(['Ready to publish', 'Hide from site…']);
+});
+
+test('Delete is its own button in the header actions', async () => {
   vi.stubGlobal('fetch', autosaved());
   const root = show();
   await tick();
-  $<HTMLButtonElement>(root, '[aria-label="More actions"]')?.click();
-  flushSync();
 
-  expect(menuItems(root)).toEqual(['Rename', 'Hide', 'Delete']);
+  expect($(root, '.entry-header .actions button.delete-entry')?.getAttribute('aria-label')).toBe(
+    'Delete',
+  );
+});
+
+test('Change file name sits in the address row', async () => {
+  vi.stubGlobal('fetch', autosaved());
+  const root = show({ entry: renamable });
+  await tick();
+
+  expect($(root, '.slug-row button.slug-rename')?.textContent).toBe('Change file name');
 });
 
 test('renaming from the header sends the new file name', async () => {
@@ -1052,13 +1085,9 @@ test('renaming from the header sends the new file name', async () => {
         : Response.json({ updated_at: 1755864000000, pending: true, problems: [] }),
   );
   vi.stubGlobal('fetch', fetchMock);
-  const root = show({ oncommitted: committed });
+  const root = show({ entry: renamable, oncommitted: committed });
   await tick();
-  $<HTMLButtonElement>(root, '[aria-label="More actions"]')?.click();
-  flushSync();
-  $$<HTMLButtonElement>(root, '[role="menuitem"]')
-    .find((b) => b.textContent?.trim() === 'Rename')
-    ?.click();
+  $<HTMLButtonElement>(root, '.slug-rename')?.click();
   flushSync();
 
   expect($(root, '.dialog h2')?.textContent).toBe('Rename Seaview Cottage');
@@ -1080,11 +1109,7 @@ test('deleting from the header leads with Hide it instead?, and Hide instead ask
   vi.stubGlobal('fetch', fetchMock);
   const root = show();
   await tick();
-  $<HTMLButtonElement>(root, '[aria-label="More actions"]')?.click();
-  flushSync();
-  $$<HTMLButtonElement>(root, '[role="menuitem"]')
-    .find((b) => b.textContent?.trim() === 'Delete')
-    ?.click();
+  $<HTMLButtonElement>(root, '.delete-entry')?.click();
   flushSync();
 
   expect($(root, '.dialog p')?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
@@ -1114,11 +1139,7 @@ test('a delete from the header sends where its readers go with the DELETE', asyn
   vi.stubGlobal('fetch', fetchMock);
   const root = show({ oncommitted: committed });
   await tick();
-  $<HTMLButtonElement>(root, '[aria-label="More actions"]')?.click();
-  flushSync();
-  $$<HTMLButtonElement>(root, '[role="menuitem"]')
-    .find((b) => b.textContent?.trim() === 'Delete')
-    ?.click();
+  $<HTMLButtonElement>(root, '.delete-entry')?.click();
   flushSync();
   $<HTMLButtonElement>(root, '.dialog .btn-danger')?.click();
   await tick();
@@ -1131,13 +1152,15 @@ test('a delete from the header sends where its readers go with the DELETE', asyn
   expect(committed).toHaveBeenCalledOnce();
 });
 
-test('the header menu is closed while somebody else holds the entry', async () => {
+test('Delete, the publish menu and Change file name are disabled while somebody else holds the entry', async () => {
   vi.stubGlobal('fetch', heldBy());
-  const root = show();
+  const root = show({ entry: renamable });
   await tick();
   flushSync();
 
-  expect($<HTMLButtonElement>(root, '[aria-label="More actions"]')?.disabled).toBe(true);
+  expect($<HTMLButtonElement>(root, '.delete-entry')?.disabled).toBe(true);
+  expect($<HTMLButtonElement>(root, '.publish-more')?.disabled).toBe(true);
+  expect($<HTMLButtonElement>(root, '.slug-rename')?.disabled).toBe(true);
 });
 
 // The SEO field is drawn on its own tab only, so no screen carries two boxes with one id.

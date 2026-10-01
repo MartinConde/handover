@@ -39,6 +39,8 @@ let {
   site,
   uiLocale = 'en',
   heading,
+  afterTitle,
+  titleKey,
   next,
   reference,
   references = [],
@@ -78,6 +80,9 @@ let {
   uiLocale?: UiLocale;
   /** Draws the pane's `h2#pane-{locale}` when the editor offers a choice of language there. */
   heading?: Snippet<[string]>;
+  /** Passed to the form: drawn under the title field. */
+  afterTitle?: Snippet;
+  titleKey?: string;
   /** The queue's way on to the next entry, when the entry was opened from a filtered list. */
   next?: Snippet;
   /** The language drawn read-only under each field, when one is chosen and still valid. */
@@ -355,6 +360,8 @@ const failureDetail = $derived(fillFailure ? messageDetail(fillFailure, uiLocale
         sourceLabel={named(source)}
         translatedAt={behind.translatedAt ?? ''}
         prefix="t"
+        {afterTitle}
+        {titleKey}
         {reference}
         {site}
         servedAt={url}

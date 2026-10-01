@@ -5,7 +5,6 @@ import { deferred } from '../test-helpers.fixture.js';
 import Editor from './Editor.svelte';
 import {
   $,
-  $$,
   addressed,
   autosaved,
   bilingual,
@@ -23,6 +22,15 @@ import {
 } from './editor.fixture.js';
 
 useEditorSetup();
+
+const openPublishMenu = (root: HTMLElement) => {
+  $<HTMLButtonElement>(root, '.publish-more')?.click();
+  flushSync();
+};
+const holdItem = (root: HTMLElement) =>
+  $<HTMLButtonElement>(root, '.publish-menu [role="menuitemcheckbox"]');
+const statusItem = (root: HTMLElement) =>
+  $<HTMLButtonElement>(root, '.publish-menu [role="menuitem"]');
 
 // Detection only: field-by-field resolution is the three-way view, not built yet.
 test('a file somebody changed in the repository badges the header and names the drawer', async () => {
@@ -731,7 +739,8 @@ test('Not ready yet stores the edit, then holds the entry', async () => {
   const root = show();
   type(root, 'input#f-title', 'Seaview House');
 
-  $<HTMLButtonElement>(root, '.hold-toggle')?.click();
+  openPublishMenu(root);
+  holdItem(root)?.click();
   await tick();
   await tick();
   flushSync();
@@ -741,18 +750,22 @@ test('Not ready yet stores the edit, then holds the entry', async () => {
     '/admin/api/hold/listings/seaview-cottage',
   ]);
   expect(wrote(fetchMock)[1]?.[1]).toMatchObject({ body: JSON.stringify({ hold: true }) });
-  expect($(root, '.hold-toggle')?.getAttribute('aria-checked')).toBe('false');
+  openPublishMenu(root);
+  expect(holdItem(root)?.getAttribute('aria-checked')).toBe('false');
   expect($(root, '.entry-header')?.classList.contains('is-held')).toBe(true);
 });
 
 test('an entry with nothing unpublished has nothing to hold back', () => {
   const root = show();
-  expect($<HTMLButtonElement>(root, '.hold-toggle')?.disabled).toBe(true);
+  openPublishMenu(root);
+  expect(holdItem(root)?.disabled).toBe(true);
+  expect(holdItem(root)?.textContent).toContain('There is nothing unpublished to hold back yet');
 });
 
 test('an entry somebody is already holding back opens with Ready off', () => {
   const root = show({ entry: { ...entry, pending: ['en'], held: true } });
-  expect($(root, '.hold-toggle')?.getAttribute('aria-checked')).toBe('false');
+  openPublishMenu(root);
+  expect(holdItem(root)?.getAttribute('aria-checked')).toBe('false');
 });
 
 // The lock is the entry's, so a refusal in the second language surrenders the whole tab.
@@ -822,15 +835,15 @@ test.each([500, 409])(
     flushSync();
     expect($<HTMLInputElement>(root, 'input#t-title')?.value).toBe('Unsaved German');
     expect($(root, '.pane .autosave')?.textContent).toContain('Not saved');
-    $<HTMLButtonElement>(root, '.hold-toggle')?.click();
+    openPublishMenu(root);
+    holdItem(root)?.click();
     await tick();
     $<HTMLButtonElement>(root, '.slug-row .btn-link')?.click();
     flushSync();
     $<HTMLButtonElement>(root, '.slug-row .btn')?.click();
     await tick();
-    $<HTMLButtonElement>(root, '.status')?.click();
-    flushSync();
-    $$<HTMLButtonElement>(root, '.status-menu button')[0]?.click();
+    openPublishMenu(root);
+    statusItem(root)?.click();
     await tick();
     expect(wrote(requests).every((c) => (c[1] as RequestInit).method === 'PUT')).toBe(true);
     expect(changed).not.toHaveBeenCalled();
@@ -922,9 +935,8 @@ test.each([500, 409])(
     $<HTMLButtonElement>(root, 'button.btn-sbs')?.click();
     flushSync();
     type(root, 'input#f-title', 'Keep the source edit');
-    $<HTMLButtonElement>(root, '.status')?.click();
-    flushSync();
-    $$<HTMLButtonElement>(root, '.status-menu button')[0]?.click();
+    openPublishMenu(root);
+    statusItem(root)?.click();
     await tick();
     $<HTMLButtonElement>(root, '.pane-head button.btn-off')?.click();
     flushSync();
@@ -1057,9 +1069,8 @@ test('a rejected status action becomes retryable without discarding the editor',
   );
   const root = show({ entry: { ...entry, hidden: true }, onchanged: changed });
   const clickStatus = () => {
-    $<HTMLButtonElement>(root, '.status')?.click();
-    flushSync();
-    $$<HTMLButtonElement>(root, '.status-menu button')[0]?.click();
+    openPublishMenu(root);
+    statusItem(root)?.click();
   };
   clickStatus();
   await tick();

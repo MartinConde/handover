@@ -17,6 +17,11 @@ const answering = (
 const q = <T extends Element>(selector: string) => document.body.querySelector<T>(selector);
 const qa = <T extends Element>(selector: string) =>
   Array.from(document.body.querySelectorAll<T>(selector));
+const holdInPublishMenu = () => {
+  q<HTMLButtonElement>('.publish-more')?.click();
+  flushSync();
+  q<HTMLButtonElement>('.publish-menu [role="menuitemcheckbox"]')?.click();
+};
 const switchLocale = () => {
   q<HTMLButtonElement>('[data-locale-switch]')?.click();
   flushSync();
@@ -68,7 +73,9 @@ test('live interface language updates editor chrome and dates without replacing 
   const current = q<HTMLInputElement>('input#f-title');
   expect(q('.editor-beside')?.getAttribute('aria-label')).toBe('Neben dem Formular');
   expect(
-    qa<HTMLButtonElement>('.editor-beside button').map((button) => button.textContent),
+    qa<HTMLButtonElement>('.editor-beside button:not(.canvas-open)').map(
+      (button) => button.textContent,
+    ),
   ).toEqual(['Live-Vorschau', 'Übersetzen']);
   expect(q('.canvas-open')?.textContent).toBe('Canvas');
   expect(q('.tabs')?.getAttribute('aria-label')).toBe('Eintragsbereiche');
@@ -93,14 +100,18 @@ test('live interface language updates editor chrome and dates without replacing 
   q<HTMLButtonElement>('.slug-row .btn-ghost')?.click();
   flushSync();
 
-  q<HTMLButtonElement>('[aria-label="Weitere Aktionen"]')?.click();
+  q<HTMLButtonElement>('.publish-more')?.click();
   flushSync();
   expect(
-    qa<HTMLButtonElement>('[role="menu"][aria-label="Weitere Aktionen"] button').map((button) =>
-      button.textContent?.trim(),
+    qa<HTMLButtonElement>('.publish-menu button').map((button) =>
+      button.textContent?.replace(/\s+/g, ' ').trim(),
     ),
-  ).toEqual(['Umbenennen', 'Ausblenden', 'Löschen']);
-  qa<HTMLButtonElement>('[role="menu"][aria-label="Weitere Aktionen"] button')[0]?.click();
+  ).toEqual(['Bereit zur Veröffentlichung', 'Von der Website nehmen…']);
+  q<HTMLButtonElement>('.publish-more')?.click();
+  flushSync();
+  expect(q('.delete-entry')?.getAttribute('aria-label')).toBe('Löschen');
+  expect(q('.slug-rename')?.textContent).toBe('Dateinamen ändern');
+  q<HTMLButtonElement>('.slug-rename')?.click();
   flushSync();
   expect(q('.dialog h2')?.textContent).toBe('Unsaved harbour words umbenennen');
   expect(q('.dialog label[for="rename-to"]')?.textContent).toBe('Dateiname');
@@ -599,7 +610,7 @@ test('visible validation and a pending save retranslate without losing queued ed
   expect(input.value).toBe('Latest queued words');
   expect(q('.autosave')?.textContent).toContain('Gespeichert');
 
-  q<HTMLButtonElement>('.hold-toggle')?.click();
+  holdInPublishMenu();
   await vi.advanceTimersByTimeAsync(0);
   flushSync();
   expect(q('.entry-header .subline')?.textContent).toContain('Zurückgehalten');
@@ -608,7 +619,7 @@ test('visible validation and a pending save retranslate without losing queued ed
   expect(q<HTMLInputElement>('input#f-title')).toBe(input);
 
   refuseHold = true;
-  q<HTMLButtonElement>('.hold-toggle')?.click();
+  holdInPublishMenu();
   await vi.advanceTimersByTimeAsync(0);
   flushSync();
   expect(q('.notice-danger')?.textContent).toContain('The hold could not be changed.');
@@ -617,7 +628,11 @@ test('visible validation and a pending save retranslate without losing queued ed
   expect(q('.notice-danger')?.textContent).toContain(
     'Der Status „Noch nicht bereit“ konnte nicht geändert werden.',
   );
-  expect(q('.hold-toggle')?.getAttribute('aria-checked')).toBe('false');
+  q<HTMLButtonElement>('.publish-more')?.click();
+  flushSync();
+  expect(q('.publish-menu [role="menuitemcheckbox"]')?.getAttribute('aria-checked')).toBe('false');
+  q<HTMLButtonElement>('.publish-more')?.click();
+  flushSync();
   switchLocale();
 
   refuseSave = true;
@@ -840,11 +855,7 @@ test('an open offsite choice retranslates without losing its target draft', asyn
   vi.stubGlobal('fetch', answering());
   state.app = mount(EditorLocaleFixture, { target: document.body });
   await settle();
-  q<HTMLButtonElement>('[aria-label="More actions"]')?.click();
-  flushSync();
-  qa<HTMLButtonElement>('[role="menuitem"]')
-    .find((button) => button.textContent?.trim() === 'Delete')
-    ?.click();
+  q<HTMLButtonElement>('.delete-entry')?.click();
   flushSync();
   const dialog = q<HTMLDialogElement>('.dialog');
   qa<HTMLInputElement>('.dialog input[type="radio"]')

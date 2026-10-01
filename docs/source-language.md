@@ -33,8 +33,8 @@ it was. Changing the interface language keeps the panel and the language chosen 
 ## Changing the language an entry is written in
 
 An entry keeps its source when languages are added, removed or reordered, and opening side by
-side never changes it. Making German the source of an English entry is its own action: **⋯ →
-Change source language…** in the entry's header, drawn on a site with two or more languages for
+side never changes it. Making German the source of an English entry is its own action: **Change source
+language…** in the heading of the entry's form, beside *Source content*, drawn on a site with two or more languages for
 an entry with files in two or more. The dialog lists every other language; one that cannot be
 chosen says why — *No file yet*, *Turned off for this entry*, or its problems once it takes the
 source's shared and source-only values. *What happens* spells out, for the language chosen, which

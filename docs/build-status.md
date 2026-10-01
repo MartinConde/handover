@@ -1,6 +1,6 @@
 # Build status and revert
 
-A commit is not a live site: what the top bar says while the host builds it, and the one
+A commit is not a live site: what the sidebar says while the host builds it, and the one
 commit that undoes a publish. The drawer that makes the commits is
 [Pending changes](pending-changes.md).
 
@@ -16,7 +16,8 @@ keep the browser's existing timezone.
 from that push; the pages your client just changed are live one to three minutes later. Without
 something saying so, a client presses Publish four times.
 
-So the top bar carries the state of the last commit the admin made:
+So the sidebar, under the unpublished-changes count, carries the state of the last commit the
+admin made:
 
 | | |
 |---|---|

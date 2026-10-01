@@ -1,6 +1,6 @@
 <script lang="ts">
 import { type Labels, labelIn, type Preset, type UiLocale } from '@handover/core';
-import type { Component } from 'svelte';
+import type { Component, Snippet } from 'svelte';
 import { on } from 'svelte/events';
 import Account from './account/Account.svelte';
 import Login, { type LoginMethods } from './account/Login.svelte';
@@ -628,6 +628,10 @@ const held = $derived(pending.filter((e) => e.held_by).length);
 
 /** The editor's title getter, tied to its entry so the next one never shows the last name. */
 let titled = $state<{ entry: string; read: () => string }>();
+/** The open entry's address and actions, drawn in the top bar while that entry is open. */
+let entryBar = $state.raw<{ entry: string; lead: Snippet; actions: Snippet }>();
+const bar = $derived(entryBar?.entry === editingAt ? entryBar : undefined);
+let topbarHeight = $state(0);
 const crumb = $derived(
   openScreen
     ? { href: '/admin', parent: m.dashboard_title({}, options), current: openScreen.label }
@@ -682,7 +686,62 @@ const initial = $derived(
     <div class="banner banner-warn" role="alert">{text(revertError)}{#if revertError.detail}<span class="technical-detail">{messageDetail(revertError, uiLocale)}</span>{/if}</div>
   {/if}
   <aside class={['sidebar', { 'is-open': menu }]} aria-label={m.shell_main_navigation({}, options)} inert={drawer}>
-    <a class="site-name" href={sitePath(`/admin`)}><span class="site-mark" aria-hidden="true">H</span><span class="nav-text">Handover<span class="workspace-label">{m.shell_content_workspace({}, options)}</span></span></a>
+    <!-- Site-wide state heads the site's navigation rather than sitting among one entry's controls. -->
+    <div class="sidebar-status">
+      <button
+        class={['indicator', { 'is-lit': pending.length && pendingKnown }]}
+        type="button"
+        aria-haspopup="dialog"
+        aria-expanded={drawer}
+        disabled={pendingStatus !== 'ready'}
+        onclick={() => (drawer = true)}
+        bind:this={indicator}
+      >
+        <span class="dot" aria-hidden="true"></span>
+        {#if pendingStatus === 'loading' && !pendingKnown}
+          {m.shell_pending_checking({}, options)}
+        {:else if pendingStatus === 'error' && !pending.length}
+          {m.shell_pending_unavailable({}, options)}
+        {:else}
+          <!-- Collapsed, the sidebar clips the words and shows the count alone. -->
+          {#if pending.length && pendingKnown}<span class="count" aria-hidden="true">{pending.length}</span>{/if}
+          <span class="nav-text">{pending.length ? m.shell_pending_count({ count: pending.length }, options) : m.shell_no_pending({}, options)}</span>
+        {/if}
+        {#if pending.length && pendingKnown}
+          <span class="detail">
+            <span class="sep" aria-hidden="true">·</span>
+            {m.shell_oldest({ when: formatRelativeTime(oldest, uiLocale) }, options)}
+            {#if held}<span class="sep" aria-hidden="true">·</span> {m.shell_on_hold({ count: held }, options)}{/if}
+          </span>
+        {/if}
+      </button>
+      {#if pendingStatus === 'error'}
+        <span class="pending-read-error" role="alert">
+          {pendingKnown ? m.shell_pending_stale({}, options) : m.shell_pending_failed({}, options)}
+          <button class="btn-link" type="button" onclick={loadPending}>{m.common_retry({}, options)}</button>
+        </span>
+      {/if}
+      <!-- Always in the DOM so the first state is announced; the ticking clock stays out of it. -->
+      <span class="build-status" role="status">
+        {#if build}
+          <BuildPill {build} {uiLocale}>
+            <!-- Only over the admin's own commit; otherwise the pill is the developer's deploy. -->
+            {#if build.state === 'failed' && build.commit_sha}
+              <span class="sep" aria-hidden="true">·</span>
+              <button class="btn-link" type="button" onclick={() => askRevert(build?.commit_sha ?? '')}>
+                {m.build_revert_last({}, options)}
+              </button>
+            {/if}
+          </BuildPill>
+        {/if}
+      </span>
+      {#if buildStatus === 'error'}
+        <span class="build-read-error" role="alert">
+          {build ? m.build_status_stale({}, options) : m.build_status_unavailable({}, options)}
+          <button class="btn-link" type="button" onclick={loadBuild}>{m.common_retry({}, options)}</button>
+        </span>
+      {/if}
+    </div>
     <nav class="nav">
       <div class="nav-group">
         <a href={sitePath(`/admin`)} data-icon="dashboard" aria-current={path === '/admin' ? 'page' : undefined}><span class="nav-text">{m.dashboard_title({}, options)}</span></a>
@@ -730,86 +789,8 @@ const initial = $derived(
         {/each}
       </div>
     </nav>
-    {#if session.site}
-      <div class="sidebar-footer"><a class="site-link" href={session.site} target="_blank" rel="noreferrer"><span class="nav-text">{m.shell_view_website({}, options)}</span> <span aria-hidden="true">↗</span></a></div>
-    {/if}
-  </aside>
-  <div class="shell-body" id="workspace" tabindex="-1" inert={drawer}>
-    <header class="topbar">
-      <!-- Only on a phone, where the narrow rule has taken the sidebar away. -->
-      <button
-        class="btn btn-ghost menu-button"
-        type="button"
-        aria-label={m.shell_open_menu({}, options)}
-        aria-expanded={menu}
-        onclick={() => (menu = !menu)}>☰</button
-      >
-      <!-- Only beside the sidebar; on a phone the menu button above stands in for it. -->
-      <button
-        class="btn btn-ghost sidebar-toggle"
-        type="button"
-        aria-label={collapsed ? m.shell_expand_sidebar({}, options) : m.shell_collapse_sidebar({}, options)}
-        aria-expanded={!collapsed}
-        onclick={toggleSidebar}
-        ><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16" /></svg></button
-      >
-      {#if crumb}
-        <div class="crumbs">
-          <a href={sitePath(crumb.href)}>{crumb.parent}</a>{#if crumb.current}<span class="sep" aria-hidden="true">/</span><span class="current">{crumb.current}</span>{/if}
-        </div>
-      {/if}
-      <button
-        class={['indicator', { 'is-lit': pending.length && pendingKnown }]}
-        type="button"
-        aria-haspopup="dialog"
-        aria-expanded={drawer}
-        disabled={pendingStatus !== 'ready'}
-        onclick={() => (drawer = true)}
-        bind:this={indicator}
-      >
-        <span class="dot" aria-hidden="true"></span>
-        {#if pendingStatus === 'loading' && !pendingKnown}
-          {m.shell_pending_checking({}, options)}
-        {:else if pendingStatus === 'error' && !pending.length}
-          {m.shell_pending_unavailable({}, options)}
-        {:else}
-          {pending.length ? m.shell_pending_count({ count: pending.length }, options) : m.shell_no_pending({}, options)}
-        {/if}
-        {#if pending.length && pendingKnown}
-          <span class="detail">
-            <span class="sep" aria-hidden="true">·</span>
-            {m.shell_oldest({ when: formatRelativeTime(oldest, uiLocale) }, options)}
-            {#if held}<span class="sep" aria-hidden="true">·</span> {m.shell_on_hold({ count: held }, options)}{/if}
-          </span>
-        {/if}
-      </button>
-      {#if pendingStatus === 'error'}
-        <span class="pending-read-error" role="alert">
-          {pendingKnown ? m.shell_pending_stale({}, options) : m.shell_pending_failed({}, options)}
-          <button class="btn-link" type="button" onclick={loadPending}>{m.common_retry({}, options)}</button>
-        </span>
-      {/if}
-      <span class="spacer"></span>
-      <!-- Always in the DOM so the first state is announced; the ticking clock stays out of it. -->
-      <span class="build-status" role="status">
-        {#if build}
-          <BuildPill {build} {uiLocale}>
-            <!-- Only over the admin's own commit; otherwise the pill is the developer's deploy. -->
-            {#if build.state === 'failed' && build.commit_sha}
-              <span class="sep" aria-hidden="true">·</span>
-              <button class="btn-link" type="button" onclick={() => askRevert(build?.commit_sha ?? '')}>
-                {m.build_revert_last({}, options)}
-              </button>
-            {/if}
-          </BuildPill>
-        {/if}
-      </span>
-      {#if buildStatus === 'error'}
-        <span class="build-read-error" role="alert">
-          {build ? m.build_status_stale({}, options) : m.build_status_unavailable({}, options)}
-          <button class="btn-link" type="button" onclick={loadBuild}>{m.common_retry({}, options)}</button>
-        </span>
-      {/if}
+    <div class="sidebar-footer">
+      {#if session.site}<a class="site-link" href={session.site} target="_blank" rel="noreferrer"><span class="nav-text">{m.shell_view_website({}, options)}</span> <span aria-hidden="true">↗</span></a>{/if}
       <div class="user-menu">
         <button
           class="btn"
@@ -841,6 +822,35 @@ const initial = $derived(
           </div>
         {/if}
       </div>
+    </div>
+  </aside>
+  <div class="shell-body" id="workspace" tabindex="-1" inert={drawer} style:--topbar-stuck={bar ? `${topbarHeight}px` : undefined}>
+    <header class={['topbar', { 'is-entry': bar }]} bind:offsetHeight={topbarHeight}>
+      <!-- Only on a phone, where the narrow rule has taken the sidebar away. -->
+      <button
+        class="btn btn-ghost menu-button"
+        type="button"
+        aria-label={m.shell_open_menu({}, options)}
+        aria-expanded={menu}
+        onclick={() => (menu = !menu)}>☰</button
+      >
+      <!-- Only beside the sidebar; on a phone the menu button above stands in for it. -->
+      <button
+        class="btn btn-ghost sidebar-toggle"
+        type="button"
+        aria-label={collapsed ? m.shell_expand_sidebar({}, options) : m.shell_collapse_sidebar({}, options)}
+        aria-expanded={!collapsed}
+        onclick={toggleSidebar}
+        ><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16" /></svg></button
+      >
+      {#if crumb}
+        <div class="crumbs">
+          <a href={sitePath(crumb.href)}>{crumb.parent}</a>{#if crumb.current}<span class="sep" aria-hidden="true">/</span><span class="current">{crumb.current}</span>{/if}
+        </div>
+      {/if}
+      {#if bar}<div class="entry-lead">{@render bar.lead()}</div>{/if}
+      <span class="spacer"></span>
+      {#if bar}<div class="entry-actions">{@render bar.actions()}</div>{/if}
     </header>
     <!-- Keyed on the entry rather than on the address, for the reason `editingAt` gives. -->
     {#key `${editingAt || path}#${reload}`}
@@ -883,6 +893,10 @@ const initial = $derived(
           createdAll={createdAll?.entry === editingAt ? createdAll.report : undefined}
           onmode={(mode) => (editorMode = mode)}
           ontitle={(read) => (titled = { entry: editingAt, read })}
+          ontopbar={(parts) => {
+            entryBar = { entry: editingAt, ...parts };
+            return () => (entryBar = undefined);
+          }}
         />
       {:catch error}
         {#if error && typeof error === 'object' && 'source' in error}

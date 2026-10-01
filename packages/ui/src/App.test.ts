@@ -893,7 +893,7 @@ test.each([
 
   if (malformedUrl.endsWith('/drafts')) {
     await vi.waitFor(() => expect(root.querySelector('.pending-read-error')).not.toBeNull());
-    expect(root.querySelector('.topbar .pill')?.textContent).toContain('Live');
+    expect(root.querySelector('.sidebar .build-status .pill')?.textContent).toContain('Live');
   } else {
     await vi.waitFor(() => expect(root.querySelector('.build-read-error')).not.toBeNull());
     expect(root.querySelector('.indicator')?.textContent).toContain('1 unpublished change');
@@ -1272,11 +1272,11 @@ const conflictShell = () => {
 const publishFromHeader = async (root: HTMLElement) => {
   await vi.dynamicImportSettled();
   await settle(3);
-  root.querySelector<HTMLButtonElement>('.entry-header .actions .btn-primary')?.click();
+  root.querySelector<HTMLButtonElement>('.topbar .entry-actions .btn-primary')?.click();
   await settle(3);
   root.querySelector<HTMLButtonElement>('.dialog .btn-primary')?.click();
   await settle(3);
-  expect(root.querySelector('.entry-header .badge-danger')?.textContent).toBe(
+  expect(root.querySelector('.topbar .entry-lead .badge-danger')?.textContent).toBe(
     'Changed in the repository since you opened it',
   );
 };
@@ -1531,10 +1531,12 @@ test('a running build says so in words, inside a live region', async () => {
   const root = show(session());
   await settle();
 
-  const region = root.querySelector('.topbar [role="status"]');
+  const region = root.querySelector('.sidebar .build-status[role="status"]');
   expect(region?.textContent).toContain('Building…');
   // The elapsed time is out of the live region's reach, or every tick says the pill again.
-  expect(root.querySelector('.topbar .pill .detail')?.getAttribute('aria-hidden')).toBe('true');
+  expect(
+    root.querySelector('.sidebar .build-status .pill .detail')?.getAttribute('aria-hidden'),
+  ).toBe('true');
 });
 
 test('a build that is still running warns that the admin may reload', async () => {
@@ -1552,7 +1554,7 @@ test('a failed build says so and offers a revert of that commit', async () => {
   const root = show(session());
   await settle();
 
-  const pill = root.querySelector('.topbar .pill');
+  const pill = root.querySelector('.sidebar .build-status .pill');
   expect(pill?.textContent).toContain('Build failed');
   pill?.querySelector<HTMLButtonElement>('.btn-link')?.click();
   flushSync();
@@ -1565,10 +1567,10 @@ test('a site with no build status draws no pill and no banner', async () => {
   const root = show(session());
   await settle();
 
-  expect(root.querySelector('.topbar .pill')).toBeNull();
+  expect(root.querySelector('.sidebar .build-status .pill')).toBeNull();
   expect(root.querySelector('.banner-info')).toBeNull();
   // The live region stays, so the first state to arrive is announced rather than missed.
-  expect(root.querySelector('.topbar [role="status"]')).not.toBeNull();
+  expect(root.querySelector('.sidebar .build-status[role="status"]')).not.toBeNull();
 });
 
 // The live pill says when the site last changed, not only that it is up.
@@ -1582,7 +1584,7 @@ test('a live build says since when', async () => {
   const root = show(session());
   await settle();
 
-  const pill = root.querySelector('.topbar .pill');
+  const pill = root.querySelector('.sidebar .build-status .pill');
   expect(pill?.textContent?.replace(/\s+/g, ' ').trim()).toBe('Live since 14:02');
 });
 
@@ -1615,7 +1617,7 @@ test('a successful commit refreshes a live build and polls only until it settles
   const root = show(session(), '/admin/site/redirects');
   await vi.advanceTimersByTimeAsync(0);
   flushSync();
-  expect(root.querySelector('.topbar .pill')?.textContent).toContain('Live');
+  expect(root.querySelector('.sidebar .build-status .pill')?.textContent).toContain('Live');
 
   root.querySelector<HTMLButtonElement>('.list-toolbar .btn-primary')?.click();
   flushSync();
@@ -1633,12 +1635,12 @@ test('a successful commit refreshes a live build and polls only until it settles
   await vi.advanceTimersByTimeAsync(0);
   flushSync();
 
-  expect(root.querySelector('.topbar .pill')?.textContent).toContain('Building…');
+  expect(root.querySelector('.sidebar .build-status .pill')?.textContent).toContain('Building…');
   expect(buildReads).toBe(2);
 
   await vi.advanceTimersByTimeAsync(10_000);
   flushSync();
-  expect(root.querySelector('.topbar .pill')?.textContent).toContain('Live');
+  expect(root.querySelector('.sidebar .build-status .pill')?.textContent).toContain('Live');
   expect(buildReads).toBe(3);
 
   await vi.advanceTimersByTimeAsync(30_000);
@@ -1653,7 +1655,7 @@ test('a failed build with no commit of ours offers no revert', async () => {
   const root = show(session());
   await settle();
 
-  const pill = root.querySelector('.topbar .pill');
+  const pill = root.querySelector('.sidebar .build-status .pill');
   expect(pill?.textContent).toContain('Build failed');
   expect(pill?.querySelector('.btn-link')).toBeNull();
 });
@@ -1987,16 +1989,16 @@ test('publishing one entry refreshes the shell from Live to the returned build s
   const root = show(session(), '/admin/c/listings/mill-house');
   await vi.dynamicImportSettled();
   await settle();
-  expect(root.querySelector('.topbar .pill')?.textContent).toContain('Live');
+  expect(root.querySelector('.sidebar .build-status .pill')?.textContent).toContain('Live');
 
-  Array.from(root.querySelectorAll<HTMLButtonElement>('.entry-header button'))
+  Array.from(root.querySelectorAll<HTMLButtonElement>('.topbar .entry-actions button'))
     .find((button) => button.textContent?.trim() === 'Publish this entry')
     ?.click();
   await settle();
   root.querySelector<HTMLButtonElement>('.dialog .btn-primary')?.click();
   await settle();
 
-  expect(root.querySelector('.topbar .pill')?.textContent).toContain('Building…');
+  expect(root.querySelector('.sidebar .build-status .pill')?.textContent).toContain('Building…');
   expect(root.querySelector('.indicator')?.textContent).toContain('No unpublished changes');
 });
 
@@ -2070,7 +2072,7 @@ test('a revert is said in a notice', async () => {
   publishing();
   const root = show(session());
   await settle();
-  root.querySelector<HTMLButtonElement>('.topbar .pill .btn-link')?.click();
+  root.querySelector<HTMLButtonElement>('.sidebar .build-status .pill .btn-link')?.click();
   flushSync();
   document.querySelector<HTMLButtonElement>('[aria-labelledby="revert-h"] .btn-danger')?.click();
   await settle();

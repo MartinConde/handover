@@ -4,6 +4,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- The entry editor's header is two rows instead of three. The breadcrumb names the entry and
+  holds **Publish this entry**, whose arrow opens **Ready to publish** and **Hide from site…**;
+  a trash button replaces the ⋯ menu. The web address and **Change file name** sit under the
+  title field, and **Change source language…** sits in the form's heading. The unpublished-changes
+  count and the build status moved to the top of the sidebar, and the account menu to its foot.
 - Screens that are still loading show grey placeholder rows and fields that pulse gently,
   instead of the word *Loading…*; with reduced motion turned on they stay still.
 - A second publish refused in *Unpublished changes* keeps **Resolve** on the entry the first

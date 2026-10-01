@@ -1,6 +1,6 @@
 # Pending changes
 
-The top bar counts the entries with unpublished changes; its button opens the
+The top of the sidebar counts the entries with unpublished changes; its button opens the
 **pending-changes drawer**, which lists them with a checkbox each and commits the checked
 ones. What autosave stores and how an entry is published on its own are on
 [Drafts and publishing](publishing.md); what happens to the commit afterwards — the build
@@ -101,8 +101,9 @@ the collection schema is not done with, and languages that have drifted apart.
 
 Drafts are shared, so publishing everything pending means publishing everybody's pending —
 including the page somebody is halfway through rewriting. The person who knows it is
-halfway is the one editing it, so that is where the flag lives: **Not ready yet**, next to
-the status in the entry header.
+halfway is the one editing it, so that is where the flag lives: **Ready to publish**, ticked
+by default, in the menu under the arrow beside **Publish this entry**. Untick it to hold the
+entry back.
 
 - It is the **whole entry**, every language, the way a lock is. The header tints and says
   *On hold — won't be included when others publish*

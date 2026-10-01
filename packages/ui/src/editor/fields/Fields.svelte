@@ -21,7 +21,7 @@ import {
   unsafeLinkScheme,
   type WordPart,
 } from '@handover/core';
-import { tick } from 'svelte';
+import { type Snippet, tick } from 'svelte';
 import Menus, { type Menu } from '../../content/Menus.svelte';
 import PagePicker from '../../content/PagePicker.svelte';
 import { EMPTY_ENTRY_DIRECTORY, type Pickable, readEntryDirectory } from '../../entry-directory.js';
@@ -77,6 +77,8 @@ let {
   structureLocked = false,
   textOnly = false,
   reference,
+  afterTitle,
+  titleKey = 'title',
 }: {
   fields: readonly Field[];
   root: Data;
@@ -134,6 +136,9 @@ let {
   textOnly?: boolean;
   /** Another language's words drawn under each translated field, read only. */
   reference?: Reference;
+  /** Drawn right under the entry's title field: the editor puts the address there. */
+  afterTitle?: Snippet;
+  titleKey?: string;
 } = $props();
 const options = $derived(messageOptions(uiLocale));
 
@@ -1108,4 +1113,5 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
       />
     {/if}
   </div>
+  {#if afterTitle && at.join('.') === titleKey}{@render afterTitle()}{/if}
 {/each}
