@@ -321,6 +321,23 @@ test('a reset for an unknown email answers the same and mails nothing', async ()
   expect(resetLinks).toEqual([]);
 });
 
+// A copy of the database must not be a way to finish somebody's pending reset.
+test('a reset link is stored as a hash, and still works', async () => {
+  emailing();
+  await seedUser('owner@example.com', 'owner');
+  await call('/request-password-reset', {
+    email: 'owner@example.com',
+    redirectTo: `${SITE}/admin/reset`,
+  });
+  const token = (resetLinks[0]?.url ?? '').split('/reset-password/')[1]?.split('?')[0] ?? '';
+  const stored = await binding.prepare('SELECT identifier FROM verification').all();
+
+  expect(JSON.stringify(stored.results)).not.toContain(token);
+  expect(
+    (await call('/reset-password', { token, newPassword: 'a-brand-new-password' })).status,
+  ).toBe(200);
+});
+
 // Better Auth buckets on the whole path, so every guessed token was a fresh bucket and a new row.
 test('opening reset links from one address is limited across tokens, in one row', async () => {
   emailing();

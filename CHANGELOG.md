@@ -4,6 +4,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Security:** a password-reset link is stored as a hash, as sign-in links already were, so a
+  copy of the database cannot finish a pending reset. Reset links mailed before the deploy stop
+  working; ask for a new one.
 - **Security:** preview pages run only scripts from the site's own files and Astro's island
   scripts. Before, a draft rendered through a component that outputs HTML could run a script with
   the session of whoever previewed it. An inline script or a custom client directive no longer

@@ -120,6 +120,10 @@ export function authOptions(siteId: string, db: Db, config: AuthConfig): BetterA
           }
         : {}),
     },
+    // Reset tokens are kept in the clear by default; magic links already hash theirs.
+    verification: {
+      storeIdentifier: { default: 'plain', overrides: { 'reset-password:': 'hashed' } },
+    },
     // Reached only through an email change: sign-up is closed and `/send-verification-email` is not routed.
     ...(approval && changeLink
       ? {
@@ -170,7 +174,7 @@ export function authOptions(siteId: string, db: Db, config: AuthConfig): BetterA
               : undefined,
         },
       },
-      // The consumed row's `value` is the user id; its other column is the token in the clear.
+      // The consumed row's `value` is the user id; its identifier is a hash of the token.
       verification: {
         delete: {
           after: async (row, context) => {

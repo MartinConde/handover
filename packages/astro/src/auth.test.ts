@@ -10,6 +10,8 @@ let clientId: string | undefined;
 let clientSecret: string | undefined;
 let resendKey: string | undefined;
 const sent: { to: string; subject: string; text: string }[] = [];
+// Every message handed to the mailer, a refused one included.
+const attempted: { text: string }[] = [];
 // A provider's refusal is the developer's to read in the log, not a person's to see.
 let refuseSend: Error | undefined;
 // A provider that takes its time: the send waits on this before it counts as sent.
@@ -50,6 +52,7 @@ vi.mock('virtual:handover/config', () => ({
     i18n: { locales: ['en'], defaultLocale: 'en' },
     collections: {},
     mailer: async (message: { to: string; subject: string; text: string }) => {
+      attempted.push(message);
       if (refuseSend) throw refuseSend;
       await holdSend;
       sent.push(message);
@@ -89,6 +92,7 @@ beforeEach(async () => {
   refuseSend = undefined;
   holdSend = undefined;
   sent.length = 0;
+  attempted.length = 0;
   const rows = (await binding.prepare(`SELECT name FROM sqlite_master WHERE type = 'table'`).all())
     .results as { name: string }[];
   for (const { name } of rows.filter((r) => !/^(sqlite_|_cf_)/.test(r.name))) {
@@ -370,13 +374,8 @@ test('a reset that could not be sent leaves a row, and no link in it', async () 
   expect(rows.map((r) => (JSON.parse(r.detail) as { message: string }).message)).toEqual([
     'password reset',
   ]);
-  // A reset stores its token in the clear, so the row this reads is the credential itself.
-  const stored = (
-    (await binding.prepare('SELECT identifier FROM verification').all()).results as {
-      identifier: string;
-    }[]
-  )[0]?.identifier;
-  const token = stored?.split(':')[1] ?? '';
+  // The link the mailer was handed is the credential itself.
+  const token = attempted[0]?.text.match(/reset-password\/([^?\s]+)/)?.[1] ?? '';
   expect(token).not.toBe('');
   expect(JSON.stringify(rows)).not.toContain(token);
 });

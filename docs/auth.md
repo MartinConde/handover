@@ -105,7 +105,8 @@ Which of the two roles somebody has, and what each may do, is
 
 ## Forgot password, and the account page
 
-*Forgot password?* mails a link to `/admin/reset` that lives for **an hour** and works once.
+*Forgot password?* mails a link to `/admin/reset` that lives for **an hour** and works once; the
+database keeps a hash of it, not the link.
 Setting a new password there ends every session the account had, including the one that asked —
 which is the point, if the reason for the reset is that somebody else had it.
 
