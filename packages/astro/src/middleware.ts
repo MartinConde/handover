@@ -6,8 +6,9 @@ import { canvasErrorDocument, errorManifest, GATE } from './canvas.js';
 
 // A draft page's links point at the live site, so clicking through a preview would leave it.
 const base = () => (config.i18n.base ?? '').replace(/\/+$/, '');
+// A tag ends at the next `<`, so a page of unclosed `<a` is one pass rather than a scan per tag.
 const previewLinks = (html: string) =>
-  html.replace(/(<a\b[^>]*\shref=")([^"#]+)(")/g, (all, before, path, after) => {
+  html.replace(/(<a\b[^<>]*\shref=")([^"#<>]+)(")/g, (all, before, path, after) => {
     const b = base();
     if (
       !path.startsWith('/') ||

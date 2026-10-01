@@ -175,6 +175,26 @@ test('a link on a preview page to a page on this site stays in the preview', asy
   expect(getSession).not.toHaveBeenCalled();
 });
 
+test('a preview page full of unclosed links is rewritten in linear time', async () => {
+  session = null;
+  const url = new URL('/_preview/listings/mill-house', 'https://x');
+  const page = `<a href="/listings/barn">Barn</a>${'<a '.repeat(100_000)}`;
+  const next = vi.fn(
+    async () => new Response(page, { headers: { 'content-type': 'text/html; charset=utf-8' } }),
+  );
+
+  const started = performance.now();
+  const res = (await onRequest(
+    { request: new Request(url), url, locals: {} } as unknown as APIContext,
+    next,
+  )) as Response;
+  const html = await res.text();
+
+  // Quadratic matching takes about thirteen seconds here; linear takes milliseconds.
+  expect(performance.now() - started).toBeLessThan(1000);
+  expect(html.startsWith('<a href="/_preview/listings/barn">Barn</a><a <a ')).toBe(true);
+});
+
 test('a Canvas POST keeps the site links real for its browser bridge', async () => {
   const url = new URL('/_preview/listings/mill-house', 'https://x');
   const page = '<a href="/listings/barn">Barn</a><a href="/">Home</a>';

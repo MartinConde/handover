@@ -4,6 +4,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- A preview page with many unclosed `<a` tags no longer takes seconds of Worker time to have its
+  links pointed at the preview.
 - `init` adds `.dev.vars*` and `.env*` to `.gitignore` (creating it if needed), so the secrets
   the docs tell you to put in `.dev.vars` are not committed by accident.
 - **Discard** and answering a conflict now wait, with a 409, while somebody else has the entry
