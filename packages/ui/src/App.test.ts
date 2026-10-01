@@ -535,6 +535,7 @@ test('the indicator names the oldest change and how many are held', async () => 
 
   const detail = root.querySelector('.indicator .detail')?.textContent?.replace(/\s+/g, ' ').trim();
   expect(detail).toBe('· oldest 22 Aug 2025 · 1 on hold');
+  expect(root.querySelector('.indicator .indicator-chevron')).not.toBeNull();
 });
 
 // Regression: sign-out posted with no content type, which Better Auth refuses with 415.
@@ -1165,7 +1166,8 @@ test('a save that makes an entry pending moves the count in the top bar', async 
   const root = show(session(), '/admin/c/listings/mill-house');
   await vi.advanceTimersByTimeAsync(0);
   flushSync();
-  expect(root.querySelector('.indicator')?.textContent?.trim()).toBe('No unpublished changes');
+  expect(root.querySelector('.indicator .nav-text')?.textContent?.trim()).toBe('No unpublished changes');
+  expect(root.querySelector('.indicator .count')?.textContent).toBe('0');
 
   const input = root.querySelector<HTMLInputElement>('input#f-title');
   if (!input) throw new Error('no title field');
@@ -1585,7 +1587,9 @@ test('a live build says since when', async () => {
   await settle();
 
   const pill = root.querySelector('.sidebar .build-status .pill');
-  expect(pill?.textContent?.replace(/\s+/g, ' ').trim()).toBe('Live since 14:02');
+  expect(pill?.textContent?.replace(/\s+/g, ' ').trim()).toBe('Live since 25 Aug 2026, 14:02');
+  expect(pill?.querySelector('.build-label')?.textContent).toBe('Live since');
+  expect(pill?.querySelector('time')?.textContent).toBe('25 Aug 2026, 14:02');
 });
 
 test('a successful commit refreshes a live build and polls only until it settles', async () => {

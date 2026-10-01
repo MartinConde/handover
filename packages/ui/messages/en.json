@@ -370,6 +370,7 @@
   "shell_entry_load_failed_status": "Could not load the entry ({status})",
   "build_building": "Building…",
   "build_live": "Live",
+  "build_live_since_label": "Live since",
   "build_failed": "Build failed",
   "build_live_since": "since {time}",
   "build_status": "Build status",

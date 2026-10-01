@@ -45,6 +45,7 @@ export function collectionName(
 const relativeFormatters = new Map<UiLocale, Intl.RelativeTimeFormat>();
 const dateFormatters = new Map<UiLocale, Intl.DateTimeFormat>();
 const exactFormatters = new Map<UiLocale, Intl.DateTimeFormat>();
+const publishFormatters = new Map<UiLocale, Intl.DateTimeFormat>();
 const clockFormatters = new Map<UiLocale, Intl.DateTimeFormat>();
 const fieldTimeFormatters = new Map<UiLocale, Intl.DateTimeFormat>();
 const mediaDateFormatters = new Map<UiLocale, Intl.DateTimeFormat>();
@@ -98,6 +99,13 @@ export const formatExactTime = (at: number, locale: UiLocale): string =>
     exactFormatters,
     locale,
     () => new Intl.DateTimeFormat(languageTag(locale), { dateStyle: 'long', timeStyle: 'short' }),
+  ).format(at);
+
+export const formatPublishTime = (at: number, locale: UiLocale): string =>
+  formatter(
+    publishFormatters,
+    locale,
+    () => new Intl.DateTimeFormat(languageTag(locale), { dateStyle: 'medium', timeStyle: 'short' }),
   ).format(at);
 
 export const formatClockTime = (at: number, locale: UiLocale): string =>

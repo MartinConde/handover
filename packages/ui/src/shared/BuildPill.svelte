@@ -1,6 +1,6 @@
 <script lang="ts">
 import type { Snippet } from 'svelte';
-import { formatClockTime, messageOptions, type UiLocale } from '../i18n.js';
+import { formatPublishTime, messageOptions, type UiLocale } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
 
 export type Build = {
@@ -37,11 +37,11 @@ const elapsed = (from: number) => {
 };
 </script>
 
-<span class="pill pill-{build.state}">
+<span class="pill pill-{build.state}" title={build.state === 'live' && build.live_at ? `${m.build_live_since_label({}, options)} ${formatPublishTime(build.live_at, uiLocale)}` : build.state === 'building' ? m.build_building({}, options) : build.state === 'live' ? m.build_live({}, options) : m.build_failed({}, options)}>
   <span class="dot" aria-hidden="true"></span>
-  {build.state === 'building' ? m.build_building({}, options) : build.state === 'live' ? m.build_live({}, options) : m.build_failed({}, options)}
+  <span class="build-label">{build.state === 'building' ? m.build_building({}, options) : build.state === 'live' ? (build.live_at ? m.build_live_since_label({}, options) : m.build_live({}, options)) : m.build_failed({}, options)}</span>
   {#if build.state === 'live' && build.live_at}
-    <span class="detail">{m.build_live_since({ time: formatClockTime(build.live_at, uiLocale) }, options)}</span>
+    <time class="detail" datetime={new Date(build.live_at).toISOString()}>{formatPublishTime(build.live_at, uiLocale)}</time>
   {:else if build.state === 'building' && from}
     <!-- Hidden from the live region: it ticks every second and would re-announce the pill. -->
     <span class="detail" aria-hidden="true">{elapsed(from)}</span>

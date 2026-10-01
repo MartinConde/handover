@@ -688,39 +688,6 @@ const initial = $derived(
   <aside class={['sidebar', { 'is-open': menu }]} aria-label={m.shell_main_navigation({}, options)} inert={drawer}>
     <!-- Site-wide state heads the site's navigation rather than sitting among one entry's controls. -->
     <div class="sidebar-status">
-      <button
-        class={['indicator', { 'is-lit': pending.length && pendingKnown }]}
-        type="button"
-        aria-haspopup="dialog"
-        aria-expanded={drawer}
-        disabled={pendingStatus !== 'ready'}
-        onclick={() => (drawer = true)}
-        bind:this={indicator}
-      >
-        <span class="dot" aria-hidden="true"></span>
-        {#if pendingStatus === 'loading' && !pendingKnown}
-          {m.shell_pending_checking({}, options)}
-        {:else if pendingStatus === 'error' && !pending.length}
-          {m.shell_pending_unavailable({}, options)}
-        {:else}
-          <!-- Collapsed, the sidebar clips the words and shows the count alone. -->
-          {#if pending.length && pendingKnown}<span class="count" aria-hidden="true">{pending.length}</span>{/if}
-          <span class="nav-text">{pending.length ? m.shell_pending_count({ count: pending.length }, options) : m.shell_no_pending({}, options)}</span>
-        {/if}
-        {#if pending.length && pendingKnown}
-          <span class="detail">
-            <span class="sep" aria-hidden="true">·</span>
-            {m.shell_oldest({ when: formatRelativeTime(oldest, uiLocale) }, options)}
-            {#if held}<span class="sep" aria-hidden="true">·</span> {m.shell_on_hold({ count: held }, options)}{/if}
-          </span>
-        {/if}
-      </button>
-      {#if pendingStatus === 'error'}
-        <span class="pending-read-error" role="alert">
-          {pendingKnown ? m.shell_pending_stale({}, options) : m.shell_pending_failed({}, options)}
-          <button class="btn-link" type="button" onclick={loadPending}>{m.common_retry({}, options)}</button>
-        </span>
-      {/if}
       <!-- Always in the DOM so the first state is announced; the ticking clock stays out of it. -->
       <span class="build-status" role="status">
         {#if build}
@@ -739,6 +706,41 @@ const initial = $derived(
         <span class="build-read-error" role="alert">
           {build ? m.build_status_stale({}, options) : m.build_status_unavailable({}, options)}
           <button class="btn-link" type="button" onclick={loadBuild}>{m.common_retry({}, options)}</button>
+        </span>
+      {/if}
+      <button
+        class={['indicator', { 'is-lit': pending.length && pendingKnown }]}
+        type="button"
+        aria-haspopup="dialog"
+        aria-expanded={drawer}
+        disabled={pendingStatus !== 'ready'}
+        onclick={() => (drawer = true)}
+        title={pendingStatus === 'loading' && !pendingKnown ? m.shell_pending_checking({}, options) : pendingStatus === 'error' && !pendingKnown ? m.shell_pending_unavailable({}, options) : pending.length ? m.shell_pending_count({ count: pending.length }, options) : m.shell_no_pending({}, options)}
+        bind:this={indicator}
+      >
+        <span class="dot" aria-hidden="true"></span>
+        {#if pendingStatus === 'loading' && !pendingKnown}
+          {m.shell_pending_checking({}, options)}
+        {:else if pendingStatus === 'error' && !pending.length}
+          {m.shell_pending_unavailable({}, options)}
+        {:else}
+          <!-- Collapsed, the sidebar clips the words and shows the count alone. -->
+          <span class="count" aria-hidden="true">{pendingKnown ? pending.length : '…'}</span>
+          <span class="nav-text">{pending.length ? m.shell_pending_count({ count: pending.length }, options) : m.shell_no_pending({}, options)}</span>
+        {/if}
+        {#if pending.length && pendingKnown}
+          <span class="detail">
+            <span class="sep" aria-hidden="true">·</span>
+            {m.shell_oldest({ when: formatRelativeTime(oldest, uiLocale) }, options)}
+            {#if held}<span class="sep" aria-hidden="true">·</span> {m.shell_on_hold({ count: held }, options)}{/if}
+          </span>
+        {/if}
+        <svg class="indicator-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="m8 5 5 5-5 5" /></svg>
+      </button>
+      {#if pendingStatus === 'error'}
+        <span class="pending-read-error" role="alert">
+          {pendingKnown ? m.shell_pending_stale({}, options) : m.shell_pending_failed({}, options)}
+          <button class="btn-link" type="button" onclick={loadPending}>{m.common_retry({}, options)}</button>
         </span>
       {/if}
     </div>

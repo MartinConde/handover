@@ -373,6 +373,7 @@
   "shell_entry_load_failed_status": "Der Eintrag konnte nicht geladen werden ({status})",
   "build_building": "Build läuft…",
   "build_live": "Live",
+  "build_live_since_label": "Live seit",
   "build_failed": "Build fehlgeschlagen",
   "build_live_since": "seit {time}",
   "build_status": "Build-Status",
