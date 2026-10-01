@@ -25,7 +25,9 @@ npx wrangler r2 bucket domain list your-site-uploads
 npx wrangler r2 bucket lifecycle list your-site-uploads
 ```
 
-The lifecycle rule expires abandoned staging objects independently of the application cron.
+Handover also deletes an abandoned staging object itself: an upload not finished within the
+hour is removed when somebody next starts one. The lifecycle rule is the backstop for a site where
+nobody does, and it expires abandoned staging objects independently of the application cron.
 Expiry is asynchronous; one day is the eligibility age, not an exact deletion deadline.
 When setting up by hand, inspect an existing rule before adding one with the same name.
 The initializer verifies the rule on retries and refuses conflicting settings.

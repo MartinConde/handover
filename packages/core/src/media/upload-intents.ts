@@ -16,6 +16,8 @@ export async function issueUploadIntent(
     mime: string;
     now?: number;
   },
+  /** The private bucket an intent's key names; an expired intent's object goes with its row. */
+  staging: { delete(key: string): Promise<void> },
 ): Promise<void> {
   const now = intent.now ?? Date.now();
   const expired = await db
@@ -23,7 +25,8 @@ export async function issueUploadIntent(
     .from(uploadIntents)
     .where(and(eq(uploadIntents.siteId, siteId), lt(uploadIntents.expiresAt, now)))
     .limit(100);
-  if (expired.length)
+  if (expired.length) {
+    await Promise.all(expired.map(({ key }) => staging.delete(key)));
     await db.delete(uploadIntents).where(
       and(
         eq(uploadIntents.siteId, siteId),
@@ -34,6 +37,7 @@ export async function issueUploadIntent(
         ),
       ),
     );
+  }
   await db.insert(uploadIntents).values({
     siteId,
     key: intent.key,

@@ -20,7 +20,7 @@ test('an upload key is owned, expires, and can be consumed only once', async () 
     mime: 'image/webp',
     now: 1,
   };
-  await issueUploadIntent('upload-intent', db, intent);
+  await issueUploadIntent('upload-intent', db, intent, { delete: async () => {} });
   await expect(
     claimUploadIntent('upload-intent', db, intent.key, 'u2', 2),
   ).resolves.toBeUndefined();
@@ -33,4 +33,26 @@ test('an upload key is owned, expires, and can be consumed only once', async () 
   await expect(
     claimUploadIntent('upload-intent', db, intent.key, 'u1', 3),
   ).resolves.toBeUndefined();
+});
+
+// An upload declared and never finished would otherwise stay in the staging bucket for good.
+test('an expired intent takes its staging object with it when the next upload is declared', async () => {
+  const db = openDb('upload-prune', binding);
+  const key = (n: string) =>
+    `uploads/12345678-1234-1234-1234-12345678900${n}/media/${n.repeat(64)}.webp`;
+  const declare = (n: string, now: number) => ({
+    key: key(n),
+    userId: 'u1',
+    hash: n.repeat(64),
+    bytes: 12,
+    mime: 'image/webp',
+    now,
+  });
+  const deleted: string[] = [];
+  const staging = { delete: async (k: string) => void deleted.push(k) };
+  await issueUploadIntent('upload-prune', db, declare('a', 1), staging);
+
+  await issueUploadIntent('upload-prune', db, declare('b', 2 * 60 * 60_000), staging);
+
+  expect(deleted).toEqual([key('a')]);
 });

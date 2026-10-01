@@ -4,6 +4,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- An upload left unfinished for an hour has its staging object deleted when the next upload
+  starts, not only its record; the bucket's lifecycle rule stays the backstop.
 - **Security:** `init` refuses a `.handover-init.json` whose owner or database id is not a UUID.
   Before, a committed record could put its own SQL into the owner seed.
 - **Security:** *Resend invite*, *Revoke invite* and *Remove* make every earlier emailed link to

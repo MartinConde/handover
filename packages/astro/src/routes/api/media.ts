@@ -249,7 +249,8 @@ export async function askUpload(
 ): Promise<Response> {
   const store = mediaStore();
   if (!store) return Response.json({ error: NO_BUCKET }, { status: 503 });
-  if (!uploadBucket()) return Response.json({ error: NO_UPLOAD_BUCKET }, { status: 503 });
+  const bucket = uploadBucket();
+  if (!bucket) return Response.json({ error: NO_UPLOAD_BUCKET }, { status: 503 });
   const upload = declaredUpload(await readJson(request));
   if (!upload)
     return Response.json({ error: 'an upload declares { hash, bytes, mime }' }, { status: 400 });
@@ -294,13 +295,12 @@ export async function askUpload(
         limit: 250 * 1024 * 1024,
       }),
     );
-    await issueUploadIntent('default', database, {
-      key,
-      userId: user,
-      hash: upload.hash,
-      bytes: upload.bytes,
-      mime: upload.mime,
-    });
+    await issueUploadIntent(
+      'default',
+      database,
+      { key, userId: user, hash: upload.hash, bytes: upload.bytes, mime: upload.mime },
+      { delete: (staged) => bucket.delete(staged) },
+    );
   } catch (error) {
     for (const claim of claims) await releaseResource('default', database, claim);
     throw error;
