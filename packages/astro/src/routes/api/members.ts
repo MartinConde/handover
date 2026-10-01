@@ -4,6 +4,7 @@ import {
   accountFacts,
   activityPage,
   demoteOwner,
+  dropEmailLinks,
   heldEntries,
   logActivity,
   memberApi,
@@ -202,6 +203,8 @@ export async function resendInvite(
     );
   const send = mailer();
   if (!send) return Response.json({ error: missingMailer() }, { status: 503 });
+  // Resending is how an owner takes back an invite sent to the wrong mailbox.
+  await dropEmailLinks('default', ctx.db(), member.email);
   try {
     await memberApi('default', createAuth(url, cfContext, { invite: true })).signInMagicLink({
       body: {
@@ -301,6 +304,8 @@ export async function removeMember(
   }
   // Their sessions went with the row; release their entries so nobody waits on them.
   await releaseLocks('default', database, id);
+  // An unopened link would sign in whoever is invited again under the address.
+  await dropEmailLinks('default', database, member.email);
   // The `user` row is gone by the time anybody reads this, so the address lives in the event.
   await logActivity('default', database, {
     userId: session.user.id,

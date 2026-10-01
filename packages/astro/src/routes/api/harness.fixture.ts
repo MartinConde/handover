@@ -797,6 +797,8 @@ export function coreMock(original: Record<string, unknown>) {
     // And the join that turns a draft's `updated_by` into a name, proven in core's own db.test.ts.
     draftEditors: async () => state.editors,
     lastHiddenLong: async () => state.hiddenLong,
+    // The D1 delete itself is proved against the real Better Auth in `auth.test.ts`.
+    dropEmailLinks: async () => {},
     releaseLocks: async (_site: string, _db: unknown, userId: string) => {
       released.push(userId);
     },

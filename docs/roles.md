@@ -47,7 +47,8 @@ fifteen minutes: an invite is read in the evening. Only a hash of it is stored, 
 database is not a way in.
 
 Until somebody opens their link the row shows as **Invite pending**, and its menu has two extra
-items: *Resend invite*, which mails a new link, and *Revoke invite*, which removes the row. A
+items: *Resend invite*, which mails a new link, and *Revoke invite*, which removes the row. Both
+stop every earlier link to that address from working. A
 member who has already signed in is not offered a resend — they ask for their own link on the
 login screen.
 
@@ -68,8 +69,8 @@ refused rather than both going through.
 ### Taking access away
 
 *Remove* deletes the `user` row and, with it, every session and every account: their password,
-their linked GitHub, and any browser they were signed in on. It takes effect on their next
-request.
+their linked GitHub, any browser they were signed in on, and any emailed link not yet opened. It
+takes effect on their next request.
 
 **Their locks go, their drafts stay.** Any entry they had open is free straight away rather
 than two minutes later ([Working together](working-together.md#being-edited-by)), and the

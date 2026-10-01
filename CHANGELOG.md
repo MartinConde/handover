@@ -4,6 +4,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Security:** *Resend invite*, *Revoke invite* and *Remove* make every earlier emailed link to
+  that address stop working. Before, an old invite link still signed in for three days, including
+  on a row invited again after a removal.
 - **Security:** the admin's session check now goes by the route a request reaches, so every route
   under `/admin/api/` needs a session. Before, on a site with `i18n.base`, writing the base twice
   (`/<base><base>/admin/api/…`) reached a site's own `/admin/api/` endpoint without signing in.

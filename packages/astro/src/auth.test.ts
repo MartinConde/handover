@@ -76,6 +76,7 @@ beforeAll(async () => {
       verification: tables.verification,
       rateLimit: tables.rateLimit,
       activity: tables.activity,
+      locks: tables.locks,
     }),
   );
 });
@@ -455,4 +456,62 @@ test('a first password ends every other session and is mailed to the account', a
   expect(sent.map((m) => [m.to, m.subject])).toEqual([
     ['lea@example.com', 'A password was set for your account'],
   ]);
+});
+
+// Old invite links
+
+const { removeMember, resendInvite } = await import('./routes/api/members.js');
+
+const routeCtx = { db: () => openDb('default', binding) } as never;
+const ownerSession = { user: { id: 'usr_owner@example.com' }, role: 'owner' } as never;
+
+/** Whether opening the link signs anybody in. */
+async function signsIn(link: string) {
+  const res = await createAuth(new URL(link)).handler(new Request(link));
+  return res.headers.getSetCookie().some((c) => c.includes('session_token=') && !c.includes('=;'));
+}
+
+// An invite sent to the wrong mailbox must stop working once the owner sends it again.
+test('a resent invite leaves the earlier link signing nobody in', async () => {
+  await seedUser('lea@example.com');
+  await binding.prepare('UPDATE user SET email_verified = 0').run();
+  await sendInvite('lea@example.com');
+  const first = linkIn(sent[0]?.text ?? '');
+
+  const res = await resendInvite(
+    routeCtx,
+    'usr_lea@example.com',
+    new Request('https://demo.example/admin/api/members/x/invite', { method: 'POST' }),
+    new URL('https://demo.example/admin/api/members/x/invite'),
+    undefined,
+    ownerSession,
+  );
+
+  expect(res.status).toBe(200);
+  expect(await signsIn(first)).toBe(false);
+});
+
+test('a removed member invited again cannot use the link from before the removal', async () => {
+  await seedUser('owner@example.com');
+  await binding.prepare("UPDATE user SET role = 'owner'").run();
+  const owner = await signInByLink('owner@example.com');
+  await seedUser('lea@example.com');
+  await sendInvite('lea@example.com');
+  const old = linkIn(sent[0]?.text ?? '');
+
+  const removed = await removeMember(
+    routeCtx,
+    'usr_lea@example.com',
+    new Request('https://demo.example/admin/api/members/x', {
+      method: 'DELETE',
+      headers: { cookie: owner, origin: 'https://demo.example' },
+    }),
+    new URL('https://demo.example/admin/api/members/x'),
+    undefined,
+    ownerSession,
+  );
+  await seedUser('lea@example.com');
+
+  expect(removed.status).toBe(200);
+  expect(await signsIn(old)).toBe(false);
 });

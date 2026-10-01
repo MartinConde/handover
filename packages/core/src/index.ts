@@ -206,6 +206,7 @@ export {
   accountFacts,
   createAuth,
   demoteOwner,
+  dropEmailLinks,
   memberApi,
   memberList,
   roleOf,

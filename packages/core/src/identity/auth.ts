@@ -313,6 +313,19 @@ export function createAuth(siteId: string, db: Db, config: AuthConfig): Auth {
   return auth;
 }
 
+/** Every emailed sign-in link to the address, so a revoked or resent invite stops working. */
+export async function dropEmailLinks(_siteId: string, db: Db, email: string): Promise<void> {
+  const { verification } = authTables;
+  await db
+    .delete(verification)
+    .where(
+      and(
+        sql`${verification.identifier} LIKE 'magic-link:%'`,
+        sql`lower(json_extract(${verification.value}, '$.email')) = ${email.toLowerCase()}`,
+      ),
+    );
+}
+
 export async function userExists(_siteId: string, db: Db, email: string): Promise<boolean> {
   const rows = await db
     .select({ id: authTables.user.id })
