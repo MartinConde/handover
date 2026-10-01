@@ -321,6 +321,8 @@ export async function simulateConflict(
   ctx: RequestContext,
   session: App.Locals['handover'],
 ): Promise<Response> {
+  // Offered only in dev; a deployed site must not take two junk commits from a request.
+  if (!import.meta.env.DEV) return new Response('Not found', { status: 404 });
   if (session?.role !== 'owner') return new Response('Forbidden', { status: 403 });
   const git = ctx.git();
   const database = ctx.db();

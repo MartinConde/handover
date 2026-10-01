@@ -597,6 +597,18 @@ test('the simulated conflict is made in a collection its schema can be filled in
   );
 });
 
+// The button is shown only in dev, and the endpoint commits twice to the real repository.
+test('outside dev, simulating a conflict is not there, even for an owner', async () => {
+  publish.mockClear();
+  vi.stubEnv('DEV', false);
+
+  const res = await POST(ctx('checks/conflict', undefined, { handover: owner }));
+  vi.unstubAllEnvs();
+
+  expect(res.status).toBe(404);
+  expect(publish).not.toHaveBeenCalled();
+});
+
 test("simulating a conflict is the owner's, not an editor's", async () => {
   publish.mockClear();
 

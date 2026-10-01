@@ -4,6 +4,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- `POST /admin/api/checks/conflict` answers `404` outside the dev server, as its button was
+  already hidden there. Before, an owner's request on a deployed site still made its two commits.
 - An upload left unfinished for an hour has its staging object deleted when the next upload
   starts, not only its record; the bucket's lifecycle rule stays the backstop.
 - **Security:** `init` refuses a `.handover-init.json` whose owner or database id is not a UUID.

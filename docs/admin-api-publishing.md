@@ -150,8 +150,9 @@ without changing the lint's advisory semantics.
 POST /admin/api/checks/conflict  →  { "entry", "path", "commit_sha" }
 ```
 
-Makes a conflict to look at, on a scratch entry, so the three-way view can be exercised on a
-live site without hand-crafting commits. **Owner only, and it writes to the repository**: it
+Makes a conflict to look at, on a scratch entry, so the three-way view can be exercised
+without hand-crafting commits. **Owner only, dev server only (`404` in a build), and it writes to
+the repository**: it
 publishes a scratch entry — named after the commit it is made against — in the first collection
 whose required fields can be filled in from their types alone, edits its draft, and then commits a different edit to the same file — which
 is what a developer's push does to somebody's open draft. The answer names the entry it made;
