@@ -470,6 +470,7 @@ export default function handover(cms: HandoverConfig): AstroIntegration {
       'astro:build:done': async ({ logger }) => {
         const n = await emitRedirects(root, clientDir, slash, cms.i18n.base);
         if (n) logger.info(`Wrote ${n} redirect${n === 1 ? '' : 's'} to _redirects`);
+        if (cms.sitemap === false) return;
         if (!crawl)
           logger.warn(
             "No sitemap: astro.config.mjs has no `site`, so there is no address to write one in. Add site: 'https://example.com'.",

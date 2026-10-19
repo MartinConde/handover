@@ -70,6 +70,52 @@ const focal = block.image?.focal ?? [0.5, 0.5];
 style the image that way. To have Cloudflare cut the crop instead of the browser, pass the same
 two numbers as `gravity` ([The focal point](media-library.md#the-focal-point)).
 
+### With Astro's `<Picture>`
+
+A site that already draws its pictures with `<Picture>` from `astro:assets` can keep it and
+let the build make the sizes. Add the media domain to `image.domains` in `astro.config.mjs`,
+and pass the remote URL with the stored width and height, since Astro cannot read either from
+a URL:
+
+```astro
+---
+import { Picture } from 'astro:assets';
+import type { Image } from 'astro-handover';
+import cms from '../../cms.config';
+
+interface Props {
+  image: Image;
+  widths: number[];
+  sizes?: string;
+}
+
+const { image, widths, sizes } = Astro.props;
+// Astro stops a local picture's widths at its own width; a remote one is not capped.
+let candidates = [...widths].sort((a, b) => a - b);
+if (candidates.at(-1)! > image.width) {
+  candidates = [...candidates.filter((w) => w <= image.width), image.width];
+}
+---
+
+<Picture
+  src={`${cms.media?.publicBase}/${image.src}`}
+  width={image.width}
+  height={image.height}
+  alt={image.alt ?? ''}
+  formats={['avif', 'webp']}
+  widths={candidates}
+  sizes={sizes}
+  fallbackFormat={image.src.endsWith('.png') ? 'png' : 'jpg'}
+/>
+```
+
+Two things differ from a picture in `src/assets/`:
+
+- **No width cap.** Astro drops the widths larger than a local picture, but not those of a
+  remote one: it upscales them. The component above caps them the way Astro caps a local one.
+- **A PNG fallback.** Without `fallbackFormat`, the `<img>` inside a remote `<picture>` is a
+  PNG, often several times the size of the JPEG it was made from.
+
 ## Videos and maps
 
 An `embed` field holds a provider and an id — never a URL, never markup. `<Embed />` builds the

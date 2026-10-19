@@ -204,6 +204,20 @@ mailer: async ({ to, subject, text, html }) => {
 },
 ```
 
+## `sitemap`
+
+Optional. Leave it out and the build writes a sitemap and `robots.txt`
+([Search and sharing](seo.md#sitemap-and-robotstxt)). A site that already has its own —
+`@astrojs/sitemap`, a `robots.txt.ts` route — turns Handover's off, so the two do not write
+the same files:
+
+```ts
+sitemap: false,
+```
+
+Then none of the three is written: no `sitemap-<locale>.xml`, no `sitemap-index.xml`, no
+`robots.txt`.
+
 ## `checks`
 
 Optional. The [pre-publish checks](pending-changes.md#checks-before-a-publish) this site does

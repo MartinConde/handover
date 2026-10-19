@@ -449,13 +449,17 @@ type Done = HookParameters<'astro:config:done'>;
 type BuildDone = HookParameters<'astro:build:done'>;
 
 // `astro:config:done` is where the site's own address and URL form are read off Astro's config.
-async function runBuild(astro: Record<string, unknown> = {}) {
+async function runBuild(
+  astro: Record<string, unknown> = {},
+  options: Partial<Parameters<typeof handover>[0]> = {},
+) {
   const client = await clientDir();
   const cms: Parameters<typeof handover>[0] = {
     collections: {
       listings: { schema: z.object({ title: z.string() }), ...crawl.collections.listings },
     },
     i18n: crawl.i18n,
+    ...options,
   };
   const hooks = handover(cms).hooks;
   await (hooks['astro:config:done'] as (o: Done) => Promise<void>)({
@@ -468,11 +472,29 @@ async function runBuild(astro: Record<string, unknown> = {}) {
     injectTypes: vi.fn(),
   } as unknown as Done);
   const info = vi.fn();
+  const warn = vi.fn();
   await (hooks['astro:build:done'] as (o: BuildDone) => Promise<void>)({
-    logger: { info },
+    logger: { info, warn },
   } as unknown as BuildDone);
-  return { read: (name: string) => readFile(new URL(name, client), 'utf8').catch(() => '') };
+  return {
+    warn,
+    read: (name: string) => readFile(new URL(name, client), 'utf8').catch(() => ''),
+  };
 }
+
+// The site's own sitemap and robots route would otherwise collide with these, file for file.
+test('sitemap: false writes no sitemap and no robots.txt', async () => {
+  const off = await runBuild({}, { sitemap: false });
+  for (const name of ['sitemap-en.xml', 'sitemap-de.xml', 'sitemap-index.xml', 'robots.txt'])
+    expect(await off.read(name)).toBe('');
+});
+
+test('sitemap: false does not warn about a missing site address', async () => {
+  const off = await runBuild({ site: undefined }, { sitemap: false });
+  expect(off.warn).not.toHaveBeenCalled();
+  const on = await runBuild({ site: undefined });
+  expect(on.warn).toHaveBeenCalledWith(expect.stringContaining('No sitemap'));
+});
 
 test('the sitemap is written in the form the site’s own pages answer at', async () => {
   const directory = await runBuild();

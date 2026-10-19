@@ -4,6 +4,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- `sitemap: false` in `cms.config.ts` stops the build writing `sitemap-<locale>.xml`,
+  `sitemap-index.xml` and `robots.txt`, for a site with its own sitemap. Before, Handover's
+  `sitemap-index.xml` and that of `@astrojs/sitemap` overwrote each other.
 - `handover init --jurisdiction eu` (or `fedramp`) creates the D1 database and both R2 buckets in
   that Cloudflare jurisdiction and writes `"jurisdiction"` on the `MEDIA_UPLOADS` binding and
   `R2_JURISDICTION` in `vars`. Without the flag nothing changes.

@@ -116,6 +116,12 @@ full checkout, or a runner with `fetch-depth: 0`).
 `robots.txt` disallows `/admin` and `/_preview`. A `robots.txt` of your own in `public/` is
 left exactly as it is — the build writes one only where there is none.
 
+A site that builds its own sitemap — `@astrojs/sitemap`, or a filter of its own on what search
+sees — sets `sitemap: false` in `cms.config.ts`. The build then writes none of the three files,
+`robots.txt` included: yours names your sitemap, and a `robots.txt` route rendered on demand
+would otherwise be hidden behind a static one. The admin and preview pages still send
+`noindex` themselves.
+
 Two things worth knowing:
 
 - **`site` in `astro.config.mjs`, again.** A sitemap holds absolute addresses. Without it no

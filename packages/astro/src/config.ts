@@ -271,6 +271,8 @@ export interface HandoverConfig {
       }
     >;
   };
+  /** `false` for a site with its own sitemap: no `sitemap-*.xml` and no `robots.txt` at build. */
+  sitemap?: false;
   /** Check ids this site turns off; nothing else about a check is configurable. */
   checks?: { ignore?: readonly CheckName[] };
   /** Required, a one-language site too: the files live in a locale folder either way. */
