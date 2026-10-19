@@ -268,7 +268,13 @@ export async function preview(ctx: Ctx, astro: AstroContent<string>): Promise<Re
   const fail = (status: number, message: string) =>
     snapshot ? canvasAnswer(status, message, snapshot) : answer(ctx.url, status, message);
   const path = `${(config.i18n.base ?? '').replace(/\/+$/, '')}/${ctx.params.path ?? ''}`;
-  const target = previewTarget('default', config.i18n, config.collections, path);
+  let target = previewTarget('default', config.i18n, config.collections, path);
+  // An entry served where another collection has its index is still that entry's page in Canvas.
+  const own = snapshot?.entry.collection;
+  if (own && target?.address === undefined && Object.hasOwn(config.collections, own)) {
+    const route = config.collections[own]?.route;
+    target = previewTarget('default', config.i18n, { [own]: { route } }, path) ?? target;
+  }
   if (!target) return fail(404, 'This site serves no page at that address.');
 
   const name = config.collections[target.collection]?.load;

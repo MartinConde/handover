@@ -4,6 +4,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- The editor's Preview and Canvas of a page entry at the same path as a collection's `index`
+  render that entry instead of failing with "The Canvas snapshot does not match the entry served
+  at this address".
 - `sitemap: false` in `cms.config.ts` stops the build writing `sitemap-<locale>.xml`,
   `sitemap-index.xml` and `robots.txt`, for a site with its own sitemap. Before, Handover's
   `sitemap-index.xml` and that of `@astrojs/sitemap` overwrote each other.

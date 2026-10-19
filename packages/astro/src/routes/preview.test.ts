@@ -48,6 +48,7 @@ vi.mock('virtual:handover/config', () => ({
     collections: {
       listings: { schema: listing, route: '/listings/[slug]', index: '/', load: 'listing' },
       pages: { schema: pageSchema, route: '/[slug]', localizedSlugs: true, load: 'page' },
+      journal: { schema: listing, route: '/journal/[slug]', index: '/journal', load: 'listing' },
       unwired: { schema: listing, route: '/unwired/[slug]' },
       samples: { schema: listing },
     },
@@ -96,6 +97,7 @@ const pagesBuilt: Record<string, unknown> = {
   'en/home': { title: 'Home' },
   'de/home': { title: 'Startseite', slug: 'startseite' },
   'de/impressum': { title: 'Impressum' },
+  'en/journal': { title: 'Journal' },
 };
 const pageSite = {
   i18n: { locales: ['en', 'de'], defaultLocale: 'en' },
@@ -289,6 +291,17 @@ test('Canvas resolves a localized address to the stable file identity carried th
     locale: 'de',
     contentVersion: 7,
   });
+});
+
+test('Canvas renders a page entry at the address another collection indexes', async () => {
+  const { result } = await post(
+    'journal',
+    canvasEnvelope({
+      entry: { collection: 'pages', id: 'journal' },
+      snapshots: { en: { title: 'Unsaved journal' } },
+    }),
+  );
+  expect(result).toMatchObject({ Component: Page, props: { data: { title: 'Unsaved journal' } } });
 });
 
 test.each([

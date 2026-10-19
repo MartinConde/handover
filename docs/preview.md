@@ -67,6 +67,12 @@ language segment sits exactly where the site puts it. With the demo's `i18n` blo
 With `prefixDefaultLocale: true` the default language carries its segment in both, so it is
 `/_preview/en/listings/mill-house` and `/_preview/listings/mill-house` is `404`.
 
+An index wins over an entry at the same path: with `pages: { route: '/[slug]' }` beside
+`listings: { index: '/listings' }`, `/_preview/listings` is the listings index. The editor's
+Preview and Canvas of the `listings` page entry render that entry through the pages loader
+instead, so a listing page's own copy can live in a page entry. Have the collection's
+`loadIndex` return what the pages loader returns for that entry, and both show the same page.
+
 ## What it renders
 
 Your own pages. The route resolves the address to a collection, calls the `load()` that
