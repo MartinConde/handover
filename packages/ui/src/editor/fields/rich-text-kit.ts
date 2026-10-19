@@ -22,10 +22,20 @@ export interface ProseSelection {
 /** Form and Canvas intentionally use one TipTap schema and Markdown serializer. */
 export const richTextExtensions = (tier: RichtextTier, additional: Extensions = []): Extensions => [
   Document,
-  Paragraph,
+  // A backslash with nothing after it in the block reads back as a literal backslash.
+  Paragraph.extend({
+    renderMarkdown: (node, h, ctx) => {
+      const content = [...(node.content ?? [])];
+      while (content.at(-1)?.type === 'hardBreak') content.pop();
+      return Paragraph.config.renderMarkdown?.({ ...node, content }, h, ctx) ?? '';
+    },
+  }),
   Text,
   // The file writer drops trailing spaces, so the default two-space break would not survive a save.
-  HardBreak.extend({ renderMarkdown: () => '\\\n' }),
+  // A heading is one line in Markdown, so a break there becomes a space.
+  HardBreak.extend({
+    renderMarkdown: (_node, _h, ctx) => (ctx.parentType === 'heading' ? ' ' : '\\\n'),
+  }),
   Bold,
   Italic,
   Link.configure({ openOnClick: false }),

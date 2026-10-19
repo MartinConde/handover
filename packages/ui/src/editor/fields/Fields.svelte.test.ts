@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { Field, ResolvedSeo, WordPart } from '@handover/core';
 import { parseEntry, stringifyEntry } from '@handover/core';
+import type { Editor } from '@tiptap/core';
 import { flushSync, mount, tick, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
 import { q } from '../../test-helpers.fixture.js';
@@ -663,6 +664,27 @@ test('richtext: the editor writes a line break as a backslash', () => {
   q<HTMLButtonElement>('[aria-label="Bullet list"]').click();
   flushSync();
   expect(roundTrip()).toEqual({ _version: 1, summary: '- Phone: 01548\\\nFax: 01549' });
+});
+
+const editorOf = (selector: string) => (q(selector) as HTMLElement & { editor: Editor }).editor;
+
+// A break that ends a block reads back as a literal backslash.
+test('richtext: a line break at the end of a paragraph is not written', () => {
+  show(richtextField(), { _version: 1, summary: 'Phone: 01548\n\nFax: 01549' });
+  editorOf('#f-summary').chain().setTextSelection(13).setHardBreak().run();
+  flushSync();
+  expect(roundTrip()).toEqual({ _version: 1, summary: 'Phone: 01548\n\nFax: 01549' });
+});
+
+// A backslash break inside a heading splits it into a heading and a paragraph.
+test('richtext: a line break in a heading is written as a space', () => {
+  show([{ path: ['body'], label: 'Body', type: 'richtext', required: false, tier: 'full' }], {
+    _version: 1,
+    body: '## Contact',
+  });
+  editorOf('#f-body').chain().setTextSelection(5).setHardBreak().run();
+  flushSync();
+  expect(roundTrip()).toEqual({ _version: 1, body: '## Cont act' });
 });
 
 test('richtext: a body outside the tier is shown read-only and left untouched', () => {

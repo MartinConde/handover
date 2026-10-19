@@ -7,7 +7,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - A rich-text field whose Markdown the editor would write differently (`* item`, a line break
   ending in `\` or two spaces) no longer freezes the form with `effect_update_depth_exceeded`
   when it opens, and opening it no longer saves a draft. Line breaks (Shift+Enter) now edit as
-  line breaks; before, the editor dropped them.
+  line breaks; before, the editor dropped them. A break at the end of a paragraph is not saved, and
+  one in a heading is saved as a space.
 - The editor's Preview and Canvas of a page entry at the same path as a collection's `index`
   render that entry instead of failing with "The Canvas snapshot does not match the entry served
   at this address".
