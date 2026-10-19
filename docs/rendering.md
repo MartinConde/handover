@@ -4,7 +4,7 @@ The components the package ships and the helpers a template calls to draw an ent
 already loaded. Getting the entry there is [Loaders and pages](loaders.md); the block renderer
 is [Blocks](blocks.md), the language switcher is
 [a page of its own](language-switcher.md), and `<Nav />` lives with the menus it draws
-([Navigation menus](navigation.md#rendering-the-menus)).
+([Rendering the menus](rendering-menus.md)).
 
 ## Rich text
 

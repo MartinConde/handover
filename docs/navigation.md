@@ -115,7 +115,7 @@ siblings, a tinted well names the parent a drop would go inside, and a slot past
 refuses in place — or from the row's ⋯ (up, down, make a sub-item, move out a level, remove).
 The second language's column draws the same tree as one box a row, for the labels alone. A
 row pointing at something this language cannot show carries a chip there — *Hidden*, *Not in
-EN*, *Page missing* — and is dropped by [`<Nav />`](#rendering-the-menus). Which menus a site has is the
+EN*, *Page missing* — and is dropped by [`<Nav />`](rendering-menus.md). Which menus a site has is the
 developer's: they are declared in this file, and the client fills them.
 
 ### Working across languages
@@ -130,38 +130,3 @@ for normal navigation; choose a single language for exceptions such as a German-
 link. It controls where the item and its sub-items belong, not whether a page is translated.
 Missing or hidden pages are still omitted in that language. Label placeholders and hidden-page
 warnings use the selected language's title and status.
-
-## Rendering the menus
-
-`menusAt()` resolves the [file above](#the-file) for one language:
-every menu by its key, every item's `ref` or `collection` turned into the address that language serves, and
-everything that language cannot show **dropped** — an entry with no file in it, a hidden one,
-and an item whose `_locales` names another language. A dropped item takes its children with it,
-so a menu never becomes the way a reader finds a 404. Resolve it in the loader, like everything
-else a page needs:
-
-```ts
-// src/loaders/globals.ts — the global is read, then resolved
-const globals = await globalsAt('default', source, locale, { required: ['navigation'] });
-const menus = await menusAt('default', source, cms, globals.navigation, locale);
-```
-
-```astro
----
-import Nav from 'astro-handover/Nav.astro';
-const { menus } = Astro.props;
----
-
-<Nav menu="header" menus={menus} current={Astro.url.pathname} />
-```
-
-`<Nav />` draws a `<nav aria-label="Main">` with nested `<ul>`s — one `<a>` per item (a `<span>` for a label without a link),
-`aria-current="page"` on the one the reader is on (a trailing slash is the same page), every
-`href` written the way `current` is — with the slash or without, so no link is a hop through a
-redirect — and
-`target="_blank" rel="noopener noreferrer"` where the item asks for a new tab. A menu with
-nothing left in this language draws **nothing**. `label` names the landmark where a page has
-two menus. The words come from the file of the language being rendered — the tree is shared and
-the labels are each language's own — so an item nobody has translated is named by the page it
-points at, in that language. Style it, or read `menus.header` — `{ label, href?, newTab?, variant?, entry?, children }`, an item with
-no `label` of its own already named by the page it points at — and write your own markup.
