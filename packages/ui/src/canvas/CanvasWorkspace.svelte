@@ -900,6 +900,7 @@ function bootstrapRenderer() {
             setTimeout(() => renderer?.textField(textField(selected)), 0);
         },
         onStateChange: (next) => (rendererState = next),
+        onActiveReload: retry,
       });
       loading = false;
       if (active) void submit('render');

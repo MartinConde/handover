@@ -201,6 +201,30 @@ test('reloading the active frame clears a lost editing flag so the candidate pro
   canvas.dispose();
 });
 
+test('a reload of the active frame asks for a fresh render', () => {
+  fakeHandshake();
+  const stage = document.createElement('div');
+  document.body.append(stage);
+  const onActiveReload = vi.fn();
+  const canvas = createCanvasRenderer({
+    stage,
+    contentVersion: () => 4,
+    currentTarget: () => undefined,
+    uiLocale: () => 'en',
+    onCommand: () => ({ ok: false, reason: 'readonly' }),
+    requestId: () => 'req-1',
+    onActiveReload,
+  });
+
+  void canvas.render(request(4));
+  settleCandidate(canvas, 'req-1', 4);
+  expect(onActiveReload).not.toHaveBeenCalled();
+
+  canvas.activeFrame()?.dispatchEvent(new Event('load'));
+  expect(onActiveReload).toHaveBeenCalledTimes(1);
+  canvas.dispose();
+});
+
 test('a stop accepted after a locale switch still lets the waiting candidate promote', () => {
   fakeHandshake();
   const stage = document.createElement('div');

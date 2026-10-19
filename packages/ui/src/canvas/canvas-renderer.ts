@@ -91,6 +91,8 @@ export interface CanvasRendererOptions {
   onInteractionChange?: (state: CanvasEditingState) => void;
   onStateChange?: (state: CanvasRendererState) => void;
   onBridgeRejected?: (reason: CanvasBridgeRejection, message: unknown) => void;
+  // A reloaded frame re-POSTs the old snapshot, which the site may refuse (Origin: null).
+  onActiveReload?: () => void;
   timeoutMs?: number;
   /** Quiet period used to coalesce continuous edits into one fresh render. */
   renderDelayMs?: number;
@@ -319,6 +321,7 @@ export function createCanvasRenderer(options: CanvasRendererOptions) {
       interaction = { ...interaction, inlineEditing: false, composing: false };
       options.onInteractionChange?.({ inlineEditing: false, composing: false });
       if (candidate) promote(candidate);
+      else options.onActiveReload?.();
     };
     held.frame.addEventListener('load', held.onActiveLoad);
     if (previous) remove(previous);

@@ -4,6 +4,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Canvas renders the page again when its frame reloads, instead of keeping the site's `403`
+  for the re-sent form (`astro dev` reloads the frame after a change to the site's code).
 - `.meta({ advanced: true })` on a field puts it in an **Advanced** fold after the other fields
   of its page, group or block, above the first group, list or blocks field, closed unless it
   holds a problem.

@@ -141,7 +141,8 @@ returns to the form. Tablet and phone controls set the iframe's real width rathe
 Canvas renders the current working snapshots, including changes that autosave has not sent yet.
 Completed edits are coalesced into a fresh render; autosave by itself does not reload the page.
 If a render fails, the last working page and the current form data remain available with Retry and
-Form actions. **Open preview** first saves every dirty locale, then opens the ordinary authenticated
+Form actions. If the page reloads itself, as it does after a change to the site's code in
+`astro dev`, Canvas renders it again. **Open preview** first saves every dirty locale, then opens the ordinary authenticated
 GET in a new tab without putting snapshot data or a Canvas signal in its URL.
 
 A global has no route of its own, so its editor offers Form only. To see a global in context, open
