@@ -95,7 +95,7 @@ export async function serveCanvasPreview(
     if (get && route.request().method() === 'GET')
       return route.fulfill({
         contentType: 'text/html',
-        headers: { 'content-security-policy': await renderedPolicy() },
+        headers: { 'content-security-policy': await renderedPolicy([]) },
         body: get(),
       });
     posts += 1;
@@ -133,7 +133,7 @@ export async function serveCanvasPreview(
     await route.fulfill({
       contentType: 'text/html',
       // The policy the real preview sends, so every Canvas test runs under it.
-      headers: { 'content-security-policy': await renderedPolicy() },
+      headers: { 'content-security-policy': await renderedPolicy([]) },
       body: `<!doctype html><html>${head}<body>${ok ? rendered : ''}<script type="application/json" data-handover-canvas-manifest>${JSON.stringify(manifest).replace(/</g, '\\u003c')}</script>${ok ? `<script type="module" src="${canvasScript}"></script>` : ''}</body></html>`,
     });
   });
