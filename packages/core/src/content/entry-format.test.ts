@@ -211,6 +211,12 @@ test('strings are normalised so the literal block never falls back to quotes', (
   expect(parseEntry('default', out)).toEqual({ body: 'line one\n\nline two' });
 });
 
+test('a one-line string keeps its trailing space', () => {
+  const out = stringifyEntry('default', { before: 'Telefon: ' });
+  expect(out).toBe('before: "Telefon: "\n');
+  expect(parseEntry('default', out)).toEqual({ before: 'Telefon: ' });
+});
+
 // Astro reads content with js-yaml, which stops on U+FFFE and U+FFFF inside a `|` block.
 test('U+FFFE and U+FFFF are taken out of a string before it is written', () => {
   expect(stringifyEntry('default', { body: 'Mill\uFFFE\nHouse\uFFFF' })).toBe(

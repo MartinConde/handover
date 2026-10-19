@@ -295,13 +295,11 @@ function canonical(value: unknown, path: string): unknown {
   return value;
 }
 
-// The yaml library drops `|` for a quoted string on trailing spaces or newlines, changing bytes.
+// The yaml library drops `|` for a quoted string on trailing spaces or newlines, changing bytes;
+// a one-line string is quoted anyway, so its spaces stay.
 function normalise(text: string): string {
-  return text
-    .replace(/\r\n/g, '\n')
-    .replace(/[^\n\t\x20-\uFFFD]/g, '')
-    .replace(/[ \t]+$/gm, '')
-    .replace(/\n+$/, '');
+  const clean = text.replace(/\r\n/g, '\n').replace(/[^\n\t\x20-\uFFFD]/g, '');
+  return clean.includes('\n') ? clean.replace(/[ \t]+$/gm, '').replace(/\n+$/, '') : clean;
 }
 
 // A row is its `_id`; an array of rows without one — a template's blocks — pairs by position.

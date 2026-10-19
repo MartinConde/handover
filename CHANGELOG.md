@@ -4,6 +4,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- A save keeps the trailing space of a one-line text (`"Telefon: "`). Only text with line
+  breaks loses spaces at line ends, so it can be written as a `|` block.
 - Docs: [Rendering the menus](docs/rendering-menus.md) is its own page, split out of
   Navigation menus.
 - A menu item linking a collection's index can list the collection's live entries under it
