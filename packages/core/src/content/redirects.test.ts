@@ -27,6 +27,14 @@ test("redirectsText writes each from both ways and to in the site's own form", (
   expect(redirectsText('default', [], true)).toBe('');
 });
 
+test('redirectsText writes a rule to or from a file once, without a slash', () => {
+  const rule = { _id: 'aaaaaaaa', status: 301 as const, createdAt: '2026-01-01T00:00:00Z' };
+  const rules = [
+    { ...rule, from: '/wp-sitemap.xml', to: '/sitemap-index.xml', reason: 'manual' as const },
+  ];
+  expect(redirectsText('default', rules, true)).toBe('/wp-sitemap.xml /sitemap-index.xml 301\n');
+});
+
 test('a rule appended re-points the rule that led to its old address', () => {
   const collapsed = collapseRedirects(
     [manual('/a', '/b', 'first')],

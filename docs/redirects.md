@@ -72,6 +72,10 @@ hop:
 /brochure/ https://example.com/files/brochure.pdf 301
 ```
 
+A path ending in a file name (`/sitemap-index.xml`, `/files/plan.pdf`) has no directory form,
+so it is written once and never gains the slash. A last segment counts as a file name when it
+ends in a dot and a letter (`.xml`, `.pdf`); `/v1.2` is still a page.
+
 A rule that fails validation fails the build, naming it:
 `src/content/redirects.yaml › rules[0].from: a path starting with "/"`. Redirects from
 `astro.config` still work; the adapter adds them to the same file.

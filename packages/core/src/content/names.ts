@@ -220,7 +220,9 @@ export function withSlash(path: string, slash: boolean): string {
   const cut = path.search(/[?#]/);
   const [bare, rest] = cut < 0 ? [path, ''] : [path.slice(0, cut), path.slice(cut)];
   const trimmed = bare.replace(/\/+$/, '');
-  return `${trimmed}${slash || !trimmed ? '/' : ''}${rest}`;
+  // A file has no directory form; an extension starts with a letter, so `/v1.2` is a page.
+  const file = /\.[a-z][a-z0-9]*$/i.test(trimmed.slice(trimmed.lastIndexOf('/')));
+  return `${trimmed}${(slash && !file) || !trimmed ? '/' : ''}${rest}`;
 }
 
 export interface PreviewTarget {

@@ -284,6 +284,15 @@ test('withSlash writes a path the way the site serves it and leaves the rest alo
   expect(withSlash('https://example.com/b.pdf', true)).toBe('https://example.com/b.pdf');
 });
 
+// A file has no directory form: `/sitemap-index.xml/` is a 404.
+test('withSlash leaves a path ending in a file name alone', () => {
+  expect(withSlash('/sitemap-index.xml', true)).toBe('/sitemap-index.xml');
+  expect(withSlash('/files/plan.pdf?v=2', true)).toBe('/files/plan.pdf?v=2');
+  expect(withSlash('/sitemap-index.xml/', false)).toBe('/sitemap-index.xml');
+  expect(withSlash('/v1.2', true)).toBe('/v1.2/');
+  expect(withSlash('/docs.old/guide', true)).toBe('/docs.old/guide/');
+});
+
 test.each(['', '/', '/site', '/nested/site', '/site/'])(
   'preview URLs round trip under base %s',
   (base) => {

@@ -4,6 +4,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- A redirect to or from a file (`/sitemap-index.xml`) is written to `_redirects` once and
+  without a trailing slash. Before, `to` gained the slash on a directory-format site and led to
+  a 404. `<Nav />` and the sitemap leave such a path alone too.
 - Canvas renders the page again when its frame reloads, instead of keeping the site's `403`
   for the re-sent form (`astro dev` reloads the frame after a change to the site's code).
 - `.meta({ advanced: true })` on a field puts it in an **Advanced** fold after the other fields
