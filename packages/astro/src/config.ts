@@ -53,33 +53,51 @@ export interface NavItem {
   /** Absent on a label that only opens the items under it. */
   link?: z.infer<typeof toUrl> | z.infer<typeof toRef> | z.infer<typeof toIndex>;
   newTab?: boolean;
+  /** One of the variants the site declares in `defineNavigation`. */
+  variant?: string;
   children?: NavItem[];
 }
-const navItem: z.ZodType<NavItem> = z.lazy(() =>
-  z.strictObject({
-    _id: z.string(),
-    _locales: z.array(z.string()).optional(),
-    // An empty label means the page's own title, as a row synced but not yet translated reads.
-    label: z.string().default(''),
-    link: z
-      .discriminatedUnion('type', [toUrl.strict(), toRef.strict(), toIndex.strict()])
-      .optional(),
-    newTab: z.boolean().optional(),
-    children: z.array(navItem).optional(),
-  }),
-);
-export const navigation = z
-  .object({
-    // Walkers hard-code this shape: the recursion leaves nothing to read it from the schema.
-    menus: z
-      .array(z.object({ _id: z.string(), key: z.string(), items: z.array(navItem) }))
-      .meta({ handover: 'menus', i18n: 'duplicate' }),
-  })
-  // Shown on the Site settings card; a global without a label is listed under its key.
-  .meta({
-    label: { en: 'Navigation', de: 'Navigation' },
-    description: 'The menus the site renders',
+
+/** `variants` are how the site can draw an item (a wide flyout); the client picks one per item. */
+export function defineNavigation({
+  variants,
+}: {
+  variants?: Record<string, string | Labels>;
+} = {}) {
+  const keys = Object.keys(variants ?? {});
+  const navItem: z.ZodType<NavItem> = z.lazy(() => {
+    const item = z.strictObject({
+      _id: z.string(),
+      _locales: z.array(z.string()).optional(),
+      // An empty label means the page's own title, as a row synced but not yet translated reads.
+      label: z.string().default(''),
+      link: z
+        .discriminatedUnion('type', [toUrl.strict(), toRef.strict(), toIndex.strict()])
+        .optional(),
+      newTab: z.boolean().optional(),
+      children: z.array(navItem).optional(),
+    });
+    // Without declared variants the key is refused, as any other unknown key is.
+    return keys.length
+      ? item.extend({ variant: z.enum(keys as [string, ...string[]]).optional() })
+      : item;
   });
+  return (
+    z
+      .object({
+        // Walkers hard-code this shape: the recursion leaves nothing to read it from the schema.
+        menus: z
+          .array(z.object({ _id: z.string(), key: z.string(), items: z.array(navItem) }))
+          .meta({ handover: 'menus', i18n: 'duplicate', ...(keys.length ? { variants } : {}) }),
+      })
+      // Shown on the Site settings card; a global without a label is listed under its key.
+      .meta({
+        label: { en: 'Navigation', de: 'Navigation' },
+        description: 'The menus the site renders',
+      })
+  );
+}
+export const navigation = defineNavigation();
 export type Navigation = z.infer<typeof navigation>;
 
 export const redirects = z.object({

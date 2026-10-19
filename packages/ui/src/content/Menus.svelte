@@ -11,6 +11,7 @@ export interface MenuItem {
     | { type: 'entry' | 'page'; ref: string }
     | { type: 'index'; collection: string };
   newTab?: boolean;
+  variant?: string;
   children?: MenuItem[];
 }
 export interface Menu {
@@ -31,7 +32,7 @@ function heightOf(item: MenuItem): number {
 <script lang="ts">
 import { type DragDropEventHandlers, DragDropProvider, DragOverlay } from '@dnd-kit/svelte';
 import { createSortable } from '@dnd-kit/svelte/sortable';
-import { newId } from '@handover/core';
+import { type Labels, labelIn, newId } from '@handover/core';
 import { tick } from 'svelte';
 import {
   type Pickable,
@@ -51,6 +52,7 @@ let {
   translating = false,
   sourceLabel = '',
   uiLocale = 'en',
+  variants = {},
 }: {
   /** The field's own id; every control on the screen is named under it. */
   id: string;
@@ -65,6 +67,8 @@ let {
   /** The source language's display name, supplied by the translation pane. */
   sourceLabel?: string;
   uiLocale?: UiLocale;
+  /** How the site can draw an item, declared by the developer in `defineNavigation`. */
+  variants?: Record<string, string | Labels>;
 } = $props();
 
 let tab = $state(0);
@@ -248,6 +252,10 @@ async function addLabel() {
   edit(item);
   await tick();
   document.getElementById(`${id}-ed-label`)?.focus();
+}
+function restyle(item: MenuItem, variant: string) {
+  if (variant) item.variant = variant;
+  else delete item.variant;
 }
 function unlink(item: MenuItem) {
   delete item.link;
@@ -523,6 +531,14 @@ function walkTabs(event: KeyboardEvent) {
     </div>
     <div class="editor-foot">
       {#if row.link}<label class="editor-option" for="{id}-ed-tab"><input type="checkbox" id="{id}-ed-tab" checked={row.newTab === true} onchange={(e) => { if (e.currentTarget.checked) row.newTab = true; else delete row.newTab; }} /><span>{m.menus_new_tab({}, options)}</span></label>{/if}
+      {#if Object.keys(variants).length}
+        <label class="editor-option" for="{id}-ed-variant"><span>{m.menus_style({}, options)}</span>
+          <select class="filter" id="{id}-ed-variant" value={row.variant ?? ''} onchange={(e) => restyle(row, e.currentTarget.value)}>
+            <option value="">{m.menus_style_standard({}, options)}</option>
+            {#each Object.entries(variants) as [key, label] (key)}<option value={key}>{labelIn(label, uiLocale) ?? key}</option>{/each}
+          </select>
+        </label>
+      {/if}
       {#if known.locales.length > 1}
         <label class="editor-option" for="{id}-ed-loc"><span>{m.menus_shown_in({}, options)}</span>
           <select class="filter" id="{id}-ed-loc" value={shownIn(row)} onchange={(e) => showIn(row, e.currentTarget.value)} aria-describedby={shownIn(row) ? `${id}-ed-loc-hint` : undefined}>

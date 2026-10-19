@@ -4,6 +4,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- `defineNavigation({ variants })` declares how the site can draw a menu item (a wide flyout).
+  The client picks one per item under **Style** in the item editor, and `menusAt()` returns it as
+  `variant`. `navigation` is `defineNavigation()` and takes no `variant`.
 - A menu item can be a label without a link that only opens the items under it. **Add a label
   without a link** in the navigation library adds one; **Remove link** turns an item into one.
   `menusAt()` returns it without `href` and drops it in a language where it has no label or

@@ -8,6 +8,7 @@ import {
   blocks,
   defineBlock,
   defineConfig,
+  defineNavigation,
   embed,
   file,
   formSchema,
@@ -387,6 +388,52 @@ test('a menu item without a link is a label over its sub-items', () => {
   expect(
     navigation.safeParse({ menus: [{ _id: '7h2kq9sd', key: 'header', items: [label] }] }).success,
   ).toBe(true);
+});
+
+const withVariant = (variant: string) => ({
+  menus: [
+    {
+      _id: '7h2kq9sd',
+      key: 'header',
+      items: [{ _id: 'a1b2c3d4', label: 'Company', variant, link: { type: 'url', href: '/c' } }],
+    },
+  ],
+});
+const wide = { mega: { en: 'Wide flyout', de: 'Breites Menü' } };
+
+test('defineNavigation takes the variants it declares and refuses any other', () => {
+  const declared = defineNavigation({ variants: wide });
+
+  expect(declared.safeParse(withVariant('mega')).success).toBe(true);
+  expect(declared.safeParse(withVariant('wide')).success).toBe(false);
+  expect(navigation.safeParse(withVariant('mega')).success).toBe(false);
+  // The admin offers them by their labels, so the form carries them.
+  expect(formOf('default', formSchema(declared)).fields).toEqual([
+    {
+      path: ['menus'],
+      label: 'Menus',
+      type: 'menus',
+      required: true,
+      i18n: 'duplicate',
+      variants: wide,
+    },
+  ]);
+});
+
+// A variant is how the item looks, not a word, so every language has the same one.
+test("an item's variant reaches another language with the item", () => {
+  const form = formOf('default', formSchema(defineNavigation({ variants: wide })));
+  const en = withVariant('mega');
+
+  const de = syncLocale('default', form, 'de', { before: { menus: [] }, after: en }, {});
+
+  expect(de.menus).toEqual([
+    {
+      _id: '7h2kq9sd',
+      key: 'header',
+      items: [{ _id: 'a1b2c3d4', variant: 'mega', link: { type: 'url', href: '/c' } }],
+    },
+  ]);
 });
 
 test('the redirects golden parses; from must be a path and to a path or absolute URL', async () => {

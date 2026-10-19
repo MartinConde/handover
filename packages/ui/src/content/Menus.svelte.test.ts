@@ -58,6 +58,7 @@ const props = $state({
   translating: false,
   sourceLabel: 'English',
   uiLocale: 'en' as UiLocale,
+  variants: undefined as Record<string, string | { en?: string; de?: string }> | undefined,
 });
 const show = (
   items: unknown[] = [],
@@ -83,6 +84,7 @@ const show = (
     translating,
     sourceLabel: 'English',
     uiLocale,
+    variants: undefined,
   });
   app = mount(Menus, { target: document.body, props });
   flushSync();
@@ -310,6 +312,34 @@ test('a label with nothing under it says the site skips it', async () => {
   const chip = q('.menu-item .badge-warn');
   expect(chip.textContent).toBe('No sub-items');
   expect(chip.title).toBe('No link and no sub-items — the site skips this item');
+});
+
+test('a declared variant is picked in the item editor and written on the item', async () => {
+  show([item({ label: 'Company' })]);
+  props.variants = { mega: { en: 'Wide flyout', de: 'Breites Menü' } };
+  flushSync();
+  await settle();
+  click(rowOpen());
+
+  const style = q<HTMLSelectElement>('#f-menus-ed-variant');
+  expect(Array.from(style.options).map((o) => o.textContent)).toEqual(['Standard', 'Wide flyout']);
+  style.value = 'mega';
+  style.dispatchEvent(new Event('change', { bubbles: true }));
+  flushSync();
+  expect($state.snapshot(menus[0]?.items[0])).toMatchObject({ variant: 'mega' });
+
+  style.value = '';
+  style.dispatchEvent(new Event('change', { bubbles: true }));
+  flushSync();
+  expect($state.snapshot(menus[0]?.items[0])).not.toHaveProperty('variant');
+});
+
+test('a site that declares no variants shows no style choice', async () => {
+  show([item({ label: 'Company' })]);
+  await settle();
+  click(rowOpen());
+
+  expect(document.querySelector('#f-menus-ed-variant')).toBeNull();
 });
 
 // The renderer drops these items; the editor is where somebody can see that it is going to.

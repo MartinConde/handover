@@ -726,7 +726,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
   <div class={['field', { 'is-invalid': err, 'pop-anchor': marked }]} data-field-type={field.type} id="{id}-field" tabindex="-1" inert={textOnly && !structural(field) && ((field.type !== 'text' && field.type !== 'richtext') || mode !== true) ? true : undefined}>
     {#if field.type === 'menus'}
       {@render groupLabel(id, field, text, at)}
-      <Menus {id} labelId="{id}-l" menus={rows(at) as Menu[]} {locale} {uiLocale} {translating} {sourceLabel} />
+      <Menus {id} labelId="{id}-l" menus={rows(at) as Menu[]} {locale} {uiLocale} {translating} {sourceLabel} variants={field.variants} />
     {:else if translating && mode === 'duplicate' && !structural(field)}
       {@render groupLabel(id, field, text, at)}
       <div class="readonly" {id} role="region" tabindex="-1" aria-labelledby="{id}-l">{read(at) ?? ''}</div>

@@ -58,6 +58,31 @@ points at and where it opens is the same in every language's file; `label` is th
 language owns ([Languages](i18n.md#the-structure-is-shared)). Moving an item in one language
 moves it in all of them, and the German file keeps its German words while it happens.
 
+### Variants
+
+Where the site draws some items differently, such as one flyout as a wide panel, declare the
+choices with `defineNavigation` instead of `navigation`. The client picks one per item under
+**Style** in the item editor, and `menusAt()` hands it to the site as `variant`:
+
+```ts
+// cms.config.ts
+import { defineConfig, defineNavigation } from 'astro-handover';
+
+const navigation = defineNavigation({
+  variants: { mega: { en: 'Wide flyout', de: 'Breites Menü' } },
+});
+export default defineConfig({ globals: { navigation } /* … */ });
+```
+
+```yaml
+      - _id: "un3r8t4b"
+        label: "Company"
+        variant: "mega"
+```
+
+An item without `variant` is drawn the standard way. A `variant` the site has not declared fails
+the build. The variant is part of the shared tree, so every language has the same one.
+
 ## In the admin
 
 The client edits this file in **Site settings → Navigation**. A persistent **Add to menu**
@@ -132,5 +157,5 @@ redirect — and
 nothing left in this language draws **nothing**. `label` names the landmark where a page has
 two menus. The words come from the file of the language being rendered — the tree is shared and
 the labels are each language's own — so an item nobody has translated is named by the page it
-points at, in that language. Style it, or read `menus.header` — `{ label, href?, newTab?, children }`, an item with
+points at, in that language. Style it, or read `menus.header` — `{ label, href?, newTab?, variant?, children }`, an item with
 no `label` of its own already named by the page it points at — and write your own markup.

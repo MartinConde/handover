@@ -203,6 +203,8 @@ export interface NavLink {
   /** Absent on a label that only opens the items under it. */
   href?: string;
   newTab?: boolean;
+  /** The variant the client picked, for the site to draw the item by. */
+  variant?: string;
   children: NavLink[];
 }
 
@@ -238,7 +240,12 @@ async function navLinks<C extends Record<string, unknown>>(
     const label = typeof item.label === 'string' ? item.label : '';
     // A label with nothing under it, or with no word in this language, would open nothing.
     if (item.link === undefined) {
-      if (label && children.length) links.push({ label, children });
+      if (label && children.length)
+        links.push({
+          label,
+          ...(typeof item.variant === 'string' ? { variant: item.variant } : {}),
+          children,
+        });
       continue;
     }
     const target = await href(siteId, source, site, item.link, locale);
@@ -247,6 +254,7 @@ async function navLinks<C extends Record<string, unknown>>(
       label: label || target.name,
       href: target.href,
       ...(item.newTab === true ? { newTab: true } : {}),
+      ...(typeof item.variant === 'string' ? { variant: item.variant } : {}),
       children,
     });
   }

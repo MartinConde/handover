@@ -554,6 +554,16 @@ test('an item with no link is a label over its children, dropped once nothing is
   ]);
 });
 
+test('an item keeps the variant it was given, for the site to draw it by', async () => {
+  const nav = menu([
+    item({ label: 'Company', variant: 'mega', link: { type: 'url', href: '/c' } }),
+  ]);
+
+  expect((await resolved(nav, 'en')).header).toStrictEqual([
+    { label: 'Company', href: '/c', variant: 'mega', children: [] },
+  ]);
+});
+
 // A collection's index is not an entry, so the item names the collection instead of a file.
 test("an index item points at the language's own index page, named by the collection", async () => {
   const nav = menu([item({ link: { type: 'index', collection: 'listings' } })]);

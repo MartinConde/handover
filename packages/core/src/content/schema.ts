@@ -40,7 +40,14 @@ type FieldOf =
   | { path: string[]; label: string; type: 'embed'; required: boolean }
   | { path: string[]; label: string; type: 'seo'; required: boolean }
   // `children` is recursive, so a menu tree has no fields the walker could flatten.
-  | { path: string[]; label: string; type: 'menus'; required: boolean }
+  | {
+      path: string[];
+      label: string;
+      type: 'menus';
+      required: boolean;
+      /** How the site can draw an item, by key, as `defineNavigation` declared them. */
+      variants?: Record<string, string | Labels>;
+    }
   | { path: string[]; label: string; type: 'reference'; required: boolean; collection: string }
   // `fields` and `item` are relative to the group / one array item; `item` is `[]` for a scalar.
   | { path: string[]; label: string; type: 'group'; required: boolean; fields: Field[] }
@@ -70,6 +77,7 @@ const menuItem: Field[] = [
   // One value the CMS never looks inside: swapping a page for a URL replaces the whole target.
   { path: ['link'], label: 'Links to', type: 'unsupported' },
   { path: ['newTab'], label: 'Open in a new tab', type: 'boolean', required: false },
+  { path: ['variant'], label: 'Style', type: 'text', required: false },
 ];
 menuItem.push({
   path: ['children'],
@@ -224,9 +232,20 @@ function fieldFrom(
     case 'date':
     case 'link':
     case 'embed':
-    case 'menus':
     case 'seo':
       return [{ path, label, type: child.handover, required }];
+    case 'menus':
+      return [
+        {
+          path,
+          label,
+          type: 'menus',
+          required,
+          ...(typeof child.variants === 'object' && child.variants !== null
+            ? { variants: child.variants as Record<string, string | Labels> }
+            : {}),
+        },
+      ];
     // Only the cap has a value where none is set.
     case 'image':
       return [

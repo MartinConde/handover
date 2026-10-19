@@ -2053,6 +2053,8 @@
   "menus_no_label_skipped": "No link and no label in this language — the site skips this item here",
   "menus_add_label_only": "Add a label without a link",
   "menus_label_added": "Label added. Name it, then put items under it.",
+  "menus_style": "Style",
+  "menus_style_standard": "Standard",
   "menus_language_labels": "{language} menu labels",
   "menus_structure": "Menu structure",
   "menus_translate_labels": "Translate the labels visitors see in this language.",
