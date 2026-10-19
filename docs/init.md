@@ -21,6 +21,18 @@ The address is the first owner's. Everything is named after the project — `nam
 `package.json`, or the folder — so `my-site` gets a D1 database called `my-site` and an R2
 public-media bucket called `my-site-media`, plus a private staging bucket called `my-site-uploads`.
 
+To keep the database and both buckets in Cloudflare's EU jurisdiction, add the flag (`eu` or
+`fedramp`):
+
+```sh
+npx handover init you@example.com --jurisdiction eu
+```
+
+It is passed to every Wrangler command that creates or checks a resource, and the generated
+config gets `"jurisdiction": "eu"` on the `MEDIA_UPLOADS` binding and `R2_JURISDICTION` in
+`vars`. A retry keeps the recorded jurisdiction and refuses a different one. A site cannot move
+into a jurisdiction later; the resources have to be created again.
+
 Example output follows; the schema version is the one shipped by the installed package:
 
 ```text

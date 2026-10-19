@@ -715,3 +715,14 @@ test('a failed media row write retains staging for an immediate confirmation ret
     true,
   );
 });
+
+test('a store with a jurisdiction talks to the jurisdictional R2 endpoint', async () => {
+  const hosts: string[] = [];
+  const fetch = (async (input: Request) => {
+    hosts.push(new URL(input.url).host);
+    return new Response('<ListBucketResult></ListBucketResult>');
+  }) as unknown as typeof globalThis.fetch;
+  const db = openDb('jurisdiction', binding);
+  await reconcileMedia('jurisdiction', db, { ...store, jurisdiction: 'eu' }, { fetch });
+  expect(hosts).toEqual(['2e4dff78a4af5223c7940d6b41d7c9a7.eu.r2.cloudflarestorage.com']);
+});

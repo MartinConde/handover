@@ -4,7 +4,8 @@ import { join } from 'node:path';
 import { init } from './init.js';
 import { dbGenerate, migrate } from './migrate.js';
 
-const USAGE = 'Usage: handover <init <owner-email> | migrate [--dry-run] | db generate [--check]>';
+const USAGE =
+  'Usage: handover <init <owner-email> [--jurisdiction eu|fedramp] | migrate [--dry-run] | db generate [--check]>';
 
 export interface Env {
   cwd: string;
@@ -30,6 +31,8 @@ export async function main(argv: string[], env: Env): Promise<number> {
   }
   try {
     if (cmd === 'init' && argv.length === 2 && sub) return init(env, sub);
+    if (cmd === 'init' && argv.length === 4 && sub && argv[2] === '--jurisdiction')
+      return init(env, sub, argv[3]);
     if (cmd === 'migrate' && (argv.length === 1 || (argv.length === 2 && sub === '--dry-run')))
       return migrate(env, sub === '--dry-run');
     if (

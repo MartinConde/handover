@@ -634,7 +634,7 @@ test('an unknown command prints usage and fails', async () => {
   const { code, out } = await run(['frobnicate'], site({}));
   expect(code).toBe(1);
   expect(out).toContain(
-    'Usage: handover <init <owner-email> | migrate [--dry-run] | db generate [--check]>',
+    'Usage: handover <init <owner-email> [--jurisdiction eu|fedramp] | migrate [--dry-run] | db generate [--check]>',
   );
 });
 
@@ -914,3 +914,92 @@ test.each([['--help'], ['migrate', '--help'], ['db', 'generate', '--help'], ['in
     expect(existsSync(join(cwd, 'migrations'))).toBe(false);
   },
 );
+
+const EU = ['--jurisdiction', 'eu'];
+
+test('init --jurisdiction eu creates the database and every bucket command in the EU', async () => {
+  const cwd = site({ 'package.json': '{ "name": "my-site" }' });
+  const ran: string[][] = [];
+  const { code, out } = await run(['init', 'you@example.com', ...EU], cwd, ran);
+  expect(code, out).toBe(0);
+  expect(ran).toContainEqual(['wrangler', 'd1', 'create', 'my-site', ...EU]);
+  const buckets = ran.filter((a) => a[2] === 'bucket');
+  expect(buckets.length).toBeGreaterThan(0);
+  for (const argv of buckets) expect(argv.slice(-2), argv.join(' ')).toEqual(EU);
+});
+
+test('init --jurisdiction eu scaffolds the binding and the var', async () => {
+  const cwd = site({ 'package.json': '{ "name": "my-site" }' });
+  const { code, out } = await run(['init', 'you@example.com', ...EU], cwd);
+  expect(code, out).toBe(0);
+  const config = readFileSync(join(cwd, 'wrangler.jsonc'), 'utf8');
+  expect(config).toContain(
+    '"binding": "MEDIA_UPLOADS", "bucket_name": "my-site-uploads", "jurisdiction": "eu"',
+  );
+  expect(config).toContain('"R2_JURISDICTION": "eu"');
+});
+
+test('init prints the TOML block with the jurisdiction for a config it did not write', async () => {
+  const cwd = site({
+    'package.json': '{ "name": "my-site" }',
+    'wrangler.toml': 'name = "theirs"\n',
+  });
+  const { code, out } = await run(['init', 'you@example.com', ...EU], cwd);
+  expect(code).toBe(1);
+  expect(out).toContain('R2_JURISDICTION = "eu"');
+  expect(out).toContain('bucket_name = "my-site-uploads"\njurisdiction = "eu"');
+});
+
+test('init refuses a jurisdiction Cloudflare does not have, before running anything', async () => {
+  const cwd = site({ 'package.json': '{ "name": "my-site" }' });
+  const ran: string[][] = [];
+  const { code, out } = await run(['init', 'you@example.com', '--jurisdiction', 'us'], cwd, ran);
+  expect(code).toBe(1);
+  expect(out).toContain('--jurisdiction must be eu or fedramp');
+  expect(ran).toEqual([]);
+});
+
+test('init resumed with another jurisdiction refuses and creates nothing', async () => {
+  const cwd = site({ 'package.json': '{ "name": "my-site" }' });
+  const cloud: CloudState = { publicUploads: true };
+  await run(['init', 'you@example.com', ...EU], cwd, [], cloud);
+  const ran: string[][] = [];
+  const { code, out } = await run(
+    ['init', 'you@example.com', '--jurisdiction', 'fedramp'],
+    cwd,
+    ran,
+    cloud,
+  );
+  expect(code).toBe(1);
+  expect(out).toContain('eu, not fedramp');
+  expect(ran).toEqual([]);
+});
+
+test('init resumed without the flag keeps the recorded jurisdiction', async () => {
+  const cwd = site({ 'package.json': '{ "name": "my-site" }' });
+  const cloud: CloudState = { publicUploads: true };
+  await run(['init', 'you@example.com', ...EU], cwd, [], cloud);
+  cloud.publicUploads = false;
+  const ran: string[][] = [];
+  const { code, out } = await run(['init', 'you@example.com'], cwd, ran, cloud);
+  expect(code, out).toBe(0);
+  const buckets = ran.filter((a) => a[2] === 'bucket');
+  expect(buckets.length).toBeGreaterThan(0);
+  for (const argv of buckets) expect(argv.slice(-2), argv.join(' ')).toEqual(EU);
+});
+
+test('init rejects a MEDIA_UPLOADS binding in another jurisdiction before provisioning', async () => {
+  const cwd = site({
+    'package.json': '{ "name": "my-site" }',
+    'wrangler.jsonc':
+      '{ "r2_buckets": [{ "binding": "MEDIA_UPLOADS", "bucket_name": "my-site-uploads", "jurisdiction": "fedramp" }] }',
+  });
+  const ran: string[][] = [];
+  const { code, out } = await run(['init', 'you@example.com', ...EU], cwd, ran);
+  expect(code).toBe(1);
+  expect(out).toContain('MEDIA_UPLOADS jurisdiction is fedramp, not eu');
+  expect(ran).toEqual([
+    ['drizzle-kit', '--version'],
+    ['wrangler', '--version'],
+  ]);
+});

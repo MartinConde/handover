@@ -17,6 +17,9 @@ npx wrangler r2 bucket create your-site-uploads
 npx wrangler r2 bucket lifecycle add your-site-uploads handover-expire-uploads uploads/ --expire-days 1
 ```
 
+For a jurisdiction, add `--jurisdiction eu` to every `wrangler r2 bucket` command here. Without
+it Wrangler does not find the bucket.
+
 Keep **r2.dev disabled and attach no custom domain** on `your-site-uploads`. Check both:
 
 ```sh
@@ -44,6 +47,10 @@ The initializer verifies the rule on retries and refuses conflicting settings.
   "R2_BUCKET": "your-site-media"
 }
 ```
+
+For a bucket in a jurisdiction, add `"jurisdiction": "eu"` to the `MEDIA_UPLOADS` binding and
+`"R2_JURISDICTION": "eu"` to `vars`. The S3 endpoint then becomes
+`<account-id>.eu.r2.cloudflarestorage.com`; the plain one cannot reach those buckets.
 
 The binding gives the Worker access to staging. It needs no browser credential or S3 key.
 For the public bucket, create an **R2 API token** with **Object Read & Write**, scoped to

@@ -315,6 +315,7 @@ export function validateWranglerConfig(
   bucket: string,
   account?: string,
   databaseId?: string,
+  jurisdiction?: string,
 ): string[] {
   const uploads = (config.buckets ?? []).filter((item) => item.binding === 'MEDIA_UPLOADS');
   if (uploads.length > 1)
@@ -323,6 +324,14 @@ export function validateWranglerConfig(
     throw new Error(
       `${config.file}: MEDIA_UPLOADS must point to ${name}-uploads. Nothing changed.`,
     );
+  for (const [what, found] of [
+    ['MEDIA_UPLOADS jurisdiction', uploads[0]?.jurisdiction],
+    ['R2_JURISDICTION', config.vars?.R2_JURISDICTION],
+  ] as const)
+    if (found !== undefined && found !== jurisdiction)
+      throw new Error(
+        `${config.file}: ${what} is ${String(found)}, not ${jurisdiction ?? 'unset'}. Nothing changed.`,
+      );
   const expected = { R2_ACCOUNT_ID: account, R2_BUCKET: bucket };
   for (const [key, value] of Object.entries(expected)) {
     const found = config.vars?.[key];
@@ -347,7 +356,11 @@ export function validateWranglerConfig(
   return [
     ...(config.vars?.R2_ACCOUNT_ID === account ? [] : ['R2_ACCOUNT_ID']),
     ...(config.vars?.R2_BUCKET === bucket ? [] : ['R2_BUCKET']),
-    ...(uploads[0]?.bucket_name === `${name}-uploads` ? [] : ['MEDIA_UPLOADS']),
+    ...(jurisdiction && config.vars?.R2_JURISDICTION !== jurisdiction ? ['R2_JURISDICTION'] : []),
+    ...(uploads[0]?.bucket_name === `${name}-uploads` &&
+    (!jurisdiction || uploads[0].jurisdiction === jurisdiction)
+      ? []
+      : ['MEDIA_UPLOADS']),
     ...(database?.database_name === name && database.database_id === databaseId ? [] : ['DB']),
   ];
 }

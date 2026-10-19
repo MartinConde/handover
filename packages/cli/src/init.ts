@@ -44,14 +44,26 @@ interface InitRecord {
   uploadsReady?: boolean;
   ownerEmail: string;
   ownerId: string;
+  jurisdiction?: string;
 }
 
-export function init(env: Env, email: string): number {
+const JURISDICTIONS = ['eu', 'fedramp'];
+const inJurisdiction = (jurisdiction?: string) =>
+  jurisdiction ? ['--jurisdiction', jurisdiction] : [];
+
+export function init(env: Env, email: string, flag?: string): number {
   if (!/^[^\s'"@]+@[^\s'"@]+\.[^\s'"@]+$/.test(email))
     throw new Error(`${email} is not an email address`);
+  if (flag !== undefined && !JURISDICTIONS.includes(flag))
+    throw new Error(`--jurisdiction must be eu or fedramp, not ${flag}`);
   const name = siteName(env.cwd);
   const saved = initRecord(env);
   validateInitRecord(saved, name, email);
+  if (saved && flag && flag !== saved.jurisdiction)
+    throw new Error(
+      `This site was started ${saved.jurisdiction ? `in ${saved.jurisdiction}` : 'without a jurisdiction'}, not ${flag}. Nothing changed.`,
+    );
+  const jurisdiction = flag ?? saved?.jurisdiction;
   if (!saved && [INIT_DRIZZLE, INIT_MIGRATIONS].some((path) => existsSync(join(env.cwd, path))))
     throw new Error(
       `${INIT_DRIZZLE} or ${INIT_MIGRATIONS}/ already exists without an initialization record. Nothing changed.`,
@@ -73,7 +85,8 @@ export function init(env: Env, email: string): number {
     const config = wranglerConfig(env);
     validateDrizzleConfig(env);
     const expectedBucket = `${name}-media`;
-    if (config) validateWranglerConfig(config, name, expectedBucket);
+    if (config)
+      validateWranglerConfig(config, name, expectedBucket, undefined, undefined, jurisdiction);
 
     // Every local file comes before provisioning. Existing files are verified or left alone.
     scaffold(env);
@@ -95,7 +108,8 @@ export function init(env: Env, email: string): number {
       throw new Error(
         `Initialization belongs to Cloudflare account ${saved.accountId}, not ${account}. Restore that CLOUDFLARE_ACCOUNT_ID; no resources were changed.`,
       );
-    if (config) validateWranglerConfig(config, name, expectedBucket, account);
+    if (config)
+      validateWranglerConfig(config, name, expectedBucket, account, undefined, jurisdiction);
     const record: InitRecord = saved ?? {
       version: 1,
       siteName: name,
@@ -104,6 +118,7 @@ export function init(env: Env, email: string): number {
       bucketReady: false,
       ownerEmail: email,
       ownerId: randomUUID(),
+      ...(jurisdiction ? { jurisdiction } : {}),
     };
     saveInitRecord(env, record);
 
@@ -123,16 +138,24 @@ export function init(env: Env, email: string): number {
     provisionBucket(env, uploads);
     record.uploadsReady = uploads.bucketReady;
     saveInitRecord(env, record);
-    secureUploadBucket(env, uploads.bucketName);
+    secureUploadBucket(env, uploads.bucketName, jurisdiction);
 
     const configFile = config?.file;
-    if (!configFile) put(env, 'wrangler.jsonc', wranglerJsonc(name, account, record.databaseId));
+    if (!configFile)
+      put(env, 'wrangler.jsonc', wranglerJsonc(name, account, record.databaseId, jurisdiction));
     const ready = wranglerConfig(env);
     if (!ready) throw new Error('wrangler.jsonc was not written');
-    const missing = validateWranglerConfig(ready, name, expectedBucket, account, record.databaseId);
+    const missing = validateWranglerConfig(
+      ready,
+      name,
+      expectedBucket,
+      account,
+      record.databaseId,
+      jurisdiction,
+    );
     if (missing.length) {
       throw new Error(
-        `${ready.file} is yours; add or merge these values before migrations can run:\n${bindingSnippet(ready.file, name, account, record.databaseId)}\nThen continue with:\n  npx handover init ${email}`,
+        `${ready.file} is yours; add or merge these values before migrations can run:\n${bindingSnippet(ready.file, name, account, record.databaseId, jurisdiction)}\nThen continue with:\n  npx handover init ${email}`,
       );
     }
 
@@ -279,14 +302,15 @@ function provisionDatabase(env: Env, record: InitRecord, configuredId?: string):
   if (matches.length > 1)
     throw new Error(`wrangler lists more than one D1 database called ${record.siteName}`);
   if (matches[0]) return matches[0].uuid;
-  env.run(['wrangler', 'd1', 'create', record.siteName]);
+  env.run(['wrangler', 'd1', 'create', record.siteName, ...inJurisdiction(record.jurisdiction)]);
   const created = databases().find((database) => database.name === record.siteName)?.uuid;
   if (!created) throw new Error(`wrangler lists no database called ${record.siteName}`);
   return created;
 }
 
 function provisionBucket(env: Env, record: InitRecord): void {
-  const argv = ['wrangler', 'r2', 'bucket', 'info', record.bucketName, '--json'];
+  const where = inJurisdiction(record.jurisdiction);
+  const argv = ['wrangler', 'r2', 'bucket', 'info', record.bucketName, '--json', ...where];
   const output = env.probe(argv);
   if (output !== undefined) {
     const info = JSON.parse(output) as { name?: unknown };
@@ -299,13 +323,14 @@ function provisionBucket(env: Env, record: InitRecord): void {
     throw new Error(
       `R2 bucket ${record.bucketName} was created earlier but Wrangler cannot verify it now; it was not recreated.`,
     );
-  env.run(['wrangler', 'r2', 'bucket', 'create', record.bucketName]);
+  env.run(['wrangler', 'r2', 'bucket', 'create', record.bucketName, ...where]);
   record.bucketReady = true;
 }
 
-function secureUploadBucket(env: Env, bucket: string): void {
-  const devUrl = env.capture(['wrangler', 'r2', 'bucket', 'dev-url', 'get', bucket]);
-  const domains = env.capture(['wrangler', 'r2', 'bucket', 'domain', 'list', bucket]);
+function secureUploadBucket(env: Env, bucket: string, jurisdiction?: string): void {
+  const where = inJurisdiction(jurisdiction);
+  const devUrl = env.capture(['wrangler', 'r2', 'bucket', 'dev-url', 'get', bucket, ...where]);
+  const domains = env.capture(['wrangler', 'r2', 'bucket', 'domain', 'list', bucket, ...where]);
   // These Wrangler commands have no JSON mode; unfamiliar output must fail closed.
   if (
     !/^Public access via the r2\.dev URL is disabled\.$/m.test(devUrl) ||
@@ -317,7 +342,7 @@ function secureUploadBucket(env: Env, bucket: string): void {
 
   const ruleName = 'handover-expire-uploads';
   const readRule = () => {
-    const output = env.capture(['wrangler', 'r2', 'bucket', 'lifecycle', 'list', bucket]);
+    const output = env.capture(['wrangler', 'r2', 'bucket', 'lifecycle', 'list', bucket, ...where]);
     return output
       .split(/(?=^name:\s*)/m)
       .find((rule) => new RegExp(`^name:\\s*${ruleName}\\s*$`, 'm').test(rule));
@@ -343,6 +368,7 @@ function secureUploadBucket(env: Env, bucket: string): void {
     'uploads/',
     '--expire-days',
     '1',
+    ...where,
   ]);
   const created = readRule();
   if (!created || !valid(created))

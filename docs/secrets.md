@@ -62,6 +62,9 @@ private:
 "vars": { "R2_ACCOUNT_ID": "<account-id>", "R2_BUCKET": "your-site-media" }
 ```
 
+A site whose buckets are in a jurisdiction adds `"R2_JURISDICTION": "eu"` to the same `vars`
+([Media](media.md)).
+
 Uploads also need a private R2 binding named `MEDIA_UPLOADS`, with no public hostname and
 a one-day lifecycle expiry rule. Only verified bytes reach the public media bucket, whose
 GET CORS, hostname and response headers are covered in [Media](media.md).

@@ -6,20 +6,27 @@ const bindings = (
   name: string,
   account: string,
   database: string,
+  jurisdiction?: string,
 ) => `  // Not secrets: an account id and a bucket name. The public-bucket access keys are.
-  "vars": { "R2_ACCOUNT_ID": "${account}", "R2_BUCKET": "${name}-media" },
+  "vars": { "R2_ACCOUNT_ID": "${account}", "R2_BUCKET": "${name}-media"${jurisdiction ? `, "R2_JURISDICTION": "${jurisdiction}"` : ''} },
   "d1_databases": [
     { "binding": "DB", "database_name": "${name}", "database_id": "${database}" }
   ],
   "r2_buckets": [
-    { "binding": "MEDIA_UPLOADS", "bucket_name": "${name}-uploads" }
+    { "binding": "MEDIA_UPLOADS", "bucket_name": "${name}-uploads"${jurisdiction ? `, "jurisdiction": "${jurisdiction}"` : ''} }
   ]`;
 
-export const bindingSnippet = (file: string, name: string, account: string, database: string) =>
+export const bindingSnippet = (
+  file: string,
+  name: string,
+  account: string,
+  database: string,
+  jurisdiction?: string,
+) =>
   file.endsWith('.toml')
     ? `[vars]
 R2_ACCOUNT_ID = "${account}"
-R2_BUCKET = "${name}-media"
+R2_BUCKET = "${name}-media"${jurisdiction ? `\nR2_JURISDICTION = "${jurisdiction}"` : ''}
 
 [[d1_databases]]
 binding = "DB"
@@ -28,10 +35,15 @@ database_id = "${database}"
 
 [[r2_buckets]]
 binding = "MEDIA_UPLOADS"
-bucket_name = "${name}-uploads"`
-    : bindings(name, account, database);
+bucket_name = "${name}-uploads"${jurisdiction ? `\njurisdiction = "${jurisdiction}"` : ''}`
+    : bindings(name, account, database, jurisdiction);
 
-export const wranglerJsonc = (name: string, account: string, database: string) => `{
+export const wranglerJsonc = (
+  name: string,
+  account: string,
+  database: string,
+  jurisdiction?: string,
+) => `{
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "${name}",
   "compatibility_date": "2026-08-01",
@@ -39,7 +51,7 @@ export const wranglerJsonc = (name: string, account: string, database: string) =
   "main": "./src/worker.ts",
   "triggers": { "crons": ["*/5 * * * *"] },
   "assets": { "binding": "ASSETS", "directory": "./dist" },
-${bindings(name, account, database)}
+${bindings(name, account, database, jurisdiction)}
 }
 `;
 

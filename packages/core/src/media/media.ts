@@ -11,6 +11,8 @@ import { imageDimensions, UploadRefusedError } from './upload-bytes.js';
 export interface R2Store {
   /** The S3 endpoint is named after it. */
   accountId: string;
+  /** `eu` or `fedramp`: those buckets answer only on `<account>.<jurisdiction>.r2…`. */
+  jurisdiction?: string;
   bucket: string;
   accessKeyId: string;
   secretAccessKey: string;
@@ -226,8 +228,10 @@ export function namedBy(key: string, files: Iterable<ContentFile>): string[] {
   return [...found].sort();
 }
 
-const objectUrl = (store: R2Store, key: string) =>
-  `https://${store.accountId}.r2.cloudflarestorage.com/${store.bucket}/${key}`;
+const bucketUrl = (store: R2Store) =>
+  `https://${store.accountId}${store.jurisdiction ? `.${store.jurisdiction}` : ''}.r2.cloudflarestorage.com/${store.bucket}`;
+
+const objectUrl = (store: R2Store, key: string) => `${bucketUrl(store)}/${key}`;
 
 const signer = (store: R2Store) =>
   new AwsClient({
@@ -419,7 +423,7 @@ export const mimeForMediaKey = (key: string): string | undefined =>
   MIMES[key.match(/\.([a-z0-9]+)$/)?.[1] ?? ''];
 
 const listPage = async (store: R2Store, fetch: typeof globalThis.fetch, token?: string) => {
-  const url = new URL(`https://${store.accountId}.r2.cloudflarestorage.com/${store.bucket}`);
+  const url = new URL(bucketUrl(store));
   url.searchParams.set('list-type', '2');
   if (token) url.searchParams.set('continuation-token', token);
   const res = await fetch(await signer(store).sign(url.toString(), { method: 'GET' }));

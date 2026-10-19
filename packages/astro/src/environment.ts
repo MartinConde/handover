@@ -35,6 +35,7 @@ export function mediaStore(): R2Store | undefined {
   return e.R2_ACCOUNT_ID && e.R2_BUCKET && e.R2_ACCESS_KEY_ID && e.R2_SECRET_ACCESS_KEY
     ? {
         accountId: e.R2_ACCOUNT_ID,
+        ...(e.R2_JURISDICTION ? { jurisdiction: e.R2_JURISDICTION } : {}),
         bucket: e.R2_BUCKET,
         accessKeyId: e.R2_ACCESS_KEY_ID,
         secretAccessKey: e.R2_SECRET_ACCESS_KEY,
