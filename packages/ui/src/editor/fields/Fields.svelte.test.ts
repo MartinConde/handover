@@ -280,6 +280,21 @@ test('advanced fields are folded away below the others', () => {
   ).toBeTruthy();
 });
 
+test('the advanced fold comes before the first group, list or blocks field', () => {
+  const links: Field = {
+    path: ['links'],
+    label: 'Links',
+    type: 'group',
+    required: false,
+    fields: [{ path: ['href'], label: 'Link', type: 'text', required: false }],
+  };
+  show([...withAdvanced, links], { title: 'Home' });
+  const fold = q<HTMLDetailsElement>('details.advanced');
+  expect(
+    fold.compareDocumentPosition(q('input#f-links\\.href')) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
+});
+
 test('an advanced field with a problem is not folded away', () => {
   show(withAdvanced, { title: 'Home' }, {}, { padded: 'Expected true or false' });
   expect(q<HTMLDetailsElement>('details.advanced').open).toBe(true);

@@ -166,6 +166,11 @@ const shown = $derived(
 );
 const plain = $derived(shown.filter((f) => !f.advanced));
 const advanced = $derived(shown.filter((f) => f.advanced));
+// The fold stays near the copy it tunes, above a long block list.
+const foldAt = $derived.by(() => {
+  const at = plain.findIndex(structural);
+  return at === -1 ? plain.length : at;
+});
 
 // One picker at a time per form level; the field id says which is open.
 let picker = $state('');
@@ -1118,10 +1123,11 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
   {#if afterTitle && at.join('.') === titleKey}{@render afterTitle()}{/if}
 {/snippet}
 
-{#each plain as field (field.path.join('.'))}{@render row(field)}{/each}
+{#each plain.slice(0, foldAt) as field (field.path.join('.'))}{@render row(field)}{/each}
 {#if advanced.length > 0}
   <details class="group advanced" open={advanced.some((f) => problemOf(f, [...path, ...f.path]))}>
     <summary>{m.field_advanced({}, messageOptions(uiLocale))}<span class="count">{m.field_count({ count: advanced.length }, messageOptions(uiLocale))}</span></summary>
     <div class="form">{#each advanced as field (field.path.join('.'))}{@render row(field)}{/each}</div>
   </details>
 {/if}
+{#each plain.slice(foldAt) as field (field.path.join('.'))}{@render row(field)}{/each}

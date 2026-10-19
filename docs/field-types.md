@@ -105,8 +105,9 @@ hero: defineBlock('hero', { heading: z.string() }).meta({ label: { en: 'Hero', d
 ### Settings the client rarely needs
 
 A switch for the developer, such as extra spacing or a smaller title, takes
-`.meta({ advanced: true })`. The form shows it in an **Advanced** fold below the other fields of
-its level (the page, a group, one block), closed until it holds a problem:
+`.meta({ advanced: true })`. The form shows it in an **Advanced** fold after the other fields of
+its level (the page, a group, one block), above the first group, list or blocks field, and keeps
+the fold closed until it holds a problem:
 
 ```ts
 paddedBottom: z.boolean().optional().meta({ label: 'Space below', advanced: true }),
