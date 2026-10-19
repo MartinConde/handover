@@ -34,7 +34,14 @@ import {
   recordRenames,
   sweepOrphans,
 } from './committed.js';
-import { createDraft, loadDraft, pendingDrafts, saveDraft } from './drafts.js';
+import {
+  createDraft,
+  discardDraft,
+  loadDraft,
+  openDraft,
+  pendingDrafts,
+  saveDraft,
+} from './drafts.js';
 import { claimLock } from './locks.js';
 
 const mf = newTestD1();
@@ -389,6 +396,19 @@ test('a row younger than a day is left alone', async () => {
 
   expect(await sweepOrphans('default', db, git, NOW)).toBe(0);
   expect(await paths(db)).toEqual([ORPHAN]);
+});
+
+test('a published entry reopened before its build is listed', async () => {
+  const db = await fresh();
+  const repo = fakeRepo({});
+  await createDraft('default', db, repo, ORPHAN, { title: 'Brand new' });
+  await publishDrafts('default', db, repo);
+  await discardDraft('default', db, ORPHAN);
+
+  const head = await repo.getHead();
+  await openDraft('default', db, ORPHAN, head, await repo.getFile(ORPHAN, head));
+
+  expect(await listed(db, indexOf({}))).toEqual([['gone', 'Brand new']]);
 });
 
 test('overlay cleanup cannot delete a recreated entry after reading its deletion marker', async () => {
