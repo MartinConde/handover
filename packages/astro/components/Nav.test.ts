@@ -49,6 +49,16 @@ test('<Nav /> opens an item marked for a new tab in one, and lets nothing back t
   expect(html).not.toContain('target="_blank" rel="noopener noreferrer">Home');
 });
 
+test('<Nav /> draws an item with no link as its label over the sub-menu', async () => {
+  const company = {
+    label: 'Company',
+    children: [{ label: 'About', href: '/about', children: [] }],
+  };
+  const html = await render({ menu: 'header', menus: { header: [company] } });
+
+  expect(html).toContain('<li><span>Company</span><ul><li><a href="/about">About</a>');
+});
+
 // Nothing rather than an empty landmark a screen reader would still announce.
 test('<Nav /> draws nothing for a menu with no items in this language', async () => {
   expect((await render({ menu: 'footer', menus })).trim()).toBe('');

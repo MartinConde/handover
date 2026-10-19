@@ -532,6 +532,28 @@ test('the tree keeps its shape: children are resolved under their parent', async
   ]);
 });
 
+// A label that only opens its sub-items has no page of its own to send a reader to.
+test('an item with no link is a label over its children, dropped once nothing is under it', async () => {
+  const about = (id: string) =>
+    item({ _id: id, label: 'About', link: { type: 'url', href: '/about' } });
+  const nav = menu([
+    item({ label: 'Company', children: [about('i2')] }),
+    item({ _id: 'i3', label: 'Empty' }),
+    item({
+      _id: 'i4',
+      label: 'Gone',
+      children: [
+        item({ _id: 'i5', label: 'Offers', link: { type: 'entry', ref: 'listings/nothing' } }),
+      ],
+    }),
+    item({ _id: 'i6', label: '', children: [about('i7')] }),
+  ]);
+
+  expect((await resolved(nav, 'en')).header).toStrictEqual([
+    { label: 'Company', children: [{ label: 'About', href: '/about', children: [] }] },
+  ]);
+});
+
 // A collection's index is not an entry, so the item names the collection instead of a file.
 test("an index item points at the language's own index page, named by the collection", async () => {
   const nav = menu([item({ link: { type: 'index', collection: 'listings' } })]);

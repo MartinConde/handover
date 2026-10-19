@@ -50,7 +50,8 @@ export interface NavItem {
   _id: string;
   _locales?: string[];
   label: string;
-  link: z.infer<typeof toUrl> | z.infer<typeof toRef> | z.infer<typeof toIndex>;
+  /** Absent on a label that only opens the items under it. */
+  link?: z.infer<typeof toUrl> | z.infer<typeof toRef> | z.infer<typeof toIndex>;
   newTab?: boolean;
   children?: NavItem[];
 }
@@ -60,7 +61,9 @@ const navItem: z.ZodType<NavItem> = z.lazy(() =>
     _locales: z.array(z.string()).optional(),
     // An empty label means the page's own title, as a row synced but not yet translated reads.
     label: z.string().default(''),
-    link: z.discriminatedUnion('type', [toUrl.strict(), toRef.strict(), toIndex.strict()]),
+    link: z
+      .discriminatedUnion('type', [toUrl.strict(), toRef.strict(), toIndex.strict()])
+      .optional(),
     newTab: z.boolean().optional(),
     children: z.array(navItem).optional(),
   }),

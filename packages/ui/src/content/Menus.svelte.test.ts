@@ -268,6 +268,50 @@ test('a custom link is written as a url item, and a scheme that runs code is ref
   });
 });
 
+// A label that only opens its sub-items, such as a company section with no page of its own.
+test('a label without a link is added from the library and written without a link', async () => {
+  show();
+  await openAdd();
+  click(q('.nav-library .add-label'));
+
+  await settle();
+  expect(document.activeElement?.id).toBe('f-menus-ed-label');
+  expect(q('.link-summary .name').textContent).toBe('No link');
+  type('#f-menus-ed-label', 'Company');
+  click(q('.item-editor .actions .btn-primary'));
+
+  expect(labels()).toEqual(['Company']);
+  expect(q('.menu-item .kind').textContent).toBe('No link');
+  const added = menus[0]?.items[0] as { _id: string };
+  expect(written()).toBe(`menus:
+  - _id: "menu0aaa"
+    key: "header"
+    items:
+      - _id: "${added._id}"
+        label: "Company"
+`);
+});
+
+test('Remove link turns an item into a label, taking its new-tab setting with it', async () => {
+  show([item({ label: 'Company', newTab: true })]);
+  await settle();
+  click(rowOpen());
+  expect(q('.link-summary .remove-link').textContent).toBe('Remove link');
+  click(q('.link-summary .remove-link'));
+
+  expect(document.querySelector('#f-menus-ed-tab')).toBeNull();
+  expect($state.snapshot(menus[0]?.items[0])).toStrictEqual({ _id: 'a1b2c3d4', label: 'Company' });
+});
+
+test('a label with nothing under it says the site skips it', async () => {
+  show([{ _id: 'a1b2c3d4', label: 'Company' }]);
+  await settle();
+
+  const chip = q('.menu-item .badge-warn');
+  expect(chip.textContent).toBe('No sub-items');
+  expect(chip.title).toBe('No link and no sub-items — the site skips this item');
+});
+
 // The renderer drops these items; the editor is where somebody can see that it is going to.
 test('an item the site will skip says so on the row', async () => {
   show([

@@ -4,6 +4,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- A menu item can be a label without a link that only opens the items under it. **Add a label
+  without a link** in the navigation library adds one; **Remove link** turns an item into one.
+  `menusAt()` returns it without `href` and drops it in a language where it has no label or
+  nothing under it; `<Nav />` draws it as a `<span>`.
 - A redirect to or from a file (`/sitemap-index.xml`) is written to `_redirects` once and
   without a trailing slash. Before, `to` gained the slash on a directory-format site and led to
   a 404. `<Nav />` and the sitemap leave such a path alone too.

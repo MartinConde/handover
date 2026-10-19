@@ -381,6 +381,14 @@ test('a menu item link is a bare target: no label or newTab inside it', () => {
   ).toBe(false);
 });
 
+test('a menu item without a link is a label over its sub-items', () => {
+  const under = { _id: 'e5f6g7h8', label: 'About', link: { type: 'url', href: '/about' } };
+  const label = { _id: 'a1b2c3d4', label: 'Company', children: [under] };
+  expect(
+    navigation.safeParse({ menus: [{ _id: '7h2kq9sd', key: 'header', items: [label] }] }).success,
+  ).toBe(true);
+});
+
 test('the redirects golden parses; from must be a path and to a path or absolute URL', async () => {
   expect(redirects.safeParse(await golden('redirects')).success).toBe(true);
   const rule = {

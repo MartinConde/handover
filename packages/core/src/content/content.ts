@@ -200,7 +200,8 @@ export async function getEntryLocales<C extends Record<string, unknown>>(
 /** One menu item as a page renders it: an address, and the items under it. */
 export interface NavLink {
   label: string;
-  href: string;
+  /** Absent on a label that only opens the items under it. */
+  href?: string;
   newTab?: boolean;
   children: NavLink[];
 }
@@ -233,13 +234,20 @@ async function navLinks<C extends Record<string, unknown>>(
   for (const item of Array.isArray(items) ? items : []) {
     if (!isObject(item)) continue;
     if (Array.isArray(item._locales) && !item._locales.includes(locale)) continue;
+    const children = await navLinks(siteId, source, site, item.children, locale);
+    const label = typeof item.label === 'string' ? item.label : '';
+    // A label with nothing under it, or with no word in this language, would open nothing.
+    if (item.link === undefined) {
+      if (label && children.length) links.push({ label, children });
+      continue;
+    }
     const target = await href(siteId, source, site, item.link, locale);
     if (!target) continue;
     links.push({
-      label: (typeof item.label === 'string' && item.label) || target.name,
+      label: label || target.name,
       href: target.href,
       ...(item.newTab === true ? { newTab: true } : {}),
-      children: await navLinks(siteId, source, site, item.children, locale),
+      children,
     });
   }
   return links;

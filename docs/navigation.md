@@ -49,6 +49,10 @@ in every locale. A `label` left empty is not a mistake: the item is then named b
 points at, so renaming that page moves the menu with it — in each language by that language's
 title.
 
+An item with no `link` is a label that only opens the items under it, such as a *Company*
+heading over *About* and *Team*. There is no page to name it, so a language where it has no
+`label`, or nothing left under it, drops it.
+
 **The tree is shared, the labels are not.** Which items a menu has, in which order, what each
 points at and where it opens is the same in every language's file; `label` is the one key a
 language owns ([Languages](i18n.md#the-structure-is-shared)). Moving an item in one language
@@ -63,6 +67,8 @@ every section it matches. Each page is one line with an add button; a ✓ marks 
 the menu, including nested items, and a tag names a page that is hidden or exists in only some
 languages (*DE only*). The library keeps the current search after an addition. On narrow
 screens the library stacks above the tree, with a shortcut to the menu structure.
+**Add a label without a link** adds a heading for sub-items; **Remove link** in an item's
+editor turns an item into one.
 
 The navigation builder follows the account's **Interface language**. Switching between English
 and German translates its controls, counts, warnings, dialogs and retained directory feedback in
@@ -118,7 +124,7 @@ const { menus } = Astro.props;
 <Nav menu="header" menus={menus} current={Astro.url.pathname} />
 ```
 
-`<Nav />` draws a `<nav aria-label="Main">` with nested `<ul>`s — one `<a>` per item,
+`<Nav />` draws a `<nav aria-label="Main">` with nested `<ul>`s — one `<a>` per item (a `<span>` for a label without a link),
 `aria-current="page"` on the one the reader is on (a trailing slash is the same page), every
 `href` written the way `current` is — with the slash or without, so no link is a hop through a
 redirect — and
@@ -126,5 +132,5 @@ redirect — and
 nothing left in this language draws **nothing**. `label` names the landmark where a page has
 two menus. The words come from the file of the language being rendered — the tree is shared and
 the labels are each language's own — so an item nobody has translated is named by the page it
-points at, in that language. Style it, or read `menus.header` — `{ label, href, newTab?, children }`, an item with
+points at, in that language. Style it, or read `menus.header` — `{ label, href?, newTab?, children }`, an item with
 no `label` of its own already named by the page it points at — and write your own markup.

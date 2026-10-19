@@ -5,7 +5,8 @@ export interface MenuItem {
   /** The languages this item is shown in; absent is all of them. */
   _locales?: string[];
   label: string;
-  link:
+  /** Absent on a label that only opens the items under it. */
+  link?:
     | { type: 'url'; href: string }
     | { type: 'entry' | 'page'; ref: string }
     | { type: 'index'; collection: string };
@@ -81,7 +82,8 @@ let menuFor = $state('');
 /** Feedback stays beside the library, so adding several pages never loses your place. */
 type AddedFeedback =
   | { kind: 'entry'; title: string; menu: string }
-  | { kind: 'url' };
+  | { kind: 'url' }
+  | { kind: 'label' };
 let addedFeedback = $state<AddedFeedback>();
 let lastAdded = $state('');
 const options = $derived(messageOptions(uiLocale));
@@ -108,30 +110,33 @@ const languageName = (of: string) => formatLanguageName(of, uiLocale);
 
 /** What a link names in the picker's list: the entry's path, the collection of an index. */
 const keyOf = (link: MenuItem['link']) =>
-  link.type === 'url' ? '' : link.type === 'index' ? link.collection : link.ref;
+  !link || link.type === 'url' ? '' : link.type === 'index' ? link.collection : link.ref;
 const entryOf = (item: MenuItem) => {
   const link = item.link;
-  if (link.type === 'url') return undefined;
+  if (!link || link.type === 'url') return undefined;
   const rows = link.type === 'index' ? (known.indexes ?? []) : known.entries;
   return rows.find((e) => e.path === keyOf(link));
 };
 /** What the row is called when nobody has typed a label: the page's own title. */
 const fallback = (item: MenuItem) =>
-  item.link.type === 'url' ? item.link.href : (entryOf(item)?.titles?.[language] ?? entryOf(item)?.title ?? keyOf(item.link));
-const name = (item: MenuItem) => item.label || fallback(item);
+  !item.link ? '' : item.link.type === 'url' ? item.link.href : (entryOf(item)?.titles?.[language] ?? entryOf(item)?.title ?? keyOf(item.link));
+const name = (item: MenuItem) => item.label || fallback(item) || m.menus_untitled({}, options);
 /** Where it goes in this language, which is what the client recognises the page by. */
 const target = (item: MenuItem) =>
-  item.link.type === 'url' ? item.link.href : (entryOf(item)?.urls[language] ?? keyOf(item.link));
+  !item.link ? '' : item.link.type === 'url' ? item.link.href : (entryOf(item)?.urls[language] ?? keyOf(item.link));
 /** The quiet word after the name: what kind of thing the row points at. */
 const kind = (item: MenuItem) => {
   const link = item.link;
+  if (!link) return m.menus_no_link({}, options);
   if (link.type === 'url') return m.menus_custom_link({}, options);
   if (link.type === 'index') return m.menus_collection_index({ collection: capitalise(collectionName(link.collection, uiLocale)) }, options);
   return capitalise(collectionName(entryOf(item)?.collection ?? link.ref.split('/')[0] ?? '', uiLocale));
 };
 // The renderer drops the row either way; the editor is where somebody can see why and tidy up.
 const flag = (item: MenuItem): { chip: string; why: string } | undefined => {
-  if (item.link.type === 'url') return undefined;
+  if (!item.link && !item.children?.length) return { chip: m.menus_no_children({}, options), why: m.menus_no_children_skipped({}, options) };
+  if (!item.link && !item.label) return { chip: m.menus_no_label({}, options), why: m.menus_no_label_skipped({}, options) };
+  if (!item.link || item.link.type === 'url') return undefined;
   if (!knownCurrent) return undefined;
   const entry = entryOf(item);
   if (!entry) return { chip: m.menus_page_missing({}, options), why: m.menus_page_gone({}, options) };
@@ -233,6 +238,20 @@ async function addUrl(href: string) {
   edit(item);
   await tick();
   document.getElementById(`${id}-ed-label`)?.focus();
+}
+// A heading over sub-items has no page to be named by, so it opens for its label too.
+async function addLabel() {
+  const item: MenuItem = { _id: newId('default'), label: '' };
+  menu?.items.push(item);
+  lastAdded = item._id;
+  addedFeedback = { kind: 'label' };
+  edit(item);
+  await tick();
+  document.getElementById(`${id}-ed-label`)?.focus();
+}
+function unlink(item: MenuItem) {
+  delete item.link;
+  delete item.newTab;
 }
 
 function edit(item: MenuItem) {
@@ -488,15 +507,22 @@ function walkTabs(event: KeyboardEvent) {
           <PagePicker id="{id}-ed-link" label="a page or entry" labelKind="page-or-entry" labelId="{id}-ed-link-l" indexes {uiLocale} chosen={keyOf(row.link)} onpick={(e) => { row.link = linkTo(e); changing = false; }} onurl={(href) => { row.link = { type: 'url', href }; changing = false; }} onclose={() => (changing = false)} />
         {:else}
           <div class="link-summary" role="group" aria-labelledby="{id}-ed-link-l">
-            <span class="name">{fallback(row)}</span>
-            <span class="sub">{row.link.type === 'url' ? m.menus_link({}, options) : m.menus_page({}, options)} <code>{target(row)}</code></span>
-            <button class="btn btn-sm" type="button" onclick={() => (changing = true)}>{m.field_change({}, options)}</button>
+            {#if row.link}
+              <span class="name">{fallback(row)}</span>
+              <span class="sub">{row.link.type === 'url' ? m.menus_link({}, options) : m.menus_page({}, options)} <code>{target(row)}</code></span>
+              <button class="btn btn-sm" type="button" onclick={() => (changing = true)}>{m.field_change({}, options)}</button>
+              <button class="btn btn-sm remove-link" type="button" onclick={() => unlink(row)}>{m.menus_remove_link({}, options)}</button>
+            {:else}
+              <span class="name">{m.menus_no_link({}, options)}</span>
+              <span class="sub">{m.menus_no_link_summary({}, options)}</span>
+              <button class="btn btn-sm" type="button" onclick={() => (changing = true)}>{m.menus_add_link({}, options)}</button>
+            {/if}
           </div>
         {/if}
       </div>
     </div>
     <div class="editor-foot">
-      <label class="editor-option" for="{id}-ed-tab"><input type="checkbox" id="{id}-ed-tab" checked={row.newTab === true} onchange={(e) => { if (e.currentTarget.checked) row.newTab = true; else delete row.newTab; }} /><span>{m.menus_new_tab({}, options)}</span></label>
+      {#if row.link}<label class="editor-option" for="{id}-ed-tab"><input type="checkbox" id="{id}-ed-tab" checked={row.newTab === true} onchange={(e) => { if (e.currentTarget.checked) row.newTab = true; else delete row.newTab; }} /><span>{m.menus_new_tab({}, options)}</span></label>{/if}
       {#if known.locales.length > 1}
         <label class="editor-option" for="{id}-ed-loc"><span>{m.menus_shown_in({}, options)}</span>
           <select class="filter" id="{id}-ed-loc" value={shownIn(row)} onchange={(e) => showIn(row, e.currentTarget.value)} aria-describedby={shownIn(row) ? `${id}-ed-loc-hint` : undefined}>
@@ -510,7 +536,7 @@ function walkTabs(event: KeyboardEvent) {
         <button class="btn btn-sm" type="button" onclick={() => cancelEdit(row)}>{m.common_cancel({}, options)}</button>
       </div>
     </div>
-    {#if shownIn(row)}<p class="hint" id="{id}-ed-loc-hint">{m.menus_visibility_hint({}, options)}{row.link.type !== 'url' ? ` ${m.menus_visibility_page_hint({}, options)}` : ''}</p>{/if}
+    {#if shownIn(row)}<p class="hint" id="{id}-ed-loc-hint">{m.menus_visibility_hint({}, options)}{row.link && row.link.type !== 'url' ? ` ${m.menus_visibility_page_hint({}, options)}` : ''}</p>{/if}
   </div>
 {/snippet}
 
@@ -530,7 +556,7 @@ function walkTabs(event: KeyboardEvent) {
       {@const says = flag(item)}
       <li>
         <div class="menu-item is-label">
-          <label class="lbl" for="{id}-lbl-{item._id}">{fallback(item)}</label>
+          <label class="lbl" for="{id}-lbl-{item._id}">{fallback(item) || m.menus_no_link({}, options)}</label>
           <input class="input" id="{id}-lbl-{item._id}" type="text" value={item.label} oninput={(e) => (item.label = e.currentTarget.value)} placeholder={fallback(item)} aria-describedby="{id}-tgt-{item._id}" />
           <span class="kind" id="{id}-tgt-{item._id}">
             {kind(item)}
@@ -582,11 +608,14 @@ function walkTabs(event: KeyboardEvent) {
             <a class="nav-jump" href="#{id}-structure-h">{m.menus_go_to_structure({}, options)} ↓</a>
           </header>
           <PagePicker id="{id}-pick" label="pages and entries" labelKind="pages-and-entries" labelId="{id}-add-h" indexes library {included} {uiLocale} onpick={addEntry} onurl={addUrl} />
+          <button class="btn btn-sm add-label" type="button" onclick={addLabel}>{m.menus_add_label_only({}, options)}</button>
           <p class="nav-feedback" role="status">{addedFeedback?.kind === 'entry'
             ? m.menus_entry_added({ title: addedFeedback.title, menu: addedFeedback.menu }, options)
             : addedFeedback?.kind === 'url'
               ? m.menus_url_added({}, options)
-              : ''}</p>
+              : addedFeedback?.kind === 'label'
+                ? m.menus_label_added({}, options)
+                : ''}</p>
         </section>
       {/if}
       <section class="nav-workspace" aria-labelledby="{id}-structure-h">

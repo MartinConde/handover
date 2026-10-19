@@ -19,10 +19,10 @@ const list = items ?? menus[menu] ?? [];
 const Tag = items ? Fragment : 'nav';
 // The site links `/listings/` and a menu stores `/listings`: the same page.
 const bare = (path: string) => path.replace(/\/+$/, '');
-const here = (link: NavLink) => current !== undefined && bare(link.href) === bare(current);
+const here = (href: string) => current !== undefined && bare(href) === bare(current);
 // Links match the current page's slash form so none is a hop through the site's redirect.
-const href = (link: NavLink) =>
-  current === undefined ? link.href : withSlash(link.href, current.endsWith('/'));
+const like = (href: string) =>
+  current === undefined ? href : withSlash(href, current.endsWith('/'));
 ---
 
 {list.length > 0 && (
@@ -30,12 +30,12 @@ const href = (link: NavLink) =>
     <ul>
       {list.map((link) => (
         <li>
-          <a
-            href={href(link)}
-            aria-current={here(link) ? 'page' : undefined}
+          {link.href === undefined ? <span>{link.label}</span> : <a
+            href={like(link.href)}
+            aria-current={here(link.href) ? 'page' : undefined}
             target={link.newTab ? '_blank' : undefined}
             rel={link.newTab ? 'noopener noreferrer' : undefined}
-          >{link.label}</a>
+          >{link.label}</a>}
           <Nav items={link.children} current={current} />
         </li>
       ))}
