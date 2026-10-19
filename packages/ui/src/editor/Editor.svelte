@@ -15,6 +15,7 @@ import {
   answeredPaths,
   answeredWork,
   entryName,
+  entryPageUrl,
   entryUrl,
   fieldPosition,
   formIn,
@@ -1280,7 +1281,9 @@ const routing = $derived({
   defaultLocale: entry.defaultLocale,
   prefixDefaultLocale: entry.prefixDefaultLocale,
 });
-const url = $derived(entryUrl('default', routing, entry.route, address || slug, locale) ?? '');
+const url = $derived(
+  entryPageUrl('default', routing, entry, slug, address || slug, locale) ?? '',
+);
 // The part in front of the address, so what is being typed reads as the URL it will be.
 const before = $derived(entryUrl('default', routing, entry.route, '', locale) ?? '');
 
@@ -1293,7 +1296,7 @@ async function turnOff(of: string, target: Target) {
 
 // What the Turn-off dialog names; no index when the collection has no page above it.
 const localeUrl = (of: string) =>
-  entryUrl('default', routing, entry.route, entry.addresses?.[of] || slug, of) ?? undefined;
+  entryPageUrl('default', routing, entry, slug, entry.addresses?.[of] || slug, of) ?? undefined;
 const localeIndex = (of: string) => entryUrl('default', routing, entry.index, '', of) ?? undefined;
 
 const canvasRequest = (): CanvasRenderRequest => ({

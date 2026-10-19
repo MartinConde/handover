@@ -1,7 +1,7 @@
 import { parse } from 'yaml';
 import type { ContentFile } from './entries.js';
 import { isObject, parseEntry } from './entry-format.js';
-import { entryAddress, entryUrl, type I18nRouting } from './names.js';
+import { entryAddress, entryPageUrl, entryUrl, type I18nRouting } from './names.js';
 import { isLive } from './reserved.js';
 import { humanise } from './schema.js';
 import { type Labels, labelsOf } from './ui-locale.js';
@@ -183,7 +183,14 @@ export async function getEntryLocales<C extends Record<string, unknown>>(
       const address = site.collections[collection]?.localizedSlugs
         ? entryAddress(siteId, entry.data, slug)
         : slug;
-      const url = entryUrl(siteId, site.i18n, route, address, locale);
+      const url = entryPageUrl(
+        siteId,
+        site.i18n,
+        site.collections[collection],
+        slug,
+        address,
+        locale,
+      );
       return url ? { locale, url } : undefined;
     }),
   );
@@ -277,7 +284,7 @@ async function href<C extends Record<string, unknown>>(
   if (!entry || !isLive(siteId, entry.data)) return undefined;
   const of = site.collections[collection];
   const address = of?.localizedSlugs ? entryAddress(siteId, entry.data, name) : name;
-  const url = entryUrl(siteId, site.i18n, of?.route, address, locale);
+  const url = entryPageUrl(siteId, site.i18n, of, name, address, locale);
   const titled = isObject(entry.data) ? entry.data[of?.titleField ?? 'title'] : undefined;
   return url ? { href: url, name: typeof titled === 'string' ? titled : name } : undefined;
 }

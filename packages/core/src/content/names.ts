@@ -200,6 +200,20 @@ export function entryUrl(
   return (i18n.base ?? '').replace(/\/+$/, '') + prefix + route.replace('[slug]', slug);
 }
 
+/** In a collection with an `index`, the entry named `index` is that page's own copy. */
+export function entryPageUrl(
+  siteId: string,
+  i18n: I18nRouting,
+  collection: { route?: string; index?: string } | undefined,
+  name: string,
+  address: string,
+  locale: string,
+): string | undefined {
+  return collection?.index && name === 'index'
+    ? entryUrl(siteId, i18n, collection.index, '', locale)
+    : entryUrl(siteId, i18n, collection?.route, address, locale);
+}
+
 /** A path written the other way is a hop through the asset server's redirect. */
 export function withSlash(path: string, slash: boolean): string {
   if (!path.startsWith('/')) return path;
@@ -249,7 +263,9 @@ export function previewTarget(
     const [head = '', tail = ''] = c.route.split('[slug]');
     if (!rest.startsWith(head) || !rest.endsWith(tail)) continue;
     const address = rest.slice(head.length, rest.length - tail.length);
-    if (address && !addressError(siteId, address)) return { collection, locale, address };
+    if (!address || addressError(siteId, address)) continue;
+    if (c.index !== undefined && address === 'index') continue;
+    return { collection, locale, address };
   }
   return undefined;
 }

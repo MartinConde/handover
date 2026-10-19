@@ -133,6 +133,20 @@ test('the page and Canvas are offered only where the site has a page to show', (
   expect($<HTMLButtonElement>(root, '.canvas-open')?.disabled).toBe(false);
 });
 
+test("the entry named index is shown at its collection's index page", () => {
+  const root = show({
+    slug: 'index',
+    entry: { ...entry, route: '/listings/[slug]', index: '/listings', published: [] },
+    preview: true,
+  });
+  flushSync();
+
+  expect(
+    $<HTMLAnchorElement>(root, '.canvas-workspace a[target="_blank"]')?.getAttribute('href'),
+  ).toMatch(/\/_preview\/listings$/);
+  expect($(root, '.canvas-rail .canvas-address')?.textContent).toBe('/listings');
+});
+
 test('the page beside the form is the address this language serves, with only page controls', () => {
   const root = show({
     entry: { ...entry, route: '/listings/[slug]', published: [] },

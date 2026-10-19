@@ -109,3 +109,41 @@ const { block, components: registry, edit } = Astro.props;
 The layout renders the top level. Without Canvas annotations it remains
 `<Blocks blocks={data.blocks} components={components} />`; the [Canvas guide](canvas.md) shows the
 annotated call and the explicit empty-list container.
+
+## A block that lists another collection
+
+A "latest news" block stores only its own copy; the stories it shows come from the `news`
+collection. Fill them in the page loader, from the source the loader was given, so a preview
+shows the stories' drafts as well:
+
+```ts
+// src/loaders/page.ts
+import { loadNews } from '../lib/content';
+
+async function fill(source: Source, locale: string, block: Block) {
+  if (block._type === 'newsList')
+    return { ...block, items: (await loadNews(source, { locale })).latest };
+  return block;
+}
+
+export async function load(source: Source, { locale, slug }: { locale: string; slug: string }) {
+  const entry = await entryAt('default', source, cms, 'pages', locale, slug);
+  if (!entry) return undefined;
+  const blocks = await Promise.all(entry.data.blocks.map((block) => fill(source, locale, block)));
+  return { data: { ...entry.data, blocks } };
+}
+```
+
+The block component renders `block.items` and reads no collection itself; a read there would
+see the published files only. `loadNews` sits in a plain module rather than in
+`src/loaders/news.ts`, because that file re-exports a layout, and importing it would add the
+layout's CSS to every page.
+
+## CSS and scripts
+
+Astro puts the CSS of every component a page imports on that page. A registry imports every
+block, so each page that renders `<Blocks />` carries the scoped CSS of all blocks, the ones it
+does not use included. It changes nothing visible.
+
+A block's `<script>` lands where the block renders: a block in the page body puts it inside
+`<main>`, not at the end of the document.

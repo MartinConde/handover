@@ -31,7 +31,7 @@ digits and dashes.
 |---|---|---|
 | `schema` | yes | The collection's Zod object from `src/content/schemas.ts`. |
 | `route` | no | The detail page's path with `[slug]` exactly once, e.g. `'/blog/[slug]'`. `[slug]` is the entry's filename without `.yaml`. Two collections cannot share a route. |
-| `index` | no | The listing page, a fixed path with no `[...]` segment, e.g. `'/blog'`. Used wherever something links to "the blog" as a whole rather than to one entry. |
+| `index` | no | The listing page, a fixed path with no `[...]` segment, e.g. `'/blog'`. Used wherever something links to "the blog" as a whole rather than to one entry. The entry named `index` in the same collection is that page's own copy: its preview, its links and its sitemap URL are the index path ([A home page](loaders.md#a-home-page)). |
 | `load` | no | The loader's name: `'post'` means `src/loaders/post.ts` ([Loaders and pages](loaders.md)). Preview needs it. |
 | `titleField` | no | The field the entry list shows, when the collection is not keyed on `title`: `titleField: 'name'`. It is also the field "New entry" writes the name you type into, so it has to be a text field of this collection's schema — the build says so if it is not. |
 | `localizedSlugs` | no | Each language may serve this collection's entries at a web address of its own. See below. |

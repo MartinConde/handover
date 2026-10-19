@@ -18,6 +18,7 @@ import {
   deeplTranslate,
   entryAddress,
   entryOffer,
+  entryPageUrl,
   entrySource,
   entryUrl,
   formOf,
@@ -268,10 +269,11 @@ export async function entryLocales(
           live: Boolean(file),
           // What a redirect's `from` is: an address only a draft has was never followed.
           url: file
-            ? entryUrl(
+            ? entryPageUrl(
                 'default',
                 config.i18n,
-                config.collections[collection]?.route,
+                config.collections[collection],
+                slug,
                 entryAddress('default', parseEntry('default', file.contents), slug),
                 locale,
               )
@@ -331,7 +333,7 @@ export async function pickable(ctx: RequestContext) {
       for (const [locale, info] of Object.entries(entry.locales)) {
         // Its `slug` where the collection has localized slugs, its file name where not.
         const address = collected.localizedSlugs ? (info.slug ?? entry.id) : entry.id;
-        const url = entryUrl('default', config.i18n, collected.route, address, locale);
+        const url = entryPageUrl('default', config.i18n, collected, entry.id, address, locale);
         if (url) urls[locale] = url;
       }
       const locales = Object.keys(entry.locales);
@@ -453,7 +455,7 @@ export function redirectTarget(
   const found = entries?.find((e) => e.id === id);
   const address = picked.localizedSlugs ? (found?.locales[locale]?.slug ?? id) : id;
   return (
-    (found?.locales[locale] && entryUrl('default', config.i18n, picked.route, address, locale)) ||
+    (found?.locales[locale] && entryPageUrl('default', config.i18n, picked, id, address, locale)) ||
     entryUrl('default', config.i18n, picked.index, '', locale) ||
     entryUrl('default', config.i18n, '/', '', locale)
   );

@@ -473,6 +473,18 @@ test('a menu item points at the address its own language serves', async () => {
   });
 });
 
+test("a link to the entry named index points at its collection's index page", async () => {
+  const home = { id: 'en/index', data: { title: 'Home' } };
+  const source = staticSource('default', {
+    getEntry: async (_c, id) => (id === home.id ? home : undefined),
+    getCollection: async () => [home],
+  });
+  const homeSite = { ...site, collections: { pages: { route: '/[slug]', index: '/' } } };
+  const nav = menu([item({ link: { type: 'page', ref: 'pages/index' } })]);
+  const { header } = await menusAt('default', source, homeSite, nav, 'en');
+  expect(header?.[0]?.href).toBe('/');
+});
+
 test('an item with no label of its own is named by the page it points at', async () => {
   const nav = menu([item({ link: { type: 'entry', ref: 'listings/coast' } })]);
 

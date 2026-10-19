@@ -67,6 +67,16 @@ test('a collection nothing renders contributes no URL', () => {
   expect(locs(pages, 'en')).toEqual([`${BASE}/`]);
 });
 
+test("the entry named index is listed once, at its collection's index page", () => {
+  const home = { ...site, collections: { pages: { route: '/[slug]', index: '/' } } };
+  const pages = sitemapFrom(
+    'default',
+    [at('src/content/pages/en/index.yaml', 'title: "Home"\n')],
+    home,
+  );
+  expect(locs(pages, 'en')).toEqual([`${BASE}/`]);
+});
+
 test('a site that serves its pages without the slash is written without it', () => {
   const pages = sitemapFrom('default', both(), { ...site, slash: false });
   expect(locs(pages, 'en')).toEqual([`${BASE}/`, `${BASE}/listings/mill-house`]);

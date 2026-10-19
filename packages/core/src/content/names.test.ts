@@ -182,6 +182,12 @@ test("a collection's index page is a target with no address", () => {
   expect(target('/')).toEqual({ collection: 'listings', locale: 'en' });
 });
 
+test('the entry named index is served at its index page, not under the route', () => {
+  const home = { pages: { route: '/[slug]', index: '/' } };
+  expect(previewTarget('default', two, home, '/index')).toBe(undefined);
+  expect(previewTarget('default', two, home, '/')).toEqual({ collection: 'pages', locale: 'en' });
+});
+
 // `/de` is both the German index and, read as a page, the slug "de" in English.
 test('a language segment is never read as a page slug', () => {
   expect(target('/de')).toEqual({ collection: 'listings', locale: 'de' });

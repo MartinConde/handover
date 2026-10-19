@@ -109,6 +109,24 @@ invalid unused globals are never read. See [Blocks](blocks.md) for the shared lo
 A layout that fetches its own reads the *published* file, so the one thing
 preview would not show is the change the client just made to it.
 
+## A home page
+
+A page entry served at `/` is the `pages` collection's index, and the file named `index` is its
+copy: `pages: { schema: page, route: '/[slug]', index: '/', load: 'page' }` and
+`src/content/pages/de/index.yaml`. Preview, Canvas, page links and the sitemap give that entry
+`/`; `/index` is not its address. The pages loader reads it for its index:
+
+```ts
+// src/loaders/page.ts
+export { default as Page, default as Index } from '../layouts/Page.astro';
+
+export const loadIndex = (source: Source, { locale }: { locale: string }) =>
+  load(source, { locale, slug: 'index' });
+```
+
+`src/pages/index.astro` renders `<Index {...await loadIndex(staticSource, { locale: 'de' })} />`,
+and `src/pages/[slug].astro` leaves `index` out of its `getStaticPaths`.
+
 ## A page with an address per language
 
 A collection with [`localizedSlugs`](configuration.md#localizedslugs) is not addressed by its

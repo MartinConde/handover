@@ -310,6 +310,17 @@ test('Canvas renders a page entry at the address another collection indexes', as
   expect(result).toMatchObject({ Component: Page, props: { data: { title: 'Unsaved journal' } } });
 });
 
+test("Canvas renders the entry named index at its collection's index page", async () => {
+  const { result } = await post(
+    '',
+    canvasEnvelope({ entry: { collection: 'listings', id: 'index' } }),
+  );
+  expect(result).toMatchObject({
+    Component: Index,
+    props: { listings: expect.arrayContaining(['en/index']) },
+  });
+});
+
 test.each([
   ['the wrong file', { entry: { collection: 'listings', id: 'other-house' } }],
   ['the wrong collection', { entry: { collection: 'pages', id: 'mill-house' } }],

@@ -75,6 +75,7 @@ export {
   checkI18n,
   entryAddress,
   entryName,
+  entryPageUrl,
   entryUrl,
   previewTarget,
   withSlash,

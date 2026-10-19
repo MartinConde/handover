@@ -2,7 +2,7 @@
 
 import { type ContentFile, entryParts } from './entries.js';
 import { parseEntry } from './entry-format.js';
-import { entryAddress, entryUrl, type I18nRouting, withSlash } from './names.js';
+import { entryAddress, entryPageUrl, entryUrl, type I18nRouting, withSlash } from './names.js';
 import { isLive } from './reserved.js';
 
 /** One page: where it is served, and the same page in the other languages. */
@@ -57,7 +57,8 @@ export function sitemapFrom(
     if (!isLive(siteId, data, parts.locale)) continue;
     if ((data?.seo as { noindex?: unknown } | undefined)?.noindex === true) continue;
     const address = entryAddress(siteId, data, parts.name);
-    const url = entryUrl(siteId, site.i18n, route, address, parts.locale);
+    const of = site.collections[parts.collection];
+    const url = entryPageUrl(siteId, site.i18n, of, parts.name, address, parts.locale);
     if (!url) continue;
     const key = `${parts.collection}/${parts.name}`;
     const locales = entries.get(key) ?? new Map<string, string>();

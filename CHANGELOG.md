@@ -4,6 +4,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- In a collection with an `index`, the entry named `index` is that page's copy: the editor's
+  Preview and Canvas open it at the index path, a page link to it and its sitemap URL are that
+  path, and `/_preview/index` is `404`. With `index: '/'` on `pages`, `pages/<locale>/index.yaml`
+  is the home page. Before, it was addressed `/index`.
 - Preview and Canvas run the site's own `<script is:inline>` scripts from `.astro` files under
   `src/`, allowed by hash. Before, the preview's Content Security Policy blocked them, so a
   layout's `classList.add('js')` never ran there.

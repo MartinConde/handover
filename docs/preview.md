@@ -76,6 +76,8 @@ An index wins over an entry at the same path: with `pages: { route: '/[slug]' }`
 Preview and Canvas of the `listings` page entry render that entry through the pages loader
 instead, so a listing page's own copy can live in a page entry. Have the collection's
 `loadIndex` return what the pages loader returns for that entry, and both show the same page.
+An entry named `index` previews at its own collection's index page, through `loadIndex`
+([A home page](loaders.md#a-home-page)).
 
 ## What it renders
 

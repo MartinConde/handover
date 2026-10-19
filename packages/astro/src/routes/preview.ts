@@ -306,23 +306,26 @@ export async function preview(ctx: Ctx, astro: AstroContent<string>): Promise<Re
     let canvas: HandoverCanvas | undefined;
     if (snapshot) {
       const matchesRoute =
-        !index &&
-        target.collection === snapshot.entry.collection &&
-        target.locale === snapshot.locale;
-      const resolved = matchesRoute
-        ? await entryAt(
-            'default',
-            source,
-            config,
-            target.collection,
-            target.locale,
-            target.address as string,
-          )
-        : undefined;
+        target.collection === snapshot.entry.collection && target.locale === snapshot.locale;
       const prefix = `${target.locale}/`;
-      const resolvedId = resolved?.id.startsWith(prefix)
-        ? resolved.id.slice(prefix.length)
-        : undefined;
+      // A collection's index page is the copy of its entry named `index`.
+      const resolved =
+        matchesRoute && !index
+          ? await entryAt(
+              'default',
+              source,
+              config,
+              target.collection,
+              target.locale,
+              target.address as string,
+            )
+          : undefined;
+      const resolvedId =
+        matchesRoute && index
+          ? 'index'
+          : resolved?.id.startsWith(prefix)
+            ? resolved.id.slice(prefix.length)
+            : undefined;
       if (resolvedId !== snapshot.entry.id)
         return canvasAnswer(
           409,
