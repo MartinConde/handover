@@ -78,6 +78,7 @@ const menuItem: Field[] = [
   { path: ['link'], label: 'Links to', type: 'unsupported' },
   { path: ['newTab'], label: 'Open in a new tab', type: 'boolean', required: false },
   { path: ['variant'], label: 'Style', type: 'text', required: false },
+  { path: ['entries'], label: 'List its pages', type: 'boolean', required: false },
 ];
 menuItem.push({
   path: ['children'],

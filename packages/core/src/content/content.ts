@@ -2,7 +2,7 @@ import { parse } from 'yaml';
 import type { ContentFile } from './entries.js';
 import { isObject, parseEntry } from './entry-format.js';
 import { entryAddress, entryPageUrl, entryUrl, type I18nRouting } from './names.js';
-import { isLive } from './reserved.js';
+import { filterLive, isLive } from './reserved.js';
 import { humanise } from './schema.js';
 import { type Labels, labelsOf } from './ui-locale.js';
 
@@ -205,6 +205,8 @@ export interface NavLink {
   newTab?: boolean;
   /** The variant the client picked, for the site to draw the item by. */
   variant?: string;
+  /** On an entry an index item lists: the entry itself, for the site's teasers. */
+  entry?: { id: string; data: unknown };
   children: NavLink[];
 }
 
@@ -250,12 +252,43 @@ async function navLinks<C extends Record<string, unknown>>(
     }
     const target = await href(siteId, source, site, item.link, locale);
     if (!target) continue;
+    if (item.entries === true && isObject(item.link) && typeof item.link.collection === 'string')
+      children.unshift(...(await entryLinks(siteId, source, site, item.link.collection, locale)));
     links.push({
       label: label || target.name,
       href: target.href,
       ...(item.newTab === true ? { newTab: true } : {}),
       ...(typeof item.variant === 'string' ? { variant: item.variant } : {}),
       children,
+    });
+  }
+  return links;
+}
+
+/** A collection's live entries in this language, as the items an index item lists. */
+async function entryLinks<C extends Record<string, unknown>>(
+  siteId: string,
+  source: ContentSource<C>,
+  site: LocaleSite,
+  collection: string,
+  locale: string,
+): Promise<NavLink[]> {
+  const of = site.collections[collection];
+  const links: NavLink[] = [];
+  const all = await source.getCollection(collection as keyof C & string, locale);
+  for (const entry of filterLive(siteId, all)) {
+    const name = entry.id.slice(locale.length + 1);
+    // The index page's own copy is the item that lists these.
+    if (of?.index && name === 'index') continue;
+    const address = of?.localizedSlugs ? entryAddress(siteId, entry.data, name) : name;
+    const url = entryPageUrl(siteId, site.i18n, of, name, address, locale);
+    if (!url) continue;
+    const titled = isObject(entry.data) ? entry.data[of?.titleField ?? 'title'] : undefined;
+    links.push({
+      label: typeof titled === 'string' ? titled : name,
+      href: url,
+      entry: { id: entry.id, data: entry.data },
+      children: [],
     });
   }
   return links;

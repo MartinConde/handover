@@ -55,6 +55,8 @@ export interface NavItem {
   newTab?: boolean;
   /** One of the variants the site declares in `defineNavigation`. */
   variant?: string;
+  /** On an index item: the collection's live entries are listed under it. */
+  entries?: true;
   children?: NavItem[];
 }
 
@@ -75,12 +77,18 @@ export function defineNavigation({
         .discriminatedUnion('type', [toUrl.strict(), toRef.strict(), toIndex.strict()])
         .optional(),
       newTab: z.boolean().optional(),
+      entries: z.literal(true).optional(),
       children: z.array(navItem).optional(),
     });
     // Without declared variants the key is refused, as any other unknown key is.
-    return keys.length
-      ? item.extend({ variant: z.enum(keys as [string, ...string[]]).optional() })
-      : item;
+    return (
+      keys.length
+        ? item.extend({ variant: z.enum(keys as [string, ...string[]]).optional() })
+        : item
+    ).refine((i) => !i.entries || i.link?.type === 'index', {
+      message: 'only an index link can list its entries',
+      path: ['entries'],
+    });
   });
   return (
     z

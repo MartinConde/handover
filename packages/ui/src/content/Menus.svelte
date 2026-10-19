@@ -12,6 +12,8 @@ export interface MenuItem {
     | { type: 'index'; collection: string };
   newTab?: boolean;
   variant?: string;
+  /** On an index item: the collection's live entries are listed under it. */
+  entries?: true;
   children?: MenuItem[];
 }
 export interface Menu {
@@ -223,7 +225,7 @@ const pathOf = (item: MenuItem, list = menu?.items ?? [], at: number[] = []): nu
 };
 
 // No label of its own, so renaming the page renames the menu row with it.
-const linkTo = (entry: PickEntry): MenuItem['link'] =>
+const linkTo = (entry: PickEntry): NonNullable<MenuItem['link']> =>
   entry.index
     ? { type: 'index', collection: entry.collection }
     : { type: 'entry', ref: entry.path };
@@ -260,6 +262,13 @@ function restyle(item: MenuItem, variant: string) {
 function unlink(item: MenuItem) {
   delete item.link;
   delete item.newTab;
+  delete item.entries;
+}
+// Only an index has entries to list, so the choice goes with the index link.
+function relink(item: MenuItem, link: NonNullable<MenuItem['link']>) {
+  item.link = link;
+  if (link.type !== 'index') delete item.entries;
+  changing = false;
 }
 
 function edit(item: MenuItem) {
@@ -512,7 +521,7 @@ function walkTabs(event: KeyboardEvent) {
       <div class="field">
         <div class="label-row"><span id="{id}-ed-link-l">{m.menus_links_to({}, options)}</span><span class="mode">{m.field_same_every_language({}, options)}</span></div>
         {#if changing}
-          <PagePicker id="{id}-ed-link" label="a page or entry" labelKind="page-or-entry" labelId="{id}-ed-link-l" indexes {uiLocale} chosen={keyOf(row.link)} onpick={(e) => { row.link = linkTo(e); changing = false; }} onurl={(href) => { row.link = { type: 'url', href }; changing = false; }} onclose={() => (changing = false)} />
+          <PagePicker id="{id}-ed-link" label="a page or entry" labelKind="page-or-entry" labelId="{id}-ed-link-l" indexes {uiLocale} chosen={keyOf(row.link)} onpick={(e) => relink(row, linkTo(e))} onurl={(href) => relink(row, { type: 'url', href })} onclose={() => (changing = false)} />
         {:else}
           <div class="link-summary" role="group" aria-labelledby="{id}-ed-link-l">
             {#if row.link}
@@ -530,6 +539,7 @@ function walkTabs(event: KeyboardEvent) {
       </div>
     </div>
     <div class="editor-foot">
+      {#if row.link?.type === 'index'}<label class="editor-option" for="{id}-ed-entries"><input type="checkbox" id="{id}-ed-entries" checked={row.entries === true} onchange={(e) => { if (e.currentTarget.checked) row.entries = true; else delete row.entries; }} /><span>{m.menus_list_entries({}, options)}</span></label>{/if}
       {#if row.link}<label class="editor-option" for="{id}-ed-tab"><input type="checkbox" id="{id}-ed-tab" checked={row.newTab === true} onchange={(e) => { if (e.currentTarget.checked) row.newTab = true; else delete row.newTab; }} /><span>{m.menus_new_tab({}, options)}</span></label>{/if}
       {#if Object.keys(variants).length}
         <label class="editor-option" for="{id}-ed-variant"><span>{m.menus_style({}, options)}</span>

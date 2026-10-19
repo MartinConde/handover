@@ -342,6 +342,24 @@ test('a site that declares no variants shows no style choice', async () => {
   expect(document.querySelector('#f-menus-ed-variant')).toBeNull();
 });
 
+test('an index item can list its entries, and the choice goes when the link stops being an index', async () => {
+  show([item({ label: 'Listings', link: { type: 'url', href: '/listings' } })]);
+  await settle();
+  click(rowOpen());
+  expect(document.querySelector('#f-menus-ed-entries')).toBeNull();
+
+  click(q('.link-summary .btn'));
+  await settle();
+  click(q('.item-editor [role="option"][title="listings"]'));
+  const entries = q<HTMLInputElement>('#f-menus-ed-entries');
+  expect(entries.closest('label')?.textContent?.trim()).toBe('List its pages under it');
+  click(entries);
+  expect($state.snapshot(menus[0]?.items[0])).toMatchObject({ entries: true });
+
+  click(q('.link-summary .remove-link'));
+  expect($state.snapshot(menus[0]?.items[0])).not.toHaveProperty('entries');
+});
+
 // The renderer drops these items; the editor is where somebody can see that it is going to.
 test('an item the site will skip says so on the row', async () => {
   show([

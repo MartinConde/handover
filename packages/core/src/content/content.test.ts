@@ -564,6 +564,45 @@ test('an item keeps the variant it was given, for the site to draw it by', async
   ]);
 });
 
+// The site draws teasers from the entries, so each brings its data along.
+test("an index item set to list its entries has the language's live entries under it, then its own", async () => {
+  const listed: Record<string, unknown> = {
+    'en/coast': { title: 'Coast', teaser: 'By the sea' },
+    'en/hidden': { _status: 'hidden', title: 'Hidden' },
+    // The index page's own copy is the item itself, not one of its entries.
+    'en/index': { title: 'All listings' },
+    'de/coast': { title: 'Küste' },
+  };
+  const source = staticSource<{ listings: unknown }>('default', {
+    getEntry: async (_c, id) => (listed[id] ? { id, data: listed[id] } : undefined),
+    getCollection: async () => Object.entries(listed).map(([id, data]) => ({ id, data })),
+  });
+  const nav = menu([
+    item({
+      label: 'Listings',
+      link: { type: 'index', collection: 'listings' },
+      entries: true,
+      children: [item({ _id: 'i2', label: 'Sold', link: { type: 'url', href: '/sold' } })],
+    }),
+  ]);
+
+  expect((await menusAt('default', source, site, nav, 'en')).header).toStrictEqual([
+    {
+      label: 'Listings',
+      href: '/listings',
+      children: [
+        {
+          label: 'Coast',
+          href: '/listings/coast',
+          entry: { id: 'en/coast', data: { title: 'Coast', teaser: 'By the sea' } },
+          children: [],
+        },
+        { label: 'Sold', href: '/sold', children: [] },
+      ],
+    },
+  ]);
+});
+
 // A collection's index is not an entry, so the item names the collection instead of a file.
 test("an index item points at the language's own index page, named by the collection", async () => {
   const nav = menu([item({ link: { type: 'index', collection: 'listings' } })]);

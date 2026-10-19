@@ -53,6 +53,12 @@ An item with no `link` is a label that only opens the items under it, such as a 
 heading over *About* and *Team*. There is no page to name it, so a language where it has no
 `label`, or nothing left under it, drops it.
 
+An `index` item with `entries: true` lists the collection's live entries under it, in each
+language, before any items added by hand. A *Services* item then always shows every service.
+Each listed item carries its `entry` (`{ id, data }`), so a flyout can draw teasers from the
+entry's fields. They come in the collection's file order; sort them in the site if the order
+matters. The client sets it with **List its pages under it** in the item editor.
+
 **The tree is shared, the labels are not.** Which items a menu has, in which order, what each
 points at and where it opens is the same in every language's file; `label` is the one key a
 language owns ([Languages](i18n.md#the-structure-is-shared)). Moving an item in one language
@@ -157,5 +163,5 @@ redirect — and
 nothing left in this language draws **nothing**. `label` names the landmark where a page has
 two menus. The words come from the file of the language being rendered — the tree is shared and
 the labels are each language's own — so an item nobody has translated is named by the page it
-points at, in that language. Style it, or read `menus.header` — `{ label, href?, newTab?, variant?, children }`, an item with
+points at, in that language. Style it, or read `menus.header` — `{ label, href?, newTab?, variant?, entry?, children }`, an item with
 no `label` of its own already named by the page it points at — and write your own markup.

@@ -4,6 +4,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- A menu item linking a collection's index can list the collection's live entries under it
+  (`entries: true`, **List its pages under it** in the item editor). `menusAt()` puts them before
+  the item's own children, each with its `entry` (`{ id, data }`) for teasers.
 - `defineNavigation({ variants })` declares how the site can draw a menu item (a wide flyout).
   The client picks one per item under **Style** in the item editor, and `menusAt()` returns it as
   `variant`. `navigation` is `defineNavigation()` and takes no `variant`.

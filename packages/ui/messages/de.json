@@ -2052,6 +2052,7 @@
   "menus_label_added": "Bezeichnung hinzugefügt. Gib ihr einen Namen und ordne Einträge darunter an.",
   "menus_style": "Darstellung",
   "menus_style_standard": "Standard",
+  "menus_list_entries": "Seiten darunter auflisten",
   "menus_language_labels": "Menübezeichnungen auf {language}",
   "menus_structure": "Menüstruktur",
   "menus_translate_labels": "Übersetze die Bezeichnungen, die Besucher in dieser Sprache sehen.",

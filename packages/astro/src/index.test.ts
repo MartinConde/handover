@@ -436,6 +436,36 @@ test("an item's variant reaches another language with the item", () => {
   ]);
 });
 
+const listing = (link: unknown) => ({
+  menus: [
+    {
+      _id: '7h2kq9sd',
+      key: 'header',
+      items: [{ _id: 'a1b2c3d4', label: 'Fields', link, entries: true }],
+    },
+  ],
+});
+
+test('only an index item can list its entries', () => {
+  expect(navigation.safeParse(listing({ type: 'index', collection: 'fields' })).success).toBe(true);
+  expect(navigation.safeParse(listing({ type: 'url', href: '/fields' })).success).toBe(false);
+});
+
+test('listing its entries reaches another language with the item', () => {
+  const form = formOf('default', formSchema(navigation));
+  const en = listing({ type: 'index', collection: 'fields' });
+
+  const de = syncLocale('default', form, 'de', { before: { menus: [] }, after: en }, {});
+
+  expect(de.menus).toEqual([
+    {
+      _id: '7h2kq9sd',
+      key: 'header',
+      items: [{ _id: 'a1b2c3d4', link: { type: 'index', collection: 'fields' }, entries: true }],
+    },
+  ]);
+});
+
 test('the redirects golden parses; from must be a path and to a path or absolute URL', async () => {
   expect(redirects.safeParse(await golden('redirects')).success).toBe(true);
   const rule = {
