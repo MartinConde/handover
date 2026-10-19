@@ -272,6 +272,29 @@ export async function contentFiles(root: URL): Promise<ContentFile[]> {
   );
 }
 
+const SCRIPT_TAG = /<script\b([^>]*?)(?:\/>|>([\s\S]*?)<\/script>)/g;
+const JS_TYPE = /\btype=["'](?:module|text\/javascript|application\/javascript)["']/;
+
+/** The code of each `is:inline` script in the site's `.astro` files, which Astro writes out verbatim. */
+export async function inlineScripts(root: URL): Promise<string[]> {
+  const dir = fileURLToPath(new URL('src/', root));
+  const found = await readdir(dir, { withFileTypes: true, recursive: true }).catch(() => []);
+  const files = found
+    .filter((e) => e.isFile() && e.name.endsWith('.astro'))
+    .map((e) => join(e.parentPath, e.name))
+    .sort();
+  const scripts: string[] = [];
+  for (const file of files)
+    for (const [, attrs = '', body] of (await readFile(file, 'utf8')).matchAll(SCRIPT_TAG)) {
+      if (!body || !/\bis:inline\b/.test(attrs)) continue;
+      // Content reaches a script only through these, and data or external scripts need no hash.
+      if (/\b(?:src=|set:html|set:text|define:vars)/.test(attrs)) continue;
+      if (/\btype=/.test(attrs) && !JS_TYPE.test(attrs)) continue;
+      scripts.push(body);
+    }
+  return scripts;
+}
+
 const GLOBAL_FILE = /^src\/content\/globals\/[^/]+\/([^/]+)\.yaml$/;
 
 /** Runs at `astro:config:done`: Astro's content sync would otherwise reach a bad file first. */
@@ -543,13 +566,15 @@ export default function handover(cms: HandoverConfig): AstroIntegration {
                     entryForm(cms, collection, name);
                   const stale = await staleFrom('default', cms.i18n, files, formFor);
                   const texts = textsFrom('default', cms.i18n, files, formFor);
+                  const scripts = await inlineScripts(config.root);
                   return `export default JSON.parse(${JSON.stringify(JSON.stringify(index))});
 export const preview = ${preview};
 export const site = ${JSON.stringify(String(config.site ?? '').replace(/\/$/, ''))};
 export const templates = JSON.parse(${JSON.stringify(JSON.stringify(templates))});
 export const uses = JSON.parse(${JSON.stringify(JSON.stringify(uses))});
 export const stale = JSON.parse(${JSON.stringify(JSON.stringify(stale))});
-export const texts = JSON.parse(${JSON.stringify(JSON.stringify(texts))});`;
+export const texts = JSON.parse(${JSON.stringify(JSON.stringify(texts))});
+export const scripts = ${JSON.stringify(scripts)};`;
                 },
                 configureServer(server: ViteDevServer) {
                   server.watcher.on('all', (_event, file) => {

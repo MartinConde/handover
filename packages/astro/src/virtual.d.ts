@@ -20,6 +20,8 @@ declare module 'virtual:handover/index' {
   export const stale: Record<string, string[]>;
   /** `"listings/mill-house" -> { de: … }`: each published file's answered text, for the draft overlay. */
   export const texts: Record<string, Record<string, import('@handover/core').FileTexts>>;
+  /** The code of the site's own `is:inline` scripts, which preview admits by hash. */
+  export const scripts: string[];
 }
 
 declare module 'virtual:handover/loaders' {

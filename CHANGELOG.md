@@ -4,6 +4,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Preview and Canvas run the site's own `<script is:inline>` scripts from `.astro` files under
+  `src/`, allowed by hash. Before, the preview's Content Security Policy blocked them, so a
+  layout's `classList.add('js')` never ran there.
 - A rich-text field whose Markdown the editor would write differently (`* item`, a line break
   ending in `\` or two spaces) no longer freezes the form with `effect_update_depth_exceeded`
   when it opens, and opening it no longer saves a draft. Line breaks (Shift+Enter) now edit as

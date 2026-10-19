@@ -16,6 +16,7 @@ import handover, {
   contentFiles,
   emitRedirects,
   emitSitemap,
+  inlineScripts,
   loadersModule,
   modifiedAt,
   NO_ADAPTER_MESSAGE,
@@ -558,6 +559,29 @@ test('buildIndex fails on a content file below the locale folder, naming it', as
   );
 });
 
+// Preview admits these by hash; a bundled, external, data or templated script is not one.
+test('inlineScripts reads the code of every plain inline script under src/', async () => {
+  const root = new URL(`${await mkdtemp(join(tmpdir(), 'handover-site-'))}/`, 'file://');
+  await mkdir(new URL('src/layouts/', root), { recursive: true });
+  await writeFile(
+    new URL('src/layouts/Base.astro', root),
+    `<head>
+  <script is:inline>document.documentElement.classList.add('js');</script>
+  <script is:inline type="module">window.ready = true;</script>
+  <script is:inline type="application/ld+json" set:html={schema} />
+  <script is:inline src="https://example.com/a.js"></script>
+  <script is:inline define:vars={{ id }}>console.log(id);</script>
+  <script>import './bundled';</script>
+</head>`,
+  );
+  await writeFile(new URL('src/layouts/notes.md', root), "<script is:inline>alert('no')</script>");
+
+  expect(await inlineScripts(root)).toEqual([
+    "document.documentElement.classList.add('js');",
+    'window.ready = true;',
+  ]);
+});
+
 // There is no "new global": the dev declares them and the first file comes with the declaration.
 test('the build names a declared global that has no file in the default language', async () => {
   const root = new URL(`${await mkdtemp(join(tmpdir(), 'handover-site-'))}/`, 'file://');
@@ -643,7 +667,8 @@ export const site = "";
 export const templates = JSON.parse(${JSON.stringify(JSON.stringify(starters))});
 export const uses = JSON.parse("{}");
 export const stale = JSON.parse("{}");
-export const texts = JSON.parse("{}");`,
+export const texts = JSON.parse("{}");
+export const scripts = [];`,
   );
 });
 
@@ -686,7 +711,8 @@ export const site = "";
 export const templates = JSON.parse(${JSON.stringify(JSON.stringify(starters))});
 export const uses = JSON.parse("{}");
 export const stale = JSON.parse("{}");
-export const texts = JSON.parse("{}");`,
+export const texts = JSON.parse("{}");
+export const scripts = [];`,
   );
 });
 

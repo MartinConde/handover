@@ -44,11 +44,15 @@ brand's real hostname. So:
   `Content-Security-Policy: frame-ancestors 'self'; script-src 'self'` and
   `Referrer-Policy: no-referrer` — the admin frames the preview, nothing else can, and a link
   followed off a draft page does not hand its address to the site it points at.
-- **Only the site's own scripts run.** A rendered page also allows Astro's island scripts by
-  hash, so `client:*` components hydrate; any other inline script or `on…` attribute does not
-  run. A draft that reaches a component rendering HTML therefore cannot act with the session of
-  whoever is previewing it. An island using a client directive added by another integration does
-  not hydrate in the preview, and a script must come from a file, not be written inline.
+- **Only the site's own scripts run.** A rendered page also allows by hash Astro's island
+  scripts, so `client:*` components hydrate, and every `<script is:inline>` written in a
+  `.astro` file under `src/`, such as a layout's
+  `<script is:inline>document.documentElement.classList.add('js');</script>`. Any other inline
+  script or `on…` attribute does not run. A draft that reaches a component rendering HTML
+  therefore cannot act with the session of whoever is previewing it. These inline scripts are not
+  admitted: one with `define:vars`, `set:html` or `set:text`, one in a package's component, and an
+  island whose client directive comes from another integration. After changing an inline
+  script, restart `astro dev` before you preview again.
 
 ## The address to preview
 

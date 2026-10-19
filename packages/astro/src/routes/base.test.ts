@@ -21,6 +21,7 @@ vi.mock('../auth.js', () => ({
   createAuth: () => ({ api: { getSession: async () => null } }),
 }));
 vi.mock('virtual:handover/loaders', () => ({ default: {} }));
+vi.mock('virtual:handover/index', () => ({ scripts: [] }));
 vi.mock('cloudflare:workers', () => ({ env: { DB: {} } }));
 const ctx = (path: string, params = '') => {
   const url = new URL(path, 'https://example.com');

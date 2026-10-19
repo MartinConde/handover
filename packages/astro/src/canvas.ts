@@ -325,10 +325,11 @@ const ASTRO_SCRIPTS = [
 ];
 let rendered: Promise<string> | undefined;
 
-/** `GATE`'s policy for a rendered draft, with Astro's own scripts allowed by hash. */
-export function renderedPolicy(): Promise<string> {
+/** `GATE`'s policy for a rendered draft, with Astro's and the site's own scripts allowed by hash. */
+export function renderedPolicy(siteScripts: string[]): Promise<string> {
+  // The site's scripts are fixed at build, so the first call's list is every call's.
   rendered ??= Promise.all(
-    ASTRO_SCRIPTS.map(async (script) => {
+    [...ASTRO_SCRIPTS, ...siteScripts].map(async (script) => {
       const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(script));
       return `'sha256-${btoa(String.fromCharCode(...new Uint8Array(digest)))}'`;
     }),

@@ -55,6 +55,12 @@ vi.mock('virtual:handover/config', () => ({
   },
 }));
 
+// The site's own inline scripts, as the integration reads them from src/.
+const { siteScript } = vi.hoisted(() => ({
+  siteScript: "document.documentElement.classList.add('js');",
+}));
+vi.mock('virtual:handover/index', () => ({ scripts: [siteScript] }));
+
 vi.mock('cloudflare:workers', () => ({ env: { DB: {} } }));
 vi.mock('@handover/core', async (original) => ({
   ...(await original<typeof import('@handover/core')>()),
@@ -427,12 +433,12 @@ const astroScripts = [
   visibleDirective,
 ].map((script) => `'sha256-${createHash('sha256').update(script).digest('base64')}'`);
 
-test("a rendered page carries the gate too, allowing only its own and Astro's scripts", async () => {
+test("a rendered page carries the gate too, allowing only Astro's and the site's own scripts", async () => {
   const { response } = await get('listings/mill-house');
   expect(response.headers.get('cache-control')).toBe('private, no-store');
   expect(response.headers.get('x-robots-tag')).toBe('noindex, nofollow');
   expect(response.headers.get('content-security-policy')).toBe(
-    `frame-ancestors 'self'; script-src 'self' ${astroScripts.join(' ')}`,
+    `frame-ancestors 'self'; script-src 'self' ${astroScripts.join(' ')} 'sha256-${createHash('sha256').update(siteScript).digest('base64')}'`,
   );
   expect(response.headers.get('referrer-policy')).toBe('no-referrer');
 });
