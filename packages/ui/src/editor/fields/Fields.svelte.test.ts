@@ -645,6 +645,26 @@ test('richtext: a refused editor transaction reconciles to the controlled sessio
   expect(q('#f-summary').textContent).toBe('Two bedrooms.');
 });
 
+test('richtext: Markdown the editor would write differently opens without being rewritten', () => {
+  show(richtextField(), { _version: 1, summary: '* Two bedrooms.' });
+  expect(q('#f-summary li').textContent).toBe('Two bedrooms.');
+  expect(roundTrip()).toEqual({ _version: 1, summary: '* Two bedrooms.' });
+});
+
+test('richtext: a hard line break opens as a line break and is kept', () => {
+  show(richtextField(), { _version: 1, summary: 'Phone: 01548\\\nFax: 01549' });
+  expect(q('#f-summary p').innerHTML).toBe('Phone: 01548<br>Fax: 01549');
+  expect(roundTrip()).toEqual({ _version: 1, summary: 'Phone: 01548\\\nFax: 01549' });
+});
+
+// The file writer drops trailing spaces, so a two-space break would not survive a save.
+test('richtext: the editor writes a line break as a backslash', () => {
+  show(richtextField(), { _version: 1, summary: 'Phone: 01548\\\nFax: 01549' });
+  q<HTMLButtonElement>('[aria-label="Bullet list"]').click();
+  flushSync();
+  expect(roundTrip()).toEqual({ _version: 1, summary: '- Phone: 01548\\\nFax: 01549' });
+});
+
 test('richtext: a body outside the tier is shown read-only and left untouched', () => {
   show(
     [{ path: ['summary'], label: 'Summary', type: 'richtext', required: false, tier: 'basic' }],

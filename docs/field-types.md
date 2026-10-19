@@ -35,7 +35,7 @@ A `richtext()` field stores Markdown, never HTML. There are two tiers:
 
 | Tier | Allows |
 |---|---|
-| `richtext()` | paragraphs, **bold**, *italic*, links, bullet and numbered lists |
+| `richtext()` | paragraphs, line breaks (Shift+Enter), **bold**, *italic*, links, bullet and numbered lists |
 | `richtext('full')` | the same plus `##` / `###` headings and `>` blockquotes |
 
 Nothing else is accepted: no images, raw HTML, code, tables, `#` or `####` headings.

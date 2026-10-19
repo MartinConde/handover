@@ -3,6 +3,7 @@ import type { Extensions } from '@tiptap/core';
 import { Blockquote } from '@tiptap/extension-blockquote';
 import { Bold } from '@tiptap/extension-bold';
 import { Document } from '@tiptap/extension-document';
+import { HardBreak } from '@tiptap/extension-hard-break';
 import { Heading } from '@tiptap/extension-heading';
 import { Italic } from '@tiptap/extension-italic';
 import { Link } from '@tiptap/extension-link';
@@ -23,6 +24,8 @@ export const richTextExtensions = (tier: RichtextTier, additional: Extensions = 
   Document,
   Paragraph,
   Text,
+  // The file writer drops trailing spaces, so the default two-space break would not survive a save.
+  HardBreak.extend({ renderMarkdown: () => '\\\n' }),
   Bold,
   Italic,
   Link.configure({ openOnClick: false }),

@@ -183,6 +183,8 @@ let reconciling = false;
 let pendingBefore: LogicalSelection | undefined;
 let previousSelection: LogicalSelection | undefined;
 let reconcileTick = $state(0);
+// The Markdown the editor last showed: TipTap writes `* a` back as `- a`, so comparing its output loops.
+let shown = untrack(() => value);
 
 function formatted(run: () => boolean) {
   session?.historyBoundary();
@@ -246,8 +248,9 @@ function reconcile(e: Editor, next: string, wanted: LogicalSelection | undefined
   const restore = matches(wanted) ? wanted : current;
   reconciling = true;
   try {
-    if (e.getMarkdown() !== next)
+    if (next !== shown && e.getMarkdown() !== next)
       e.commands.setContent(next, { contentType: 'markdown', emitUpdate: false });
+    shown = next;
     if (restore) {
       const selection = restoreProseSelection(e.state.doc, {
         kind: restore.kind ?? 'text',
@@ -360,7 +363,8 @@ onMount(() => {
       if (reconciling) return;
       const after = logical(editor.state.selection);
       const kind = composition ? 'composition' : (nextIntent ?? 'typing');
-      onchange(editor.getMarkdown(), {
+      shown = editor.getMarkdown();
+      onchange(shown, {
         kind,
         ...(composition ? { group: composition } : {}),
         before: pendingBefore,
