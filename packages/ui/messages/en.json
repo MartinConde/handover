@@ -1031,6 +1031,7 @@
       }
     }
   ],
+  "field_advanced": "Advanced",
   "field_alt_text": "Alt text",
   "field_title": "Title",
   "field_display_name": "Display name",

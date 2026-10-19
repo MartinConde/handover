@@ -431,6 +431,17 @@ test('a label names the field, on a plain type and on top of a helper', () => {
   ]);
 });
 
+test('a field marked advanced says so in the form', () => {
+  const schema = z.object({
+    title: z.string(),
+    padded: z.boolean().optional().meta({ label: 'Space below', advanced: true }),
+  });
+  expect(fieldsFrom('default', formSchema(schema))).toEqual([
+    { path: ['title'], label: 'Title', type: 'text', required: true },
+    { path: ['padded'], label: 'Space below', type: 'boolean', required: false, advanced: true },
+  ]);
+});
+
 // A full demo-shaped schema carries no unsupported marker.
 test('the demo schema produces a full descriptor tree', () => {
   const hero = defineBlock('hero', {

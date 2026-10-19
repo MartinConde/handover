@@ -265,6 +265,26 @@ test('boolean: a switch with the label as its text writes true / false', () => {
   expect(roundTrip()).toEqual({ _version: 1, featured: false });
 });
 
+const withAdvanced: Field[] = [
+  { path: ['padded'], label: 'Space below', type: 'boolean', required: false, advanced: true },
+  { path: ['title'], label: 'Title', type: 'text', required: true },
+];
+
+test('advanced fields are folded away below the others', () => {
+  show(withAdvanced, { title: 'Home' });
+  const fold = q<HTMLDetailsElement>('details.advanced');
+  expect(fold.open).toBe(false);
+  expect(fold.querySelector('input#f-padded')).not.toBeNull();
+  expect(
+    fold.compareDocumentPosition(q('input#f-title')) & Node.DOCUMENT_POSITION_PRECEDING,
+  ).toBeTruthy();
+});
+
+test('an advanced field with a problem is not folded away', () => {
+  show(withAdvanced, { title: 'Home' }, {}, { padded: 'Expected true or false' });
+  expect(q<HTMLDetailsElement>('details.advanced').open).toBe(true);
+});
+
 test('date: writes the ISO string from the date golden, never a Date', () => {
   show([{ path: ['availableFrom'], label: 'Available from', type: 'date', required: false }], {
     _version: 1,

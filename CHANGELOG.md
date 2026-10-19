@@ -4,6 +4,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- `.meta({ advanced: true })` on a field puts it in an **Advanced** fold below the other fields
+  of its page, group or block, closed unless it holds a problem.
 - In a collection with an `index`, the entry named `index` is that page's copy: the editor's
   Preview and Canvas open it at the index path, a page link to it and its sitemap URL are that
   path, and `/_preview/index` is `404`. With `index: '/'` on `pages`, `pages/<locale>/index.yaml`

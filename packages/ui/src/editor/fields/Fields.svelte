@@ -164,6 +164,8 @@ const shown = $derived(
     ? fields.filter((f) => structural(f) || (modeOf(f) !== false && !FIXED.has(f.type)))
     : fields,
 );
+const plain = $derived(shown.filter((f) => !f.advanced));
+const advanced = $derived(shown.filter((f) => f.advanced));
 
 // One picker at a time per form level; the field id says which is open.
 let picker = $state('');
@@ -707,7 +709,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
   </div>
 {/snippet}
 
-{#each shown as field (field.path.join('.'))}
+{#snippet row(field: Field)}
   {@const at = [...path, ...field.path]}
   {@const id = `${prefix}-${at.join('.')}`}
   {@const mode = modeOf(field)}
@@ -1114,4 +1116,12 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
     {/if}
   </div>
   {#if afterTitle && at.join('.') === titleKey}{@render afterTitle()}{/if}
-{/each}
+{/snippet}
+
+{#each plain as field (field.path.join('.'))}{@render row(field)}{/each}
+{#if advanced.length > 0}
+  <details class="group advanced" open={advanced.some((f) => problemOf(f, [...path, ...f.path]))}>
+    <summary>{m.field_advanced({}, messageOptions(uiLocale))}<span class="count">{m.field_count({ count: advanced.length }, messageOptions(uiLocale))}</span></summary>
+    <div class="form">{#each advanced as field (field.path.join('.'))}{@render row(field)}{/each}</div>
+  </details>
+{/if}

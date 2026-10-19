@@ -49,7 +49,8 @@ type FieldOf =
   | { path: string[]; label: string; type: 'unsupported' };
 
 // `label` is the English-first name; `labels` is kept so the admin can switch language without asking again.
-export type Field = FieldOf & { i18n?: Translation; labels?: Labels };
+// `advanced` is `.meta({ advanced: true })`: a developer's switch the form folds away.
+export type Field = FieldOf & { i18n?: Translation; labels?: Labels; advanced?: true };
 
 // Keyed by name, not nested under each `blocks` field, because a block can contain its own type.
 export interface Form {
@@ -201,7 +202,11 @@ function fieldOf(root: JsonSchema, path: string[], node: JsonSchema, required: b
   // An array item has no key, and the form numbers its rows instead.
   const label = labelIn(child.label, 'en') ?? humanise(path[path.length - 1] ?? '');
   const labels = labelsOf(child.label);
-  return fieldFrom(root, path, child, required, label).map((f) => (labels ? { ...f, labels } : f));
+  return fieldFrom(root, path, child, required, label).map((f) => ({
+    ...f,
+    ...(labels ? { labels } : {}),
+    ...(child.advanced === true ? { advanced: true as const } : {}),
+  }));
 }
 
 function fieldFrom(

@@ -102,6 +102,16 @@ the block picker shows the type:
 hero: defineBlock('hero', { heading: z.string() }).meta({ label: { en: 'Hero', de: 'Bühne' } }),
 ```
 
+### Settings the client rarely needs
+
+A switch for the developer, such as extra spacing or a smaller title, takes
+`.meta({ advanced: true })`. The form shows it in an **Advanced** fold below the other fields of
+its level (the page, a group, one block), closed until it holds a problem:
+
+```ts
+paddedBottom: z.boolean().optional().meta({ label: 'Space below', advanced: true }),
+```
+
 ### In the admin
 
 Every scalar type has a widget: text is an input (a textarea once it holds line breaks or
