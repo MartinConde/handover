@@ -19,7 +19,6 @@ import {
 import type { RequestContext } from '../../environment.js';
 import { readJson } from './body.js';
 import {
-  codedError,
   entryLocales,
   entryPath,
   entrySourceFor,
@@ -31,6 +30,7 @@ import {
   translationSource,
   translator,
 } from './content.js';
+import { codedError, notFound } from './respond.js';
 
 /** Structure and shared values from the source file, none of its words, as a draft. */
 export async function createTranslation(
@@ -40,8 +40,7 @@ export async function createTranslation(
   locale: string,
 ): Promise<Response> {
   const schema = schemaOf(collection, slug);
-  if (!schema || !config.i18n.locales.includes(locale))
-    return new Response('Not found', { status: 404 });
+  if (!schema || !config.i18n.locales.includes(locale)) return notFound();
   const { loaded, source: answer } = await entrySourceFor(ctx, collection, slug);
   // A missing default language is exactly what this route is for, so no extra guard on it.
   if (loaded[locale])
@@ -49,7 +48,7 @@ export async function createTranslation(
   if (answer && 'problem' in answer) return sourceRefusal(answer, localeData(loaded));
   const source = answer?.locale;
   const data = source === undefined ? undefined : loaded[source]?.data;
-  if (source === undefined || data === undefined) return new Response('Not found', { status: 404 });
+  if (source === undefined || data === undefined) return notFound();
   const { offered, problems } = offeredIn(data, Object.keys(loaded));
   // A mark the files contradict is answered before the offer it would otherwise be read as.
   if (problems.length) return new Response(problems.join('\n'), { status: 409 });
@@ -96,8 +95,7 @@ export async function machineTranslate(
   session: App.Locals['handover'],
 ): Promise<Response> {
   const schema = schemaOf(collection, slug);
-  if (!schema || !config.i18n.locales.includes(locale))
-    return new Response('Not found', { status: 404 });
+  if (!schema || !config.i18n.locales.includes(locale)) return notFound();
   // Checked before the entry is read: having no translator is about the site, not this entry.
   const translate = await translator(ctx);
   if (!translate)
@@ -110,8 +108,7 @@ export async function machineTranslate(
   const from = answer?.locale;
   const source =
     from === undefined ? undefined : await translationSource(ctx, collection, slug, from);
-  if (!from || !source || from === locale || !loaded[locale])
-    return new Response('Not found', { status: 404 });
+  if (!from || !source || from === locale || !loaded[locale]) return notFound();
   const body = (await readJson(request)) as { paths?: unknown } | undefined;
   const named = Array.isArray(body?.paths) ? body.paths.map(String) : undefined;
   const form = formFor(collection, slug);

@@ -27,7 +27,6 @@ import type { RequestContext } from '../../environment.js';
 import { formSchema } from '../../index.js';
 import { readJson } from './body.js';
 import {
-  codedError,
   entryLocales,
   entryPath,
   entryPaths,
@@ -41,6 +40,7 @@ import {
   SHA,
   schemaOf,
 } from './content.js';
+import { codedError, forbidden, isOwner, notFound } from './respond.js';
 
 /** The draft against HEAD, not the commit it was loaded from: the row says what goes out next. */
 export async function entryDiff(
@@ -48,7 +48,7 @@ export async function entryDiff(
   collection: string,
   slug: string,
 ): Promise<Response> {
-  if (!schemaOf(collection, slug)) return new Response('Not found', { status: 404 });
+  if (!schemaOf(collection, slug)) return notFound();
   const git = ctx.git();
   const database = ctx.db();
   const head = await git.getHead();
@@ -84,7 +84,7 @@ export async function translatedFromView(
   slug: string,
   locale: string,
 ): Promise<Response> {
-  if (!schemaOf(collection, slug)) return new Response('Not found', { status: 404 });
+  if (!schemaOf(collection, slug)) return notFound();
   const { loaded, source } = await entrySourceFor(ctx, collection, slug);
   const mark = (loaded[locale]?.data as { _i18n?: Partial<I18nMark> } | undefined)?._i18n;
   const from = typeof mark?.sourceLocale === 'string' ? mark.sourceLocale : undefined;
@@ -155,7 +155,7 @@ export async function entryHistory(
   slug: string,
   url: URL,
 ): Promise<Response> {
-  if (!schemaOf(collection, slug)) return new Response('Not found', { status: 404 });
+  if (!schemaOf(collection, slug)) return notFound();
   const asked = Number(url.searchParams.get('page') ?? 1);
   // Every page is one request per language file, and the Free plan allows fifty subrequests.
   const pages = Math.min(Math.max(Number.isSafeInteger(asked) ? asked : 1, 1), 10);
@@ -198,7 +198,7 @@ export async function versionDiff(
   slug: string,
   url: URL,
 ): Promise<Response> {
-  if (!schemaOf(collection, slug)) return new Response('Not found', { status: 404 });
+  if (!schemaOf(collection, slug)) return notFound();
   const to = url.searchParams.get('to') ?? '';
   const asked = url.searchParams.get('from');
   if (!SHA.test(to) || (asked !== null && !SHA.test(asked)))
@@ -268,7 +268,7 @@ export async function restoreVersion(
   session: App.Locals['handover'],
 ): Promise<Response> {
   const schema = schemaOf(collection, slug);
-  if (!schema) return new Response('Not found', { status: 404 });
+  if (!schema) return notFound();
   const body = (await readJson(request)) as { commit_sha?: unknown; name?: unknown } | undefined;
   const sha = typeof body?.commit_sha === 'string' ? body.commit_sha : '';
   if (!SHA.test(sha)) return new Response('A commit_sha is needed to restore', { status: 400 });
@@ -322,7 +322,7 @@ export async function conflictView(
   collection: string,
   slug: string,
 ): Promise<Response> {
-  if (!schemaOf(collection, slug)) return new Response('Not found', { status: 404 });
+  if (!schemaOf(collection, slug)) return notFound();
   const found = await entryConflict(
     'default',
     ctx.db(),
@@ -330,7 +330,7 @@ export async function conflictView(
     formFor(collection, slug),
     entryPaths(collection, slug),
   );
-  if (!found) return Response.json({ code: 'CONFLICT_SETTLED', error: SETTLED }, { status: 409 });
+  if (!found) return codedError(409, 'CONFLICT_SETTLED', SETTLED);
   return Response.json({
     head: found.head,
     version: found.version,
@@ -350,7 +350,7 @@ export async function resolve(
   request: Request,
   session: App.Locals['handover'],
 ): Promise<Response> {
-  if (!schemaOf(collection, slug)) return new Response('Not found', { status: 404 });
+  if (!schemaOf(collection, slug)) return notFound();
   const held = await heldByAnother(ctx, collection, slug, session, 'resolved');
   if (held) return held;
   const body = (await readJson(request)) as { answers?: unknown; version?: unknown } | undefined;
@@ -368,14 +368,12 @@ export async function resolve(
     form,
     entryPaths(collection, slug),
   );
-  if (!found) return Response.json({ code: 'CONFLICT_SETTLED', error: SETTLED }, { status: 409 });
+  if (!found) return codedError(409, 'CONFLICT_SETTLED', SETTLED);
   if (!found.version || body?.version !== found.version)
-    return Response.json(
-      {
-        code: 'CONFLICT_CHANGED',
-        error: 'This conflict changed. Reload it and review the new values.',
-      },
-      { status: 409 },
+    return codedError(
+      409,
+      'CONFLICT_CHANGED',
+      'This conflict changed. Reload it and review the new values.',
     );
   const answering = (question: { path: string; locale?: string }) =>
     answers.filter((a) => a.path === question.path && (a.locale ?? '') === (question.locale ?? ''));
@@ -383,12 +381,10 @@ export async function resolve(
     answers.length !== found.questions.length ||
     found.questions.some((q) => answering(q).length !== 1)
   )
-    return Response.json(
-      {
-        code: 'CONFLICT_ANSWERS_INVALID',
-        error: 'Those are not the fields this entry disagrees about',
-      },
-      { status: 409 },
+    return codedError(
+      409,
+      'CONFLICT_ANSWERS_INVALID',
+      'Those are not the fields this entry disagrees about',
     );
   await resolveConflict('default', ctx.db(), form, found, answers);
   return Response.json({});
@@ -404,8 +400,7 @@ export async function revert(
   if (!sha) return new Response('A commit_sha is needed to revert', { status: 400 });
   const database = ctx.db();
   const scope = await commitScope('default', database, sha);
-  if (scope.kind.startsWith('redirect-') && session?.role !== 'owner')
-    return new Response('Forbidden', { status: 403 });
+  if (scope.kind.startsWith('redirect-') && !isOwner(session)) return forbidden();
   const result = await revertCommit('default', database, ctx.git(), sha, undoPath(session), false, {
     userId: session?.user.id,
   });

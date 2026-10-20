@@ -1,12 +1,13 @@
 import config from 'virtual:handover/config';
 import assets from 'virtual:handover/ui';
 
-const base = (config.i18n.base ?? '').replace(/\/+$/, '');
+const base = siteBase(config.i18n);
 
-import { DEFAULT_UI_LOCALE, type UiLocale } from '@handover/core';
+import { DEFAULT_UI_LOCALE, siteBase, type UiLocale } from '@handover/core';
 import type { APIRoute } from 'astro';
 import { loginMethods } from '../auth.js';
 import { acceptedLocale, cookieLocale } from '../mail-text.js';
+import { notFound } from './api/respond.js';
 
 const ASSET_PREFIX = '_assets/';
 const TYPES: Record<string, string> = { js: 'text/javascript', css: 'text/css' };
@@ -42,7 +43,7 @@ export const GET: APIRoute = ({ params, request }) => {
     const name = path.slice(ASSET_PREFIX.length);
     const body = assets.files[name];
     const type = TYPES[name.split('.').pop() ?? ''];
-    if (body === undefined || !type) return new Response('Not found', { status: 404 });
+    if (body === undefined || !type) return notFound();
     return new Response(body, {
       headers: {
         'content-type': `${type}; charset=utf-8`,

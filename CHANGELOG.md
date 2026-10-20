@@ -4,6 +4,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Every refusal with a top-level `code` now carries it in the `x-handover-error-code` header; the
+  media, settings, members, sources, history, publish and body-limit refusals sent only the JSON
+  body before. Statuses and bodies are unchanged. A redirect rule that is not valid keeps its code
+  in `descriptor.code`.
 - The entry form is redrawn. An array of images is a gallery of thumbnails you drag to reorder, with
   a dialog per picture for alt text, focal point and Replace, and pictures without alt text are
   marked. Existing blocks and object-list items open as compact, collapsed cards with content
@@ -272,6 +276,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Internal: the Worker bindings helpers moved to `src/environment.ts`; auth and preview open D1
   through them.
 - Internal: the entry helpers the admin API routes share live in `routes/api/content.ts`.
+- Internal: the admin API's `codedError`, not-found and owner-only responses live in
+  `routes/api/respond.ts` and every coded refusal goes through `codedError`; core's `siteBase`
+  builds the base path in one place.
 - Internal: the integration's template and media-use wrappers are inlined, and its tests drop
   checks core already makes and the form-descriptor snapshot.
 - Internal: the cli tests share one fake Cloudflare.

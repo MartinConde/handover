@@ -39,10 +39,8 @@ import { formSchema } from '../../../index.js';
 import { entryProblems } from '../../../problems.js';
 import { readJson } from '../body.js';
 import {
-  codedError,
   entryFiles,
   entryLocales,
-  entryNotFound,
   entryPath,
   entrySourceFor,
   entrySubject,
@@ -59,6 +57,7 @@ import {
   tabOf,
   unresolvedSource,
 } from '../content.js';
+import { codedError, entryNotFound, notFound } from '../respond.js';
 
 /** The mark lives in the files, so turning off a published language commits a delete. */
 export async function offering(
@@ -69,7 +68,7 @@ export async function offering(
   session: App.Locals['handover'],
 ): Promise<Response> {
   const collected = config.collections[collection];
-  if (!collected) return new Response('Not found', { status: 404 });
+  if (!collected) return notFound();
   const body = (await readJson(request)) as
     | { locales?: unknown; redirect?: { kind?: unknown; value?: unknown } }
     | undefined;
@@ -91,7 +90,7 @@ export async function offering(
   const written = capturedFiles
     .filter(({ file }, index) => file || capturedRows[index])
     .map(({ locale }) => locale);
-  if (!written.length) return new Response('Not found', { status: 404 });
+  if (!written.length) return notFound();
   const going = written.filter((locale) => !offered.includes(locale));
   const staying = written.filter((locale) => offered.includes(locale));
   const effective = Object.fromEntries(
@@ -112,30 +111,26 @@ export async function offering(
   const published = files.filter((f) => f.file).map((f) => f.locale);
   const left = published.length ? published.filter((l) => !going.includes(l)) : staying;
   if (going.length && !left.length)
-    return Response.json(
-      staying.length
-        ? {
-            code: 'ENTRY_LOCALE_LAST_PUBLISHED',
-            error: `Turning ${going.join(', ')} off would leave this entry with no published file: publish ${staying.join(', ')} first, or Delete the entry`,
-            locales: going,
-            remaining: staying,
-          }
-        : {
-            code: 'ENTRY_LOCALE_LAST_FILE',
-            error: `Turning ${going.join(', ')} off would leave this entry with no file in any language: Delete the entry instead, which asks where its readers should go`,
-            locales: going,
-          },
-      { status: 409 },
-    );
+    return staying.length
+      ? codedError(
+          409,
+          'ENTRY_LOCALE_LAST_PUBLISHED',
+          `Turning ${going.join(', ')} off would leave this entry with no published file: publish ${staying.join(', ')} first, or Delete the entry`,
+          { locales: going, remaining: staying },
+        )
+      : codedError(
+          409,
+          'ENTRY_LOCALE_LAST_FILE',
+          `Turning ${going.join(', ')} off would leave this entry with no file in any language: Delete the entry instead, which asks where its readers should go`,
+          { locales: going },
+        );
   // Only a deliberate change of source may leave the entry without the language it is written in.
   if (resolved && 'locale' in resolved && going.includes(resolved.locale))
-    return Response.json(
-      {
-        code: 'ENTRY_LOCALE_IS_SOURCE',
-        error: `${resolved.locale} is the language this entry is written in, so it cannot be turned off`,
-        locale: resolved.locale,
-      },
-      { status: 409 },
+    return codedError(
+      409,
+      'ENTRY_LOCALE_IS_SOURCE',
+      `${resolved.locale} is the language this entry is written in, so it cannot be turned off`,
+      { locale: resolved.locale },
     );
   const pathsOf = (locales: string[]) => locales.map((l) => entryPath(collection, slug, l));
   if (published.some((locale) => going.includes(locale))) {
@@ -268,38 +263,31 @@ export async function address(
   session: App.Locals['handover'],
 ): Promise<Response> {
   const collected = config.collections[collection];
-  if (!collected?.localizedSlugs || !config.i18n.locales.includes(locale))
-    return new Response('Not found', { status: 404 });
+  if (!collected?.localizedSlugs || !config.i18n.locales.includes(locale)) return notFound();
   const body = (await readJson(request)) as { address?: unknown } | undefined;
   const wanted = typeof body?.address === 'string' ? body.address.trim() : '';
   const bad = addressError('default', wanted);
   if (bad)
-    return Response.json(
-      {
-        code: wanted.length > 80 ? 'ENTRY_ADDRESS_TOO_LONG' : 'ENTRY_ADDRESS_INVALID',
-        error: bad,
-        ...(wanted.length > 80 ? { limit: 80 } : {}),
-      },
-      { status: 422 },
+    return codedError(
+      422,
+      wanted.length > 80 ? 'ENTRY_ADDRESS_TOO_LONG' : 'ENTRY_ADDRESS_INVALID',
+      bad,
+      wanted.length > 80 ? { limit: 80 } : {},
     );
   const path = entryPath(collection, slug, locale);
   const git = ctx.git();
   const [file, row] = await Promise.all([git.getFile(path), loadDraft('default', ctx.db(), path)]);
-  if (!file && !row) return new Response('Not found', { status: 404 });
+  if (!file && !row) return notFound();
   const refused = await unresolvedSource(ctx, collection, slug);
   if (refused) return refused;
   // Empty falls back to the file name, so that is the address being claimed either way.
   const after = wanted || slug;
   if ((await takenAddresses(ctx, collection, locale, slug)).includes(after))
-    return Response.json(
-      {
-        code: 'ENTRY_ADDRESS_TAKEN',
-        error: `${JSON.stringify(after)} is already the web address of another entry in ${collection} in ${locale}`,
-        address: after,
-        collection,
-        locale,
-      },
-      { status: 409 },
+    return codedError(
+      409,
+      'ENTRY_ADDRESS_TAKEN',
+      `${JSON.stringify(after)} is already the web address of another entry in ${collection} in ${locale}`,
+      { address: after, collection, locale },
     );
   // Only a published address can have been followed, and only via the collection's route.
   const was = file ? entryAddress('default', parseEntry('default', file.contents), slug) : after;
@@ -327,7 +315,7 @@ export async function setStatus(
   session: App.Locals['handover'],
 ): Promise<Response> {
   const collected = config.collections[collection];
-  if (!collected) return new Response('Not found', { status: 404 });
+  if (!collected) return notFound();
   const body = (await readJson(request)) as
     | { entries?: unknown; hidden?: unknown; redirect?: { kind?: unknown; value?: unknown } }
     | undefined;
@@ -393,7 +381,7 @@ export async function reconcile(
   session: App.Locals['handover'],
 ): Promise<Response> {
   const schema = schemaOf(collection, slug);
-  if (!schema) return new Response('Not found', { status: 404 });
+  if (!schema) return notFound();
   const body = (await readJson(request)) as { choices?: unknown } | undefined;
   const choices = (Array.isArray(body?.choices) ? body.choices : []).filter(
     (choice): choice is { path: string; locales: string[] } =>

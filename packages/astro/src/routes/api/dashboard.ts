@@ -21,12 +21,13 @@ import {
 import type { RequestContext } from '../../environment.js';
 import { entryForm } from '../../index.js';
 import { ENTRY_FILE, entryHref, globalLabel, neverPublished, pickable } from './content.js';
+import { notFound } from './respond.js';
 import { templateNames } from './templates.js';
 
 // Nothing here touches GitHub: listing through the contents API is one request per file.
 export async function listEntries(ctx: RequestContext, collection: string): Promise<Response> {
   const collected = config.collections[collection];
-  if (!collected) return new Response('Not found', { status: 404 });
+  if (!collected) return notFound();
   const database = ctx.db();
   const [rows, waiting, editing, published, editors] = await Promise.all([
     overlayRows('default', database, index),

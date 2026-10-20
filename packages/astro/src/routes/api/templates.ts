@@ -24,7 +24,8 @@ import {
 import type { RequestContext } from '../../environment.js';
 import { formSchema } from '../../index.js';
 import { readJson } from './body.js';
-import { codedError, entryFiles, entryPath, takenNames } from './content.js';
+import { entryFiles, entryPath, takenNames } from './content.js';
+import { codedError, forbidden, isOwner, notFound } from './respond.js';
 
 /** The baseline order: which published file a template copies where the files disagree about their source. */
 const sourceOrder = () => [...new Set([config.i18n.defaultLocale, ...config.i18n.locales])];
@@ -75,8 +76,8 @@ export async function saveTemplate(
   request: Request,
   session: App.Locals['handover'],
 ): Promise<Response> {
-  if (!config.collections[collection]) return new Response('Not found', { status: 404 });
-  if (session?.role !== 'owner') return new Response('Forbidden', { status: 403 });
+  if (!config.collections[collection]) return notFound();
+  if (!isOwner(session)) return forbidden();
   const body = (await readJson(request)) as { to?: unknown } | undefined;
   const git = ctx.git();
   const database = ctx.db();
@@ -164,7 +165,7 @@ export async function createEntry(
   request: Request,
 ): Promise<Response> {
   const collected = config.collections[collection];
-  if (!collected) return new Response('Not found', { status: 404 });
+  if (!collected) return notFound();
   const body = (await readJson(request)) as
     | { title?: unknown; template?: unknown; locale?: unknown }
     | undefined;

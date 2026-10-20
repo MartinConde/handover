@@ -38,6 +38,7 @@ import {
 } from '@handover/core';
 import type { RequestContext } from '../../environment.js';
 import { entryForm, formSchema } from '../../index.js';
+import { codedError } from './respond.js';
 
 /** The pasted key wins; a site with neither never needs `HANDOVER_SETTINGS_KEY`. */
 export async function deeplKey(ctx: RequestContext): Promise<string | undefined> {
@@ -88,15 +89,6 @@ const SOURCE_PROBLEMS = {
   undeclared: 'ENTRY_SOURCE_UNDECLARED',
   missing: 'ENTRY_SOURCE_MISSING',
 } as const;
-
-// The header carries the code too, so a client can branch on it without parsing the body.
-export const codedError = (
-  status: number,
-  code: string,
-  error: string,
-  more: Record<string, unknown> = {},
-) =>
-  Response.json({ code, error, ...more }, { status, headers: { 'x-handover-error-code': code } });
 
 /** Never promoted automatically: somebody has to say which language the entry is written in. */
 export function sourceRefusal(
@@ -508,12 +500,6 @@ export function redirectTarget(
     entryUrl('default', config.i18n, '/', '', locale)
   );
 }
-
-export const entryNotFound = () =>
-  new Response('Not found', {
-    status: 404,
-    headers: { 'x-handover-error-code': 'ENTRY_NOT_FOUND' },
-  });
 
 export const object = (value: unknown): value is Record<string, unknown> =>
   !!value && typeof value === 'object' && !Array.isArray(value);

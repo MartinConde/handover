@@ -12,6 +12,7 @@ import {
   type Role,
   resendMailer,
   senderAddress,
+  siteBase,
   type UiLocale,
 } from '@handover/core';
 import { db } from './environment.js';
@@ -135,7 +136,7 @@ export function createAuth(
   return create('default', database, {
     secret,
     baseURL: base,
-    basePath: `${(config.i18n.base ?? '').replace(/\/+$/, '')}/admin/api/auth`,
+    basePath: `${siteBase(config.i18n)}/admin/api/auth`,
     // Decided from the same string as the cookie, so the two cannot disagree about one request.
     secureCookies: (base ?? url.origin).startsWith('https:'),
     ...(e.GITHUB_CLIENT_ID && e.GITHUB_CLIENT_SECRET

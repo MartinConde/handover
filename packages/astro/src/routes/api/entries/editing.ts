@@ -30,6 +30,7 @@ import {
   translationSource,
   unresolvedSource,
 } from '../content.js';
+import { codedError, notFound } from '../respond.js';
 
 /** One lock per entry: `read` never takes it, `beat` extends ours, `take` moves it. */
 export async function lockState(
@@ -41,7 +42,7 @@ export async function lockState(
   tab: string,
 ): Promise<Response> {
   if (!session) return new Response('Unauthorized', { status: 401 });
-  if (!schemaOf(collection, slug)) return new Response('Not found', { status: 404 });
+  if (!schemaOf(collection, slug)) return notFound();
   const database = ctx.db();
   const entry = `${collection}/${slug}`;
   if (mode === 'take')
@@ -93,7 +94,7 @@ export async function hold(
   session: App.Locals['handover'],
 ): Promise<Response> {
   if (!session) return new Response('Unauthorized', { status: 401 });
-  if (!schemaOf(collection, slug)) return new Response('Not found', { status: 404 });
+  if (!schemaOf(collection, slug)) return notFound();
   const refused = await unresolvedSource(ctx, collection, slug);
   if (refused) return refused;
   const body = (await readJson(request)) as { hold?: unknown } | undefined;
@@ -252,8 +253,7 @@ export async function autosave(
   locale?: string,
 ): Promise<Response> {
   const schema = schemaOf(collection, slug);
-  if (!schema || (locale !== undefined && !config.i18n.locales.includes(locale)))
-    return new Response('Not found', { status: 404 });
+  if (!schema || (locale !== undefined && !config.i18n.locales.includes(locale))) return notFound();
   // The lock is enforced here: a tab that lost a take-over keeps typing and finds out on save.
   const holder = await lockHolder('default', ctx.db(), `${collection}/${slug}`);
   const body = (await readJson(request)) as
@@ -280,7 +280,7 @@ export async function autosave(
   const many = config.i18n.locales.length > 1;
   const read = many ? await entrySourceFor(ctx, collection, slug) : undefined;
   const answer = read ? read.source : { locale: config.i18n.defaultLocale, recorded: false };
-  if (!answer) return new Response('Not found', { status: 404 });
+  if (!answer) return notFound();
   if ('problem' in answer) return sourceRefusal(answer, localeData(read?.loaded ?? {}));
   const source = answer.locale;
   const at = locale ?? source;
@@ -290,7 +290,7 @@ export async function autosave(
   const provenance = translation
     ? await translationSource(ctx, collection, slug, source)
     : undefined;
-  if (translation && !provenance) return new Response('Not found', { status: 404 });
+  if (translation && !provenance) return notFound();
   if (translation && body?.structure !== undefined)
     return new Response('Bad request', { status: 400 });
   const structure =
@@ -346,17 +346,15 @@ export async function autosave(
         { status: 409 },
       );
     if (isMediaRace(err))
-      return Response.json(
-        {
-          code: 'MEDIA_UNAVAILABLE',
-          error: 'That media item is being deleted. Choose another file before saving.',
-          reason: 'media',
-        },
-        { status: 409 },
+      return codedError(
+        409,
+        'MEDIA_UNAVAILABLE',
+        'That media item is being deleted. Choose another file before saving.',
+        { reason: 'media' },
       );
     // A shape the serialiser cannot write (a nested array) is refused with its reason.
     return new Response(err instanceof Error ? err.message : 'Bad request', { status: 400 });
   }
-  if (!saved) return new Response('Not found', { status: 404 });
+  if (!saved) return notFound();
   return Response.json({ ...saved, problems: entryProblems(schema, data) });
 }

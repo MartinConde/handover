@@ -30,7 +30,6 @@ import {
 import type { RequestContext } from '../../../environment.js';
 import { readJson } from '../body.js';
 import {
-  codedError,
   entryFiles,
   entryPath,
   entrySubject,
@@ -42,6 +41,7 @@ import {
   takenNames,
   unresolvedSource,
 } from '../content.js';
+import { codedError, notFound } from '../respond.js';
 
 // Same derivation as a new entry's: a rename cannot produce a name the CMS could not create.
 export async function rename(
@@ -51,7 +51,7 @@ export async function rename(
   request: Request,
   session: App.Locals['handover'],
 ): Promise<Response> {
-  if (!config.collections[collection]) return new Response('Not found', { status: 404 });
+  if (!config.collections[collection]) return notFound();
   const held = await heldByAnother(ctx, collection, slug, session, 'renamed');
   if (held) return held;
   const body = (await readJson(request)) as { to?: unknown } | undefined;
@@ -191,7 +191,7 @@ export async function duplicate(
   request: Request,
   session: App.Locals['handover'],
 ): Promise<Response> {
-  if (!config.collections[collection]) return new Response('Not found', { status: 404 });
+  if (!config.collections[collection]) return notFound();
   const refused = await unresolvedSource(ctx, collection, slug);
   if (refused) return refused;
   const body = (await readJson(request)) as { to?: unknown; drafts?: unknown } | undefined;
@@ -244,7 +244,7 @@ export async function remove(
   session: App.Locals['handover'],
 ): Promise<Response> {
   const collected = config.collections[collection];
-  if (!collected) return new Response('Not found', { status: 404 });
+  if (!collected) return notFound();
   const held = await heldByAnother(ctx, collection, slug, session, 'deleted');
   if (held) return held;
   const body = (request ? await readJson(request) : undefined) as
@@ -341,7 +341,7 @@ export async function discard(
   slug: string,
   session: App.Locals['handover'],
 ): Promise<Response> {
-  if (!schemaOf(collection, slug)) return new Response('Not found', { status: 404 });
+  if (!schemaOf(collection, slug)) return notFound();
   const held = await heldByAnother(ctx, collection, slug, session, 'discarded');
   if (held) return held;
   const database = ctx.db();

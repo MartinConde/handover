@@ -19,6 +19,7 @@ import {
 import type { RequestContext } from '../../environment.js';
 import { readJson } from './body.js';
 import { pickable } from './content.js';
+import { codedError } from './respond.js';
 
 /** What a `from` is held against: a redirect over a live page takes it off the site silently. */
 function sitePages(entries: Awaited<ReturnType<typeof pickable>>): Record<string, string> {
@@ -201,10 +202,8 @@ export async function changeRedirect(
     pickable(ctx),
   ]);
   const found = rules.find((rule) => rule._id === id);
-  if (!found)
-    return Response.json({ code: 'REDIRECT_NOT_FOUND', error: 'Not found' }, { status: 404 });
-  if (found.reason === 'hidden')
-    return Response.json({ code: 'REDIRECT_MANAGED', error: MANAGED }, { status: 409 });
+  if (!found) return codedError(404, 'REDIRECT_NOT_FOUND', 'Not found');
+  if (found.reason === 'hidden') return codedError(409, 'REDIRECT_MANAGED', MANAGED);
   const bad = redirectError(
     'default',
     typed,
@@ -271,10 +270,8 @@ export async function removeRedirect(
   const baseSha = prior?.baseSha ?? head;
   const rules = prior ? await readRedirects('default', git, baseSha) : current;
   const found = rules.find((rule) => rule._id === id);
-  if (!found)
-    return Response.json({ code: 'REDIRECT_NOT_FOUND', error: 'Not found' }, { status: 404 });
-  if (found.reason === 'hidden')
-    return Response.json({ code: 'REDIRECT_MANAGED', error: MANAGED }, { status: 409 });
+  if (!found) return codedError(404, 'REDIRECT_NOT_FOUND', 'Not found');
+  if (found.reason === 'hidden') return codedError(409, 'REDIRECT_MANAGED', MANAGED);
   const operation =
     prior ??
     (await beginOperation('default', database, {

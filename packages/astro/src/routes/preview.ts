@@ -12,6 +12,7 @@ import {
   entryAt,
   previewTarget,
   roleOf,
+  siteBase,
   staticSource,
   type UiLocale,
 } from '@handover/core';
@@ -307,7 +308,7 @@ export async function preview(ctx: Ctx, astro: AstroContent<string>): Promise<Re
     snapshot
       ? canvasAnswer(status, message, snapshot, more)
       : answer(ctx.url, status, message, locale, more);
-  const path = `${(config.i18n.base ?? '').replace(/\/+$/, '')}/${ctx.params.path ?? ''}`;
+  const path = `${siteBase(config.i18n)}/${ctx.params.path ?? ''}`;
   let target = previewTarget('default', config.i18n, config.collections, path);
   // An entry served where another collection has its index is still that entry's page in Canvas.
   const own = snapshot?.entry.collection;
@@ -395,10 +396,7 @@ export async function preview(ctx: Ctx, astro: AstroContent<string>): Promise<Re
       ...(canvas
         ? {
             canvasManifest: serializeCanvasManifest(
-              successManifest(
-                canvas,
-                `${(config.i18n.base ?? '').replace(/\/+$/, '')}/admin/api/entries`,
-              ),
+              successManifest(canvas, `${siteBase(config.i18n)}/admin/api/entries`),
             ),
           }
         : { previewResult: { status: 'success' as const, ...previewIdentity(ctx.url) } }),

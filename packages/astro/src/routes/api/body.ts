@@ -1,3 +1,5 @@
+import { codedError } from './respond.js';
+
 export const MAX_JSON_BYTES = 1024 * 1024;
 
 export class BodyTooLargeError extends Error {
@@ -83,13 +85,9 @@ export async function bodyErrorResponse(
     await readJson(preserveBody ? request.clone() : request);
   } catch (error) {
     void request.body?.cancel().catch(() => undefined);
-    if (error instanceof BodyTooLargeError)
-      return Response.json({ code: 'BODY_TOO_LARGE', error: error.message }, { status: 413 });
+    if (error instanceof BodyTooLargeError) return codedError(413, 'BODY_TOO_LARGE', error.message);
     if (error instanceof BodyStructureError)
-      return Response.json(
-        { code: 'BODY_STRUCTURE_INVALID', error: error.message },
-        { status: 400 },
-      );
+      return codedError(400, 'BODY_STRUCTURE_INVALID', error.message);
     throw error;
   }
 }

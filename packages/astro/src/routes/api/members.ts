@@ -11,6 +11,7 @@ import {
   memberApi,
   memberList,
   releaseLocks,
+  siteBase,
 } from '@handover/core';
 import { createAuth, loginMethods, mailer } from '../../auth.js';
 import type { RequestContext } from '../../environment.js';
@@ -18,6 +19,7 @@ import { missingMailer } from '../../environment.js';
 import { mailText, requestLocale } from '../../mail-text.js';
 import { readJson } from './body.js';
 import { entryTitle } from './content.js';
+import { codedError, forbidden, isOwner, notFound } from './respond.js';
 
 /** Only the facts the page cannot work out itself; everything else is a Better Auth endpoint. */
 export async function account(
@@ -34,7 +36,7 @@ export async function account(
 function refused(err: unknown): Response {
   const body = (err as { body?: { code?: string; message?: string } }).body;
   if (!body?.code) throw err;
-  return Response.json({ error: body.message ?? body.code, code: body.code }, { status: 400 });
+  return codedError(400, body.code, body.message ?? body.code);
 }
 
 /** Better Auth's `freshAge`, which none of its routed endpoints applies to this one. */
@@ -56,10 +58,7 @@ export async function setPassword(
   if (!current) return new Response('Unauthorized', { status: 401 });
   // A stolen cookie must not become a password that outlives "Sign out everywhere".
   if (Date.now() - new Date(current.session.createdAt).getTime() > FRESH_MS)
-    return Response.json(
-      { error: 'Sign in again to set a password', code: 'SESSION_NOT_FRESH' },
-      { status: 403 },
-    );
+    return codedError(403, 'SESSION_NOT_FRESH', 'Sign in again to set a password');
   try {
     await auth.api.setPassword({ body: { newPassword }, headers: request.headers });
   } catch (err) {
@@ -109,7 +108,7 @@ export async function members(
   ctx: RequestContext,
   session: App.Locals['handover'],
 ): Promise<Response> {
-  if (session?.role !== 'owner') return new Response('Forbidden', { status: 403 });
+  if (!isOwner(session)) return forbidden();
   const database = ctx.db();
   const [rows, held] = await Promise.all([
     memberList('default', database),
@@ -135,19 +134,12 @@ export async function invite(
   cfContext: App.Locals['cfContext'],
   session: App.Locals['handover'],
 ): Promise<Response> {
-  if (session?.role !== 'owner') return new Response('Forbidden', { status: 403 });
+  if (!isOwner(session)) return forbidden();
   const body = ((await readJson(request)) ?? {}) as { email?: unknown };
   const role = roleIn(body);
   if (typeof body.email !== 'string' || !body.email.trim())
-    return Response.json(
-      { code: 'MEMBER_EMAIL_REQUIRED', error: 'No email address was sent' },
-      { status: 400 },
-    );
-  if (!role)
-    return Response.json(
-      { code: 'MEMBER_ROLE_INVALID', error: 'That is not a role' },
-      { status: 400 },
-    );
+    return codedError(400, 'MEMBER_EMAIL_REQUIRED', 'No email address was sent');
+  if (!role) return codedError(400, 'MEMBER_ROLE_INVALID', 'That is not a role');
   const send = mailer();
   if (!send) return Response.json({ error: missingMailer() }, { status: 503 });
   const auth = createAuth(url, cfContext, {
@@ -176,7 +168,7 @@ export async function invite(
   }
   try {
     await memberApi('default', auth).signInMagicLink({
-      body: { email, callbackURL: `${(config.i18n.base ?? '').replace(/\/+$/, '')}/admin/account` },
+      body: { email, callbackURL: `${siteBase(config.i18n)}/admin/account` },
       headers: request.headers,
     });
   } catch {
@@ -195,15 +187,12 @@ export async function resendInvite(
   cfContext: App.Locals['cfContext'],
   session: App.Locals['handover'],
 ): Promise<Response> {
-  if (session?.role !== 'owner') return new Response('Forbidden', { status: 403 });
+  if (!isOwner(session)) return forbidden();
   // The list rather than one row: `pending` is computed from three tables, and only here.
   const member = (await memberList('default', ctx.db())).find((row) => row.id === id);
-  if (!member) return new Response('Not found', { status: 404 });
+  if (!member) return notFound();
   if (!member.pending)
-    return Response.json(
-      { code: 'MEMBER_ALREADY_SIGNED_IN', error: 'They have already signed in' },
-      { status: 400 },
-    );
+    return codedError(400, 'MEMBER_ALREADY_SIGNED_IN', 'They have already signed in');
   const send = mailer();
   if (!send) return Response.json({ error: missingMailer() }, { status: 503 });
   // Resending is how an owner takes back an invite sent to the wrong mailbox.
@@ -219,7 +208,7 @@ export async function resendInvite(
     ).signInMagicLink({
       body: {
         email: member.email,
-        callbackURL: `${(config.i18n.base ?? '').replace(/\/+$/, '')}/admin/account`,
+        callbackURL: `${siteBase(config.i18n)}/admin/account`,
       },
       headers: request.headers,
     });
@@ -238,28 +227,18 @@ export async function setMemberRole(
   cfContext: App.Locals['cfContext'],
   session: App.Locals['handover'],
 ): Promise<Response> {
-  if (session?.role !== 'owner') return new Response('Forbidden', { status: 403 });
+  if (!isOwner(session)) return forbidden();
   if (id === session.user.id)
-    return Response.json(
-      { code: 'MEMBER_SELF_ROLE', error: 'You cannot change your own role' },
-      { status: 400 },
-    );
+    return codedError(400, 'MEMBER_SELF_ROLE', 'You cannot change your own role');
   const role = roleIn((await readJson(request)) ?? {});
-  if (!role)
-    return Response.json(
-      { code: 'MEMBER_ROLE_INVALID', error: 'That is not a role' },
-      { status: 400 },
-    );
+  if (!role) return codedError(400, 'MEMBER_ROLE_INVALID', 'That is not a role');
   const database = ctx.db();
   const member = (await memberList('default', database)).find((row) => row.id === id);
-  if (!member) return new Response('Not found', { status: 404 });
+  if (!member) return notFound();
   // Demoting an owner runs in the statement that holds the rule, not `setRole` behind a count.
   if (role === 'editor' && member.role === 'owner') {
     if (!(await demoteOwner('default', database, id)))
-      return Response.json(
-        { code: 'MEMBER_LAST_OWNER', error: 'There must be at least one owner' },
-        { status: 400 },
-      );
+      return codedError(400, 'MEMBER_LAST_OWNER', 'There must be at least one owner');
   } else {
     try {
       await memberApi('default', createAuth(url, cfContext)).setRole({
@@ -289,21 +268,15 @@ export async function removeMember(
   cfContext: App.Locals['cfContext'],
   session: App.Locals['handover'],
 ): Promise<Response> {
-  if (session?.role !== 'owner') return new Response('Forbidden', { status: 403 });
+  if (!isOwner(session)) return forbidden();
   if (id === session.user.id)
-    return Response.json(
-      { code: 'MEMBER_SELF_REMOVE', error: 'You cannot remove yourself' },
-      { status: 400 },
-    );
+    return codedError(400, 'MEMBER_SELF_REMOVE', 'You cannot remove yourself');
   const database = ctx.db();
   const member = (await memberList('default', database)).find((row) => row.id === id);
-  if (!member) return new Response('Not found', { status: 404 });
+  if (!member) return notFound();
   // An owner leaves the count before the table, so two owners removing each other can't both win.
   if (member.role === 'owner' && !(await demoteOwner('default', database, id)))
-    return Response.json(
-      { code: 'MEMBER_LAST_OWNER', error: 'There must be at least one owner' },
-      { status: 400 },
-    );
+    return codedError(400, 'MEMBER_LAST_OWNER', 'There must be at least one owner');
   try {
     await memberApi('default', createAuth(url, cfContext)).removeUser({
       body: { userId: id },

@@ -28,7 +28,8 @@ import {
 import type { RequestContext } from '../../environment.js';
 import { mediaStore, NO_BUCKET } from '../../environment.js';
 import { readJson } from './body.js';
-import { codedError, entryHref, entryTitle } from './content.js';
+import { entryHref, entryTitle } from './content.js';
+import { codedError, notFound } from './respond.js';
 
 interface UploadBucket {
   put(
@@ -130,21 +131,16 @@ export async function describeMedia(
       ? ([point[0], point[1]] as [number, number])
       : undefined;
   if (point !== undefined && !focal)
-    return Response.json(
-      { code: 'MEDIA_METADATA_INVALID', error: 'a focal point is [x, y], each 0 to 1' },
-      { status: 400 },
-    );
+    return codedError(400, 'MEDIA_METADATA_INVALID', 'a focal point is [x, y], each 0 to 1');
   if (tags === undefined && alt === undefined && archived === undefined && focal === undefined)
-    return Response.json(
-      {
-        code: 'MEDIA_METADATA_INVALID',
-        error: 'send { tags }, { alt }, { archived } or { focal }',
-      },
-      { status: 400 },
+    return codedError(
+      400,
+      'MEDIA_METADATA_INVALID',
+      'send { tags }, { alt }, { archived } or { focal }',
     );
   const database = ctx.db();
   const row = await setMediaDetails('default', database, id, { tags, alt, archived, focal });
-  if (!row) return Response.json({ code: 'MEDIA_NOT_FOUND', error: 'Not found' }, { status: 404 });
+  if (!row) return codedError(404, 'MEDIA_NOT_FOUND', 'Not found');
   // Putting an asset away is a decision about what the site offers, so only that is logged.
   if (archived !== undefined)
     await logActivity('default', database, {
@@ -168,12 +164,10 @@ export async function deleteAsset(
   session: App.Locals['handover'],
 ): Promise<Response> {
   const store = mediaStore();
-  if (!store)
-    return Response.json({ code: 'MEDIA_STORAGE_UNAVAILABLE', error: NO_BUCKET }, { status: 503 });
+  if (!store) return codedError(503, 'MEDIA_STORAGE_UNAVAILABLE', NO_BUCKET);
   const database = ctx.db();
   const row = await findMedia('default', database, id);
-  if (!row || row.state === 'deleted')
-    return Response.json({ code: 'MEDIA_NOT_FOUND', error: 'Not found' }, { status: 404 });
+  if (!row || row.state === 'deleted') return codedError(404, 'MEDIA_NOT_FOUND', 'Not found');
   const [tree, drafts] = await Promise.all([
     ctx.git().contentFiles(),
     draftFiles('default', database, index),
@@ -188,22 +182,18 @@ export async function deleteAsset(
     ]),
   ].sort();
   if (now.length)
-    return Response.json(
-      {
-        code: 'MEDIA_IN_USE',
-        error: `This is used in ${places(now)} and cannot be deleted. Archive it instead — that hides it from the picker and keeps every page working.`,
-        uses: now,
-      },
-      { status: 409 },
+    return codedError(
+      409,
+      'MEDIA_IN_USE',
+      `This is used in ${places(now)} and cannot be deleted. Archive it instead — that hides it from the picker and keeps every page working.`,
+      { uses: now },
     );
   if (live.length)
-    return Response.json(
-      {
-        code: 'MEDIA_PUBLISHED_IN_USE',
-        error: `The published site still uses this in ${places(live)}. Publish the change that takes it out and wait for that deployment to be live, then it can be deleted.`,
-        uses: live,
-      },
-      { status: 409 },
+    return codedError(
+      409,
+      'MEDIA_PUBLISHED_IN_USE',
+      `The published site still uses this in ${places(live)}. Publish the change that takes it out and wait for that deployment to be live, then it can be deleted.`,
+      { uses: live },
     );
   await deleteMedia('default', database, store, row);
   await logActivity('default', database, {
@@ -321,10 +311,10 @@ export async function ingestUpload(
   const bucket = uploadBucket();
   if (!bucket) return codedError(503, 'MEDIA_UPLOAD_BUCKET_MISSING', NO_UPLOAD_BUCKET);
   const keyMime = mimeForMediaKey(key);
-  if (!keyMime || !UPLOAD_KEY.test(key)) return new Response('Not found', { status: 404 });
+  if (!keyMime || !UPLOAD_KEY.test(key)) return notFound();
   const user = session?.user.id ?? 'unknown';
   const intent = await claimUploadIntent('default', ctx.db(), key, user);
-  if (!intent) return new Response('Not found', { status: 404 });
+  if (!intent) return notFound();
   const mime = intent.mime;
   if (keyMime !== mime || request.headers.get('content-type') !== mime) {
     await releaseUploadIntent('default', ctx.db(), key, user);

@@ -79,3 +79,14 @@ test('valid bounded bodies are parsed once for downstream JSON and text handlers
   expect(await readBodyText(request)).toBe('{"name":"Lea"}');
   expect(reads).toBe(1);
 });
+
+test('a refused body carries its code in the x-handover-error-code header', async () => {
+  const response = await bodyErrorResponse(
+    new Request('https://x/admin/api/members', {
+      method: 'POST',
+      headers: { 'content-length': String(MAX_JSON_BYTES + 1) },
+      body: '{}',
+    }),
+  );
+  expect(response?.headers.get('x-handover-error-code')).toBe('BODY_TOO_LARGE');
+});

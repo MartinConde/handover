@@ -27,6 +27,7 @@ import type { RequestContext } from '../../environment.js';
 import { readJson } from './body.js';
 import { entryHref, entryPath, formFor, object } from './content.js';
 import { entryTitles } from './dashboard.js';
+import { codedError, forbidden, isOwner } from './respond.js';
 
 const KIND = 'sources-recorded';
 
@@ -166,7 +167,7 @@ export async function sourcesList(
   ctx: RequestContext,
   session: App.Locals['handover'],
 ): Promise<Response> {
-  if (session?.role !== 'owner') return new Response('Forbidden', { status: 403 });
+  if (!isOwner(session)) return forbidden();
   const database = ctx.db();
   // One head for the read and the answer, so the POST compares what the dialog showed.
   const base = await ctx.git().getHead();
@@ -196,12 +197,10 @@ export async function sourcesList(
 }
 
 const changed = () =>
-  Response.json(
-    {
-      code: 'SOURCES_CHANGED',
-      error: 'The repository changed while this was open. Nothing was recorded — review it again.',
-    },
-    { status: 409 },
+  codedError(
+    409,
+    'SOURCES_CHANGED',
+    'The repository changed while this was open. Nothing was recorded — review it again.',
   );
 
 export async function recordSources(
@@ -209,7 +208,7 @@ export async function recordSources(
   request: Request,
   session: App.Locals['handover'],
 ): Promise<Response> {
-  if (session?.role !== 'owner') return new Response('Forbidden', { status: 403 });
+  if (!isOwner(session)) return forbidden();
   const body = (await readJson(request)) as { base?: unknown } | undefined;
   if (typeof body?.base !== 'string' || !body.base)
     return new Response('Bad request', { status: 400 });
@@ -243,13 +242,11 @@ export async function recordSources(
     return holder && holder.id !== session.user.id ? [{ key, name: holder.name }] : [];
   });
   if (held.length)
-    return Response.json(
-      {
-        code: 'SOURCES_LOCKED',
-        error: `${held.map((h) => h.name ?? 'Somebody else').join(', ')} ${held.length === 1 ? 'is' : 'are'} editing an entry this would record. Nothing was recorded — try again once they are done.`,
-        held,
-      },
-      { status: 409 },
+    return codedError(
+      409,
+      'SOURCES_LOCKED',
+      `${held.map((h) => h.name ?? 'Somebody else').join(', ')} ${held.length === 1 ? 'is' : 'are'} editing an entry this would record. Nothing was recorded — try again once they are done.`,
+      { held },
     );
   const sources: Record<string, number> = {};
   for (const { source } of found) sources[source] = (sources[source] ?? 0) + 1;

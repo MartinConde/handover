@@ -27,6 +27,9 @@ Conventions across all of them:
 - **A `409` because somebody else is editing the entry** (rename, delete, hide, show, restore,
   discard, resolve) is JSON: `{ "error": "<sentence>", "held_by": { "id", "name" } }`. `name` is
   `null` when the holder has none; the admin phrases it in the interface language
+- **Every refusal with a top-level `code` also sends it as `x-handover-error-code`**, so a client
+  can branch on it without parsing the body. The one exception is the `422` for a redirect rule
+  that is not valid, which carries its code in `descriptor.code` (below)
 - **These `409`s are JSON `{ "code", "error" }`**, with the code also in `x-handover-error-code`,
   so the admin can phrase them in the interface language: `ENTRY_RENAME_UNPUBLISHED`,
   `ENTRY_DUPLICATE_UNPUBLISHED` and `TEMPLATE_UNPUBLISHED` (the entry was never published),

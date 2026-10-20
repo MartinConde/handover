@@ -3,6 +3,7 @@
 import { getCollection, getEntry } from 'astro:content';
 import config from 'virtual:handover/config';
 import assets from 'virtual:handover/ui';
+import { siteBase } from '@handover/core';
 import { preview } from '../dist/routes/preview.js';
 
 const result = await preview(Astro, {
@@ -12,7 +13,7 @@ const result = await preview(Astro, {
 if (result instanceof Response) return result;
 const { Component, props, previewResult, canvasManifest } = result;
 const canvas = canvasManifest ? assets.entries.canvas : undefined;
-const base = (config.i18n.base ?? '').replace(/\/+$/, '');
+const base = siteBase(config.i18n);
 const asset = (path: string) => `${base}/admin/_assets/${path}`;
 ---
 

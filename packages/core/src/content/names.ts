@@ -187,6 +187,9 @@ export interface I18nRouting {
   base?: string;
 }
 
+/** Astro's base path without its trailing slash, `''` at the root. */
+export const siteBase = (i18n: { base?: string }): string => (i18n.base ?? '').replace(/\/+$/, '');
+
 /** `undefined` for a collection with no route: nothing renders it, so there is nowhere to link. */
 export function entryUrl(
   _siteId: string,
@@ -197,7 +200,7 @@ export function entryUrl(
 ): string | undefined {
   if (!route) return undefined;
   const prefix = locale === i18n.defaultLocale && !i18n.prefixDefaultLocale ? '' : `/${locale}`;
-  return (i18n.base ?? '').replace(/\/+$/, '') + prefix + route.replace('[slug]', slug);
+  return siteBase(i18n) + prefix + route.replace('[slug]', slug);
 }
 
 /** In a collection with an `index`, the entry named `index` is that page's own copy. */
@@ -241,7 +244,7 @@ export function previewTarget(
 ): PreviewTarget | undefined {
   // Only one trailing slash is forgiven: an allow-list that repairs input allows too much.
   if (!path.startsWith('/') || path.includes('//')) return undefined;
-  const base = (i18n.base ?? '').replace(/\/+$/, '');
+  const base = siteBase(i18n);
   if (base && path !== base && !path.startsWith(`${base}/`)) return undefined;
   path = path.slice(base.length) || '/';
   const trimmed = path.length > 1 && path.endsWith('/') ? path.slice(0, -1) : path;

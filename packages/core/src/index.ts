@@ -78,6 +78,7 @@ export {
   entryPageUrl,
   entryUrl,
   previewTarget,
+  siteBase,
   withSlash,
 } from './content/names.js';
 export type { EntrySource, I18nMark, TranslationSource } from './content/provenance.js';

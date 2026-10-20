@@ -26,7 +26,6 @@ import { mediaStore, workerBuilds } from '../../environment.js';
 import { entryProblems } from '../../problems.js';
 import { readBodyText, readJson } from './body.js';
 import {
-  codedError,
   ENTRY_FILE,
   entryLocales,
   entryPath,
@@ -38,6 +37,7 @@ import {
   schemaOf,
   siteSeoDefaults,
 } from './content.js';
+import { codedError } from './respond.js';
 
 /** Read from the log: a publish redeploys the Worker, so the tab that pressed it may reload. */
 export async function buildStatus(ctx: RequestContext): Promise<Response> {
@@ -360,16 +360,13 @@ export async function publish(
   const unready = pending.filter((row) => problemsOf(row).length > 0);
   if (unready.length) {
     const paths = unready.map((r) => r.path);
-    return Response.json(
-      {
-        code: 'PUBLISH_INCOMPLETE',
-        error:
-          paths.length === 1
-            ? `${paths[0]} is missing something the schema needs`
-            : `${paths.length} files are missing something the schema needs — ${paths.join(', ')}`,
-        paths,
-      },
-      { status: 422 },
+    return codedError(
+      422,
+      'PUBLISH_INCOMPLETE',
+      paths.length === 1
+        ? `${paths[0]} is missing something the schema needs`
+        : `${paths.length} files are missing something the schema needs — ${paths.join(', ')}`,
+      { paths },
     );
   }
   const { drifted, unresolved } = await refusedPaths(
@@ -385,18 +382,16 @@ export async function publish(
       { paths: unresolved },
     );
   if (drifted.length) {
-    return Response.json(
+    return codedError(
+      409,
+      'PUBLISH_DRIFT',
+      drifted.length === 1
+        ? `${drifted[0]} has drifted apart from the entry's other languages — resolve it in the editor`
+        : `${drifted.length} files have drifted apart from their entries' other languages — ${drifted.join(', ')}`,
       {
-        code: 'PUBLISH_DRIFT',
-        error:
-          drifted.length === 1
-            ? `${drifted[0]} has drifted apart from the entry's other languages — resolve it in the editor`
-            : `${drifted.length} files have drifted apart from their entries' other languages — ${drifted.join(', ')}`,
-        paths: drifted,
-        // Which 409 this is: a conflict's way out is Discard, drift's is the editor.
+        paths: drifted, // Which 409 this is: a conflict's way out is Discard, drift's is the editor.
         reason: 'drift',
       },
-      { status: 409 },
     );
   }
   let result: Awaited<ReturnType<typeof publishDrafts>>;

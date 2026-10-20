@@ -14,7 +14,6 @@ import type { RequestContext } from '../../../environment.js';
 import { entryProblems } from '../../../problems.js';
 import {
   type entryLocales,
-  entryNotFound,
   entryPath,
   entrySourceFor,
   formFor,
@@ -26,6 +25,7 @@ import {
   sourceRefusal,
   translator,
 } from '../content.js';
+import { entryNotFound, notFound } from '../respond.js';
 
 /** Committed and draft rules are both read; empty means the client answered "nowhere". */
 async function hideTargets(
@@ -139,7 +139,7 @@ export async function getEntry(
 
 /** A query against the log: a deleted entry is in neither the index nor the draft rows. */
 export async function deletedList(ctx: RequestContext, collection: string): Promise<Response> {
-  if (!config.collections[collection]) return new Response('Not found', { status: 404 });
+  if (!config.collections[collection]) return notFound();
   const database = ctx.db();
   const events = await deletedEntries('default', database, collection);
   const rows = await overlayRows('default', database, index);

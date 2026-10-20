@@ -27,18 +27,15 @@ import { mailText, requestLocale } from '../../mail-text.js';
 import { entryProblems } from '../../problems.js';
 import { readJson } from './body.js';
 import { deeplKey, entryPath, formFor, publishSources, takenNames } from './content.js';
+import { codedError, forbidden, isOwner, notFound } from './respond.js';
 
 export async function testEmail(
   request: Request,
   session: App.Locals['handover'],
 ): Promise<Response> {
-  if (session?.role !== 'owner') return new Response('Forbidden', { status: 403 });
+  if (!isOwner(session)) return forbidden();
   const send = mailer();
-  if (!send)
-    return Response.json(
-      { code: 'DIAGNOSTIC_UNAVAILABLE', error: missingMailer() },
-      { status: 503 },
-    );
+  if (!send) return codedError(503, 'DIAGNOSTIC_UNAVAILABLE', missingMailer());
   const to = session.user.email;
   try {
     const language = session.user.uiLocale ?? requestLocale(request);
@@ -46,16 +43,13 @@ export async function testEmail(
     return Response.json({ ok: true, code: 'DIAGNOSTIC_EMAIL_SENT', to, id });
   } catch (err) {
     // The provider's refusal names the broken rule, which is the whole use of the button.
-    return Response.json(
-      { code: 'DIAGNOSTIC_REFUSED', error: (err as Error).message },
-      { status: 502 },
-    );
+    return codedError(502, 'DIAGNOSTIC_REFUSED', (err as Error).message);
   }
 }
 
 /** Owner only: it names the sending address and the media host, and the sidebar is not a gate. */
 export function diagnostics(session: App.Locals['handover']): Response {
-  if (session?.role !== 'owner') return new Response('Forbidden', { status: 403 });
+  if (!isOwner(session)) return forbidden();
   const configured = config.mailer;
   return Response.json({
     collections: Object.entries(config.collections).map(([name, collected]) => ({
@@ -77,15 +71,14 @@ export function diagnostics(session: App.Locals['handover']): Response {
 }
 
 /** Something the site was never told, rather than something that refused: a different sentence. */
-const unset = (why: string) =>
-  Response.json({ code: 'DIAGNOSTIC_UNAVAILABLE', error: why }, { status: 503 });
+const unset = (why: string) => codedError(503, 'DIAGNOSTIC_UNAVAILABLE', why);
 
 /** The key itself is never in the answer: only its last four characters, who set it and when. */
 export async function integrations(
   ctx: RequestContext,
   session: App.Locals['handover'],
 ): Promise<Response> {
-  if (session?.role !== 'owner') return new Response('Forbidden', { status: 403 });
+  if (!isOwner(session)) return forbidden();
   const database = ctx.db();
   const [facts, members] = await Promise.all([
     settingFacts('default', database),
@@ -122,15 +115,11 @@ export async function setIntegration(
   request: Request,
   session: App.Locals['handover'],
 ): Promise<Response> {
-  if (session?.role !== 'owner') return new Response('Forbidden', { status: 403 });
-  if (!INTEGRATIONS.includes(key as Integration)) return new Response('Not found', { status: 404 });
+  if (!isOwner(session)) return forbidden();
+  if (!INTEGRATIONS.includes(key as Integration)) return notFound();
   const body = (await readJson(request)) as { value?: unknown } | undefined;
   const value = typeof body?.value === 'string' ? body.value.trim() : '';
-  if (!value)
-    return Response.json(
-      { code: 'INTEGRATION_KEY_REQUIRED', error: 'Paste the key before saving it.' },
-      { status: 400 },
-    );
+  if (!value) return codedError(400, 'INTEGRATION_KEY_REQUIRED', 'Paste the key before saving it.');
   let detail: string | undefined;
   if (key === 'deepl') {
     const to = config.i18n.locales.find((l) => l !== config.i18n.defaultLocale);
@@ -140,10 +129,7 @@ export async function setIntegration(
         await deeplTranslate('default', value)(['Hello'], config.i18n.defaultLocale, to);
         detail = `It translated "Hello" into ${to}.`;
       } catch (err) {
-        return Response.json(
-          { code: 'DIAGNOSTIC_REFUSED', error: (err as Error).message },
-          { status: 502 },
-        );
+        return codedError(502, 'DIAGNOSTIC_REFUSED', (err as Error).message);
       }
     }
   }
@@ -184,8 +170,8 @@ export async function clearIntegration(
   key: string,
   session: App.Locals['handover'],
 ): Promise<Response> {
-  if (session?.role !== 'owner') return new Response('Forbidden', { status: 403 });
-  if (!INTEGRATIONS.includes(key as Integration)) return new Response('Not found', { status: 404 });
+  if (!isOwner(session)) return forbidden();
+  if (!INTEGRATIONS.includes(key as Integration)) return notFound();
   const database = ctx.db();
   await removeSetting('default', database, key as Integration);
   await logActivity('default', database, {
@@ -203,13 +189,12 @@ export async function connection(
   name: string,
   session: App.Locals['handover'],
 ): Promise<Response> {
-  if (session?.role !== 'owner') return new Response('Forbidden', { status: 403 });
+  if (!isOwner(session)) return forbidden();
   const e = env as Record<string, string | undefined>;
   const ok = (code: string, detail: string, facts: Record<string, string | number> = {}) =>
     Response.json({ ok: true, code, detail, ...facts });
   const off = (code: string, detail: string) => Response.json({ off: true, code, detail });
-  const refused = (err: unknown) =>
-    Response.json({ code: 'DIAGNOSTIC_REFUSED', error: (err as Error).message }, { status: 502 });
+  const refused = (err: unknown) => codedError(502, 'DIAGNOSTIC_REFUSED', (err as Error).message);
 
   if (name === 'github') {
     let git: GitClient;
@@ -314,7 +299,7 @@ export async function connection(
     );
   }
 
-  return new Response('Not found', { status: 404 });
+  return notFound();
 }
 
 /** Commits a different edit over an open draft, which is what a developer's push does to one. */
@@ -323,8 +308,8 @@ export async function simulateConflict(
   session: App.Locals['handover'],
 ): Promise<Response> {
   // Offered only in dev; a deployed site must not take two junk commits from a request.
-  if (!import.meta.env.DEV) return new Response('Not found', { status: 404 });
-  if (session?.role !== 'owner') return new Response('Forbidden', { status: 403 });
+  if (!import.meta.env.DEV) return notFound();
+  if (!isOwner(session)) return forbidden();
   const git = ctx.git();
   const database = ctx.db();
   for (const [collection, collected] of Object.entries(config.collections)) {

@@ -18,6 +18,7 @@ import {
   RepoUnreachableError,
   ResourceLimitError,
   RevertConflictError,
+  siteBase,
   UploadRefusedError,
 } from '@handover/core';
 import type { APIRoute } from 'astro';
@@ -25,7 +26,7 @@ import { createAuth } from '../auth.js';
 import { requestContext } from '../environment.js';
 import { formSchema } from '../index.js';
 import { bodyErrorResponse, readJson } from './api/body.js';
-import { codedError, tabOf } from './api/content.js';
+import { tabOf } from './api/content.js';
 import { dashboard, globalsList, listEntries, pendingList, pickList } from './api/dashboard.js';
 import { autosave, hold, lockState } from './api/entries/editing.js';
 import { discard, duplicate, remove, rename } from './api/entries/lifecycle.js';
@@ -70,6 +71,7 @@ import {
 } from './api/members.js';
 import { buildStatus, prepublishChecks, publish } from './api/publishing.js';
 import { addRedirect, changeRedirect, redirectList, removeRedirect } from './api/redirects.js';
+import { codedError, notFound } from './api/respond.js';
 import {
   clearIntegration,
   connection,
@@ -121,7 +123,7 @@ const groups = (path: string | undefined, re: RegExp) =>
 
 // The middleware exempts Better Auth's paths, so this is the only thing in front of the login.
 const mounted = (pathname: string) =>
-  pathname.startsWith(`${(config.i18n.base ?? '').replace(/\/+$/, '')}${AUTH_BASE_PATH}/`);
+  pathname.startsWith(`${siteBase(config.i18n)}${AUTH_BASE_PATH}/`);
 
 export const GET: APIRoute = async ({ params, request, url, locals }) => {
   const session = locals.handover;
@@ -201,7 +203,7 @@ export const GET: APIRoute = async ({ params, request, url, locals }) => {
   if (entry) return answering(() => getEntry(ctx, entry[1], entry[2]));
   const list = groups(params.path, ENTRIES);
   if (list) return listEntries(ctx, list[1]);
-  return new Response('Not found', { status: 404 });
+  return notFound();
 };
 
 export const PUT: APIRoute = async ({ params, request, locals }) => {
@@ -224,7 +226,7 @@ export const PUT: APIRoute = async ({ params, request, locals }) => {
   if (uploaded) return answering(() => finishUpload(ctx, uploaded[1], request, session));
   const rule = groups(params.path, REDIRECT);
   if (rule) return answering(() => changeRedirect(ctx, rule[1], request, session));
-  return new Response('Not found', { status: 404 });
+  return notFound();
 };
 
 // The one verb that changes an asset without changing its bytes, which are named by their hash.
@@ -235,7 +237,7 @@ export const PATCH: APIRoute = async ({ params, request, locals }) => {
   const ctx = requestContext();
   const asset = groups(params.path, MEDIA);
   if (asset) return describeMedia(ctx, asset[1], request, session);
-  return new Response('Not found', { status: 404 });
+  return notFound();
 };
 
 // Every route answers the same way when git refuses, whether it was reading or committing.
@@ -256,18 +258,13 @@ async function answering(
     // The repository is out of reach for every path, so 503 with the message rather than a 404.
     if (err instanceof RepoUnreachableError)
       return codes.repository
-        ? Response.json({ code: codes.repository, error: err.message }, { status: 503 })
+        ? codedError(503, codes.repository, err.message)
         : new Response(err.message, { status: 503 });
     // A conflict names its files as data so the drawer can badge those rows.
     if (err instanceof DraftConflictError)
-      return Response.json(
-        {
-          ...(codes.conflict ? { code: codes.conflict } : {}),
-          error: err.message,
-          paths: err.paths,
-        },
-        { status: 409 },
-      );
+      return codes.conflict
+        ? codedError(409, codes.conflict, err.message, { paths: err.paths })
+        : Response.json({ error: err.message, paths: err.paths }, { status: 409 });
     if (err instanceof CommitScopeError) return new Response(err.message, { status: 403 });
     if (err instanceof DraftRevisionError || isDraftRace(err))
       return Response.json(
@@ -275,44 +272,37 @@ async function answering(
         { status: 409 },
       );
     if (err instanceof MediaInUseError || err instanceof MediaUnavailableError || isMediaRace(err))
-      return Response.json(
-        {
-          code: err instanceof MediaInUseError ? 'MEDIA_BECAME_USED' : 'MEDIA_UNAVAILABLE',
-          error: err instanceof Error ? err.message : new MediaUnavailableError().message,
-          reason: 'media',
-        },
-        { status: 409 },
+      return codedError(
+        409,
+        err instanceof MediaInUseError ? 'MEDIA_BECAME_USED' : 'MEDIA_UNAVAILABLE',
+        err instanceof Error ? err.message : new MediaUnavailableError().message,
+        { reason: 'media' },
       );
     // A refused revert names its files the way a publish's conflict does.
     if (err instanceof RevertConflictError)
-      return Response.json(
-        { code: 'REVERT_CONFLICT', error: err.message, paths: err.paths },
-        { status: 409 },
-      );
+      return codedError(409, 'REVERT_CONFLICT', err.message, { paths: err.paths });
     if (err instanceof RenameCollisionError)
       return codedError(409, 'ENTRY_RENAME_COLLISION', err.message);
     if (err instanceof RefMovedError)
       return codes.refMoved
-        ? Response.json({ code: codes.refMoved, error: err.message }, { status: 409 })
+        ? codedError(409, codes.refMoved, err.message)
         : new Response(err.message, { status: 409 });
-    if (err instanceof OperationFinalizationError)
-      return Response.json(
-        {
-          ...(codes.finalization ? { code: codes.finalization } : {}),
-          error: err.message,
-          reason: 'needs-finalization',
-          operation_id: err.operationId,
-          commit_sha: err.commitSha,
-        },
-        { status: 503 },
-      );
+    if (err instanceof OperationFinalizationError) {
+      const finalizing = {
+        reason: 'needs-finalization',
+        operation_id: err.operationId,
+        commit_sha: err.commitSha,
+      };
+      return codes.finalization
+        ? codedError(503, codes.finalization, err.message, finalizing)
+        : Response.json({ error: err.message, ...finalizing }, { status: 503 });
+    }
     // A refused upload is the chooser's own file, so it is answered to them by the rule it broke.
     if (err instanceof UploadRefusedError)
       return err.code
         ? codedError(422, err.code, err.message, { limit: err.limit })
         : Response.json({ error: err.message }, { status: 422 });
-    if (err instanceof ResourceLimitError)
-      return Response.json({ code: 'RESOURCE_LIMIT', error: err.message }, { status: 429 });
+    if (err instanceof ResourceLimitError) return codedError(429, 'RESOURCE_LIMIT', err.message);
     throw err;
   }
 }
@@ -407,7 +397,7 @@ export const POST: APIRoute = async ({ params, request, url, locals }) => {
     return answering(() => saveTemplate(ctx, templated[1], templated[2], request, session));
   const created = groups(params.path, ENTRIES);
   if (created) return answering(() => createEntry(ctx, created[1], request));
-  return new Response('Not found', { status: 404 });
+  return notFound();
 };
 
 export const DELETE: APIRoute = async ({ params, request, url, locals }) => {
@@ -427,5 +417,5 @@ export const DELETE: APIRoute = async ({ params, request, url, locals }) => {
   if (rule) return answering(() => removeRedirect(ctx, rule[1], session));
   const entry = groups(params.path, ENTRY);
   if (entry) return answering(() => remove(ctx, entry[1], entry[2], request, session));
-  return new Response('Not found', { status: 404 });
+  return notFound();
 };
