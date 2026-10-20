@@ -47,7 +47,7 @@ repository's — and the answer is per field:
   before it offers the two answers — *€ 435,000 or € 440,000* is unanswerable without the
   € 450,000 it came from. A rich-text field is answered whole: each side shows its
   text as plain words, without Markdown symbols and with line breaks kept, because there is no readable way to pick halves of one. A question inside a block is
-  headed by the block's type and the field, such as *Legal content · Intro*
+  headed by the block's type and the field, such as *Legal content · Intro*; with two blocks of one type, by its position too, such as *Text 2 · Body*
 - **Keep all mine** and **Take all theirs** answer every question at once. Neither touches
   what is already merged, and both say so on the button rather than behind a confirmation
 - **Nothing publishes while a resolver is open**: the other entries would go out in the same

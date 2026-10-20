@@ -271,7 +271,7 @@ test('a block that moved says it moved, not that it was deleted and added again'
       path: 'blocks[_id=cccc3333]',
       label: 'Gallery',
       kind: 'row',
-      type: 'Hero',
+      type: 'Hero 1',
       at: 'moved-up',
       above: 'Seaview Cottage',
       changes: [],
@@ -308,7 +308,7 @@ test('a block that arrived and one that went are named by what they say', () => 
       path: 'blocks[_id=cccc3333]',
       label: 'Gallery',
       kind: 'row',
-      type: 'Hero',
+      type: 'Hero 2',
       at: 'removed',
       changes: [],
     },
@@ -890,7 +890,27 @@ test('a row position carries the localized name of the following block', () => {
   expect(changes[0]).toMatchObject({
     kind: 'row',
     at: 'added',
-    above: 'Hero',
-    aboveLabels: { en: 'Hero', de: 'Bühne' },
+    above: 'Hero 2',
+    aboveLabels: { en: 'Hero 2', de: 'Bühne 2' },
   });
+});
+
+test('two blocks of one type are numbered by position among that type', () => {
+  const changes = enChanges(
+    page,
+    { blocks: [hero, cta, quote] },
+    { blocks: [hero, cta, { ...quote, heading: 'Pictures' }] },
+  );
+
+  expect(changes.map((c) => c.kind === 'row' && c.type)).toEqual(['Hero 2']);
+});
+
+test('a block alone of its type is not numbered', () => {
+  const changes = enChanges(
+    page,
+    { blocks: [hero, cta] },
+    { blocks: [hero, { ...cta, heading: 'Join' }] },
+  );
+
+  expect(changes.map((c) => c.kind === 'row' && c.type)).toEqual(['Cta']);
 });

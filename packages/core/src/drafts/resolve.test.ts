@@ -182,7 +182,7 @@ test('a block one side added and a block the other side edited are both merged',
   expect(report.questions).toEqual([]);
   expect(report.merged.map((m) => [m.label, m.side])).toEqual([
     ['Newsletter signup', 'ours'],
-    ['Hero · Heading', 'theirs'],
+    ['Hero 2 · Heading', 'theirs'],
   ]);
 });
 
@@ -613,4 +613,19 @@ test("a rewritten rich text body carries each side's text to the question", () =
       },
     ],
   ]);
+});
+
+test('a question inside the second of two blocks of one type names its position', () => {
+  const second = { _type: 'hero', _id: 'dddd4444', heading: 'Second' };
+  const base = { title: 'Home', blocks: [hero, second] };
+
+  const report = conflictReport('default', page, {
+    en: {
+      base,
+      ours: { ...base, blocks: [hero, { ...second, heading: 'Second, ours' }] },
+      theirs: { ...base, blocks: [hero, { ...second, heading: 'Second, theirs' }] },
+    },
+  });
+
+  expect(report.questions.map((q) => q.label)).toEqual(['Hero 2 · Heading']);
 });

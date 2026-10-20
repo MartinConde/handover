@@ -264,13 +264,19 @@ function rowsIn(
     const above = nowKeys[i + 1];
     const next =
       shown !== 'same' && above !== undefined
-        ? rowLabel(form, fieldsOf(asRow(now.get(above))) ?? [], now.get(above), i + 1)
+        ? rowLabel(
+            form,
+            fieldsOf(asRow(now.get(above))) ?? [],
+            now.get(above),
+            i + 1,
+            nth(now, above),
+          )
         : undefined;
     rows.push({
       path: rowAddress(at, key),
-      ...rowLabel(form, fieldsOf(asRow(row)) ?? [], row, i),
+      ...rowLabel(form, fieldsOf(asRow(row)) ?? [], row, i, nth(now, key)),
       kind: 'row',
-      ...typeOf(form, row),
+      ...typeOf(form, row, nth(now, key)),
       at: shown,
       ...(next ? { above: next.label, ...(next.labels ? { aboveLabels: next.labels } : {}) } : {}),
       changes,
@@ -281,9 +287,9 @@ function rowsIn(
       if (!now.has(key))
         rows.push({
           path: rowAddress(at, key),
-          ...rowLabel(form, fieldsOf(asRow(row)) ?? [], row, i),
+          ...rowLabel(form, fieldsOf(asRow(row)) ?? [], row, i, nth(was, key)),
           kind: 'row',
-          ...typeOf(form, row),
+          ...typeOf(form, row, nth(was, key)),
           at: 'removed',
           changes: [],
         });
@@ -315,17 +321,28 @@ export function joinedName(prefix: Named, name: Named): Named {
   };
 }
 
-const typeOf = (form: Form, row: unknown): { type?: string; types?: Labels } => {
+/** Position among the rows of its type, only where that type appears more than once. */
+const nth = (rows: Map<string, unknown>, key: string): number | undefined => {
+  const typeIn = (row: unknown) => (isObject(row) ? row._type : undefined);
+  const mine = typeIn(rows.get(key));
+  if (mine === undefined) return undefined;
+  const same = [...rows].filter(([, row]) => typeIn(row) === mine).map(([k]) => k);
+  return same.length > 1 ? same.indexOf(key) + 1 : undefined;
+};
+
+const typeOf = (form: Form, row: unknown, number?: number): { type?: string; types?: Labels } => {
   if (!isObject(row) || typeof row._type !== 'string') return {};
   const label = form.blockLabels?.[row._type];
   const labels = labelsOf(label);
-  const type = labelIn(label, 'en') ?? humanise(row._type);
+  const numbered = (text: string) => (number ? `${text} ${number}` : text);
+  const plain = labelIn(label, 'en') ?? humanise(row._type);
+  const type = numbered(plain);
   return {
     type,
     ...(labels
       ? {
           types: Object.fromEntries(
-            UI_LOCALES.map((locale) => [locale, labelIn(label, locale) ?? type]),
+            UI_LOCALES.map((locale) => [locale, numbered(labelIn(label, locale) ?? plain)]),
           ),
         }
       : {}),
@@ -333,10 +350,16 @@ const typeOf = (form: Form, row: unknown): { type?: string; types?: Labels } => 
 };
 
 /** A menu item named by its page keeps no label of its own, hence the link fallback. */
-function rowLabel(form: Form, fields: readonly Field[], row: unknown, index: number): Named {
+function rowLabel(
+  form: Form,
+  fields: readonly Field[],
+  row: unknown,
+  index: number,
+  number?: number,
+): Named {
   const authored = firstWords(fields, row) || linkTarget(isObject(row) ? row.link : undefined);
   if (authored) return { label: authored };
-  const type = typeOf(form, row);
+  const type = typeOf(form, row, number);
   return { label: type.type || `Row ${index + 1}`, ...(type.types ? { labels: type.types } : {}) };
 }
 

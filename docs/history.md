@@ -20,7 +20,7 @@ one of them.
   same per-field diff the [pending-changes drawer](pending-changes.md) uses — so what is marked
   is what restoring that version would change. **Ticking two** compares them with each other
   instead; a third is not offered. A change inside a block is named by the block's type and the
-  field, such as *Legal content · Intro*. A rich-text change shows the words that changed, without Markdown symbols, and a line break as ↵. A change to only a link or only the formatting says *link changed* or *formatting changed*.
+  field, such as *Legal content · Intro*; where a page has two blocks of one type they are numbered, *Text 2 · Body*. A rich-text change shows the words that changed, without Markdown symbols, and a line break as ↵. A change to only a link or only the formatting says *link changed* or *formatting changed*.
 - The list is paged at 30 versions; **Show older versions** reads the next page.
 - An entry that has never been published has no history, and the tab says so.
 
