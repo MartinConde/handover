@@ -251,6 +251,7 @@ test('number: writes a number, never a string; clearing removes the key', () => 
 test('boolean: a switch with the label as its text writes true / false', () => {
   show([{ path: ['featured'], label: 'Featured', type: 'boolean', required: false }], {
     _version: 1,
+    featured: false,
   });
   const box = q<HTMLInputElement>('input#f-featured[role="switch"]');
   expect(q('label[for="f-featured"]').textContent).toBe('Featured');
@@ -268,6 +269,19 @@ test('boolean: a switch with the label as its text writes true / false', () => {
 test('boolean: unchecking a switch that was never set leaves the key absent', () => {
   show([{ path: ['featured'], label: 'Featured', type: 'boolean', required: false }], {
     _version: 1,
+  });
+  fire('input#f-featured', 'change', (el) => {
+    el.checked = false;
+  });
+  expect(roundTrip()).toEqual({ _version: 1 });
+});
+
+test('boolean: a never-set switch turned on and then off leaves the key absent', () => {
+  show([{ path: ['featured'], label: 'Featured', type: 'boolean', required: false }], {
+    _version: 1,
+  });
+  fire('input#f-featured', 'change', (el) => {
+    el.checked = true;
   });
   fire('input#f-featured', 'change', (el) => {
     el.checked = false;
@@ -979,6 +993,37 @@ const mouseMove = async (name: string, by: number) => {
   await pointer(document, 'pointermove', y + by);
   await pointer(document, 'pointerup', y + by);
 };
+test('boolean: a never-set switch in a block that was moved first is still absent after on and off', async () => {
+  laidOut();
+  show(
+    [{ path: ['blocks'], label: 'Blocks', type: 'blocks', required: false, types: ['cta'] }],
+    {
+      _version: 1,
+      blocks: [
+        { _id: 'aaaa1111', _type: 'cta' },
+        { _id: 'bbbb2222', _type: 'cta' },
+      ],
+    },
+    { cta: [{ path: ['flag'], label: 'Flag', type: 'boolean', required: false }] },
+  );
+  await keyMove('cta', 1);
+  const first = () =>
+    document.querySelectorAll<HTMLInputElement>('input[role="switch"]')[1] as HTMLInputElement;
+  first().checked = true;
+  first().dispatchEvent(new Event('change', { bubbles: true }));
+  flushSync();
+  first().checked = false;
+  first().dispatchEvent(new Event('change', { bubbles: true }));
+  flushSync();
+  expect(roundTrip()).toEqual({
+    _version: 1,
+    blocks: [
+      { _id: 'bbbb2222', _type: 'cta' },
+      { _id: 'aaaa1111', _type: 'cta' },
+    ],
+  });
+});
+
 const MOVED = `_version: 1
 rooms:
   - _id: "f4a8c3d6"

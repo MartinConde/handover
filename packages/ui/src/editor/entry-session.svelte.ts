@@ -429,6 +429,11 @@ export function createEntrySession({
   const snapshots = $state<Record<string, EntryData>>(
     structuredClone({ ...translations, [sourceLocale]: data }),
   );
+  // As last loaded from the server, not as autosaved: decides which flags a file already holds.
+  const opened: Record<string, EntryData> = structuredClone({
+    ...translations,
+    [sourceLocale]: data,
+  });
   const initialSerialized = Object.fromEntries(
     Object.entries(snapshots).map(([locale, snapshot]) => [locale, JSON.stringify(snapshot)]),
   );
@@ -1241,6 +1246,13 @@ export function createEntrySession({
       }
       return positional;
     },
+    /** Whether the entry as loaded already holds a value at this field, found by row id. */
+    heldWhenOpened(locale: string, address: string): boolean {
+      const loaded = opened[locale];
+      if (!loaded || !form) return false;
+      const resolved = resolveFieldTarget('default', form, address, loaded);
+      return resolved.ok && read(loaded, resolved.target.path) !== undefined;
+    },
     /** Resolve a command target against this session's current schema and locale data. */
     resolveField(locale: string, address: string): FieldTargetResult {
       const current = snapshots[locale];
@@ -1577,6 +1589,7 @@ export function createEntrySession({
             return { ok: false, reason: 'stale' };
 
           snapshots[locale] = structuredClone(response.data);
+          opened[locale] = structuredClone(response.data);
           mutated(locale);
           resetLocaleHistory(locale);
           if (response.revision !== undefined) openedRevisions[locale] = response.revision;
