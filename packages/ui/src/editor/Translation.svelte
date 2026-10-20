@@ -11,6 +11,7 @@ import { messageDetail, messageText, responseMessage, type UiMessage } from '../
 import { formatLanguageName, messageOptions, type UiLocale } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
 import { request as fetch, uncertainResponse } from '../request.js';
+import { dismiss } from '../shared/dismiss.js';
 import type { EntrySession } from './entry-session.svelte';
 import Fields from './fields/Fields.svelte';
 import type { Reference } from './fields/ReferencePeek.svelte';
@@ -277,13 +278,18 @@ const failureText = $derived(fillFailure ? messageText(fillFailure, uiLocale) : 
 const failureDetail = $derived(fillFailure ? messageDetail(fillFailure, uiLocale) : '');
 </script>
 
-<svelte:window
-  onclick={(e) => referenceOpen && !(e.target as HTMLElement).closest('.reference-pick') && (referenceOpen = false)}
-  onkeydown={(e) => e.key === 'Escape' && referenceOpen && (e.target as HTMLElement).closest('.reference-pick') && closeReference()}
-/>
-
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -- the chord belongs to the pane, not to one field -->
-<section class="pane is-locale" aria-labelledby="pane-{locale}" onkeydown={paneKey}>
+<section
+  class="pane is-locale"
+  aria-labelledby="pane-{locale}"
+  onkeydown={paneKey}
+  {@attach dismiss({
+    open: () => referenceOpen,
+    close: () => (referenceOpen = false),
+    onescape: (e) => e.target instanceof Element && e.target.closest('.reference-pick') && closeReference(),
+    inside: '.reference-pick',
+  })}
+>
   <div class="pane-head">
     {#if heading}{@render heading(locale)}{:else}<h2 id="pane-{locale}">{named(locale)}</h2>{/if}
     {#if answered}

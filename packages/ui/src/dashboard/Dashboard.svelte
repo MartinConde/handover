@@ -13,6 +13,7 @@ import * as m from '../paraglide/messages.js';
 import { request as fetch, sitePath } from '../request.js';
 import { activityGroupLabel, initials, said } from '../shared/activity-line';
 import BuildPill, { type Build } from '../shared/BuildPill.svelte';
+import { dismiss } from '../shared/dismiss';
 import Skeleton from '../shared/Skeleton.svelte';
 import SourceLanguagesTile from './SourceLanguagesTile.svelte';
 
@@ -77,7 +78,6 @@ const options = $derived(messageOptions(uiLocale));
 // The collection whose New entry dialog is open — the list's own dialog, opened from here.
 let creating = $state('');
 let newMenuOpen = $state(false);
-let newMenu = $state<HTMLDivElement>();
 let newTrigger = $state<HTMLButtonElement>();
 
 let recent = $state.raw<Recent[]>([]);
@@ -177,18 +177,6 @@ const held = $derived(pending.filter((entry) => entry.held_by).length);
 const oldest = $derived(Math.min(...pending.map((entry) => entry.updated_at)));
 </script>
 
-<svelte:window
-  onclick={(event) => {
-    if (newMenuOpen && event.target instanceof Node && !newMenu?.contains(event.target)) newMenuOpen = false;
-  }}
-  onkeydown={(event) => {
-    if (event.key === 'Escape' && newMenuOpen) {
-      newMenuOpen = false;
-      newTrigger?.focus();
-    }
-  }}
-/>
-
 <main class="main dashboard-page">
   <div class="dashboard-heading">
     <div>
@@ -196,7 +184,10 @@ const oldest = $derived(Math.min(...pending.map((entry) => entry.updated_at)));
       <p class="list-note">{m.dashboard_intro({}, options)}</p>
     </div>
     {#if collections.length}
-      <div class="quick row-menu" bind:this={newMenu}>
+      <div
+        class="quick row-menu"
+        {@attach dismiss({ open: () => newMenuOpen, close: () => (newMenuOpen = false), onescape: () => { newMenuOpen = false; newTrigger?.focus(); } })}
+      >
         <button
           class="btn"
           type="button"

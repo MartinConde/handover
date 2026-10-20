@@ -43,6 +43,7 @@ import {
 } from '../entry-directory.js';
 import { capitalise, collectionName, formatLanguageName, messageOptions, type UiLocale } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
+import { dismiss } from '../shared/dismiss.js';
 import Modal from '../shared/Modal.svelte';
 import PagePicker from './PagePicker.svelte';
 
@@ -620,12 +621,13 @@ function walkTabs(event: KeyboardEvent) {
   </ul>
 {/snippet}
 
-<svelte:window
-  onkeydown={(e) => { if (e.key === 'Escape' && !removing && menuFor) menuFor = ''; }}
-  onclick={(e) => { const at = e.target as HTMLElement; if (menuFor && !at.closest('.row-menu')) menuFor = ''; }}
-/>
-
-<div class={['nav-build', { 'is-labels': translating }]} {id} role="group" aria-labelledby={labelId}>
+<div
+  class={['nav-build', { 'is-labels': translating }]}
+  {id}
+  role="group"
+  aria-labelledby={labelId}
+  {@attach dismiss({ open: () => !!menuFor, close: () => (menuFor = ''), onescape: () => !removing && (menuFor = ''), inside: '.row-menu' })}
+>
   {#if knownError}
     <div class="notice notice-danger menu-directory-error" role="alert">
       {m.menus_directory_failed({}, options)}

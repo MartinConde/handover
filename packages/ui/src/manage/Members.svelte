@@ -4,6 +4,7 @@ import { messageDetail, messageText, responseMessage, type UiMessage } from '../
 import { formatRelativeTime, messageOptions, type UiLocale } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
 import { request as fetch, sitePath, uncertainResponse } from '../request.js';
+import { dismiss } from '../shared/dismiss.js';
 import Modal from '../shared/Modal.svelte';
 import Skeleton from '../shared/Skeleton.svelte';
 
@@ -198,13 +199,7 @@ async function remove() {
 }
 </script>
 
-<svelte:window
-  onkeydown={(e) => e.key === 'Escape' && !dialog && (open = '')}
-  onclickcapture={(e) =>
-    open && !(e.target as HTMLElement).closest('.row-menu') && (open = '')}
-/>
-
-<main class="main">
+<main class="main" {@attach dismiss({ open: () => !!open, close: () => (open = ''), onescape: () => !dialog && (open = ''), inside: '.row-menu', capture: true })}>
   <div class="list-toolbar">
     <h1>{m.members_title({}, options)} <span class="count">{members.length}</span></h1>
     <span class="spacer"></span>

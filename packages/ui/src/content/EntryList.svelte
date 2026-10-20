@@ -22,6 +22,7 @@ import { navigate } from '../navigate';
 import { missing, offered, owes, partial, queueQuery, rowTitle, stale, workFrom } from '../owed.js';
 import * as m from '../paraglide/messages.js';
 import { request as fetch, sitePath } from '../request.js';
+import { dismiss } from '../shared/dismiss.js';
 import Modal from '../shared/Modal.svelte';
 import Skeleton from '../shared/Skeleton.svelte';
 import NewEntry from './NewEntry.svelte';
@@ -365,12 +366,7 @@ async function done() {
 }
 </script>
 
-<svelte:window
-  onkeydown={(e) => e.key === 'Escape' && menuFor && (menuFor = '')}
-  onclick={(e) => menuFor && !(e.target as HTMLElement).closest('.row-menu') && (menuFor = '')}
-/>
-
-<main class="main collection-page">
+<main class="main collection-page" {@attach dismiss({ open: () => !!menuFor, close: () => (menuFor = ''), inside: '.row-menu' })}>
   <div class="list-toolbar">
     <h1>{capitalise(plural)} <span class="count">{filtered ? m.entry_list_count_filtered({ shown: shown.length, total: entries.length }, options) : entries.length}</span></h1>
     <span class="spacer"></span>
