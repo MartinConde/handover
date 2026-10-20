@@ -38,3 +38,9 @@ export const request: typeof globalThis.fetch = async (input, init) => {
     });
   }
 };
+export const postJson = (url: string, body: unknown, method = 'POST') =>
+  request(url, {
+    method,
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });

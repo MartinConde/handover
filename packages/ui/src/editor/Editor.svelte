@@ -38,11 +38,12 @@ import {
 } from '../navigate';
 import { type OwedRow, owes, queueQuery, rowTitle, workFrom } from '../owed.js';
 import * as m from '../paraglide/messages.js';
-import { type CheckItem, checkText, localeOf, merged } from '../publishing/CheckLines.svelte';
+import { checkText, localeOf } from '../publishing/CheckLines.svelte';
 import DriftPanel from '../publishing/Drift.svelte';
 import History from '../publishing/History.svelte';
 import {
   request as fetch,
+  postJson,
   previewPath,
   siteBase,
   sitePath,
@@ -62,8 +63,8 @@ import type { EditorEntry } from './entry-payload';
 import SourceChange from './SourceChange.svelte';
 import { classifyDraftSaveRefusal } from './save';
 import { createEntryLock } from './entry-lock.svelte';
+import { createEntryPublish } from './entry-publish.svelte';
 import { drawn, focusField, land, revealField } from './field-reveal';
-import { createPublishChoice, type Readiness } from './publish-choice.svelte';
 import Translation from './Translation.svelte';
 
 type Data = Record<string, unknown>;
@@ -140,8 +141,6 @@ let {
 } = $props();
 const options = $derived(messageOptions(uiLocale));
 const feedbackText = (message: UiMessage) => messageText(message, uiLocale);
-const postJson = (url: string, body: unknown, method = 'POST') =>
-  fetch(url, { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
 function reload() {
   return onreload ? onreload() : onchanged();
 }
@@ -173,12 +172,21 @@ let saveError = $state<UiMessage>();
 // svelte-ignore state_referenced_locally -- the loaded entry is the initial value on purpose
 let held = $state(entry.held === true);
 const schemaProblems = $derived(entrySession.positionalProblems(entry.sourceLocale, uiLocale));
-/** What the pre-publish checks found over this entry: read when it opens and after every save. */
-let checks = $state<CheckItem[]>([]);
+// svelte-ignore state_referenced_locally -- the opened entry is the one this publishes
+const entryPublish = createEntryPublish({
+  key: `${collection}/${slug}`,
+  session: entrySession,
+  pending: () => entry.locales.filter((of) => pendingByLocale[of]),
+  many: () => many,
+  reload,
+  onpublished: () => onpublished?.(title),
+  onconflict: () => onconflict?.(),
+  focusPanel: () => publishPanel?.focus(),
+});
 // Only the source's check errors gate the header; a translation's are the dialog's to offer.
 const checkProblems = $derived(
   Object.fromEntries(
-    checks
+    entryPublish.checks
       .filter((c) => c.severity === 'error' && localeOf(c.path) === entry.sourceLocale)
       .flatMap((c) => {
         const at = fieldPosition('default', c.fieldPath, data);
@@ -615,8 +623,8 @@ async function writeSourceSave(
     invalidateEntryDirectory();
     entrySession.acceptProblems(entry.sourceLocale, body.problems, sent, contentVersion);
     // The checks read the draft rows, so a save that left nothing pending has nothing to lint.
-    if (body.pending) void lint();
-    else checks = [];
+    if (body.pending) void entryPublish.lint();
+    else entryPublish.clear();
     return true;
   } catch {
     saveError = { code: 'EDITOR_SAVE_CONNECTION' };
@@ -649,7 +657,7 @@ async function writeTranslationSave(
     setPending(of, body.pending);
     invalidateEntryDirectory();
     // A new revision makes an open dialog's readiness stale.
-    if (confirming) void lint();
+    if (entryPublish.confirming) void entryPublish.lint();
     return true;
   } catch {
     return false;
@@ -994,158 +1002,12 @@ onMount(() => {
   fromAddress();
   void loadQueue();
   // Only a draft gets linted, so an entry with nothing pending is not asked about.
-  if (entry.pending.length) void lint();
+  if (entry.pending.length) void entryPublish.lint();
 });
 
-// This entry and nothing else, less any new language left for later; it commits, so it confirms first.
-let confirming = $state(false);
-let sending = $state(false);
-let publishFailed = $state<UiMessage>();
-/** The pass could not be run at all — which holds nothing back: it is a lint, not a gate. */
-let checksFailed = $state(false);
-const publishChoice = createPublishChoice(
-  () => entry.locales.filter((of) => pendingByLocale[of]),
-  () => many,
-);
-let pass = 0;
-const lines = $derived(merged(checks));
-const errors = $derived(lines.filter((c) => c.severity === 'error'));
-// Detection only; resolving it is the drawer's job.
-let conflicted = $state(false);
 let publishButton = $state<HTMLButtonElement>();
 let canvasPublishButton = $state<HTMLButtonElement>();
 let publishPanel = $state<HTMLElement>();
-
-const leftOut = $derived(publishChoice.leftOut);
-const unready = $derived(publishChoice.unready);
-const selection = (key: string, without: string[]) =>
-  without.length
-    ? { entries: [key], without: without.map((of) => `${key}:${of}`) }
-    : { entries: [key] };
-
-async function askToPublish() {
-  if (!(await flush())) return;
-  publishFailed = undefined;
-  publishChoice.reset();
-  confirming = true;
-  void lint();
-}
-
-function publishLater(of: string) {
-  publishChoice.toggle(of);
-  void lint();
-}
-
-/** The drawer's lint over this one entry; an answer that never comes holds nothing back. */
-async function lint() {
-  const key = `${collection}/${slug}`;
-  const mine = ++pass;
-  const sent = leftOut;
-  const res = await postJson('/admin/api/publish/checks', selection(key, sent)).catch(() => undefined);
-  const body = res?.ok
-    ? ((await res.json()) as {
-        results?: CheckItem[];
-        readiness?: Record<string, Record<string, Readiness>>;
-      })
-    : undefined;
-  // A save or another choice since asked again; the older answer would put back what the newer one cleared.
-  if (mine !== pass) return;
-  checksFailed = !res?.ok;
-  // The daily hidden check's note about some other page is the drawer's to list, not this entry's.
-  checks = (body?.results ?? []).filter((c) => c.entry === key);
-  publishChoice.receive(body?.readiness?.[key], checksFailed);
-  // The answer changed what can wait, so these checks were over another set of files.
-  if (confirming && sent.join() !== leftOut.join()) void lint();
-}
-
-function closePublish() {
-  if (sending) return;
-  confirming = false;
-}
-
-async function publishEntry() {
-  if (entrySession.persistedActionPending()) return;
-  sending = true;
-  publishFailed = undefined;
-  let res: Response | undefined;
-  let checksBlocked = false;
-  const outcome = await entrySession.finalPublish(
-    async () => {
-      // Again after reserving the session: the dialog may have been open while more was typed.
-      const chosen = leftOut;
-      await lint();
-      if (errors.length || unready.length || chosen.join() !== leftOut.join()) {
-        checksBlocked = true;
-        return false;
-      }
-      res = await postJson('/admin/api/publish', selection(`${collection}/${slug}`, leftOut));
-      if (uncertainResponse(res)) throw new TypeError('The publish response was not confirmed.');
-      if (res.ok) await onpublished?.(title);
-      return res.ok;
-    },
-    reload,
-  );
-  sending = false;
-  if (outcome.ok) {
-    confirming = false;
-    return;
-  }
-  if (outcome.reason === 'save') {
-    publishFailed = { code: 'PUBLISH_SAVE_FAILED' };
-    publishPanel?.focus();
-    return;
-  }
-  if (checksBlocked) {
-    // A disabled button drops the focus that pressed it.
-    publishFailed = { code: 'PUBLISH_CHECKS_BLOCKED' };
-    publishPanel?.focus();
-    return;
-  }
-  if (outcome.reason === 'uncertain') {
-    publishFailed = { code: 'PUBLISH_ENTRY_RESPONSE_LOST' };
-    return;
-  }
-  if (outcome.reason === 'reload') {
-    publishFailed = { code: 'PUBLISH_ENTRY_RELOAD_FAILED' };
-    return;
-  }
-  if (!res) {
-    publishFailed = { code: 'PUBLISH_FAILED' };
-    return;
-  }
-  const code = res.headers.get('x-handover-error-code') ?? '';
-  if (code === 'PUBLISH_SELECTION_INVALID' || code.startsWith('PUBLISH_EXCLUDE_')) {
-    publishFailed = await retainedFailure(res, 'PUBLISH_FAILED');
-    return;
-  }
-  if (res.status === 422) {
-    publishFailed = { code: 'PUBLISH_ENTRY_INCOMPLETE' };
-    return;
-  }
-  if (res.status === 409) {
-    const parsed = (await res
-      .clone()
-      .json()
-      .catch(() => ({}))) as {
-      paths?: unknown;
-      reason?: string;
-    };
-    // Drift has a panel on this screen; a file somebody else changed is handled in the drawer.
-    if (parsed.reason === 'drift') {
-      publishFailed = { code: 'PUBLISH_ENTRY_DRIFT' };
-      return;
-    }
-    if (Array.isArray(parsed.paths) && parsed.paths.length) {
-      closePublish();
-      conflicted = true;
-      onconflict?.();
-      return;
-    }
-    publishFailed = await retainedFailure(res, 'PUBLISH_REF_MOVED');
-    return;
-  }
-  publishFailed = await retainedFailure(res, 'PUBLISH_FAILED');
-}
 
 // Keep the pane mounted until all its changes have been saved.
 async function leaving(change: () => void) {
@@ -1360,9 +1222,9 @@ async function saveAddress() {
 {/snippet}
 
 {#snippet canvasPublish()}
-  <button class="btn btn-primary canvas-publish" type="button" aria-haspopup="dialog" aria-expanded={confirming}
+  <button class="btn btn-primary canvas-publish" type="button" aria-haspopup="dialog" aria-expanded={entryPublish.confirming}
     disabled={!canPublish}
-    onclick={askToPublish} bind:this={canvasPublishButton}>{m.editor_publish_short({}, options)}</button>
+    onclick={entryPublish.open} bind:this={canvasPublishButton}>{m.editor_publish_short({}, options)}</button>
 {/snippet}
 
 {#snippet addressRow()}
@@ -1413,7 +1275,7 @@ async function saveAddress() {
 
 {#snippet topbarLead()}
   {#if hidden && !entry.singleton}<span class="badge">{m.editor_status_hidden({}, options)}</span>{/if}
-  {#if conflicted}<span class="badge badge-danger">{m.pending_changed_repository({}, options)}</span>{/if}
+  {#if entryPublish.conflicted}<span class="badge badge-danger">{m.pending_changed_repository({}, options)}</span>{/if}
 {/snippet}
 
 {#snippet topbarActions()}
@@ -1428,7 +1290,7 @@ async function saveAddress() {
       class="btn btn-primary"
       type="button"
       aria-haspopup="dialog"
-      aria-expanded={confirming}
+      aria-expanded={entryPublish.confirming}
       disabled={!canPublish}
       title={entryLock.locked
         ? m.editor_publish_disabled_locked({}, options)
@@ -1437,7 +1299,7 @@ async function saveAddress() {
         : missing.length
           ? m.editor_publish_disabled_missing({}, options)
           : undefined}
-      onclick={askToPublish}
+      onclick={entryPublish.open}
       bind:this={publishButton}
     >{m.editor_publish({}, options)}</button>
     <button
@@ -1569,7 +1431,7 @@ async function saveAddress() {
         <div class="actions">{@render topbarActions()}</div>
       </div>
     {/if}
-    {#if conflicted}
+    {#if entryPublish.conflicted}
       <p class="subline">{m.editor_conflict_guidance({}, options)}</p>
     {/if}
     {#if held}
@@ -1822,7 +1684,7 @@ async function saveAddress() {
               onjump={jumpTo}
               onreveal={(path) => revealPreview(path, shown)}
               translator={entry.translator}
-              actionBlocked={busy || sending}
+              actionBlocked={busy || entryPublish.sending}
               url={localeUrl(shown)}
               {site}
               {uiLocale}
@@ -1878,22 +1740,22 @@ async function saveAddress() {
     {/if}
   </div>
   {/if}
-  {#if confirming}
+  {#if entryPublish.confirming}
     <PublishConfirmation
       {title}
       {many}
-      choice={publishChoice}
-      {lines}
-      {checksFailed}
-      {sending}
-      failed={publishFailed}
+      choice={entryPublish.choice}
+      lines={entryPublish.lines}
+      checksFailed={entryPublish.checksFailed}
+      sending={entryPublish.sending}
+      failed={entryPublish.failed}
       {uiLocale}
       returnTo={mode === 'canvas' ? canvasPublishButton : publishButton}
       bind:panel={publishPanel}
-      onclose={closePublish}
-      onchoose={publishLater}
-      onretry={() => void lint()}
-      onpublish={publishEntry}
+      onclose={entryPublish.close}
+      onchoose={entryPublish.later}
+      onretry={() => void entryPublish.lint()}
+      onpublish={entryPublish.send}
       pending={() => entrySession.persistedActionPending()}
     />
   {/if}
