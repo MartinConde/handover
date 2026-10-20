@@ -2433,7 +2433,7 @@
   "canvas_close_structure": "Struktur schließen",
   "canvas_page_structure": "Seitenstruktur",
   "canvas_empty": "Leer",
-  "canvas_no_annotations": "Diese Vorlage enthält keine bearbeitbaren Annotationen.",
+  "canvas_no_annotations": "Diese Seite lässt sich nicht direkt auf der Seite bearbeiten. Ändere sie über das Formular.",
   "canvas_add_block": "Block hinzufügen",
   "canvas_resize_structure": "Strukturbereich vergrößern oder verkleinern",
   "canvas_resize_inspector": "Inspektorbereich vergrößern oder verkleinern",

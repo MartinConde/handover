@@ -314,3 +314,12 @@ test('collapsing a branch hides every row beneath it, however deep', () => {
     ),
   ).toEqual(['a', 'd']);
 });
+
+test('Structure of a page without annotations tells the client to use the form', async () => {
+  const options = await mountWithMockedRenderer(entrySession({ title: 'Draft' }));
+  options.onStructureChange?.([]);
+  flushSync();
+  expect(document.querySelector('.canvas-structure-empty')?.textContent?.trim()).toBe(
+    "This page can't be edited on the page itself. Use the form to change it.",
+  );
+});

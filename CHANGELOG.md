@@ -4,6 +4,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- A page with nothing to edit on the page itself now tells the client to use the form, where the
+  Canvas Structure pane used to say the template has no editable annotations.
 - An optional switch nobody turned on is no longer written as `false` on save; one switched off
   after it was on, or already `false`, keeps `false`.
 - The menu editor shows the entries a **List its pages under it** item lists as read-only rows

@@ -2436,7 +2436,7 @@
   "canvas_close_structure": "Close Structure",
   "canvas_page_structure": "Page structure",
   "canvas_empty": "Empty",
-  "canvas_no_annotations": "This template has no editable annotations.",
+  "canvas_no_annotations": "This page can't be edited on the page itself. Use the form to change it.",
   "canvas_add_block": "Add block",
   "canvas_resize_structure": "Resize Structure panel",
   "canvas_resize_inspector": "Resize Inspector panel",
