@@ -17,7 +17,8 @@
 - [Structured fields in the admin](structured-fields-admin.md) — how the editor draws groups, lists, blocks, references, embeds and the SEO tab.
 - [Search and sharing](seo.md) — the `seo` field, the site's defaults and `<Seo />`.
 - [Template convention](template-convention.md) — the three rules, `schemas.ts` and `content.config.ts`.
-- [Loaders and pages](loaders.md) — `load()` and `ContentSource`, what a loader returns and what renders it, an address per language, layouts that take their data as props.
+- [Loaders and pages](loaders.md) — `load()` and `ContentSource`, what a loader returns and what renders it, layouts that take their data as props.
+- [A page with an address per language](loaders-addresses.md) — finding the entry by its `localizedSlugs` address, in a request and in `getStaticPaths`.
 - [Blocks](blocks.md) — `<Blocks />`, the component registry, blocks that nest, and `_ref` blocks filled from a global.
 - [Admin screens](admin-screens.md) — a page of your own inside the admin at `/admin/x/<key>`: the config key, the four props a screen is handed, its endpoint, what a screens site installs, and the variables to style it with.
 - [Canvas editing](canvas.md) — annotate page fields, blocks, nested and empty lists; guard site-side effects during editable renders.
@@ -32,7 +33,8 @@
 - [Build status and revert](build-status.md) — the pill after a commit, when it reports the newest deploy instead, and the commit that undoes a publish.
 - [Working together](working-together.md) — the soft lock on an entry, what "Being edited by…" takes away, and taking one over.
 - [Publish conflicts](conflicts.md) — a file somebody changed in the repository: the refusal, resolving it field by field, Discard.
-- [Preview](preview.md) — the client seeing a page before it goes out: turning it on at build, what is behind the gate, the address to preview, and the pane in the editor.
+- [Preview](preview.md) — the client seeing a page before it goes out: turning it on at build, what is behind the gate, the address to preview, and when a draft cannot be rendered.
+- [Preview in the editor](preview-in-the-editor.md) — **Beside the form**, Canvas, links inside a preview, and the interface language of that chrome.
 - [Accounts and signing in](auth.md) — the secrets, `HANDOVER_BASE_URL`, seeding the first owner, the three ways in, the account page, closed sign-up and rate limiting.
 - [Roles and permissions](roles.md) — the two roles, what each may do, and what is behind the session and what is deliberately not.
 - [Sending email](email.md) — the `mailer` block, verifying a sending domain, and the check that proves a key.

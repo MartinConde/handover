@@ -101,7 +101,7 @@ cms.config.ts › collections.posts.localizedSlugs: this collection's schema has
   ([Template convention](template-convention.md#contentconfigts))
 - Your own route resolves through `entryAt()` rather than by id, or — if it is prerendered —
   builds its paths from `entryAddress()`
-  ([Loaders and pages](loaders.md#a-page-with-an-address-per-language))
+  ([Loaders and pages](loaders-addresses.md))
 - Publishing a change to an address that was live writes one `slug-change` redirect, for that
   language only ([Publishing](publishing.md#creating-renaming-and-deleting)) — the other languages' URLs did not move
 - Off, a `slug` in a file is an ordinary field of that collection's schema like any other
