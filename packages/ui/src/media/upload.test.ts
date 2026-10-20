@@ -1,4 +1,5 @@
 import { expect, test, vi } from 'vitest';
+import { messageLine, type UiMessage } from '../errors.js';
 import * as m from '../paraglide/messages.js';
 import { fileSize, MediaUploadError, uploadBlob, uploadFile, uploadImage } from './upload.js';
 
@@ -313,4 +314,18 @@ test('a file goes to the bucket as it is, and is stored as a download', async ()
     type: 'application/pdf',
     disposition: 'attachment',
   });
+});
+
+test('a file over the limit reaches the caller as a code and a number, in German', async () => {
+  const { fetch } = server({
+    'POST /admin/api/media': Response.json(
+      { code: 'MEDIA_TOO_LARGE', error: 'Upload exceeds 10MB', limit: 10_485_760 },
+      { status: 413 },
+    ),
+  });
+  const descriptor = (await descriptorOf(
+    uploadBlob(blob(), { filename: 'huge.webp' }, { fetch }),
+  )) as UiMessage;
+
+  expect(messageLine(descriptor, 'de')).toBe('Diese Datei ist größer als 10 MB.');
 });

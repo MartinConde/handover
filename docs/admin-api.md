@@ -31,6 +31,12 @@ Conventions across all of them:
   `ENTRY_DUPLICATE_UNPUBLISHED` and `TEMPLATE_UNPUBLISHED` (the entry was never published),
   `ENTRY_RENAME_COLLISION` (the new name exists in the repository), `HISTORY_RESTORE_NO_FILE` and
   `HISTORY_RESTORE_UNREADABLE` (the version to restore). `error` stays the English sentence
+- **Upload and save refusals carry a `code` too**, so the admin can phrase them: `MEDIA_TOO_LARGE`
+  (with `limit`, in bytes), `MEDIA_SIZE_MISMATCH`, `MEDIA_TYPE_MISMATCH`, `MEDIA_EMPTY`,
+  `MEDIA_INGEST_TIMEOUT` and `MEDIA_UPLOAD_BUCKET_MISSING` for an upload, `MEDIA_UNAVAILABLE` and
+  `MEDIA_BECAME_USED` beside `reason: "media"` when a media item is being deleted or became used,
+  `TRANSLATION_TARGET_EXISTS`, `ENTRY_SOURCE_TARGET_OFF` and `ENTRY_SOURCE_REVISION` when a language
+  cannot be created, and `ENTRY_DRIFT_ANSWERS_INVALID` for drift answers that no longer match
 - Times are epoch milliseconds
 
 Accounts, members and the mailer check are not here: they are Better Auth's, and what a site

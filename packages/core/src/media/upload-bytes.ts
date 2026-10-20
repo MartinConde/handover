@@ -1,5 +1,14 @@
 /** The message is shown to the person who chose the file. */
-export class UploadRefusedError extends Error {}
+export class UploadRefusedError extends Error {
+  constructor(
+    message: string,
+    /** What the admin phrases in its own language; the message stays English for developers. */
+    readonly code?: string,
+    readonly limit?: number,
+  ) {
+    super(message);
+  }
+}
 
 /** Read dimensions from the encoded container, never from the browser's declaration. */
 export function imageDimensions(
@@ -94,6 +103,7 @@ export function imageDimensions(
   if (!width || !height || width > 65535 || height > 65535)
     throw new UploadRefusedError(
       'The uploaded bytes are not a supported image of the declared type',
+      'MEDIA_TYPE_MISMATCH',
     );
   return { width, height };
 }

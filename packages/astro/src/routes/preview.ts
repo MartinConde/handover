@@ -61,8 +61,9 @@ const canvasAnswer = (
   status: number,
   message: string,
   request?: Pick<CanvasSnapshot, 'requestId' | 'epoch' | 'contentVersion'>,
+  more?: { code?: string; detail?: string },
 ) =>
-  new Response(canvasErrorDocument(errorManifest(status, message, request)), {
+  new Response(canvasErrorDocument(errorManifest(status, message, request, more)), {
     status,
     headers: { ...GATE, 'content-type': 'text/html; charset=utf-8' },
   });
@@ -266,8 +267,8 @@ export async function preview(ctx: Ctx, astro: AstroContent<string>): Promise<Re
   } else if (ctx.request.method !== 'GET') {
     return answer(ctx.url, 405, 'Preview supports GET and Canvas POST requests.');
   }
-  const fail = (status: number, message: string) =>
-    snapshot ? canvasAnswer(status, message, snapshot) : answer(ctx.url, status, message);
+  const fail = (status: number, message: string, more?: { code?: string; detail?: string }) =>
+    snapshot ? canvasAnswer(status, message, snapshot, more) : answer(ctx.url, status, message);
   const path = `${(config.i18n.base ?? '').replace(/\/+$/, '')}/${ctx.params.path ?? ''}`;
   let target = previewTarget('default', config.i18n, config.collections, path);
   // An entry served where another collection has its index is still that entry's page in Canvas.
@@ -276,21 +277,22 @@ export async function preview(ctx: Ctx, astro: AstroContent<string>): Promise<Re
     const route = config.collections[own]?.route;
     target = previewTarget('default', config.i18n, { [own]: { route } }, path) ?? target;
   }
-  if (!target) return fail(404, 'This site serves no page at that address.');
+  const loaderMissing = (message: string) =>
+    fail(500, message, { code: 'CANVAS_LOADER_MISSING', detail: message });
+  if (!target)
+    return fail(404, 'This site serves no page at that address.', { code: 'CANVAS_NO_PAGE' });
 
   const name = config.collections[target.collection]?.load;
   const page: PageModule | undefined = name ? loaders[name] : undefined;
   if (!page)
-    return fail(
-      500,
+    return loaderMissing(
       `Collection "${target.collection}" has no loader: cms.config.ts needs load: "<name>" on it, for src/loaders/<name>.ts.`,
     );
 
   const index = target.address === undefined;
   const Component = index ? page.Index : page.Page;
   if (!Component || !(index ? page.loadIndex : page.load))
-    return fail(
-      500,
+    return loaderMissing(
       `src/loaders/${name}.ts is asked for ${index ? "a collection's index" : 'an entry'} page and exports no ${index ? 'loadIndex and Index' : 'load and Page'}.`,
     );
 
@@ -345,7 +347,8 @@ export async function preview(ctx: Ctx, astro: AstroContent<string>): Promise<Re
     const props = index
       ? await page.loadIndex?.(source, { locale: target.locale })
       : await page.load?.(source, { locale: target.locale, slug: target.address as string });
-    if (!props) return fail(404, 'This site serves no page at that address.');
+    if (!props)
+      return fail(404, 'This site serves no page at that address.', { code: 'CANVAS_NO_PAGE' });
     for (const [key, value] of Object.entries(GATE)) ctx.response.headers.set(key, value);
     ctx.response.headers.set('content-security-policy', await renderedPolicy(scripts));
     return {
@@ -364,6 +367,9 @@ export async function preview(ctx: Ctx, astro: AstroContent<string>): Promise<Re
     };
   } catch (error) {
     if (!(error instanceof ContentError)) throw error;
-    return fail(422, `This draft cannot be rendered:\n${error.message}`);
+    return fail(422, `This draft cannot be rendered:\n${error.message}`, {
+      code: 'CANVAS_DRAFT_UNRENDERABLE',
+      detail: error.message,
+    });
   }
 }

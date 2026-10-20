@@ -1,5 +1,6 @@
 import type { UiLocale } from './i18n.js';
 import { formatLanguageList, formatLanguageName, messageOptions } from './i18n.js';
+import { fileSize } from './media/upload.js';
 import * as m from './paraglide/messages.js';
 
 export interface UiMessage {
@@ -103,6 +104,20 @@ const KNOWN_CODES = new Set([
   'MEDIA_STORAGE_UNAVAILABLE',
   'MEDIA_IN_USE',
   'MEDIA_PUBLISHED_IN_USE',
+  'MEDIA_TOO_LARGE',
+  'MEDIA_SIZE_MISMATCH',
+  'MEDIA_TYPE_MISMATCH',
+  'MEDIA_EMPTY',
+  'MEDIA_INGEST_TIMEOUT',
+  'MEDIA_UPLOAD_BUCKET_MISSING',
+  'MEDIA_UNAVAILABLE',
+  'MEDIA_BECAME_USED',
+  'BODY_TOO_LARGE',
+  'BODY_STRUCTURE_INVALID',
+  'RESOURCE_LIMIT',
+  'ENTRY_LOCALE_IS_SOURCE',
+  'ENTRY_DRIFT_ANSWERS_INVALID',
+  'TRANSLATION_TARGET_EXISTS',
   'ENTRY_ADDRESS_TOO_LONG',
   'ENTRY_ADDRESS_INVALID',
   'ENTRY_ADDRESS_TAKEN',
@@ -360,6 +375,15 @@ export function messageText(message: UiMessage, locale: UiLocale): string {
         { languages: formatLanguageList(message.locales ?? [], locale) },
         options,
       );
+    case 'ENTRY_LOCALE_IS_SOURCE':
+      return m.entry_locale_is_source(
+        { language: message.locale ? formatLanguageName(message.locale, locale) : '' },
+        options,
+      );
+    case 'ENTRY_DRIFT_ANSWERS_INVALID':
+      return m.drift_changed({}, options);
+    case 'TRANSLATION_TARGET_EXISTS':
+      return m.translation_target_exists({}, options);
     case 'ENTRY_SOURCE_CONFLICT':
     case 'ENTRY_SOURCE_UNDECLARED':
     case 'ENTRY_SOURCE_MISSING':
@@ -573,6 +597,36 @@ export function messageText(message: UiMessage, locale: UiLocale): string {
       return m.media_library_delete_in_use({ count: message.count ?? 0 }, options);
     case 'MEDIA_PUBLISHED_IN_USE':
       return m.media_library_delete_published_in_use({ count: message.count ?? 0 }, options);
+    case 'MEDIA_TOO_LARGE':
+      return m.media_upload_too_large({ limit: fileSize(message.limit, locale) }, options);
+    case 'MEDIA_SIZE_MISMATCH':
+      return m.media_upload_size_mismatch({}, options);
+    case 'MEDIA_TYPE_MISMATCH':
+      return m.media_upload_type_mismatch({}, options);
+    case 'MEDIA_EMPTY':
+      return m.media_upload_empty({}, options);
+    case 'MEDIA_INGEST_TIMEOUT':
+      return m.media_upload_timeout({}, options);
+    case 'MEDIA_UPLOAD_BUCKET_MISSING':
+      return m.media_upload_bucket_missing({}, options);
+    case 'MEDIA_UNAVAILABLE':
+      return m.media_unavailable({}, options);
+    case 'MEDIA_BECAME_USED':
+      return m.media_became_used({}, options);
+    case 'BODY_TOO_LARGE':
+      return m.request_too_large({}, options);
+    case 'BODY_STRUCTURE_INVALID':
+      return m.request_malformed({}, options);
+    case 'RESOURCE_LIMIT':
+      return m.request_rate_limited({}, options);
+    case 'CANVAS_NO_PAGE':
+      return m.canvas_failure_no_page({}, options);
+    case 'CANVAS_DRAFT_UNRENDERABLE':
+      return m.canvas_failure_draft_unrenderable({}, options);
+    case 'CANVAS_LOADER_MISSING':
+      return m.canvas_failure_loader_missing({}, options);
+    case 'CANVAS_POST_FAILED':
+      return m.canvas_failure_post({}, options);
     case 'MEDIA_DELETE_FAILED':
       return withStatus(m.media_library_delete_failed, m.media_library_delete_failed_status);
     case 'MEDIA_DELETE_UNCONFIRMED':

@@ -1,4 +1,9 @@
-import { claimResource, ResourceLimitError, releaseResource } from '@handover/core';
+import {
+  claimResource,
+  DraftRevisionError,
+  ResourceLimitError,
+  releaseResource,
+} from '@handover/core';
 import { expect, test, vi } from 'vitest';
 import { POST } from '../api.js';
 import {
@@ -97,7 +102,33 @@ test('creating a language the entry already has is refused', async () => {
   const res = await POST(post('drafts/pages/home/de', ''));
 
   expect(res.status).toBe(409);
+  expect(await res.json()).toMatchObject({ code: 'TRANSLATION_TARGET_EXISTS' });
   expect(createDraft).not.toHaveBeenCalled();
+});
+
+test('creating a language the entry is not offered in is refused with the turned-off code', async () => {
+  state.locales = ['en', 'de', 'fr'];
+  files['src/content/pages/en/home.yaml'] = home.en.replace(
+    '_version: 1',
+    '_version: 1\n_locales:\n  - "en"',
+  );
+  createDraft.mockClear();
+
+  const res = await POST(post('drafts/pages/home/de', ''));
+
+  expect(res.status).toBe(409);
+  expect(await res.json()).toMatchObject({ code: 'ENTRY_SOURCE_TARGET_OFF' });
+  expect(createDraft).not.toHaveBeenCalled();
+});
+
+test('creating a language over a draft that moved says the entry changed', async () => {
+  untranslated();
+  createDraft.mockRejectedValueOnce(new DraftRevisionError());
+
+  const res = await POST(post('drafts/pages/home/de', ''));
+
+  expect(res.status).toBe(409);
+  expect(await res.json()).toMatchObject({ code: 'ENTRY_SOURCE_REVISION' });
 });
 
 // The site's default language is no longer a language this route refuses on sight.

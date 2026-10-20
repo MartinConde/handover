@@ -607,6 +607,43 @@ test('a loader missing the pair the page needs says which one', async () => {
   expect(await (result as Response).text()).toContain('loadIndex and Index');
 });
 
+const canvasError = async (result: unknown) => {
+  const html = await (result as Response).text();
+  return JSON.parse(html.match(/data-handover-canvas-manifest>(.*?)<\/script>/)?.[1] ?? '{}').error;
+};
+
+test('a Canvas render at an address with no page carries a code for the admin to phrase', async () => {
+  const { result } = await post('listings/mill-house/gallery');
+  expect(await canvasError(result)).toMatchObject({ status: 404, code: 'CANVAS_NO_PAGE' });
+});
+
+test('a Canvas render with no loader carries the English as detail', async () => {
+  const { result } = await post('unwired/anything');
+  expect(await canvasError(result)).toMatchObject({
+    status: 500,
+    code: 'CANVAS_LOADER_MISSING',
+    detail: expect.stringContaining('cms.config.ts needs load:'),
+  });
+});
+
+test('a Canvas render that fails validation carries the problem as detail', async () => {
+  rows.push(invalidCta);
+  const { result } = await post(
+    'home',
+    canvasEnvelope({
+      entry: { collection: 'pages', id: 'home' },
+      snapshots: {
+        en: { title: 'Home', blocks: [{ _type: 'cta', _ref: 'globals/cta-newsletter' }] },
+      },
+    }),
+  );
+  expect(await canvasError(result)).toMatchObject({
+    status: 422,
+    code: 'CANVAS_DRAFT_UNRENDERABLE',
+    detail: expect.stringContaining('src/content/globals/en/cta-newsletter.yaml'),
+  });
+});
+
 const invalidCta = {
   path: 'src/content/globals/en/cta-newsletter.yaml',
   contents: 'button:\n  type: entry\n',

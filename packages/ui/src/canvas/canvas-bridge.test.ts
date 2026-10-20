@@ -929,3 +929,11 @@ test('image activation validates its geometry and retains the normal target boun
   expect(onAction).toHaveBeenCalledWith(message);
   bridge.dispose();
 });
+
+test('an error manifest may carry a code and the detail for the admin to phrase', () => {
+  document.body.innerHTML = `<script type="application/json" data-handover-canvas-manifest>{"mode":"canvas","status":"error","protocol":1,"error":{"status":404,"message":"No page","code":"CANVAS_NO_PAGE","detail":"x"}}</script>`;
+
+  expect(readCanvasResultManifest()).toMatchObject({
+    error: { status: 404, code: 'CANVAS_NO_PAGE', detail: 'x' },
+  });
+});

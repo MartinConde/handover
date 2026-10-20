@@ -83,7 +83,8 @@ interface CanvasErrorManifest {
   requestId?: string;
   epoch?: string;
   contentVersion?: number;
-  error: { status: number; message: string };
+  /** `code` and `detail` let the admin phrase the failure; `message` stays English for the frame. */
+  error: { status: number; message: string; code?: string; detail?: string };
 }
 
 type CanvasResultManifest = CanvasSuccessManifest | CanvasErrorManifest;
@@ -266,6 +267,7 @@ export function errorManifest(
   status: number,
   message: string,
   request?: { requestId: string; epoch: string; contentVersion: number },
+  more: { code?: string; detail?: string } = {},
 ): CanvasErrorManifest {
   return {
     mode: 'canvas',
@@ -278,7 +280,7 @@ export function errorManifest(
           contentVersion: request.contentVersion,
         }
       : {}),
-    error: { status, message },
+    error: { status, message, ...more },
   };
 }
 

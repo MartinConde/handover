@@ -50,6 +50,25 @@ const declared = JSON.stringify({
   height: 1350,
 });
 
+test('a file over the limit is refused with a code and the limit as a number', async () => {
+  const res = await POST(
+    post('media', JSON.stringify({ hash: HASH, bytes: 11 * 1024 * 1024, mime: 'image/webp' })),
+  );
+  expect({ status: res.status, body: await res.json() }).toMatchObject({
+    status: 422,
+    body: { code: 'MEDIA_TOO_LARGE', limit: 10 * 1024 * 1024 },
+  });
+});
+
+test('a site with no upload bucket says so with a code', async () => {
+  state.uploadBucketed = false;
+  const res = await POST(post('media', declared));
+  expect({ status: res.status, body: await res.json() }).toMatchObject({
+    status: 503,
+    body: { code: 'MEDIA_UPLOAD_BUCKET_MISSING' },
+  });
+});
+
 // Step 3 of the upload flow: the free dedupe, and the reason the client hashes before it uploads.
 test('bytes the site already holds are answered from the row, with nothing signed', async () => {
   findMedia.mockResolvedValueOnce({
@@ -104,8 +123,12 @@ test('private ingestion requires a persisted upload intent for the exact key', a
 
 test('private ingestion binds the declared MIME and actual byte count', async () => {
   const key = `uploads/12345678-1234-1234-1234-123456789abc/media/${'b'.repeat(64)}.webp`;
-  expect((await PUT(stagingRequest(key, new Uint8Array(4), 'text/plain'))).status).toBe(415);
-  expect((await PUT(stagingRequest(key, new Uint8Array(5)))).status).toBe(422);
+  const wrongType = await PUT(stagingRequest(key, new Uint8Array(4), 'text/plain'));
+  expect(wrongType.status).toBe(415);
+  expect(await wrongType.json()).toMatchObject({ code: 'MEDIA_TYPE_MISMATCH' });
+  const wrongSize = await PUT(stagingRequest(key, new Uint8Array(5)));
+  expect(wrongSize.status).toBe(422);
+  expect(await wrongSize.json()).toMatchObject({ code: 'MEDIA_SIZE_MISMATCH' });
   expect(privateUploads).toEqual([]);
 
   const accepted = await PUT(stagingRequest(key, new Uint8Array(4)));
@@ -546,6 +569,7 @@ test('stalled ingestion stops after a minute even when stream cancellation never
   vi.mocked(releaseUploadIntent).mockClear();
   const key = `uploads/12345678-1234-1234-1234-123456789abc/media/${'b'.repeat(64)}.webp`;
   let status: number | undefined;
+  let code: string | null | undefined;
   const cancel = vi.fn(() => new Promise<void>(() => {}));
   try {
     const request = new Request(`https://x/admin/api/${key}`, {
@@ -556,9 +580,11 @@ test('stalled ingestion stops after a minute even when stream cancellation never
     } as RequestInit & { duplex: 'half' });
     void Promise.resolve(PUT(ctx(key, request))).then((response) => {
       status = response.status;
+      code = response.headers.get('x-handover-error-code');
     });
     await vi.advanceTimersByTimeAsync(60_001);
     expect(status).toBe(408);
+    expect(code).toBe('MEDIA_INGEST_TIMEOUT');
     expect(cancel).toHaveBeenCalledOnce();
     expect(releaseUploadIntent).toHaveBeenCalledExactlyOnceWith(
       'default',

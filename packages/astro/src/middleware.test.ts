@@ -293,6 +293,8 @@ test('a Canvas render that throws a content error mid-page answers with its reas
     error: {
       status: 422,
       message: 'This draft cannot be rendered:\nCanvas address exceeds 4096 characters.',
+      code: 'CANVAS_DRAFT_UNRENDERABLE',
+      detail: 'Canvas address exceeds 4096 characters.',
     },
   });
 });

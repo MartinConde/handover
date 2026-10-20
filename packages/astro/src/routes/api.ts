@@ -277,6 +277,7 @@ async function answering(
     if (err instanceof MediaInUseError || err instanceof MediaUnavailableError || isMediaRace(err))
       return Response.json(
         {
+          code: err instanceof MediaInUseError ? 'MEDIA_BECAME_USED' : 'MEDIA_UNAVAILABLE',
           error: err instanceof Error ? err.message : new MediaUnavailableError().message,
           reason: 'media',
         },
@@ -307,7 +308,9 @@ async function answering(
       );
     // A refused upload is the chooser's own file, so it is answered to them by the rule it broke.
     if (err instanceof UploadRefusedError)
-      return Response.json({ error: err.message }, { status: 422 });
+      return err.code
+        ? codedError(422, err.code, err.message, { limit: err.limit })
+        : Response.json({ error: err.message }, { status: 422 });
     if (err instanceof ResourceLimitError)
       return Response.json({ code: 'RESOURCE_LIMIT', error: err.message }, { status: 429 });
     throw err;

@@ -68,6 +68,7 @@ test('an answer about a block the languages agree on is refused rather than writ
   const res = await POST(answer([{ path: 'blocks[_id=k3nf9a2p]', locales: ['de'] }]));
 
   expect(res.status).toBe(409);
+  expect(await res.json()).toMatchObject({ code: 'ENTRY_DRIFT_ANSWERS_INVALID' });
   expect(resolveDrift).not.toHaveBeenCalled();
   expect((await POST(answer([]))).status).toBe(409);
 });

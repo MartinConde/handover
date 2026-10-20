@@ -348,6 +348,7 @@ export async function autosave(
     if (isMediaRace(err))
       return Response.json(
         {
+          code: 'MEDIA_UNAVAILABLE',
           error: 'That media item is being deleted. Choose another file before saving.',
           reason: 'media',
         },

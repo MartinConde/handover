@@ -408,9 +408,11 @@ export async function reconcile(
   const drift = new Set(driftReport('default', form, locales).map((row) => row.path));
   // A row the languages agree about has nothing to answer: the report moved on under the tab.
   if (!choices.length || choices.some((choice) => !drift.has(choice.path)))
-    return new Response("Those are not the blocks this entry's languages disagree about", {
-      status: 409,
-    });
+    return codedError(
+      409,
+      'ENTRY_DRIFT_ANSWERS_INVALID',
+      "Those are not the blocks this entry's languages disagree about",
+    );
   await resolveDrift(
     'default',
     ctx.db(),

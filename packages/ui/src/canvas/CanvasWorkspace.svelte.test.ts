@@ -292,3 +292,26 @@ test('the reviewed-problems list exposes a role for its ungrouped buttons', asyn
   await tick();
   expect(document.querySelector('.canvas-validation-issues')?.getAttribute('role')).toBe('group');
 });
+
+test('a coded render failure reads in the interface language, not the page frame’s English', async () => {
+  const { created } = mockRenderer();
+  const session = entrySession();
+  const props = $state(workspaceProps(session, { fullscreen: false, uiLocale: 'de' }));
+  app = mount(CanvasWorkspace, { target: document.body, props });
+  const options = await created();
+  options.onStateChange?.({
+    phase: 'failed',
+    requestId: 'r1',
+    contentVersion: 0,
+    reason: 'render',
+    status: 404,
+    message: 'This site serves no page at that address.',
+    code: 'CANVAS_NO_PAGE',
+  });
+  flushSync();
+
+  expect(document.querySelector('.canvas-failure small')?.textContent).toBe(
+    'Diese Website liefert unter dieser Adresse keine Seite aus.',
+  );
+  vi.doUnmock('./canvas-renderer');
+});

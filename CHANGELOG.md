@@ -4,6 +4,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Upload refusals (too large, size or type mismatch, empty, timed out, no upload bucket), the
+  media-being-deleted refusal on save, creating a language that exists or is not offered, stale
+  drift answers, and a Canvas page with no address, a draft that cannot be rendered or a missing
+  loader now show in the interface language (en, de). Those responses are JSON with a `code`
+  (`MEDIA_TOO_LARGE` also carries `limit` in bytes; `MEDIA_UNAVAILABLE` and `MEDIA_BECAME_USED` sit
+  next to `reason: "media"`), and the Canvas error manifest gains `error.code` and `error.detail`;
+  `error` stays the English sentence.
 - Refusals to rename, duplicate, save as a template or restore a version, and a revert or restore
   refused because a file has changed, now show in the interface language (en, de). Those `409`s are
   JSON with a `code` (`ENTRY_RENAME_UNPUBLISHED`, `ENTRY_DUPLICATE_UNPUBLISHED`,

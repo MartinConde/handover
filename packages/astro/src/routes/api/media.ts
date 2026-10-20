@@ -28,7 +28,7 @@ import {
 import type { RequestContext } from '../../environment.js';
 import { mediaStore, NO_BUCKET } from '../../environment.js';
 import { readJson } from './body.js';
-import { entryHref, entryTitle } from './content.js';
+import { codedError, entryHref, entryTitle } from './content.js';
 
 interface UploadBucket {
   put(
@@ -248,9 +248,9 @@ export async function askUpload(
   session: App.Locals['handover'],
 ): Promise<Response> {
   const store = mediaStore();
-  if (!store) return Response.json({ error: NO_BUCKET }, { status: 503 });
+  if (!store) return codedError(503, 'MEDIA_STORAGE_UNAVAILABLE', NO_BUCKET);
   const bucket = uploadBucket();
-  if (!bucket) return Response.json({ error: NO_UPLOAD_BUCKET }, { status: 503 });
+  if (!bucket) return codedError(503, 'MEDIA_UPLOAD_BUCKET_MISSING', NO_UPLOAD_BUCKET);
   const upload = declaredUpload(await readJson(request));
   if (!upload)
     return Response.json({ error: 'an upload declares { hash, bytes, mime }' }, { status: 400 });
@@ -319,7 +319,7 @@ export async function ingestUpload(
   session: App.Locals['handover'],
 ): Promise<Response> {
   const bucket = uploadBucket();
-  if (!bucket) return Response.json({ error: NO_UPLOAD_BUCKET }, { status: 503 });
+  if (!bucket) return codedError(503, 'MEDIA_UPLOAD_BUCKET_MISSING', NO_UPLOAD_BUCKET);
   const keyMime = mimeForMediaKey(key);
   if (!keyMime || !UPLOAD_KEY.test(key)) return new Response('Not found', { status: 404 });
   const user = session?.user.id ?? 'unknown';
@@ -328,9 +328,10 @@ export async function ingestUpload(
   const mime = intent.mime;
   if (keyMime !== mime || request.headers.get('content-type') !== mime) {
     await releaseUploadIntent('default', ctx.db(), key, user);
-    return Response.json(
-      { error: 'The uploaded content type differs from its declaration' },
-      { status: 415 },
+    return codedError(
+      415,
+      'MEDIA_TYPE_MISMATCH',
+      'The uploaded content type differs from its declaration',
     );
   }
   const lengthHeader = request.headers.get('content-length');
@@ -338,20 +339,17 @@ export async function ingestUpload(
   if (declared !== undefined && Number.isFinite(declared) && declared !== intent.bytes) {
     await releaseUploadIntent('default', ctx.db(), key, user);
     if (declared > MAX_UPLOAD_BYTES)
-      return Response.json({ error: 'Upload exceeds 10MB' }, { status: 413 });
-    return Response.json(
-      { error: 'The uploaded size differs from its declaration' },
-      { status: 422 },
-    );
+      return codedError(413, 'MEDIA_TOO_LARGE', 'Upload exceeds 10MB', { limit: MAX_UPLOAD_BYTES });
+    return codedError(422, 'MEDIA_SIZE_MISMATCH', 'The uploaded size differs from its declaration');
   }
   if (intent.bytes > MAX_UPLOAD_BYTES) {
     await releaseUploadIntent('default', ctx.db(), key, user);
-    return Response.json({ error: 'Upload exceeds 10MB' }, { status: 413 });
+    return codedError(413, 'MEDIA_TOO_LARGE', 'Upload exceeds 10MB', { limit: MAX_UPLOAD_BYTES });
   }
   const reader = request.body?.getReader();
   if (!reader) {
     await releaseUploadIntent('default', ctx.db(), key, user);
-    return Response.json({ error: 'The upload is empty' }, { status: 400 });
+    return codedError(400, 'MEDIA_EMPTY', 'The upload is empty');
   }
   const data = new Uint8Array(intent.bytes);
   let size = 0;
@@ -367,9 +365,10 @@ export async function ingestUpload(
         size += value.byteLength;
         if (size > data.byteLength) {
           await releaseUploadIntent('default', ctx.db(), key, user);
-          return Response.json(
-            { error: 'The uploaded size differs from its declaration' },
-            { status: 422 },
+          return codedError(
+            422,
+            'MEDIA_SIZE_MISMATCH',
+            'The uploaded size differs from its declaration',
           );
         }
         data.set(value, size - value.byteLength);
@@ -381,15 +380,12 @@ export async function ingestUpload(
   } catch (error) {
     await releaseUploadIntent('default', ctx.db(), key, user);
     if (error instanceof UploadIngestTimeout)
-      return Response.json({ error: 'Upload ingestion timed out' }, { status: 408 });
+      return codedError(408, 'MEDIA_INGEST_TIMEOUT', 'Upload ingestion timed out');
     throw error;
   }
   if (size !== data.byteLength) {
     await releaseUploadIntent('default', ctx.db(), key, user);
-    return Response.json(
-      { error: 'The uploaded size differs from its declaration' },
-      { status: 422 },
-    );
+    return codedError(422, 'MEDIA_SIZE_MISMATCH', 'The uploaded size differs from its declaration');
   }
   try {
     await bucket.put(key, data, {
@@ -414,7 +410,7 @@ export async function finishUpload(
   session: App.Locals['handover'],
 ): Promise<Response> {
   const store = mediaStore();
-  if (!store) return Response.json({ error: NO_BUCKET }, { status: 503 });
+  if (!store) return codedError(503, 'MEDIA_STORAGE_UNAVAILABLE', NO_BUCKET);
   const upload = declaredUpload(await readJson(request), hash);
   if (!upload)
     return Response.json({ error: 'an upload declares { hash, bytes, mime }' }, { status: 400 });
@@ -438,7 +434,7 @@ export async function finishUpload(
       { status: 422 },
     );
   const bucket = uploadBucket();
-  if (!bucket) return Response.json({ error: NO_UPLOAD_BUCKET }, { status: 503 });
+  if (!bucket) return codedError(503, 'MEDIA_UPLOAD_BUCKET_MISSING', NO_UPLOAD_BUCKET);
   const { media, created } = await confirmUpload('default', database, store, upload, {
     staging: {
       read: async (key) => {

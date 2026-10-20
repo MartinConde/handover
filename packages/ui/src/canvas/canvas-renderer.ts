@@ -60,6 +60,8 @@ export type CanvasRenderResult =
       reason: CanvasRenderFailure;
       status?: number;
       message?: string;
+      code?: string;
+      detail?: string;
     };
 
 export type CanvasRendererState =
@@ -73,6 +75,8 @@ export type CanvasRendererState =
       reason: Exclude<CanvasRenderFailure, 'disposed' | 'superseded'>;
       status?: number;
       message?: string;
+      code?: string;
+      detail?: string;
     }
   | { phase: 'disposed' };
 
@@ -264,7 +268,7 @@ export function createCanvasRenderer(options: CanvasRendererOptions) {
   const finishFailure = (
     held: RenderFrame,
     reason: CanvasRenderFailure,
-    detail: { status?: number; message?: string } = {},
+    detail: { status?: number; message?: string; code?: string; detail?: string } = {},
     announce = pending === undefined,
   ) => {
     if (held.settled) return;
@@ -527,10 +531,8 @@ export function createCanvasRenderer(options: CanvasRendererOptions) {
     options.stage.append(form);
     try {
       form.submit();
-    } catch (error) {
-      finishFailure(held, 'bootstrap', {
-        message: error instanceof Error ? error.message : 'Canvas POST failed.',
-      });
+    } catch {
+      finishFailure(held, 'bootstrap', { code: 'CANVAS_POST_FAILED' });
     } finally {
       form.remove();
     }

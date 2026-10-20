@@ -902,7 +902,7 @@ test('asset deletion refuses a draft reference saved after its usage snapshot', 
   const saved = await save('Home', entry.revisions.en ?? '', key);
 
   expect(saved.status).toBe(409);
-  expect(await saved.json()).toMatchObject({ reason: 'media' });
+  expect(await saved.json()).toMatchObject({ reason: 'media', code: 'MEDIA_UNAVAILABLE' });
   expect((await loadDraft('default', db, PATH))?.contents).not.toContain(key);
   finish.release();
   expect((await deleting).status).toBe(200);

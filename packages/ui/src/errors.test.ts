@@ -345,6 +345,82 @@ test.each([
   expect(messageText(message, 'de')).toBe(de);
 });
 
+test.each([
+  ['MEDIA_TOO_LARGE', { limit: 10_485_760 }, 'Diese Datei ist größer als 10 MB.'],
+  [
+    'MEDIA_SIZE_MISMATCH',
+    {},
+    'Die Größe der Datei hat sich während des Uploads geändert. Versuche es erneut.',
+  ],
+  [
+    'MEDIA_TYPE_MISMATCH',
+    {},
+    'Der Inhalt der Datei passt nicht zu ihrem Dateityp. Wähle eine andere Datei.',
+  ],
+  ['MEDIA_EMPTY', {}, 'Diese Datei ist leer.'],
+  ['MEDIA_INGEST_TIMEOUT', {}, 'Der Upload hat zu lange gedauert. Versuche es erneut.'],
+  [
+    'MEDIA_UPLOAD_BUCKET_MISSING',
+    {},
+    'Für diese Website ist noch kein Upload-Speicher eingerichtet. Bitte die Person, die die Website betreibt, den Bucket MEDIA_UPLOADS hinzuzufügen.',
+  ],
+  ['MEDIA_UNAVAILABLE', {}, 'Dieses Medium wird gerade gelöscht. Wähle eine andere Datei.'],
+  [
+    'MEDIA_BECAME_USED',
+    {},
+    'Dieses Medium wurde verwendet, während es gelöscht wurde. Archiviere es stattdessen.',
+  ],
+  [
+    'BODY_TOO_LARGE',
+    {},
+    'Diese Anfrage ist zu groß. Verkleinere den Inhalt und versuche es erneut.',
+  ],
+  [
+    'BODY_STRUCTURE_INVALID',
+    {},
+    'Die Anfrage konnte nicht gelesen werden. Lade die Seite neu und versuche es erneut.',
+  ],
+  [
+    'RESOURCE_LIMIT',
+    {},
+    'Gerade sind zu viele Anfragen unterwegs. Warte einen Moment und versuche es erneut.',
+  ],
+  [
+    'ENTRY_LOCALE_IS_SOURCE',
+    { locale: 'en' },
+    'Englisch ist die Sprache, in der dieser Eintrag geschrieben ist, deshalb kann sie nicht ausgeschaltet werden.',
+  ],
+  [
+    'ENTRY_DRIFT_ANSWERS_INVALID',
+    {},
+    'Dieser Eintrag wurde geändert, während du entschieden hast. Lade ihn neu und prüfe ihn erneut.',
+  ],
+  ['TRANSLATION_TARGET_EXISTS', {}, 'Für diese Sprache gibt es bereits eine Datei.'],
+])('the server code %s reads in German with no English detail', async (code, more, de) => {
+  const message = await responseMessage(
+    Response.json({ code, error: 'the API’s own sentence', ...more }, { status: 409 }),
+    'EDITOR_SAVE_REFUSED',
+  );
+  expect(messageLine(message, 'de')).toBe(de);
+});
+
+test.each([
+  ['CANVAS_NO_PAGE', undefined, 'Diese Website liefert unter dieser Adresse keine Seite aus.'],
+  [
+    'CANVAS_DRAFT_UNRENDERABLE',
+    'field x is wrong',
+    'Dieser Entwurf kann nicht gerendert werden. Technisches Detail: field x is wrong',
+  ],
+  [
+    'CANVAS_LOADER_MISSING',
+    'src/loaders/a.ts',
+    'Die Website hat für diesen Eintrag keinen Seiten-Loader. Technisches Detail: src/loaders/a.ts',
+  ],
+  ['CANVAS_POST_FAILED', undefined, 'Die Seitenanfrage konnte nicht gesendet werden.'],
+])('the Canvas failure %s reads in German', (code, detail, de) => {
+  expect(messageLine({ code, ...(detail ? { detail } : {}) }, 'de')).toBe(de);
+});
+
 test('an unresolved source refusal reads the same for all three codes, in either language', async () => {
   for (const code of ['ENTRY_SOURCE_CONFLICT', 'ENTRY_SOURCE_UNDECLARED', 'ENTRY_SOURCE_MISSING']) {
     const message = await responseMessage(

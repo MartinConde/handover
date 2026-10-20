@@ -51,10 +51,18 @@ export const onRequest: MiddlewareHandler = async (
       const canvas = locals.handoverCanvas;
       if (!(error instanceof ContentError) || !canvas) throw error;
       const message = `This draft cannot be rendered:\n${error.message}`;
-      return new Response(canvasErrorDocument(errorManifest(422, message, canvas)), {
-        status: 422,
-        headers: { ...GATE, 'content-type': 'text/html; charset=utf-8' },
-      });
+      return new Response(
+        canvasErrorDocument(
+          errorManifest(422, message, canvas, {
+            code: 'CANVAS_DRAFT_UNRENDERABLE',
+            detail: error.message,
+          }),
+        ),
+        {
+          status: 422,
+          headers: { ...GATE, 'content-type': 'text/html; charset=utf-8' },
+        },
+      );
     }
     const headers = new Headers(res.headers);
     headers.delete('content-length');

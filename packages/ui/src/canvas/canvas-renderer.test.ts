@@ -425,3 +425,18 @@ test('a lost stop cleared silently is reported once, after the candidate is acti
   expect(reports).toEqual([setup.waiting]);
   canvas.dispose();
 });
+
+test('a POST the browser refuses fails with a code the admin phrases, not browser text', async () => {
+  vi.spyOn(HTMLFormElement.prototype, 'submit').mockImplementation(() => {
+    throw new Error('NS_ERROR_FAILURE');
+  });
+  const stage = document.createElement('div');
+  document.body.append(stage);
+  const canvas = renderer(stage);
+
+  void canvas.render(request(2));
+
+  expect(canvas.state()).toMatchObject({ phase: 'failed', code: 'CANVAS_POST_FAILED' });
+  expect(canvas.state()).not.toHaveProperty('message');
+  canvas.dispose();
+});

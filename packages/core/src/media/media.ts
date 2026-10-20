@@ -100,6 +100,8 @@ export function mediaKey(upload: Upload): string {
   if (!(Number.isInteger(upload.bytes) && upload.bytes > 0 && upload.bytes <= MAX_UPLOAD_BYTES))
     throw new UploadRefusedError(
       `an upload may be at most ${MAX_UPLOAD_BYTES / 1024 / 1024}MB, and this one is ${Math.round(upload.bytes / 1024 / 1024)}MB`,
+      upload.bytes > MAX_UPLOAD_BYTES ? 'MEDIA_TOO_LARGE' : undefined,
+      MAX_UPLOAD_BYTES,
     );
   // The server picks the prefix: a browser naming its own key is an overwrite waiting to happen.
   return `${upload.mime.startsWith('image/') ? 'media' : 'files'}/${upload.hash}.${ext}`;
@@ -538,7 +540,7 @@ async function verifyObject(
   if (response.status === 404) throw new UploadRefusedError('The upload never reached the bucket');
   if (!response.ok) throw new Error(`R2 GET ${key} failed: ${response.status}`);
   const reader = response.body?.getReader();
-  if (!reader) throw new UploadRefusedError('The upload is empty');
+  if (!reader) throw new UploadRefusedError('The upload is empty', 'MEDIA_EMPTY');
   const data = new Uint8Array(upload.bytes);
   let size = 0;
   try {
@@ -547,14 +549,20 @@ async function verifyObject(
       if (done) break;
       size += value.byteLength;
       if (size > data.length)
-        throw new UploadRefusedError('The uploaded size differs from its declaration');
+        throw new UploadRefusedError(
+          'The uploaded size differs from its declaration',
+          'MEDIA_SIZE_MISMATCH',
+        );
       data.set(value, size - value.byteLength);
     }
   } finally {
     await reader.cancel();
   }
   if (size !== data.length)
-    throw new UploadRefusedError('The uploaded size differs from its declaration');
+    throw new UploadRefusedError(
+      'The uploaded size differs from its declaration',
+      'MEDIA_SIZE_MISMATCH',
+    );
   return verifyStaged(
     {
       data,
@@ -574,10 +582,16 @@ async function verifyStaged(
   mediaKey(upload);
   if (!staged) throw new UploadRefusedError('The upload never reached the bucket');
   if (staged.mime !== upload.mime)
-    throw new UploadRefusedError('The uploaded content type differs from its declaration');
+    throw new UploadRefusedError(
+      'The uploaded content type differs from its declaration',
+      'MEDIA_TYPE_MISMATCH',
+    );
   const data = staged.data;
   if (data.byteLength !== upload.bytes)
-    throw new UploadRefusedError('The uploaded size differs from its declaration');
+    throw new UploadRefusedError(
+      'The uploaded size differs from its declaration',
+      'MEDIA_SIZE_MISMATCH',
+    );
   const hash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', data)), (n) =>
     n.toString(16).padStart(2, '0'),
   ).join('');
@@ -587,7 +601,7 @@ async function verifyStaged(
     if (key.startsWith('files/') && !staged.disposition?.startsWith('attachment'))
       throw new UploadRefusedError('A public PDF must be stored as a download');
     if (!new TextDecoder().decode(data.slice(0, 5)).startsWith('%PDF-'))
-      throw new UploadRefusedError('The uploaded bytes are not a PDF');
+      throw new UploadRefusedError('The uploaded bytes are not a PDF', 'MEDIA_TYPE_MISMATCH');
     return { data, width: undefined, height: undefined };
   }
   return { data, ...imageDimensions(data, upload.mime) };

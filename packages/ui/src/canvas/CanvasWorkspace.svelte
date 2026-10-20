@@ -3,6 +3,7 @@ import { onMount, type Snippet, tick, untrack } from 'svelte';
 import { cubicOut } from 'svelte/easing';
 import { fly } from 'svelte/transition';
 import { EMPTY_ENTRY_DIRECTORY, readEntryDirectory } from '../entry-directory';
+import { messageLine } from '../errors.js';
 import { messageOptions, type UiLocale } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
 import { previewPath } from '../request';
@@ -1085,7 +1086,7 @@ onMount(() => {
       <div>
         <strong>{m.canvas_could_not_update({}, options)}</strong>
         <span>{failureText}</span>
-        {#if failure.message}<small>{failure.message}</small>{/if}
+        {#if failure.code?.startsWith('CANVAS_')}<small>{messageLine({ code: failure.code, detail: failure.detail }, uiLocale)}</small>{:else if failure.message}<small>{failure.message}</small>{/if}
       </div>
       <button class="btn btn-sm" type="button" onclick={onform}>{m.canvas_go_to_form({}, options)}</button>
       {#if !rendererImportFailed}

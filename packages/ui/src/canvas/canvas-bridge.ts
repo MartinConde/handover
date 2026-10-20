@@ -84,7 +84,7 @@ export interface CanvasErrorManifest {
   requestId?: string;
   epoch?: string;
   contentVersion?: number;
-  error: { status: number; message: string };
+  error: { status: number; message: string; code?: string; detail?: string };
 }
 export type CanvasResultManifest = CanvasSuccessManifest | CanvasErrorManifest;
 export interface CanvasFieldMutation {
@@ -1232,11 +1232,13 @@ export function readCanvasResultManifest(
           !id(value.epoch) ||
           !Number.isSafeInteger(value.contentVersion) ||
           (value.contentVersion as number) < 0)) ||
-      !keys(value.error, ['status', 'message']) ||
+      !keys(value.error, ['status', 'message'], ['code', 'detail']) ||
       !Number.isSafeInteger(value.error.status) ||
       (value.error.status as number) < 400 ||
       (value.error.status as number) > 599 ||
-      typeof value.error.message !== 'string'
+      typeof value.error.message !== 'string' ||
+      (value.error.code !== undefined && typeof value.error.code !== 'string') ||
+      (value.error.detail !== undefined && typeof value.error.detail !== 'string')
     )
       return;
     return value as unknown as CanvasErrorManifest;

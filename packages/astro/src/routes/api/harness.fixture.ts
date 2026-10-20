@@ -47,6 +47,7 @@ type State = {
   hiddenLong: { path: string; since: string }[];
   siteChecks: { ignore?: string[] } | undefined;
   bucketed: boolean;
+  uploadBucketed: boolean;
   uploadIntentAvailable: boolean;
   storeRefusal: Error | undefined;
   dbRefusal: Error | undefined;
@@ -82,6 +83,7 @@ function defaultState(): State {
     hiddenLong: [],
     siteChecks: undefined,
     bucketed: true,
+    uploadBucketed: true,
     uploadIntentAvailable: true,
     storeRefusal: undefined,
     dbRefusal: undefined,
@@ -637,7 +639,7 @@ export function cloudflareMock() {
         return state.bucketed ? 'secret' : undefined;
       },
       get MEDIA_UPLOADS() {
-        return state.bucketed
+        return state.bucketed && state.uploadBucketed
           ? {
               put: vi.fn(
                 async (

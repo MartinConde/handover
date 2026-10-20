@@ -19,6 +19,7 @@ import {
 import type { RequestContext } from '../../environment.js';
 import { readJson } from './body.js';
 import {
+  codedError,
   entryLocales,
   entryPath,
   entrySourceFor,
@@ -43,7 +44,8 @@ export async function createTranslation(
     return new Response('Not found', { status: 404 });
   const { loaded, source: answer } = await entrySourceFor(ctx, collection, slug);
   // A missing default language is exactly what this route is for, so no extra guard on it.
-  if (loaded[locale]) return new Response('That language already has a file', { status: 409 });
+  if (loaded[locale])
+    return codedError(409, 'TRANSLATION_TARGET_EXISTS', 'That language already has a file');
   if (answer && 'problem' in answer) return sourceRefusal(answer, localeData(loaded));
   const source = answer?.locale;
   const data = source === undefined ? undefined : loaded[source]?.data;
@@ -52,7 +54,7 @@ export async function createTranslation(
   // A mark the files contradict is answered before the offer it would otherwise be read as.
   if (problems.length) return new Response(problems.join('\n'), { status: 409 });
   if (!offered.includes(locale))
-    return new Response(`This entry is not offered in ${locale}`, { status: 409 });
+    return codedError(409, 'ENTRY_SOURCE_TARGET_OFF', `This entry is not offered in ${locale}`);
   const form = formFor(collection, slug);
   // Stamped even on an unrecorded entry: adding a language must never move the source.
   const made = withSource(
@@ -74,9 +76,11 @@ export async function createTranslation(
     );
   } catch (err) {
     if (err instanceof DraftRevisionError || isDraftRace(err))
-      return new Response('This entry changed while the language was being created', {
-        status: 409,
-      });
+      return codedError(
+        409,
+        'ENTRY_SOURCE_REVISION',
+        'This entry changed while the language was being created',
+      );
     throw err;
   }
   return Response.json({});
