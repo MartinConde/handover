@@ -72,6 +72,7 @@ let {
   servedAt,
   session,
   oncommand,
+  onreveal,
   openMediaPicker = 0,
   viewRoot,
   structureLocked = false,
@@ -128,6 +129,7 @@ let {
   oncommand?: (result: FieldCommandResult | ListCommandResult) => void;
   /** A changing request opens this level's single image field without an extra inspector click. */
   openMediaPicker?: number;
+  onreveal?: (path: readonly string[]) => void;
   /** A drag-only rendering copy shared with recursive field levels. */
   viewRoot?: Data;
   /** A persisted action may allow prose edits while freezing list structure. */
@@ -817,7 +819,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
     {:else if field.type === 'group'}
       <details class="group" open>
         <summary>{text}<span class="count">{m.field_count({ count: field.fields.length }, messageOptions(uiLocale))}</span></summary>
-        <div class="form"><Fields fields={field.fields} bind:root {blocks} {blockLabels} {problems} path={at} {translating} {machine} {ontranslate} {sourceChanged} bind:dismissed {sourceLabel} {translatedAt} {onretranslate} {prefix} {mediaBase} {locale} {uiLocale} {site} {servedAt} {session} {oncommand} viewRoot={displayedRoot} inherited={mode} {structureLocked} {textOnly} {reference} /></div>
+        <div class="form"><Fields fields={field.fields} bind:root {blocks} {blockLabels} {problems} path={at} {translating} {machine} {ontranslate} {sourceChanged} bind:dismissed {sourceLabel} {translatedAt} {onretranslate} {prefix} {mediaBase} {locale} {uiLocale} {site} {servedAt} {session} {oncommand} {onreveal} viewRoot={displayedRoot} inherited={mode} {structureLocked} {textOnly} {reference} /></div>
       </details>
     {:else if field.type === 'array'}
       {@const items = rows(at)}
@@ -833,20 +835,20 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
           {@const shut = !open && folded[keyOf(items, i)] !== false}
           {#if scalar}
           <div class={['row-card', { 'is-scalar': true, 'is-dragging': s.isDragging }]} {@attach !translating && s.attach}>
-            <div class="row-fields"><Fields fields={field.item} bind:root {blocks} {blockLabels} {problems} path={[...at, String(i)]} rowLabel="{text} {i + 1}" {translating} {machine} {ontranslate} {sourceChanged} bind:dismissed {sourceLabel} {translatedAt} {onretranslate} {prefix} {mediaBase} {locale} {uiLocale} {site} {servedAt} {session} {oncommand} viewRoot={displayedRoot} inherited={mode} {structureLocked} {textOnly} {reference} /></div>
+            <div class="row-fields"><Fields fields={field.item} bind:root {blocks} {blockLabels} {problems} path={[...at, String(i)]} rowLabel="{text} {i + 1}" {translating} {machine} {ontranslate} {sourceChanged} bind:dismissed {sourceLabel} {translatedAt} {onretranslate} {prefix} {mediaBase} {locale} {uiLocale} {site} {servedAt} {session} {oncommand} {onreveal} viewRoot={displayedRoot} inherited={mode} {structureLocked} {textOnly} {reference} /></div>
             {#if !translating}{@render controls(at, i, name, s.attachHandle)}{/if}
           </div>
           {:else}
           <article class={['block-card section-card', { 'is-dragging': s.isDragging, 'is-folded': shut }]} id="{id}.{i}" aria-labelledby="{id}.{i}-h" {@attach !translating && s.attach}>
             <header>
-              <button class="btn btn-ghost fold section-toggle" type="button" disabled={open} aria-expanded={!shut} aria-controls="{id}.{i}-b" onclick={() => (folded[keyOf(items, i)] = !shut)}>
+              <button class="btn btn-ghost fold section-toggle" type="button" disabled={open} aria-expanded={!shut} aria-controls="{id}.{i}-b" onclick={() => { const opening = shut; folded[keyOf(items, i)] = !opening; if (opening) onreveal?.([...at, String(i)]); }}>
                 {@render icon('m9 6 6 6-6 6')}
                 <span class="section-number">{i + 1}</span>
                 <span class="section-copy"><span class="label" id="{id}.{i}-h">{name}</span>{#if shut} <span class="excerpt">{excerpt(row, field.item)}</span>{/if}</span>
               </button>
               {#if !translating}{@render controls(at, i, name, s.attachHandle)}{/if}
             </header>
-            {#if !shut}<div class="form" id="{id}.{i}-b"><Fields fields={field.item} bind:root {blocks} {blockLabels} {problems} path={[...at, String(i)]} rowLabel="{text} {i + 1}" {translating} {machine} {ontranslate} {sourceChanged} bind:dismissed {sourceLabel} {translatedAt} {onretranslate} {prefix} {mediaBase} {locale} {uiLocale} {site} {servedAt} {session} {oncommand} viewRoot={displayedRoot} inherited={mode} {structureLocked} {textOnly} {reference} /></div>{/if}
+            {#if !shut}<div class="form" id="{id}.{i}-b"><Fields fields={field.item} bind:root {blocks} {blockLabels} {problems} path={[...at, String(i)]} rowLabel="{text} {i + 1}" {translating} {machine} {ontranslate} {sourceChanged} bind:dismissed {sourceLabel} {translatedAt} {onretranslate} {prefix} {mediaBase} {locale} {uiLocale} {site} {servedAt} {session} {oncommand} {onreveal} viewRoot={displayedRoot} inherited={mode} {structureLocked} {textOnly} {reference} /></div>{/if}
           </article>
           {/if}
         {:else}
@@ -883,7 +885,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
           {@const shut = !open && folded[keyOf(items, i)] !== false}
           <article class={['block-card section-card', { 'is-dragging': s.isDragging, 'is-folded': shut }]} id="{id}.{i}" aria-labelledby="{id}.{i}-h" {@attach !translating && s.attach}>
             <header>
-              <button class="btn btn-ghost fold section-toggle" type="button" disabled={open} aria-expanded={!shut} aria-controls="{id}.{i}-b" onclick={() => (folded[keyOf(items, i)] = !shut)}>
+              <button class="btn btn-ghost fold section-toggle" type="button" disabled={open} aria-expanded={!shut} aria-controls="{id}.{i}-b" onclick={() => { const opening = shut; folded[keyOf(items, i)] = !opening; if (opening) onreveal?.([...at, String(i)]); }}>
                 {@render icon('m9 6 6 6-6 6')}
                 <span class="section-number">{i + 1}</span>
                 <span class="section-copy"><span class="label" id="{id}.{i}-h" title="{block(row)._type} · {block(row)._id}">{label}</span>{#if shut} <span class="excerpt">{excerpt(row, inner)}</span>{/if}</span>
@@ -893,7 +895,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
             {#if shut}
               <!-- folded: the header is the whole card -->
             {:else if inner}
-              <div class="form" id="{id}.{i}-b"><Fields fields={inner} bind:root {blocks} {blockLabels} {problems} path={[...at, String(i)]} {translating} {machine} {ontranslate} {sourceChanged} bind:dismissed {sourceLabel} {translatedAt} {onretranslate} {prefix} {mediaBase} {locale} {uiLocale} {site} {servedAt} {session} {oncommand} viewRoot={displayedRoot} inherited={mode} {structureLocked} {textOnly} {reference} /></div>
+              <div class="form" id="{id}.{i}-b"><Fields fields={inner} bind:root {blocks} {blockLabels} {problems} path={[...at, String(i)]} {translating} {machine} {ontranslate} {sourceChanged} bind:dismissed {sourceLabel} {translatedAt} {onretranslate} {prefix} {mediaBase} {locale} {uiLocale} {site} {servedAt} {session} {oncommand} {onreveal} viewRoot={displayedRoot} inherited={mode} {structureLocked} {textOnly} {reference} /></div>
             {:else}
               <p class="ref-note" id="{id}.{i}-b">{block(row)._ref ?? m.field_block_missing({ type: block(row)._type ?? '' }, messageOptions(uiLocale))} — {m.field_not_editable({}, messageOptions(uiLocale))}</p>
             {/if}

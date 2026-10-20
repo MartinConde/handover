@@ -133,8 +133,10 @@ the full width. The choice is remembered per browser; an entry opened on a langu
 such as a queue from the entry list, shows it side by side without changing that choice.
 
 The page beside the form stays in view while the form scrolls, under one row with its address, the
-device widths and **Preview**. It is for looking at: it scrolls and follows every edit, but clicking
-it selects, edits and follows nothing. **Canvas** gives the page the workspace width, adds
+device widths and **Preview**. Opening a block or object-list card scrolls the preview to its
+nearest annotated section. Clicking annotated content in the preview opens the matching form
+field, scrolls it into view and focuses its control. Edits stay in the form: the split preview
+does not offer inline editing, follow links or submit forms. **Canvas** gives the page the workspace width, adds
 Structure, Inspector, undo and Edit/Interact, and collapses the normal navigation; its back arrow
 returns to the form. Tablet and phone controls set the iframe's real width rather than scaling it.
 

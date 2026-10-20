@@ -143,7 +143,7 @@ if (typeof window !== 'undefined' && window.parent !== window) {
       onActions: ({ selection: value, actions }) => selection?.actions(value, actions),
       onMode: (next) => {
         mode = next;
-        selection?.setEnabled(next === 'edit');
+        selection?.setMode(next);
         if (next !== 'edit') {
           requested = undefined;
           configureField(undefined);
@@ -176,6 +176,7 @@ if (typeof window !== 'undefined' && window.parent !== window) {
           dragging: state.dragging,
         }),
       onActivate: (value, element, intent) => {
+        if (mode !== 'edit') return false;
         bridge.selection(value);
         if (value.kind !== 'field') return false;
         requested = { selection: value, element, ...intent };

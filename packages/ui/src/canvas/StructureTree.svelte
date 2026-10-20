@@ -8,6 +8,7 @@ import CanvasIcon from './CanvasIcon.svelte';
 import type {
   CanvasActionMessage,
   CanvasBlockAction,
+  CanvasInteractionMode,
   CanvasSelection,
   CanvasStructureNode,
 } from './canvas-bridge';
@@ -45,7 +46,7 @@ let {
   session: import('../editor/entry-session.svelte').EntrySession;
   locale: string;
   uiLocale: UiLocale;
-  interactionMode: 'edit' | 'interact';
+  interactionMode: CanvasInteractionMode;
   insertionNode: CanvasStructureNode | undefined;
   blockLocation: (node: CanvasStructureNode) => { address: string; index: number } | undefined;
   blockActionsFor: (node: CanvasStructureNode) => CanvasBlockAction[];

@@ -80,7 +80,7 @@ export function createCanvasNavigationRuntime(options: CanvasNavigationRuntimeOp
     if (!(anchor instanceof HTMLAnchorElement)) return;
     const raw = anchor.getAttribute('href');
     if (!raw) return;
-    if ((options.mode?.() ?? 'interact') === 'edit') {
+    if ((options.mode?.() ?? 'interact') !== 'interact') {
       event.preventDefault();
       event.stopImmediatePropagation();
       return;
@@ -128,7 +128,7 @@ export function createCanvasNavigationRuntime(options: CanvasNavigationRuntimeOp
     if (!(form instanceof HTMLFormElement)) return;
     event.preventDefault();
     event.stopImmediatePropagation();
-    if ((options.mode?.() ?? 'interact') === 'edit') return;
+    if ((options.mode?.() ?? 'interact') !== 'interact') return;
     const submitter = event.submitter;
     const action =
       submitter instanceof HTMLButtonElement || submitter instanceof HTMLInputElement

@@ -499,6 +499,19 @@ test('interaction mode and navigation intents cross only the current connected b
   expect(rejected).toHaveBeenCalledWith('malformed', expect.anything());
 });
 
+test('selection mode crosses only the current parent identity', () => {
+  const onMode = vi.fn();
+  const page = child({ onMode });
+  page.bridge.start();
+  const message = { ...ready, type: 'handover:canvas:mode', mode: 'select' };
+  page.send(message, 'https://outside.example');
+  page.send(message, 'https://cms.example', frame());
+  page.send({ ...message, contentVersion: 3 });
+  expect(onMode).not.toHaveBeenCalled();
+  page.send(message);
+  expect(onMode).toHaveBeenCalledWith('select');
+});
+
 test('plain-text capability and editing state cross only the current selected bridge', () => {
   const onTextField = vi.fn();
   const page = child({ onTextField });

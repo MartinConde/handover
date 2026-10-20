@@ -138,3 +138,23 @@ test('edit mode consumes links and forms without raising navigation intents', ()
   expect(onNavigate).not.toHaveBeenCalled();
   runtime.dispose();
 });
+
+test('selection mode blocks links, fragment changes and form submission', () => {
+  document.body.innerHTML = `<a id="outside" href="https://outside.example">Outside</a>
+    <a id="fragment" href="#section">Section</a><form><button>Send</button></form>`;
+  const onNavigate = vi.fn();
+  const runtime = createCanvasNavigationRuntime({ mode: () => 'select', onNavigate });
+  runtime.start();
+  const hash = window.location.hash;
+  for (const id of ['outside', 'fragment']) {
+    const event = new MouseEvent('click', { bubbles: true, cancelable: true });
+    document.getElementById(id)?.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+  }
+  const submitted = new SubmitEvent('submit', { bubbles: true, cancelable: true });
+  document.querySelector('form')?.dispatchEvent(submitted);
+  expect(submitted.defaultPrevented).toBe(true);
+  expect(onNavigate).not.toHaveBeenCalled();
+  expect(window.location.hash).toBe(hash);
+  runtime.dispose();
+});

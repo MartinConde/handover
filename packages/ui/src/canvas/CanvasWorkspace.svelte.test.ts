@@ -183,7 +183,7 @@ test('reformats retained renderer recovery while preserving exact diagnostic det
   expect(materialize).toHaveBeenCalledOnce();
 });
 
-test('Split shows the page to look at: no editing, Inspector or navigation until Canvas', async () => {
+test('Split selects form fields without editing, Inspector or navigation until Canvas', async () => {
   const { renderer, created } = mockRenderer();
   const session = entrySession();
   const props = $state(workspaceProps(session, { fullscreen: false, onnavigateentry: vi.fn() }));
@@ -192,7 +192,7 @@ test('Split shows the page to look at: no editing, Inspector or navigation until
   options.onStateChange?.({ phase: 'ready', requestId: 'r1', contentVersion: 0 });
   flushSync();
 
-  expect(renderer.mode).toHaveBeenLastCalledWith('interact');
+  expect(renderer.mode).toHaveBeenLastCalledWith('select');
   // A shared global is the selection that would open the Inspector on its own in Canvas.
   options.onSelectionChange?.({
     kind: 'field',
@@ -211,6 +211,50 @@ test('Split shows the page to look at: no editing, Inspector or navigation until
   flushSync();
   expect(renderer.mode).toHaveBeenLastCalledWith('edit');
   vi.doUnmock('./canvas-renderer');
+});
+
+test('Split hands user selections to the form without moving focus again after a render', async () => {
+  const { created } = mockRenderer();
+  const onselectform = vi.fn();
+  app = mountWorkspace(entrySession(), { fullscreen: false, onselectform });
+  const options = await created();
+  const selection = {
+    kind: 'field' as const,
+    target: { document: { collection: 'pages', id: 'home' }, locale: 'en', address: 'title' },
+  };
+  options.onSelectionChange?.(selection);
+  await tick();
+  expect(onselectform).toHaveBeenLastCalledWith(selection);
+  onselectform.mockClear();
+
+  options.onSelectionChange?.(selection, 'restore');
+  await tick();
+  expect(onselectform).not.toHaveBeenCalled();
+});
+
+test('opening a form field selects its nearest annotated owner in the preview', async () => {
+  const { renderer, created } = mockRenderer();
+  app = mountWorkspace(entrySession(), { fullscreen: false });
+  const options = await created();
+  const owner = {
+    id: 'hero',
+    kind: 'block' as const,
+    target: {
+      document: { collection: 'pages', id: 'home' },
+      locale: 'en',
+      address: 'blocks[_id=hero0001]',
+    },
+    label: 'Hero',
+    depth: 1,
+    position: 1,
+    setSize: 1,
+    occurrences: 1,
+  };
+  options.onStructureChange?.([owner]);
+  await tick();
+
+  app.selectForm('blocks[_id=hero0001].image.alt');
+  expect(renderer.select).toHaveBeenLastCalledWith(owner);
 });
 
 test('does not re-post identical validation problems on every keystroke', async () => {

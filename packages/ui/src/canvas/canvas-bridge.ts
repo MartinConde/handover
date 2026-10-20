@@ -5,7 +5,7 @@ import { sameCanvasDocument, sameCanvasTarget } from './canvas-target';
 export const CANVAS_PROTOCOL = 1 as const;
 /** Maximum UTF-16 code units in a complete Canvas field address. */
 export const CANVAS_ADDRESS_LIMIT = 4_096;
-export type CanvasInteractionMode = 'edit' | 'interact';
+export type CanvasInteractionMode = 'edit' | 'interact' | 'select';
 
 export type CanvasNavigationRequest =
   | {
@@ -575,7 +575,8 @@ const modeMessage = (value: unknown) =>
     'handover:canvas:mode',
     ['mode'],
     [],
-    (message) => message.mode === 'edit' || message.mode === 'interact',
+    (message) =>
+      message.mode === 'edit' || message.mode === 'interact' || message.mode === 'select',
   );
 const problemsMessage = (value: unknown) =>
   envelope<CanvasProblemsMessage>(

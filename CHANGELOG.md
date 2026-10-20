@@ -6,6 +6,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Translated blocks and list items keep their disclosure buttons and text fields enabled.
 
+- Live preview connects to the form: opening a section scrolls the page to it, and selecting
+  annotated content reveals and focuses its form field without inline editing.
+
 - Existing blocks and object-list items open as compact, collapsed cards with content
   summaries. New items open for editing; validation and field navigation reveal nested
   fields automatically. Simple lists remain directly editable.

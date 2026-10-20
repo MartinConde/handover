@@ -24,6 +24,7 @@ import {
 } from '@handover/core';
 import { onMount, type Snippet, tick } from 'svelte';
 import CanvasWorkspace from '../canvas/CanvasWorkspace.svelte';
+import type { CanvasSelection } from '../canvas/canvas-bridge';
 import type { CanvasRenderRequest } from '../canvas/canvas-renderer';
 import OffsiteDialog, { type Target } from '../content/Offsite.svelte';
 import { invalidateEntryDirectory } from '../entry-directory.js';
@@ -1001,11 +1002,11 @@ const focusable = (node: Element) =>
   node.matches('input, textarea, select, [contenteditable="true"]');
 // A folded block draws no fields at all, so the way in is the fold button of each closed card.
 async function unfolded(id: string) {
-  for (let guard = 0; guard < 10; guard++) {
+  for (let guard = 0; guard <= id.split('.').length; guard++) {
     const field = document.getElementById(id);
-    if (field) return field;
+    if (field && !field.classList.contains('is-folded')) return field;
     const steps = id.split('.');
-    let card: HTMLElement | undefined;
+    let card: HTMLElement | undefined = field ?? undefined;
     for (steps.pop(); steps.length && !card; steps.pop()) {
       const found = document.getElementById(steps.join('.'));
       if (found?.classList.contains('is-folded')) card = found;
@@ -1015,6 +1016,48 @@ async function unfolded(id: string) {
     await tick();
   }
   return null;
+}
+
+let revealingForm = 0;
+let formSelection = 0;
+function revealPreview(path: readonly string[], of: string) {
+  if (mode !== 'split' || revealingForm || of !== locale) return;
+  const address = entrySession.addressForPath(of, path.join('.'));
+  if (address) canvasPane?.selectForm(address);
+}
+
+async function selectForm(selection: CanvasSelection) {
+  const target = selection.target;
+  if (
+    mode !== 'split' || target.document.collection !== collection ||
+    target.document.id !== slug || target.locale !== locale || !entrySession.hasSnapshot(locale)
+  ) return;
+  const at = fieldPosition('default', target.address, entrySession.snapshot(locale), wholeForm);
+  if (!at) return;
+  const request = ++formSelection;
+  const of = locale;
+  mobilePane = 'form';
+  const prefix = locale === entry.sourceLocale ? 'f' : 't';
+  revealingForm++;
+  try {
+    const id = `${prefix}-${at.join('.')}`;
+    const field = (await unfolded(id)) ?? document.getElementById(`${id}-field`) ?? drawn(prefix, at.join('.'));
+    if (!field || request !== formSelection || of !== locale || mode !== 'split') return;
+    for (let node: HTMLElement | null = field; node; node = node.parentElement)
+      if (node instanceof HTMLDetailsElement) node.open = true;
+    await tick();
+    const input = focusable(field) ? field : field.querySelector<HTMLElement>(
+      'input:not([type="hidden"]):not(:disabled), textarea:not(:disabled), select:not(:disabled), [contenteditable="true"]',
+    ) ?? field.querySelector<HTMLElement>('button:not(:disabled), summary');
+    for (let node = input?.parentElement; node; node = node.parentElement)
+      if (node instanceof HTMLDetailsElement) node.open = true;
+    await tick();
+    if (request !== formSelection || of !== locale || mode !== 'split') return;
+    (input ?? field).scrollIntoView({ block: 'center' });
+    input?.focus({ preventScroll: true });
+  } finally {
+    revealingForm--;
+  }
 }
 
 /** The pane's to-do jump: bring the field this source path names on screen and focus it. */
@@ -1838,7 +1881,7 @@ async function saveAddress() {
             </span>
           </div>
           <fieldset disabled={locked || entrySession.localeMutationBlocked(entry.sourceLocale)}>
-            <Fields {fields} blocks={shownForm.blocks} blockLabels={shownForm.blockLabels} {problems} {mediaBase} locale={entry.sourceLocale} {uiLocale} session={entrySession} inheritedSeo={inherited(entry.sourceLocale, data)} {site} servedAt={localeUrl(entry.sourceLocale)} bind:root={entrySession.snapshots[entry.sourceLocale]!} structureLocked={entrySession.structureMutationBlocked()} textOnly={entrySession.sourceTextOnly(entry.sourceLocale)} afterTitle={ontopbar && locale === entry.sourceLocale ? addressRow : undefined} titleKey={entry.titleField} />
+            <Fields {fields} onreveal={(path) => revealPreview(path, entry.sourceLocale)} blocks={shownForm.blocks} blockLabels={shownForm.blockLabels} {problems} {mediaBase} locale={entry.sourceLocale} {uiLocale} session={entrySession} inheritedSeo={inherited(entry.sourceLocale, data)} {site} servedAt={localeUrl(entry.sourceLocale)} bind:root={entrySession.snapshots[entry.sourceLocale]!} structureLocked={entrySession.structureMutationBlocked()} textOnly={entrySession.sourceTextOnly(entry.sourceLocale)} afterTitle={ontopbar && locale === entry.sourceLocale ? addressRow : undefined} titleKey={entry.titleField} />
           </fieldset>
         </form>
       {/if}
@@ -1953,6 +1996,7 @@ async function saveAddress() {
               answered={answered[shown]}
               work={paneWork}
               onjump={jumpTo}
+              onreveal={(path) => revealPreview(path, shown)}
               translator={entry.translator}
               actionBlocked={busy || sending}
               url={localeUrl(shown)}
@@ -1997,6 +2041,7 @@ async function saveAddress() {
           blockLabels={shownForm.blockLabels}
           problems={locale === entry.sourceLocale ? problems : entrySession.positionalProblems(locale, uiLocale)}
           onreviewproblems={reviewCanvasProblems}
+          onselectform={selectForm}
           {mediaBase}
           {site}
           servedAt={localeUrl(locale)}

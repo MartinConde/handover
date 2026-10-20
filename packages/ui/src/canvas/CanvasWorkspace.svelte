@@ -75,6 +75,7 @@ let {
   locked = false,
   onform,
   onreviewproblems,
+  onselectform,
   onnavigateentry,
   mobileHidden = false,
 }: {
@@ -100,6 +101,7 @@ let {
   locked?: boolean;
   onform: () => void;
   onreviewproblems: () => void;
+  onselectform?: (selection: CanvasSelection) => void;
   onnavigateentry: (target: {
     collection: string;
     id: string;
@@ -142,9 +144,9 @@ $effect(() => {
   )
     imagePopover = undefined;
 });
-// Split is for looking at the page: editing in it, and the panels that go with it, are Canvas's.
+// Split selects the form's fields; inline editing and panels belong to Canvas.
 $effect(() => {
-  const next = fullscreen ? 'edit' : 'interact';
+  const next = fullscreen ? 'edit' : 'select';
   untrack(() => setInteractionMode(next));
 });
 let inspectorWidth = $state<number>(PANEL_WIDTHS.inspector.default);
@@ -384,6 +386,23 @@ export function schedule(policy: 'continuous' | 'discrete' = 'discrete') {
   return submit(policy === 'continuous' ? 'schedule' : 'render');
 }
 
+export function selectForm(address: string) {
+  if (!active || fullscreen) return;
+  const node = structure
+    .filter(
+      (node) =>
+        sameDocument(node.target) &&
+        node.target.locale === locale &&
+        (address === node.target.address ||
+          address.startsWith(`${node.target.address}.`) ||
+          address.startsWith(`${node.target.address}[`)),
+    )
+    .sort((a, b) => b.target.address.length - a.target.address.length)[0];
+  if (!node) return;
+  selected = node;
+  renderer?.select(node);
+}
+
 function retry() {
   void submit('render', true);
 }
@@ -510,8 +529,13 @@ $effect(() => {
   );
 });
 
-function selectionChanged(next: CanvasSelection | undefined) {
-  if (interactionMode !== 'edit') return;
+function selectionChanged(next: CanvasSelection | undefined, reason?: 'restore') {
+  if (!active || interactionMode === 'interact') return;
+  if (interactionMode === 'select') {
+    selected = next;
+    if (next && reason !== 'restore') onselectform?.(next);
+    return;
+  }
   // Selection updates the Inspector's content without changing its visibility.
   selected = next;
   void tick().then(() => {
@@ -749,7 +773,7 @@ function setInteractionMode(next: CanvasInteractionMode) {
   if (interactionMode === next) return;
   interactionMode = next;
   actionRefusal = '';
-  if (next === 'interact') {
+  if (next !== 'edit') {
     structureOpen = false;
     inspectorOpen = false;
     blockEditor = undefined;

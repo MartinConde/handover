@@ -47,6 +47,7 @@ let {
   mark,
   onreference,
   onjump,
+  onreveal,
   onsaved,
   onclose,
   onturnoff,
@@ -94,6 +95,7 @@ let {
   onreference?: (locale: string | undefined) => void;
   /** Shows the field at this source path in this pane; false when it is no longer drawn. */
   onjump?: (path: string) => Promise<boolean>;
+  onreveal?: (path: readonly string[]) => void;
   /** The entry keeps `pending`: this column is thrown away on a screen change, its edit is not. */
   onsaved?: (pending: boolean, data?: Data) => void;
   onclose?: () => void;
@@ -355,6 +357,7 @@ const failureDetail = $derived(fillFailure ? messageDetail(fillFailure, uiLocale
         {locale}
         {uiLocale}
         {session}
+        {onreveal}
         bind:root={data}
         translating
         ontranslate={translator ? (path) => fill([path]) : undefined}

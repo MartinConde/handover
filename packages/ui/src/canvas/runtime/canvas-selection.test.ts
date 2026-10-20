@@ -165,6 +165,77 @@ test('a single click activates an annotated link control without navigating it',
   runtime.dispose();
 });
 
+test('selection mode selects fields by pointer and keyboard without activating editors', async () => {
+  document.body.innerHTML = `<h1 id="title" ${mark('field', 'title')}>Home</h1>
+    <img id="image" ${mark('field', 'image')} alt="Harbour" />`;
+  vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue(
+    new DOMRect(20, 40, 200, 50),
+  );
+  const selected = vi.fn();
+  const activate = vi.fn(() => true);
+  const runtime = createCanvasSelectionRuntime({ onSelection: selected, onActivate: activate });
+  runtime.start();
+  runtime.setMode('select');
+  document.getElementById('title')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  document.getElementById('title')?.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  expect(activate).not.toHaveBeenCalled();
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  expect(selected).toHaveBeenLastCalledWith({ kind: 'field', target: target('image') });
+  await settle();
+  const overlay = document.querySelector('[data-handover-canvas-overlay]')?.shadowRoot;
+  expect(overlay?.querySelectorAll('.box.selected')).toHaveLength(1);
+  runtime.dispose();
+});
+
+test('selection mode removes mutation actions retained from editing', async () => {
+  document.body.innerHTML = `<section id="block" ${mark('block', 'blocks[_id=one]')}>One</section>`;
+  vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue(
+    new DOMRect(20, 40, 200, 50),
+  );
+  const action = vi.fn();
+  const runtime = createCanvasSelectionRuntime({ onAction: action });
+  runtime.start();
+  const selected = { kind: 'block' as const, target: target('blocks[_id=one]') };
+  runtime.select(selected);
+  runtime.actions(selected, ['delete', 'move', 'move-down', 'insert-after', 'undo']);
+  runtime.setMode('select');
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true }));
+  document.dispatchEvent(
+    new KeyboardEvent('keydown', { key: 'ArrowDown', altKey: true, bubbles: true }),
+  );
+  document.dispatchEvent(
+    new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, bubbles: true }),
+  );
+  await settle();
+  expect(action).not.toHaveBeenCalled();
+  const overlay = document.querySelector('[data-handover-canvas-overlay]')?.shadowRoot;
+  expect(overlay?.querySelectorAll('[data-canvas-action]')).toHaveLength(0);
+  runtime.dispose();
+});
+
+test('selection mode scrolls to shared targets without opening ownership controls or moving focus', () => {
+  const shared = { ...target('heading'), document: { collection: 'globals', id: 'banner' } };
+  document.body.innerHTML = `<input id="form"><h1 data-handover-field='${JSON.stringify(shared)}'>Banner</h1>`;
+  const control = document.getElementById('form');
+  control?.focus();
+  const scroll = vi.fn();
+  Element.prototype.scrollIntoView = scroll;
+  const runtime = createCanvasSelectionRuntime({ entryDocument: target('').document });
+  runtime.start();
+  runtime.setMode('select');
+  expect(runtime.select({ kind: 'field', target: shared }, { scroll: true })).toBe(true);
+  expect(document.activeElement).toBe(control);
+  expect(scroll).toHaveBeenCalledWith({ block: 'nearest', inline: 'nearest' });
+  expect(
+    document
+      .querySelector('[data-handover-canvas-overlay]')
+      ?.shadowRoot?.querySelector('[role="dialog"]'),
+  ).toBeNull();
+  runtime.dispose();
+});
+
 test('arrow keys preview siblings, Enter selects, and Shift+ArrowUp cannot select a populated parent list', () => {
   document.body.innerHTML = `<main ${mark('list', 'blocks')}>
     <section id="one" ${mark('block', 'blocks[_id=one]')}>One</section>

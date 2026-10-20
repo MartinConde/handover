@@ -2,6 +2,7 @@ import { messageOptions, type UiLocale } from '../../i18n';
 import * as m from '../../paraglide/messages.js';
 import type {
   CanvasBlockAction,
+  CanvasInteractionMode,
   CanvasSelection,
   CanvasStructureNode,
   CanvasTarget,
@@ -105,6 +106,7 @@ export function createCanvasSelectionRuntime(options: CanvasSelectionRuntimeOpti
   let allowedActions: CanvasBlockAction[] = [];
   let disposed = false;
   let enabled = true;
+  let mode: CanvasInteractionMode = 'edit';
   let sharedOpen = false;
   let geometryFrame = 0;
   let rebuildFrame = 0;
@@ -281,7 +283,7 @@ export function createCanvasSelectionRuntime(options: CanvasSelectionRuntimeOpti
   };
   const drag = createCanvasDragController({
     owner,
-    canStart: () => enabled && !options.isEditing?.() && allowedActions.includes('move'),
+    canStart: () => mode === 'edit' && !options.isEditing?.() && allowedActions.includes('move'),
     isEditing: () => !!options.isEditing?.(),
     onInteraction: options.onInteraction,
     onAction: options.onAction,
@@ -323,6 +325,7 @@ export function createCanvasSelectionRuntime(options: CanvasSelectionRuntimeOpti
     const focusedLabel = focused?.closest('.path');
     const focusedAction = focused?.dataset.canvasAction;
     const restoreActionFocus = () => {
+      if (mode === 'select' && !root.hasFocus()) return;
       const replacement = focusedAction
         ? actions.querySelector<HTMLElement>(`[data-canvas-action="${focusedAction}"]`)
         : undefined;
@@ -511,7 +514,7 @@ export function createCanvasSelectionRuntime(options: CanvasSelectionRuntimeOpti
       )
         hoverPath.style.top = `${selectedLabel.bottom + 2}px`;
     }
-    if (!selectedNode || !selectedElement) {
+    if (!selectedNode || !selectedElement || mode !== 'edit') {
       restoreActionFocus();
       return;
     }
@@ -552,6 +555,7 @@ export function createCanvasSelectionRuntime(options: CanvasSelectionRuntimeOpti
       const fire = (event: Event) => {
         event.preventDefault();
         event.stopPropagation();
+        if (mode !== 'edit') return;
         closeShared();
         options.onAction?.(action, { kind: selectedNode.kind, target: selectedNode.target });
         scheduleDraw();
@@ -769,7 +773,7 @@ export function createCanvasSelectionRuntime(options: CanvasSelectionRuntimeOpti
     if (!sameCanvasSelection(selected, value)) {
       allowedActions = [];
     }
-    sharedOpen = foreign(node);
+    sharedOpen = mode === 'edit' && foreign(node);
     sharedPanel.hidden = !sharedOpen;
     if (sharedOpen) {
       shadow.append(sharedPanel);
@@ -827,7 +831,7 @@ export function createCanvasSelectionRuntime(options: CanvasSelectionRuntimeOpti
         ? caretOffsetAt(root, element, event.clientX, event.clientY)
         : undefined;
     choose(node, element);
-    if (foreign(node) || node.kind !== 'field') return;
+    if (mode !== 'edit' || foreign(node) || node.kind !== 'field') return;
     const control = event.target instanceof Element ? event.target.closest('a, button') : undefined;
     options.onActivate?.({ kind: node.kind, target: node.target }, element, {
       ...(control && element.contains(control) ? { trigger: control } : {}),
@@ -837,7 +841,7 @@ export function createCanvasSelectionRuntime(options: CanvasSelectionRuntimeOpti
   };
   const onDoubleClick = (event: MouseEvent) => {
     // Once the first click has opened the editor, a double click is the reader's word select.
-    if (!enabled || options.isEditing?.()) return;
+    if (mode !== 'edit' || options.isEditing?.()) return;
     const element = closestMarker(event.target);
     const node = nodeForElement(element);
     if (!node || !element || node.kind !== 'field' || foreign(node)) return;
@@ -911,6 +915,7 @@ export function createCanvasSelectionRuntime(options: CanvasSelectionRuntimeOpti
         const activationElement = selectedElement ?? cursor.elements[0];
         if (
           !foreign(cursor) &&
+          mode === 'edit' &&
           cursor.kind === 'field' &&
           sameCanvasSelection(cursor, selected) &&
           activationElement &&
@@ -979,6 +984,7 @@ export function createCanvasSelectionRuntime(options: CanvasSelectionRuntimeOpti
       return choose(value, undefined, { publish: false, scroll: settings.scroll });
     },
     actions(value: CanvasSelection, values: CanvasBlockAction[]) {
+      if (mode !== 'edit') return false;
       if (!sameCanvasSelection(selected, value)) return false;
       allowedActions = [...values];
       scheduleDraw();
@@ -988,13 +994,17 @@ export function createCanvasSelectionRuntime(options: CanvasSelectionRuntimeOpti
       problemAddresses = [...addresses];
       scheduleDraw();
     },
-    setEnabled(next: boolean) {
-      if (enabled === next) return;
-      if (!next && drag.active()) drag.cancel();
-      if (!next) closeShared();
-      enabled = next;
+    setMode(next: CanvasInteractionMode) {
+      if (mode === next) return;
+      mode = next;
+      enabled = next !== 'interact';
+      if (next !== 'edit') {
+        if (drag.active()) drag.cancel();
+        closeShared();
+        allowedActions = [];
+      }
       hoveredElement = undefined;
-      cursor = next ? nodeForSelection(selected) : undefined;
+      cursor = enabled ? nodeForSelection(selected) : undefined;
       scheduleDraw();
     },
     structure: () => nodes.map(publicNode),
