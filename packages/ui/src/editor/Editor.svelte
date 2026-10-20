@@ -412,53 +412,34 @@ async function findRestore(of: string) {
 }
 
 let localeFailure = $state<{ locale: string; message: UiMessage }>();
-async function createFrom(of: string) {
-  if (!(await flush())) return;
-  busy = true;
-  localeFailure = undefined;
-  const res = await fetch(`/admin/api/drafts/${collection}/${slug}/${of}`, { method: 'POST' });
-  busy = false;
-  if (!res.ok) {
-    localeFailure = {
-      locale: of,
-      message: uncertainResponse(res)
-        ? { code: 'TRANSLATION_CREATE_UNCONFIRMED', status: res.status }
-        : await retainedFailure(res, 'TRANSLATION_CREATE_FAILED'),
-    };
-    return;
-  }
-  await announceCommit(res);
-  onchanged();
-}
+const CREATE_FAILED = { create: 'TRANSLATION_CREATE_FAILED', fill: 'TRANSLATION_CREATED_FILL_FAILED' };
+const CREATE_UNCONFIRMED = {
+  create: 'TRANSLATION_CREATE_UNCONFIRMED',
+  fill: 'TRANSLATION_CREATED_FILL_UNCONFIRMED',
+};
 // The file has to exist before a machine's draft can be written into it.
-async function createFilled(of: string) {
+async function createLanguage(of: string, fill: boolean) {
+  const made = await fetch(`/admin/api/drafts/${collection}/${slug}/${of}`, { method: 'POST' });
+  if (!made.ok || !fill) return { made, refused: made.ok ? undefined : made, step: 'create' as const };
+  const filled = await postJson(`/admin/api/translate/${collection}/${slug}/${of}`, {});
+  return { made, refused: filled.ok ? undefined : filled, step: 'fill' as const };
+}
+async function createInPane(of: string, fill: boolean) {
   if (!(await flush())) return;
   busy = true;
   localeFailure = undefined;
-  const made = await fetch(`/admin/api/drafts/${collection}/${slug}/${of}`, { method: 'POST' });
-  let filled: Response | undefined;
-  if (made.ok)
-    filled = await postJson(`/admin/api/translate/${collection}/${slug}/${of}`, {});
+  const { made, refused, step } = await createLanguage(of, fill);
   busy = false;
-  if (!made.ok) {
+  if (refused) {
     localeFailure = {
       locale: of,
-      message: uncertainResponse(made)
-        ? { code: 'TRANSLATION_CREATE_UNCONFIRMED', status: made.status }
-        : await retainedFailure(made, 'TRANSLATION_CREATE_FAILED'),
+      message: uncertainResponse(refused)
+        ? { code: CREATE_UNCONFIRMED[step], status: refused.status }
+        : await retainedFailure(refused, CREATE_FAILED[step]),
     };
     return;
   }
-  if (!filled?.ok) {
-    const refusal = filled ?? new Response('', { status: 503 });
-    localeFailure = {
-      locale: of,
-      message: uncertainResponse(refusal)
-        ? { code: 'TRANSLATION_CREATED_FILL_UNCONFIRMED', status: refusal.status }
-        : await retainedFailure(refusal, 'TRANSLATION_CREATED_FILL_FAILED'),
-    };
-    return;
-  }
+  if (!fill) await announceCommit(made);
   onchanged();
 }
 // Offered languages with no file, in configured order; the source always has one.
@@ -470,29 +451,19 @@ let reportedHere = $state(false);
 async function createAll(fill: boolean) {
   const targets = [...missingTargets];
   const report: CreatedAll = { targets, done: {} };
-  const failure = async (res: Response, locale: string, step: 'create' | 'fill') => {
-    const unconfirmed = uncertainResponse(res);
-    const fallback = step === 'create' ? 'TRANSLATION_CREATE_FAILED' : 'TRANSLATION_CREATED_FILL_FAILED';
-    return { locale, step, unconfirmed, message: await retainedFailure(res, fallback) };
-  };
   createAllFailure = undefined;
   const outcome = await entrySession.authoritativeChange(
     async () => {
       for (const of of targets) {
         creatingAll = of;
-        const made = await fetch(`/admin/api/drafts/${collection}/${slug}/${of}`, { method: 'POST' });
-        if (!made.ok) {
-          report.failed = await failure(made, of, 'create');
+        const { made, refused, step } = await createLanguage(of, fill);
+        // A file made and then left unfilled still counts: the reload has to show it.
+        if (made.ok) report.done[of] = fill && !refused ? 'filled' : 'created';
+        if (refused) {
+          const unconfirmed = uncertainResponse(refused);
+          report.failed = { locale: of, step, unconfirmed, message: await retainedFailure(refused, CREATE_FAILED[step]) };
           break;
         }
-        report.done[of] = 'created';
-        if (!fill) continue;
-        const filled = await postJson(`/admin/api/translate/${collection}/${slug}/${of}`, {});
-        if (!filled.ok) {
-          report.failed = await failure(filled, of, 'fill');
-          break;
-        }
-        report.done[of] = 'filled';
       }
       creatingAll = undefined;
       reportedHere = true;
@@ -1779,11 +1750,11 @@ async function saveAddress() {
             {:else}
               <div class="is-wide">
                 <p>{m.editor_create_translation_intro({}, options)}</p>
-                <button class="btn btn-primary btn-create" type="button" disabled={actionBusy || entryLock.locked} onclick={() => createFrom(shown)}>
+                <button class="btn btn-primary btn-create" type="button" disabled={actionBusy || entryLock.locked} onclick={() => createInPane(shown, false)}>
                   {m.editor_create_from({ language: language(entry.sourceLocale) }, options)}
                 </button>
                 {#if entry.translator}
-                  <button class="btn btn-fill" type="button" disabled={actionBusy || entryLock.locked} onclick={() => createFilled(shown)}>
+                  <button class="btn btn-fill" type="button" disabled={actionBusy || entryLock.locked} onclick={() => createInPane(shown, true)}>
                     {m.editor_create_prefill({}, options)}
                   </button>
                 {/if}
