@@ -9,7 +9,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   written once. The editor's field reveal, publish flow and entry lock sit in their own modules,
   its banners in their own component, and its repeated reload, feedback and request code is
   written once. The entry session's path helpers and its undo history sit in their own modules,
-  and each list operation is its own function.
+  and each list operation is its own function. Editor comments sit on what they describe, and
+  doc blocks that only repeated a name are gone.
 - Internal: the admin's menus close on a click outside or Escape through one shared attachment, and
   its confirm dialogs and autosave status share one component each, and the new-entry label takes its
   fallback as an argument, instead of hand-written copies.
