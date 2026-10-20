@@ -68,7 +68,7 @@ translating, a gallery is a list again, since its alt text is all a translation 
 
 ## The focal point on a field
 
-A selected image appears in a compact card with its filename, dimensions and alt text.
+A selected image appears in a compact card with its filename, dimensions and alt text; a file's card shows its type and size.
 Click the preview or **Set focal point** to open the larger framing dialog.
 The card stacks its controls beneath the preview in a narrow editing pane.
 

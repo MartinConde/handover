@@ -140,9 +140,6 @@ simple lists such as paragraphs stay directly editable. New and duplicated items
 for editing. Cards with validation problems open automatically, and field links and
 translation jumps reveal the nested field before focusing it.
 
-Open cards use a tinted header and larger field controls. Nested groups use a light
-divider, and list Add buttons span the available width.
-
 Group counts, list empty states, row actions, block controls, references, link controls, embed
 guidance and the SEO panel follow the account's interface language. Switching English/Deutsch
 updates open block and page pickers, an embed replacement with a retained refusal, SEO notices and
@@ -174,14 +171,6 @@ labels and retained failures in place. Their DOM nodes, focus, focal coordinates
 ratio remain unchanged; filenames do not translate, and preset labels only as their field's label does. Changing interface
 language causes no image processing, content write or geometry reset. Crop source-read, render and
 upload failures keep separate recovery identities and safe diagnostics.
-
-`image` and `file` are a card: the picture at the field's own ratio, or the file's type and
-size, with the translatable half beside it and Replace and Remove under it. Image controls
-stack below the preview in narrow panes; clicking the preview opens focal-point editing.
-An empty one is a
-drop zone that takes a file dropped on it and opens the
-[picker](media-fields.md#choosing-a-picture) otherwise. A language that is being translated gets the alt or the display name and nothing
-else — the picture itself is the same in every language.
 
 `reference` is a search box over the collection its schema names, one row per entry with
 the languages that entry has a file in. Choosing one stores `collection/slug`; the chosen

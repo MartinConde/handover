@@ -33,7 +33,7 @@ digits and dashes.
 | `route` | no | The detail page's path with `[slug]` exactly once, e.g. `'/blog/[slug]'`. `[slug]` is the entry's filename without `.yaml`. Two collections cannot share a route. |
 | `index` | no | The listing page, a fixed path with no `[...]` segment, e.g. `'/blog'`. Used wherever something links to "the blog" as a whole rather than to one entry. The entry named `index` in the same collection is that page's own copy: its preview, its links and its sitemap URL are the index path ([A home page](loaders.md#a-home-page)). |
 | `load` | no | The loader's name: `'post'` means `src/loaders/post.ts` ([Loaders and pages](loaders.md)). Preview needs it. |
-| `titleField` | no | The field the entry list shows, when the collection is not keyed on `title`: `titleField: 'name'`. It is also the field "New entry" writes the name you type into, so it has to be a text field of this collection's schema — the build says so if it is not. |
+| `titleField` | no | The field the entry list shows, when the collection is not keyed on `title`: `titleField: 'name'`. It is also the field the new-entry dialog writes the name you type into, so it has to be a text field of this collection's schema — the build says so if it is not. |
 | `localizedSlugs` | no | Each language may serve this collection's entries at a web address of its own. See below. |
 | `label` | no | What the admin calls the collection, written as it reads mid-sentence: `'homes'` or `{ en: 'homes', de: 'Häuser' }`. Without it the key is used. See [Names in each interface language](#names-in-each-interface-language). |
 | `singular` | no | One entry of it, the same way: `{ en: 'home', de: 'Haus' }`. Without it the `label` is used, or the key without its final `s`. |
@@ -267,7 +267,7 @@ a letter.
 
 ## Entry filenames
 
-"New entry" derives the filename from the name you type — the collection's `titleField`
+The new-entry dialog derives the filename from the name you type — the collection's `titleField`
 where it has one: transliterated (`ä → ae`, `é → e`, Cyrillic to Latin; other scripts are
 dropped), lowercased, anything that is not a letter or digit becomes one dash, capped at
 80 characters. An empty name gives `untitled`. If the name already exists in the collection

@@ -54,7 +54,7 @@ own in the language it was written in, without its `_id`s, `_i18n`, `_locales`, 
 `_status` and `slug`. An entry made from a template records its own `_source`, never one the
 template carries. `to` is optional and defaults to the entry's filename; it goes through the same
 derivation as a new entry's title against the starters the collection already has, so `name`
-in the answer is the one actually written. The template is offered by the New entry dialog from
+in the answer is the one actually written. The template is offered by the new-entry dialog from
 then on, ahead of the build that reads it from the repository. Owners only: `403` for an editor,
 `409` if the entry has never been published.
 

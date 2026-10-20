@@ -26,9 +26,6 @@ back and drops the key.
 
 ## In the admin
 
-The destination list scrolls within the dialog. Dialogs fit the viewport and can be closed
-with Escape or a click on the shaded area outside, except while a save is running.
-
 The admin's table refuses a `from` that is a page the site already serves — that redirect would
 take the page off the site — and a second rule from an address that already has one. A visitor
 never hops twice: when a rule is added or edited, older rules pointing at its old address are
@@ -77,7 +74,8 @@ hop:
 
 A path ending in a file name (`/sitemap-index.xml`, `/files/plan.pdf`) has no directory form,
 so it is written once and never gains the slash. A last segment counts as a file name when it
-ends in a dot and a letter (`.xml`, `.pdf`); `/v1.2` is still a page.
+ends in a dot, a letter and any further letters or digits (`.xml`, `.pdf`, `.mp4`); `/v1.2` is
+still a page.
 
 A rule that fails validation fails the build, naming it:
 `src/content/redirects.yaml › rules[0].from: a path starting with "/"`. Redirects from

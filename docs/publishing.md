@@ -139,7 +139,7 @@ still offers only the recovery the response code permits. See [Publish conflicts
 
 ## Creating, renaming and deleting
 
-**New entry** writes a draft and nothing else: the file appears in the repository at its
+The new-entry button writes a draft and nothing else: the file appears in the repository at its
 first publish, so an entry you started and abandoned never reaches git. The filename comes
 from the name you type ([Configuration](configuration.md#entry-filenames)) and counts
 names that exist only as drafts, so two unpublished entries cannot claim the same file.

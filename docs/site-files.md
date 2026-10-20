@@ -85,7 +85,7 @@ blocks:
 The folder is never part of a collection: each collection's loader reads its own folder
 (`base: './src/content/listings'`), so `_templates/` is outside every glob.
 
-**New entry** offers Blank and one choice per starter the collection ships, named after the
+The new-entry dialog offers Blank and one choice per starter the collection ships, named after the
 file (`house.yaml` → *House*). The values are copied into the new draft, every block and array
 row is given an `_id`, and the title typed into the dialog wins over the one the starter
 carries — so a starter needs no ids and no `_status`, `_locales` or `slug` of its own; those

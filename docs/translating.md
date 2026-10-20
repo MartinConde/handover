@@ -21,7 +21,7 @@ but continues to show none of the content-language controls described below.
 
 ## Choosing a language
 
-**New entry** asks which language to write the entry in whenever the site declares more than
+The new-entry dialog asks which language to write the entry in whenever the site declares more than
 one. It starts on the language the list is filtered to, or on the site's default language, and
 the entry is created in the one chosen: writing a legal notice in German makes German its
 source, and creating its English file later leaves it German.

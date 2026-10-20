@@ -59,7 +59,7 @@ descriptions present their localized language names.
 
 ## Creating an entry
 
-"New entry" asks for a title and derives the filename from it
+The new-entry dialog asks for a title and derives the filename from it
 ([Configuration](configuration.md#entry-filenames)). The file itself is not written until
 the entry is published for the first time — until then it is a draft in D1, so the
 filename can still change and an abandoned entry leaves nothing behind. After the first
