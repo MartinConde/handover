@@ -1,4 +1,5 @@
 <script lang="ts">
+import { KeyboardSensor, PointerSensor, type Sensors } from '@dnd-kit/dom';
 import { type DragDropEventHandlers, DragDropProvider } from '@dnd-kit/svelte';
 import { createSortable, isSortable } from '@dnd-kit/svelte/sortable';
 import {
@@ -400,8 +401,9 @@ function ended(at: readonly string[], event: Parameters<Handlers['onDragEnd']>[0
   }
 }
 // Read lazily: an eager read would remake the sortable on every reorder, losing the animation.
-const sortable = (id: () => string, index: () => number) =>
+const sortable = (id: () => string, index: () => number, sensors?: Sensors) =>
   createSortable({
+    ...(sensors && { sensors }),
     get id() {
       return id();
     },
@@ -552,6 +554,14 @@ const gallery = (field: Field) =>
   field.item.length === 1 &&
   field.item[0]?.path.length === 0 &&
   field.item[0]?.type === 'image';
+
+// The picture itself drags as well as the handle; the keyboard still goes through the handle.
+const GALLERY_SENSORS: Sensors = [
+  PointerSensor.configure({ activatorElements: (source) => [source.element, source.handle] }),
+  KeyboardSensor,
+];
+/** The gallery picture whose dialog is open. */
+let editing = $state<{ id: string; index: number }>();
 
 function pickedInto(at: readonly string[], items: MediaItem[]) {
   for (const item of items) add(at, stored('image', item));
@@ -822,10 +832,64 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
         <summary>{text}<span class="count">{m.field_count({ count: field.fields.length }, messageOptions(uiLocale))}</span></summary>
         <div class="form"><Fields fields={field.fields} bind:root {blocks} {blockLabels} {problems} path={at} {translating} {machine} {ontranslate} {sourceChanged} bind:dismissed {sourceLabel} {translatedAt} {onretranslate} {prefix} {mediaBase} {locale} {uiLocale} {site} {servedAt} {session} {oncommand} {onreveal} viewRoot={displayedRoot} inherited={mode} {structureLocked} {textOnly} {reference} /></div>
       </details>
+    {:else if field.type === 'array' && gallery(field) && !translating}
+      {@const items = rows(at)}
+      {@const preset = field.item[0]?.type === 'image' ? field.item[0].preset : {}}
+      {@render groupLabel(id, field, text, at)}
+      <div class="list gallery" {id} role="group" aria-labelledby="{id}-l">
+        <DragDropProvider onDragStart={(e) => begun(at, e)} onDragOver={(e) => over(at, e)} onDragEnd={(e) => ended(at, e)}>
+        {#each items as _row, i (keyOf(items, i))}
+          {@const s = sortable(() => keyOf(items, i), () => i, GALLERY_SENSORS)}
+          {@const cell = [...at, String(i)]}
+          {@const name = m.field_gallery_image({ index: i + 1, count: items.length }, options)}
+          <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -- the edit button is the keyboard route -->
+          <div class={['gallery-item', { 'is-dragging': s.isDragging }]} {@attach s.attach} onclick={(e) => !e.defaultPrevented && (editing = { id, index: i })}>
+            <span class="thumb"><MediaImage src={src(cell)} alt="" loading="lazy" style="object-position: {dot(cell)[0]}% {dot(cell)[1]}%" {uiLocale} /></span>
+            <span class="gallery-number">{i + 1}</span>
+            {#if !str([...cell, 'alt'])}<span class="gallery-no-alt">{m.field_gallery_no_alt({}, options)}</span>{/if}
+            <div class="row-controls">
+              <button class="btn btn-ghost btn-icon handle" type="button" aria-label={m.field_reorder({ item: name }, options)} disabled={structureLocked} {@attach s.attachHandle}>{@render icon('M9 6h.01M9 12h.01M9 18h.01M15 6h.01M15 12h.01M15 18h.01')}</button>
+              <button class="btn btn-ghost btn-icon" type="button" aria-label={m.field_gallery_edit({ index: i + 1 }, options)} onclick={() => (editing = { id, index: i })}>{@render icon('M4 20h4L19 9l-4-4L4 16zM14 6l4 4')}</button>
+              <button class="btn btn-ghost btn-icon remove-row" type="button" aria-label={m.field_remove({ item: name }, options)} disabled={structureLocked} onclick={() => drop(at, i)}>{@render icon('M7 7l10 10M17 7 7 17')}</button>
+            </div>
+          </div>
+        {/each}
+        </DragDropProvider>
+        <button class="btn btn-sm add gallery-add" type="button" aria-label={m.field_list_add_label({ field: text }, options)} disabled={structureLocked} onclick={() => (picker = id)}>{m.field_gallery_add({}, options)}</button>
+      </div>
+      {#if picker === id}
+        <Media kind="images" label={text} {preset} base={mediaBase} many {uiLocale} onpick={(picks) => pickedInto(at, picks)} onclose={() => (picker = '')} />
+      {/if}
+      {#if editing?.id === id && items[editing.index] !== undefined}
+        {@const i = editing.index}
+        {@const cell = [...at, String(i)]}
+        {@const cellId = `${id}.${i}`}
+        <Modal labelledby="{cellId}-h" panelClass="dialog gallery-dialog" initialFocus="input" onclose={() => (editing = undefined)}>
+          <header><h2 id="{cellId}-h">{m.field_gallery_image({ index: i + 1, count: items.length }, options)}</h2></header>
+          <div class="media-card is-image">
+            <button class="thumb field-image-preview" type="button" aria-label={m.field_picture_set_focal({}, options)} title={m.field_picture_set_focal({}, options)} onclick={() => (framing = cellId)} style="aspect-ratio: {aspect(preset)}"><MediaImage src={src(cell)} alt="" style="object-position: {dot(cell)[0]}% {dot(cell)[1]}%" {uiLocale} /><span class="focal" style="left: {dot(cell)[0]}%; top: {dot(cell)[1]}%" aria-hidden="true"></span></button>
+            <div class="meta">
+              <div class="field-image-name"><span title={str([...cell, 'src'])}>{str([...cell, 'src']).split('/').pop()}</span>{#if num([...cell, 'width']) && num([...cell, 'height'])}<small>{num([...cell, 'width'])} × {num([...cell, 'height'])}</small>{/if}</div>
+              {@render altField(cellId, cell)}
+              <div class="actions">
+                <button class="btn btn-sm" type="button" onclick={() => (framing = cellId)}>{m.field_picture_set_focal({}, options)}</button>
+                <button class="btn btn-sm" type="button" onclick={() => (picker = cellId)}>{m.field_replace({}, options)}</button>
+                <button class="btn btn-sm btn-ghost btn-icon image-remove" type="button" aria-label={m.field_remove_value({}, options)} title={m.field_remove_value({}, options)} disabled={structureLocked} onclick={() => { drop(at, i); editing = undefined; }}>{@render icon('M3 6h18M9 6V4h6v2M5 6l1 14h12l1-14M10 10v6M14 10v6')}</button>
+              </div>
+            </div>
+          </div>
+          <div class="actions"><button class="btn btn-primary" type="button" onclick={() => (editing = undefined)}>{m.field_gallery_done({}, options)}</button></div>
+        </Modal>
+        {#if framing === cellId}
+          <Focal name={text} url={src(cell)} focal={point(cell)} presets={preset.ratio ? [{ label: text, preset }] : []} {uiLocale} onsave={(moved) => { write([...cell, 'focal'], centred(moved) ? undefined : moved); framing = ''; }} onclose={() => (framing = '')} />
+        {/if}
+        {#if picker === cellId}
+          <Media kind="images" label={text} {preset} base={mediaBase} {uiLocale} onpick={(picks) => picked(cell, 'image', picks)} onclose={() => (picker = '')} />
+        {/if}
+      {/if}
     {:else if field.type === 'array'}
       {@const items = rows(at)}
       {@const scalar = field.item.length === 1 && field.item[0]?.path.length === 0}
-      {@const isGallery = gallery(field)}
       {@render groupLabel(id, field, text, at)}
       <div class="list" {id} role="group" aria-labelledby="{id}-l">
         <DragDropProvider onDragStart={(e) => begun(at, e)} onDragOver={(e) => over(at, e)} onDragEnd={(e) => ended(at, e)}>
@@ -857,21 +921,9 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
         {/each}
         </DragDropProvider>
         {#if !translating}
-          <button class="btn btn-sm add" type="button" aria-label={m.field_list_add_label({ field: text }, messageOptions(uiLocale))} disabled={structureLocked} onclick={() => (isGallery ? (picker = id) : add(at, scalar ? '' : { _id: newId('default') }))}>{m.field_list_add({}, messageOptions(uiLocale))}</button>
+          <button class="btn btn-sm add" type="button" aria-label={m.field_list_add_label({ field: text }, messageOptions(uiLocale))} disabled={structureLocked} onclick={() => add(at, scalar ? '' : { _id: newId('default') })}>{m.field_list_add({}, messageOptions(uiLocale))}</button>
         {/if}
       </div>
-      {#if isGallery && picker === id}
-        <Media
-          kind="images"
-          label={text}
-          preset={field.item[0]?.type === 'image' ? field.item[0].preset : {}}
-          base={mediaBase}
-          many
-          {uiLocale}
-          onpick={(items) => pickedInto(at, items)}
-          onclose={() => (picker = '')}
-        />
-      {/if}
     {:else if field.type === 'blocks'}
       {@const items = rows(at)}
       {@render groupLabel(id, field, text, at)}

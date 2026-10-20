@@ -994,7 +994,7 @@ const click = (sel: string) => {
 };
 
 // jsdom lays nothing out, so cards are stacked 100 px tall in DOM order for dnd-kit's hit test.
-const CARD = '.row-card, .block-card';
+const CARD = '.row-card, .block-card, .gallery-item';
 const laidOut = () =>
   vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
     const found = this.closest(CARD);
@@ -2003,14 +2003,14 @@ test('replacing an image keeps the page alt override', async () => {
 });
 
 // The picker takes several at once so a gallery is filled in one pass, not Add-then-choose.
+const galleryField: Field = {
+  path: ['gallery'],
+  label: 'Gallery',
+  type: 'array',
+  required: false,
+  item: [{ path: [], label: 'Gallery', type: 'image', required: true, preset: { ratio: '4:3' } }],
+};
 test('a gallery field inserts every picked image as a row of its own', async () => {
-  const galleryField: Field = {
-    path: ['gallery'],
-    label: 'Gallery',
-    type: 'array',
-    required: false,
-    item: [{ path: [], label: 'Gallery', type: 'image', required: true, preset: { ratio: '4:3' } }],
-  };
   library([
     { id: 'a'.repeat(64), src: 'media/a.webp', filename: 'harbour.jpg', width: 2400, height: 1800 },
     { id: 'b'.repeat(64), src: 'media/b.webp', filename: 'garden.jpg', width: 2000, height: 1500 },
@@ -2032,6 +2032,66 @@ gallery:
     height: 1800
 `,
   );
+});
+
+const pictures = () => ({
+  _version: 1,
+  gallery: [
+    { src: 'media/a.webp', alt: 'Harbour', width: 2400, height: 1800 },
+    { src: 'media/b.webp', width: 2000, height: 1500 },
+    { src: 'media/c.webp', alt: 'Garden', width: 2000, height: 1500 },
+  ],
+});
+const galleryRows = () => snap().gallery as unknown as { src: string; alt?: string }[];
+const gallerySrcs = () => galleryRows().map((row) => row.src);
+const thumbs = () => Array.from(document.querySelectorAll<HTMLElement>('.gallery-item img'));
+
+test('a gallery is a grid of thumbnails, marking the one without alt text', () => {
+  show([galleryField], pictures());
+  expect(thumbs().map((img) => img.getAttribute('src'))).toEqual([
+    '/media/a.webp',
+    '/media/b.webp',
+    '/media/c.webp',
+  ]);
+  const marked = Array.from(document.querySelectorAll('.gallery-item')).map(
+    (item) => item.querySelector('.gallery-no-alt')?.textContent ?? '',
+  );
+  expect(marked).toEqual(['', 'No alt text', '']);
+});
+
+test('a gallery thumbnail moves with the keyboard from its handle', async () => {
+  laidOut();
+  show([galleryField], pictures());
+  await keyMove('Image 1 of 3', 2);
+  expect(gallerySrcs()).toEqual(['media/b.webp', 'media/c.webp', 'media/a.webp']);
+});
+
+test('a gallery thumbnail drags by its picture, not only its handle', async () => {
+  laidOut();
+  show([galleryField], pictures());
+  const picture = thumbs()[0] as HTMLElement;
+  await pointer(picture, 'pointerdown', 50);
+  await pointer(document, 'pointermove', 150);
+  await pointer(document, 'pointermove', 250);
+  await pointer(document, 'pointerup', 250);
+  expect(gallerySrcs()).toEqual(['media/b.webp', 'media/c.webp', 'media/a.webp']);
+});
+
+test('the × on a gallery thumbnail removes that picture', () => {
+  show([galleryField], pictures());
+  click('[aria-label="Remove Image 2 of 3"]');
+  expect(gallerySrcs()).toEqual(['media/a.webp', 'media/c.webp']);
+});
+
+test('clicking a gallery thumbnail opens a dialog that edits its alt text', () => {
+  show([galleryField], pictures());
+  (thumbs()[1] as HTMLElement).click();
+  flushSync();
+  expect(q('.gallery-dialog h2').textContent).toBe('Image 2 of 3');
+  type('.gallery-dialog input', 'Courtyard');
+  click('.gallery-dialog .btn-primary');
+  expect(document.querySelector('.gallery-dialog')).toBeNull();
+  expect(galleryRows().map((row) => row.alt)).toEqual(['Harbour', 'Courtyard', 'Garden']);
 });
 
 test('the file card names the download, and Remove empties the field', () => {

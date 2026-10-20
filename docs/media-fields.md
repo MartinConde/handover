@@ -54,8 +54,17 @@ a HEAD cannot measure one — is refused by every image field, floor or no floor
 those two numbers.
 
 An **array of `image`** — a gallery — is the one field the picker takes several pictures for at
-once. *Add to …* opens it with checkboxes rather than radio buttons, the panel beside the grid is
+once. *Add images* opens it with checkboxes rather than radio buttons, the panel beside the grid is
 the order they will go in, and each ticked picture becomes a row of its own.
+
+```ts
+gallery: z.array(image({ max: 2560 })).optional(),
+```
+
+The form draws a gallery as a grid of thumbnails. Drag a picture to reorder it, or use its grip
+with the keyboard; the × removes it. Click a picture to open it in a dialog with its alt text,
+focal point and *Replace*. A picture with no alt text is marked *No alt text* on the grid. While
+translating, a gallery is a list again, since its alt text is all a translation changes.
 
 ## The focal point on a field
 

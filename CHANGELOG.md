@@ -4,6 +4,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- An array of images is edited as a gallery: a grid of thumbnails you drag to reorder, with a
+  dialog per picture for alt text, focal point and Replace. Pictures without alt text are marked.
+
 - Add block opens a dialog so choices stay accessible in nested forms. Open section
   headers keep their tint without the left-hand accent. The wider block chooser uses
   spacious cards in a responsive grid, with its heading and Cancel action always visible.
