@@ -200,11 +200,6 @@ async function translationFailure(response: Response): Promise<UiMessage> {
   return detail ? { ...message, detail } : message;
 }
 
-/** The publish reads D1, so a click a second after typing must find this language there. */
-async function flush(): Promise<boolean> {
-  return session.flush();
-}
-
 const named = (of: string) => formatLanguageName(of, uiLocale);
 
 let referenceOpen = $state(false);
@@ -301,7 +296,7 @@ const failureDetail = $derived(fillFailure ? messageDetail(fillFailure, uiLocale
     {/if}
     <AutosaveStatus {saving} {failed} unsaved={isUnsaved} {uiLocale}>
       {#snippet failure()}
-        {#if fillFailure?.code === 'TRANSLATION_UNCONFIRMED'}<button type="button" class="btn-link" onclick={() => location.reload()}>{m.editor_lock_reload({}, options)}</button>{:else}<button type="button" class="btn-link" onclick={() => fillFailure ? fill(retryPaths) : flush()}>{fillFailure ? m.translation_retry({}, options) : m.editor_save_retry({}, options)}</button>{/if}
+        {#if fillFailure?.code === 'TRANSLATION_UNCONFIRMED'}<button type="button" class="btn-link" onclick={() => location.reload()}>{m.editor_lock_reload({}, options)}</button>{:else}<button type="button" class="btn-link" onclick={() => fillFailure ? fill(retryPaths) : session.flush()}>{fillFailure ? m.translation_retry({}, options) : m.editor_save_retry({}, options)}</button>{/if}
       {/snippet}
     </AutosaveStatus>
     <span class="spacer"></span>
