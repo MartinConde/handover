@@ -1,4 +1,4 @@
-import { DraftRevisionError, loadDraft } from '@handover/core';
+import { DraftRevisionError, EntryShapeError, loadDraft } from '@handover/core';
 import { expect, test, vi } from 'vitest';
 import {
   beats,
@@ -65,13 +65,24 @@ test('a global takes a draft through the same autosave as an entry', async () =>
 test('an autosave the serialiser cannot write back is refused, with the reason', async () => {
   saveDraft.mockClear();
   saveDraft.mockImplementationOnce(async () => {
-    throw new Error('Nested array at tags[0]: wrap the inner array in an object');
+    throw new EntryShapeError('Nested array at tags[0]: wrap the inner array in an object');
   });
   const res = await PUT(
     put('drafts/listings/mill-house', JSON.stringify({ revision: 'opened', data: { tags: [[]] } })),
   );
   expect(res.status).toBe(400);
   expect(await res.text()).toBe('Nested array at tags[0]: wrap the inner array in an object');
+});
+
+test('a database failure during autosave reaches the 500 path, not a 400 with its message', async () => {
+  saveDraft.mockClear();
+  saveDraft.mockImplementationOnce(async () => {
+    throw new Error('D1_ERROR: no such table: drafts');
+  });
+
+  await expect(
+    PUT(put('drafts/listings/mill-house', JSON.stringify({ revision: 'opened', data: { a: 1 } }))),
+  ).rejects.toThrow('D1_ERROR: no such table: drafts');
 });
 
 test('a body that is not an object, and an unknown collection, are refused', async () => {

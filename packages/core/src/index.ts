@@ -101,7 +101,13 @@ export {
   redirectSourceError,
   redirectsText,
 } from './content/redirects.js';
-export { filterLive, isLive, newId, regenerateIds } from './content/reserved.js';
+export {
+  EntryShapeError,
+  filterLive,
+  isLive,
+  newId,
+  regenerateIds,
+} from './content/reserved.js';
 export type { RichtextTier } from './content/richtext.js';
 export {
   renderRichtext,

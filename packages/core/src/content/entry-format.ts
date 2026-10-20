@@ -1,5 +1,5 @@
 import { Document, isMap, isScalar, isSeq, parse, parseDocument, visit } from 'yaml';
-import { checkReserved, RESERVED_KEYS } from './reserved.js';
+import { checkReserved, EntryShapeError, RESERVED_KEYS } from './reserved.js';
 import { type Field, type FieldsOf, type Form, rowFields, type Translation } from './schema.js';
 import { keptMachine } from './translate.js';
 
@@ -249,7 +249,7 @@ export function overlay(
 export function stringifyEntry(_siteId: string, data: unknown): string {
   if (!data || typeof data !== 'object' || Array.isArray(data)) {
     const kind = Array.isArray(data) ? 'an array' : data === null ? 'null' : typeof data;
-    throw new Error(`Entry: expected an object, got ${kind}`);
+    throw new EntryShapeError(`Entry: expected an object, got ${kind}`);
   }
   checkReserved(data);
   const doc = new Document(canonical(data, ''));
@@ -267,12 +267,14 @@ export function stringifyEntry(_siteId: string, data: unknown): string {
 function canonical(value: unknown, path: string): unknown {
   if (typeof value === 'string') return normalise(value);
   if (value instanceof Date) {
-    throw new Error(`Date object at ${path}: store dates as "YYYY-MM-DD" strings`);
+    throw new EntryShapeError(`Date object at ${path}: store dates as "YYYY-MM-DD" strings`);
   }
   if (Array.isArray(value)) {
     return value.map((item, i) => {
       if (Array.isArray(item)) {
-        throw new Error(`Nested array at ${path}[${i}]: wrap the inner array in an object`);
+        throw new EntryShapeError(
+          `Nested array at ${path}[${i}]: wrap the inner array in an object`,
+        );
       }
       return canonical(item, `${path}[${i}]`);
     });
@@ -287,7 +289,7 @@ function canonical(value: unknown, path: string): unknown {
     keys.sort((a, b) => rank(a) - rank(b));
     for (const k of keys)
       if (k === '<<' || /[\uFFFE\uFFFF]/.test(k))
-        throw new Error(
+        throw new EntryShapeError(
           `${path ? `${path}.${k}` : k}: Astro's YAML loader cannot read this key — rename it`,
         );
     return Object.fromEntries(keys.map((k) => [k, canonical(obj[k], path ? `${path}.${k}` : k)]));

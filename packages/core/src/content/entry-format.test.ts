@@ -13,6 +13,7 @@ import {
   writtenEntry,
 } from './entry-format.js';
 import { syncLocale } from './locale-sync.js';
+import { EntryShapeError } from './reserved.js';
 import type { Form } from './schema.js';
 
 // Publish decides "nothing pending" by blob SHA, so a byte change in the serialiser is a bug.
@@ -185,6 +186,25 @@ test('a date is stored as a quoted string, never a YAML timestamp or a Date', ()
   expect(() => stringifyEntry('default', { availableFrom: new Date('2026-09-01') })).toThrow(
     'Date object at availableFrom',
   );
+});
+
+test('every shape the serialiser refuses is an EntryShapeError', () => {
+  const refused = [
+    // an array
+    ['x'],
+    // a Date
+    { when: new Date('2026-09-01') },
+    // a nested array
+    { tags: [[]] },
+    // a key YAML cannot load
+    { '<<': 'x' },
+    // a duplicate row id
+    { rows: [{ _id: 'same0001' }, { _id: 'same0001' }] },
+    // a misplaced _version
+    { rows: [{ _version: 2 }] },
+  ];
+  for (const data of refused)
+    expect(() => stringifyEntry('default', data)).toThrow(EntryShapeError);
 });
 
 test('reserved keys come first in fixed order, then fields in schema order', () => {

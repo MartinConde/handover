@@ -30,7 +30,8 @@ from session state and never matches or rewrites `message`. Schema/check message
 global error maps remain unmarked and authored. Keys
 beginning with `_` are ignored: they belong to the file, not to the form. `400` if `data`
 is not an object or holds a shape the serialiser cannot write back (a nested array), with
-the reason as the body; `404` if the collection or the file does not exist. `409` with
+the reason as the body; `404` if the collection or the file does not exist; a storage failure
+is a `500` with no detail. `409` with
 `{ "held_by", "mine", "expires_at" }` when another tab holds the entry — somebody else's, or
 the same person's ([Working together](working-together.md#take-over)).
 

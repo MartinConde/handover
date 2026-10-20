@@ -14,6 +14,9 @@ export const RESERVED_KEYS = [
   '_machine',
 ] as const;
 
+/** An entry's data has a shape the files cannot hold; the editor shows its message. */
+export class EntryShapeError extends Error {}
+
 const ID = /^[0-9a-z]{8}$/;
 const ALPHABET = '0123456789abcdefghijklmnopqrstuvwxyz';
 
@@ -39,7 +42,7 @@ export function checkReserved(value: unknown, path = ''): void {
       if (typeof id !== 'string') continue;
       const first = identities.get(id);
       if (first)
-        throw new Error(
+        throw new EntryShapeError(
           `${itemPath}._id: duplicate row identity ${JSON.stringify(id)}; already used at ${first}._id. Give each row in ${path || 'this collection'} a unique _id and keep matching IDs aligned across locale files.`,
         );
       identities.set(id, itemPath);
@@ -50,7 +53,7 @@ export function checkReserved(value: unknown, path = ''): void {
   const obj = value as Record<string, unknown>;
   const at = (k: string) => (path ? `${path}.${k}` : k);
   const fail = (k: string, want: string) => {
-    throw new Error(`${at(k)}: expected ${want}, got ${JSON.stringify(obj[k])}`);
+    throw new EntryShapeError(`${at(k)}: expected ${want}, got ${JSON.stringify(obj[k])}`);
   };
   const top = path === '';
   for (const k of Object.keys(obj)) {

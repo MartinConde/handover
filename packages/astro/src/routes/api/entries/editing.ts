@@ -2,11 +2,9 @@ import config from 'virtual:handover/config';
 import type { Form, LocaleSeed } from '@handover/core';
 import {
   claimLock,
-  DraftRevisionError,
   driftReport,
+  EntryShapeError,
   holdEntry,
-  isDraftRace,
-  isMediaRace,
   lockHolder,
   logActivity,
   resolveFieldTarget,
@@ -340,10 +338,10 @@ export async function autosave(
       body.revision,
     );
   } catch (err) {
-    // `answering` has the 409s for these.
-    if (err instanceof DraftRevisionError || isDraftRace(err) || isMediaRace(err)) throw err;
-    // A shape the serialiser cannot write (a nested array) is refused with its reason.
-    return new Response(err instanceof Error ? err.message : 'Bad request', { status: 400 });
+    // A shape the serialiser cannot write (a nested array) is refused with its reason; anything
+    // else is `answering`'s (409s, 503s) or the generic 500.
+    if (!(err instanceof EntryShapeError)) throw err;
+    return new Response(err.message, { status: 400 });
   }
   if (!saved) return notFound();
   return Response.json({ ...saved, problems: entryProblems(schema, data) });

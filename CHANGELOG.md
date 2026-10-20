@@ -4,6 +4,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Autosave answers `400` with the reason only when the data has a shape the files cannot hold
+  (a nested array, a duplicate row `_id`); a database failure now gets the generic `500`
+  instead of a `400` carrying its raw message.
 - Internal: the admin's markup is re-indented and its long lines wrapped, with the compiled
   output unchanged, and three test files no longer use non-null assertions.
 - Internal: the admin shell's drafts and build status and its revert dialog sit in their own
