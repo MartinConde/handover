@@ -66,7 +66,7 @@ const withMark = (data: Data, mark: unknown): Data => {
 const known = (collection: string, slug: string) =>
   collection === 'globals' ? Boolean(config.globals?.[slug]) : collection in config.collections;
 
-/** What recording would write: the rule-6 answer of every unmarked entry with two or more files. */
+// What recording would write: the rule-6 answer of every unmarked entry with two or more files.
 async function unrecorded(
   published: readonly ContentFile[],
   drafted: readonly ContentFile[],
@@ -297,7 +297,7 @@ type Detail = {
 };
 const summary = ({ entries, stale, sources }: Detail) => ({ entries, stale, sources });
 
-/** Moves each open draft onto the commit; a retry reads both sides of it from the repository. */
+// Moves each open draft onto the commit; a retry reads both sides of it from the repository.
 async function finish(
   ctx: RequestContext,
   operation: Operation,

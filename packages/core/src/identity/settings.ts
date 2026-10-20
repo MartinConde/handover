@@ -20,7 +20,6 @@ const UNSET =
 const WRONG_SIZE =
   'HANDOVER_SETTINGS_KEY is not 32 bytes of base64: make one with `openssl rand -base64 32`';
 
-/** AES-256-GCM under the Worker's own secret. */
 async function aesKey(secret: string | undefined) {
   if (!secret) throw new Error(UNSET);
   let raw: Uint8Array;

@@ -129,7 +129,7 @@ export async function setEntryStatus(
   await batchAll(db, writes);
 }
 
-/** Each of these is owned by an action of its own, never by a version of the words. */
+// Each of these is owned by an action of its own, never by a version of the words.
 const KEPT_ON_RESTORE = ['slug', '_status', '_locales', '_source'] as const;
 
 // A key assigned in place lands after the other `_` keys; `_source` sits right after `_version`.

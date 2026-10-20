@@ -21,7 +21,7 @@ import { readJson } from './body.js';
 import { pickable } from './content.js';
 import { codedError } from './respond.js';
 
-/** What a `from` is held against: a redirect over a live page takes it off the site silently. */
+// What a `from` is held against: a redirect over a live page takes it off the site silently.
 function sitePages(entries: Awaited<ReturnType<typeof pickable>>): Record<string, string> {
   const pages: Record<string, string> = {};
   for (const [collection, collected] of Object.entries(config.collections))
@@ -61,7 +61,7 @@ export async function redirectList(ctx: RequestContext): Promise<Response> {
   });
 }
 
-/** A rule the entry owns: hiding wrote it and showing the entry again takes it back out. */
+// A rule the entry owns: hiding wrote it and showing the entry again takes it back out.
 const MANAGED =
   'This redirect belongs to the entry that is hidden. Show that entry again and the redirect goes with it.';
 

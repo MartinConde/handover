@@ -183,7 +183,7 @@ const indexOf = (key: string, length: number): number | undefined => {
   return Number.isSafeInteger(index) && index >= 0 && index < length ? index : undefined;
 };
 
-/** The schema leaf that owns a positional path, including a widget's internal properties. */
+// The schema leaf that owns a positional path, including a widget's internal properties.
 function fieldAt(form: Form, path: readonly string[], root: unknown): Field | undefined {
   const walk = (fields: readonly Field[], offset: number, node: unknown): Field | undefined => {
     for (const field of fields) {
@@ -230,7 +230,7 @@ function readAt(data: unknown, path: string): unknown {
   return node;
 }
 
-/** A missing group is made on the way down; a missing row is not, as a fill never adds blocks. */
+// A missing group is made on the way down; a missing row is not, as a fill never adds blocks.
 function writeAt(data: Record<string, unknown>, path: string, value: string): boolean {
   const steps = stepsOf(path);
   const last = steps.pop();

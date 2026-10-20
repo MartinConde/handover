@@ -17,7 +17,7 @@ import * as authTables from './auth-schema.js';
 /** The one path no session assert may cover. */
 export const AUTH_BASE_PATH = '/admin/api/auth';
 
-/** The login screen quotes this number. */
+// The login screen quotes this number.
 const MAGIC_LINK_MINUTES = 15;
 
 // Only member management is gated here; what each role may do is asserted by the routes.
@@ -255,10 +255,10 @@ export interface MemberApi {
 export const memberApi = (_siteId: string, auth: Auth): MemberApi =>
   auth.api as unknown as MemberApi;
 
-/** A mailed reset link is opened once; ten a minute from one address is somebody guessing. */
+// A mailed reset link is opened once; ten a minute from one address is somebody guessing.
 const RESET_LINKS = { window: 60, max: 10 };
 
-/** One row per address, bumped in one statement so parallel requests cannot share a count. */
+// One row per address, bumped in one statement so parallel requests cannot share a count.
 async function resetLinkRefused(db: Db, request: Request, options: BetterAuthOptions) {
   const { rateLimit: table } = authTables;
   const now = Date.now();

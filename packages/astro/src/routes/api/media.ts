@@ -53,7 +53,7 @@ export const UPLOAD_KEY = /^uploads\/[0-9a-f-]{36}\/(?:media|files)\/[0-9a-f]{64
 const NO_UPLOAD_BUCKET =
   'No private upload bucket is configured: add an R2 binding named MEDIA_UPLOADS';
 
-/** The key a content file stores, and where the asset is served from. */
+// The key a content file stores, and where the asset is served from.
 function mediaItem(row: MediaRow) {
   const base = config.media?.publicBase?.replace(/\/$/, '');
   return {
@@ -70,7 +70,7 @@ function mediaItem(row: MediaRow) {
   };
 }
 
-/** The asset as the library knows it; an upload's answer has none of this yet. */
+// The asset as the library knows it; an upload's answer has none of this yet.
 function libraryItem(row: MediaRow, used: readonly string[] = []) {
   return {
     ...mediaItem(row),
@@ -205,7 +205,7 @@ export async function deleteAsset(
   return Response.json({ deleted: id });
 }
 
-/** Both halves of an upload declare against this; the url's hash wins over the body's. */
+// Both halves of an upload declare against this; the url's hash wins over the body's.
 function declaredUpload(body: unknown, hash?: string): Upload | undefined {
   const sent = body as Record<string, unknown> | undefined;
   const id = hash ?? sent?.hash;

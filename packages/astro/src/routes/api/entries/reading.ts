@@ -27,7 +27,7 @@ import {
 } from '../content.js';
 import { entryNotFound, notFound } from '../respond.js';
 
-/** Committed and draft rules are both read; empty means the client answered "nowhere". */
+// Committed and draft rules are both read; empty means the client answered "nowhere".
 async function hideTargets(
   ctx: RequestContext,
   collection: string,

@@ -1,7 +1,7 @@
 import { FORMAT_VERSION, newId } from '@handover/core';
 import type { I18n } from './config-reader.js';
 
-/** The bindings the site needs; also what init prints when the config file is not its own. */
+// The bindings the site needs; also what init prints when the config file is not its own.
 const bindings = (
   name: string,
   account: string,

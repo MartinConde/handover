@@ -255,7 +255,6 @@ async function navLinks<C extends Record<string, unknown>>(
   return links;
 }
 
-/** A collection's live entries in this language, as the items an index item lists. */
 async function entryLinks<C extends Record<string, unknown>>(
   siteId: string,
   source: ContentSource<C>,
@@ -292,7 +291,6 @@ export function indexName(collection: string, label: unknown, locale: string): s
   return named ? named.charAt(0).toUpperCase() + named.slice(1) : humanise(collection);
 }
 
-/** Where one item points in this language, and what the page it points at is called. */
 async function href<C extends Record<string, unknown>>(
   siteId: string,
   source: ContentSource<C>,

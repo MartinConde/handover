@@ -27,7 +27,7 @@ import { readJson } from './body.js';
 import { entryFiles, entryPath, takenNames } from './content.js';
 import { codedError, forbidden, isOwner, notFound } from './respond.js';
 
-/** The baseline order: which published file a template copies where the files disagree about their source. */
+// The baseline order: which published file a template copies where the files disagree about their source.
 const sourceOrder = () => [...new Set([config.i18n.defaultLocale, ...config.i18n.locales])];
 
 const templatePath = (collection: string, name: string) =>

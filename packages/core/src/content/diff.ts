@@ -127,7 +127,7 @@ function changesIn(
   }
 }
 
-/** Only the properties a translator retypes are the language's. */
+// Only the properties a translator retypes are the language's.
 function leafIn(
   field: Field,
   before: unknown,
@@ -259,7 +259,6 @@ function propsIn(
   }
 }
 
-/** Property names under a structured field, in each language where the package knows them. */
 function propName(field: Field, keys: string[]): Named {
   const known = keys.map((k) => PROP_NAMES_OF[field.type]?.[k] ?? PROP_NAMES[k]);
   const label = (locale: UiLocale | undefined) =>
@@ -272,7 +271,7 @@ function propName(field: Field, keys: string[]): Named {
     : { label: label(undefined) };
 }
 
-/** Keyed by `_id` so a moved block says so; rows without one pair by position and never move. */
+// Keyed by `_id` so a moved block says so; rows without one pair by position and never move.
 function rowsIn(
   form: Form,
   fieldsOf: FieldsOf,
@@ -367,7 +366,7 @@ export function joinedName(prefix: Named, name: Named): Named {
   };
 }
 
-/** Position among the rows of its type, only where that type appears more than once. */
+// Position among the rows of its type, only where that type appears more than once.
 const nth = (rows: Map<string, unknown>, key: string): number | undefined => {
   const typeIn = (row: unknown) => (isObject(row) ? row._type : undefined);
   const mine = typeIn(rows.get(key));
@@ -395,7 +394,7 @@ const typeOf = (form: Form, row: unknown, number?: number): { type?: string; typ
   };
 };
 
-/** A menu item named by its page keeps no label of its own, hence the link fallback. */
+// A menu item named by its page keeps no label of its own, hence the link fallback.
 function rowLabel(
   form: Form,
   fields: readonly Field[],
@@ -427,7 +426,7 @@ function firstWords(fields: readonly Field[], row: unknown): string | undefined 
   return undefined;
 }
 
-/** The longest run that kept its order stood still; two rows that swapped are one move, not two. */
+// The longest run that kept its order stood still; two rows that swapped are one move, not two.
 function movers(before: string[], after: string[]): Map<string, 'moved-up' | 'moved-down'> {
   const kept = new Set(after);
   const had = new Set(before);
@@ -450,7 +449,7 @@ function movers(before: string[], after: string[]): Map<string, 'moved-up' | 'mo
 // one comparison from consuming the Worker's isolate memory or CPU budget.
 const MAX_LCS_CELLS = 1_000_000;
 
-/** Exact after trimming common edges; undefined asks the caller for a deterministic coarse diff. */
+// Exact after trimming common edges; undefined asks the caller for a deterministic coarse diff.
 function lcs<T extends string>(a: T[], b: T[]): T[] | undefined {
   let prefix = 0;
   while (prefix < a.length && prefix < b.length && a[prefix] === b[prefix]) prefix++;
@@ -495,7 +494,7 @@ function lcs<T extends string>(a: T[], b: T[]): T[] | undefined {
   return out;
 }
 
-/** Split on word boundaries, so adding a comma is not the whole word replaced; never on lines. */
+// Split on word boundaries, so adding a comma is not the whole word replaced; never on lines.
 function wordDiff(before: string, after: string): WordPart[] | undefined {
   const a = words(before);
   const b = words(after);

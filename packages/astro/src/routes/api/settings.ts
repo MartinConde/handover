@@ -72,7 +72,7 @@ export function diagnostics(session: App.Locals['handover']): Response {
   });
 }
 
-/** Something the site was never told, rather than something that refused: a different sentence. */
+// Something the site was never told, rather than something that refused: a different sentence.
 const unset = (why: string) => codedError(503, 'DIAGNOSTIC_UNAVAILABLE', why);
 
 /** The key itself is never in the answer: only its last four characters, who set it and when. */
@@ -357,7 +357,7 @@ export async function simulateConflict(
 
 const SCRATCH = 'Conflict check';
 
-/** `undefined` where a required field has no stand-in, since the site builds from this file. */
+// `undefined` where a required field has no stand-in, since the site builds from this file.
 function sampleValues(fields: Form['fields']): Record<string, unknown> | undefined {
   const out: Record<string, unknown> = {};
   for (const field of fields) {

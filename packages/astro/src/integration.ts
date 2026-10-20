@@ -93,11 +93,7 @@ const oneSvelte: Plugin = {
   },
 };
 
-/**
- * The admin SPA built again inside the site with its screens compiled in. `uiBuildConfig` is
- * TypeScript inside `@handover/ui`, which Node refuses to import from `node_modules`; Vite's
- * runner reads it anyway. `configFile: false` keeps a site's own `vite.config.ts` out of it.
- */
+// Node refuses `uiBuildConfig` (TypeScript in node_modules), so Vite's runner reads it.
 async function uiBuildOptions(root: URL, screens: Screens): Promise<InlineConfig> {
   const { runnerImport } = await import('vite');
   const { module } = await runnerImport<{ uiBuildConfig: typeof uiBuildConfig }>(
@@ -365,7 +361,7 @@ type AstroI18n = {
   routing?: unknown;
 };
 
-/** A drift would put a German file under a folder Astro never builds, silently. */
+// A drift would put a German file under a folder Astro never builds, silently.
 function i18nErrors(
   cms: HandoverConfig['i18n'],
   astro: AstroI18n | undefined,
@@ -540,9 +536,7 @@ export default function handover(cms: HandoverConfig): AstroIntegration {
         const contentDir = fileURLToPath(new URL('src/content/', config.root));
         updateConfig({
           vite: {
-            // Installed from a registry the package sits in node_modules, where Vite's dev
-            // optimiser stops looking for dependencies, and `@handover/core`'s CommonJS
-            // transitives reach workerd raw: every route answers `module is not defined`.
+            // Under node_modules Vite skips core's CommonJS deps: "module is not defined".
             ssr: { optimizeDeps: { include: ['astro-handover > @handover/core'] } },
             plugins: [
               {

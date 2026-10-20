@@ -7,12 +7,12 @@ interface ProblemDescriptor {
   exact?: boolean;
 }
 
-/** One thing the schema will not accept, addressed the way the form addresses its fields. */
+// One thing the schema will not accept, addressed the way the form addresses its fields.
 interface Problem {
   /** Dotted, array indices included: `body.0.heading`. */
   path: string;
   message: string;
-  /** Additive presentation identity; `message` remains the compatibility fallback. */
+  /** Extra identity for the form; `message` stays the fallback. */
   descriptor?: ProblemDescriptor;
 }
 
@@ -73,7 +73,7 @@ function descriptorOf(issue: Issue): ProblemDescriptor | undefined {
   return undefined;
 }
 
-/** Branches that failed on a reserved key never applied; one left is the real list of issues. */
+// Branches that failed on a reserved key never applied; one left is the real list of issues.
 function problemsOf(issue: Issue, base: PropertyKey[]): Problem[] {
   const path = [...base, ...issue.path];
   // A missing key is what every new entry meets, so it gets the one word the form marks it with.
@@ -100,8 +100,7 @@ export function entryProblems(schema: z.ZodType, data: unknown): Problem[] {
   const customError = z.config().customError;
   const parsed = schema.safeParse(data, {
     error: (raw) => {
-      // Returning nothing preserves Zod's normal message precedence. Reaching this callback proves
-      // no schema/check message won; a consumer-wide custom map remains authored and unmarked.
+      // Returning nothing keeps Zod's message precedence; a site-wide customError stays unmarked.
       if (!customError) {
         const issue = raw as unknown as Issue;
         const descriptor = descriptorOf(issue);

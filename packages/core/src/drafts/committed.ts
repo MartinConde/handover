@@ -264,7 +264,7 @@ async function current(rows: Draft[], index: ContentIndex): Promise<ContentFile[
   return rows.filter((_, i) => !stale[i]).map(({ path, contents }) => ({ path, contents }));
 }
 
-/** A rename or delete is a commit then a D1 write; this must not race the second half. */
+// A rename or delete is a commit then a D1 write; this must not race the second half.
 const ORPHAN_AGE = 24 * 60 * 60 * 1000;
 
 /** Only unchanged rows abandoned by the repository are disposable without user recovery. */

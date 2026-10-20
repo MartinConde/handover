@@ -113,7 +113,6 @@ interface Flat {
 
 const keyOf = (locale: string | undefined, path: string) => `${locale ?? ''}\u0000${path}`;
 
-/** Every change in a report by the language and path it is at, a row's own included. */
 function flatten(groups: DiffGroup[]): Map<string, Flat> {
   const found = new Map<string, Flat>();
   const walk = (
@@ -144,7 +143,7 @@ function flatten(groups: DiffGroup[]): Map<string, Flat> {
   return found;
 }
 
-/** What a change leaves behind, where that is something to compare two of. */
+// What a change leaves behind, where that is something to compare two of.
 const after = (change: Change): string | undefined =>
   change.kind === 'value'
     ? change.after
@@ -155,7 +154,7 @@ const after = (change: Change): string | undefined =>
           .join('')
       : undefined;
 
-/** And what it started from, which is the one thing that makes two answers answerable. */
+// And what it started from, which is the one thing that makes two answers answerable.
 const before = (change: Change): string | undefined =>
   change.kind === 'value'
     ? change.before
@@ -220,7 +219,7 @@ const set = (out: Record<string, unknown>, key: string, value: unknown) => {
   else out[key] = value;
 };
 
-/** The diff's split, so a replaced picture file and a retyped `alt` both come out. */
+// The diff's split, so a replaced picture file and a retyped `alt` both come out.
 function leafIn(field: Field, at: ThreeWay, path: string, ctx: Sides): unknown {
   const translated = TRANSLATED_PROPS[field.type];
   if (translated && (isObject(at.ours) || isObject(at.theirs)))
@@ -254,7 +253,7 @@ function propsIn(field: Field, at: ThreeWay, path: string, under: string[], ctx:
   return out;
 }
 
-/** Rows keyed by `_id`; ours is the order, since a position has no pair of answers to offer. */
+// Rows keyed by `_id`; ours is the order, since a position has no pair of answers to offer.
 function rowsIn(
   form: Form,
   fieldsOf: FieldsOf,

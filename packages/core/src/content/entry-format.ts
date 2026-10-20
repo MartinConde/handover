@@ -82,7 +82,7 @@ export const FORMAT_VERSION = 1;
 // Sorted last, so a key the schema does not declare keeps the place the file gave it.
 const UNDECLARED = Number.MAX_SAFE_INTEGER;
 
-/** Reserved `_` keys, then schema order, then undeclared keys in the place the file gave them. */
+// Reserved `_` keys, then schema order, then undeclared keys in the place the file gave them.
 function ordered(
   fields: readonly Field[],
   entry: Record<string, unknown>,
@@ -176,7 +176,7 @@ export const TRANSLATED_PROPS: Partial<Record<Field['type'], readonly string[]>>
 export const isObject = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v);
 
-/** Skeleton mode: the rows come from `from`, and `was` says which of `onto`'s are gone. */
+// Skeleton mode: the rows come from `from`, and `was` says which of `onto`'s are gone.
 interface Skeleton {
   locale: string;
   was: unknown;
@@ -376,7 +376,7 @@ export function overlayProps(
   return Object.keys(out).length ? out : undefined;
 }
 
-/** A row only `onto` has holds its place behind the last row both sides know. */
+// A row only `onto` has holds its place behind the last row both sides know.
 function syncRows(
   form: Form,
   fieldsOf: FieldsOf,

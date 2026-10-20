@@ -17,10 +17,9 @@ import { batchAll, type Db, type Draft } from '../db.js';
 import { blobSha, type GitClient } from '../publishing/git.js';
 import { drafts, media, user } from '../tables.js';
 
-// A source change deliberately decides every file's provenance. Keep that decision through
-// unrelated draft rewrites; a real translation save writes its own mark into the contents.
-// Keep `:` out: durable publish snapshots separate revision, base SHA and blob with that delimiter.
+// No `:` here: durable publish snapshots split revision, base SHA and blob on it.
 export const SOURCE_CHANGE_REVISION = 'source-change-';
+// A source change decides every file's provenance; unrelated rewrites keep that prefix.
 export const nextRevision = (
   current?: string,
   sourceChange = current?.startsWith(SOURCE_CHANGE_REVISION),

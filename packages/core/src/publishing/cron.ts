@@ -25,10 +25,9 @@ const RETRY = 5 * 60 * 1000;
 const MAX_RETRY = HOUR;
 const LEASE = 15 * 60 * 1000;
 
-/** How many things a job did — and, for the one whose answer is read back later, what it found. */
 type JobDone = number | { done: number; [detail: string]: unknown };
 
-/** Adding a job is a line here and never a second trigger in `wrangler.jsonc`. */
+// Adding a job is a line here and never a second trigger in `wrangler.jsonc`.
 const JOBS: Record<
   string,
   { every: number; run: (siteId: string, deps: JobDeps) => Promise<JobDone> }

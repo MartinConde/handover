@@ -57,7 +57,7 @@ const redirectsFile = async (
   return file ? [file] : [];
 };
 
-/** With `localizedSlugs` each language's URL is read out of that language's own file. */
+// With `localizedSlugs` each language's URL is read out of that language's own file.
 const urlOf = (
   siteId: string,
   loc: EntryLocation,

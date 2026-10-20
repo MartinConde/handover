@@ -78,7 +78,7 @@ export async function listEntries(ctx: RequestContext, collection: string): Prom
   });
 }
 
-/** The build's counts with the drafts over them, read the same way by list and dashboard. */
+// The build's counts with the drafts over them, read the same way by list and dashboard.
 function textsNow(overlay: readonly { path: string; contents: string }[], collection?: string) {
   // A list parses only its own drafts; the dashboard needs every entry, globals too.
   const within = (key = '') => !collection || key.startsWith(`${collection}/`);
@@ -91,7 +91,7 @@ function textsNow(overlay: readonly { path: string; contents: string }[], collec
   );
 }
 
-/** A global's label in every language, for the rows that name it; nothing for an entry. */
+// A global's label in every language, for the rows that name it; nothing for an entry.
 const globalLabels = (key: string) => {
   const [collection, name = ''] = key.split('/');
   const schema = collection === 'globals' ? config.globals?.[name] : undefined;
@@ -176,7 +176,6 @@ export async function globalsList(ctx: RequestContext): Promise<Response> {
   });
 }
 
-/** When an entry was last touched, by whom, and whether that edit is out on the site yet. */
 interface LastEdit {
   key: string;
   at: number;
@@ -186,7 +185,7 @@ interface LastEdit {
   kind: 'edit' | 'publish';
 }
 
-/** The draft row wins; a draft is deleted once its build is live, so the log is the fallback. */
+// The draft row wins; a draft is deleted once its build is live, so the log is the fallback.
 function lastEdits(
   drafts: readonly { path: string; updatedAt: number }[],
   published: readonly EntryEdit[],
@@ -242,7 +241,7 @@ export async function dashboard(ctx: RequestContext): Promise<Response> {
   });
 }
 
-/** Stale is the last build's: judging it with drafts would cost a fetch per entry. */
+// Stale is the last build's: judging it with drafts would cost a fetch per entry.
 function translationHealth(overlay: readonly { path: string; contents: string }[]) {
   const locales = config.i18n.locales;
   if (locales.length < 2) return null;

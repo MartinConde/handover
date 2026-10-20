@@ -143,7 +143,7 @@ export function applyDrift(
   return out;
 }
 
-/** One language's file at the depth the walk has reached, made where an answer needs it. */
+// One language's file at the depth the walk has reached, made where an answer needs it.
 interface Into {
   locale: string;
   /** The object as the file has it, or nothing where the file goes no deeper. */
@@ -233,7 +233,7 @@ function applyRows(
   }
 }
 
-/** A file the answer names gets the row behind the last row before it that this file also has. */
+// A file the answer names gets the row behind the last row before it that this file also has.
 function answerRow(
   form: Form,
   fieldsOf: FieldsOf,
@@ -324,7 +324,6 @@ export function driftReport(_siteId: string, form: Form, files: Record<string, u
   return found;
 }
 
-/** One entry as one language has it, at the depth the walk has reached. */
 interface Copy {
   locale: string;
   data: unknown;
@@ -399,7 +398,7 @@ function driftRows(
   }
 }
 
-/** Prose only: the reconciliation panel shows words, and nobody decides between two numbers. */
+// Prose only: the reconciliation panel shows words, and nobody decides between two numbers.
 function rowWords(fields: readonly Field[], data: unknown, found: string[]): void {
   for (const field of fields) {
     const value = isObject(data) ? data[field.path[0] ?? ''] : undefined;

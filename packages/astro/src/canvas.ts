@@ -160,7 +160,7 @@ const trimUnits = (value: string, limit: number) => {
   return value.slice(0, code >= 0xd800 && code <= 0xdbff ? limit - 1 : limit);
 };
 
-/** Matches the block cards in the form editor, so one block reads the same in both surfaces. */
+// Matches the block cards in the form editor, so one block reads the same in both surfaces.
 const blockName = (block: EditBlock) => {
   const named =
     block._label?.trim() ||
@@ -304,7 +304,6 @@ const escapeHtml = (value: string) =>
     return entities[character] ?? character;
   });
 
-/** A complete iframe document lets the parent distinguish a known refusal from a timeout. */
 /** Draft content on the client's own domain is a phishing primitive. */
 export const GATE = {
   'cache-control': 'private, no-store',
@@ -344,6 +343,7 @@ export function canvasErrorDocument(manifest: CanvasErrorManifest): string {
   return `<!doctype html><html><head><meta charset="utf-8"><meta name="robots" content="noindex"><title>Canvas render failed</title></head><body><main><h1>Canvas render failed</h1><p>${message}</p></main><script type="application/json" data-handover-canvas-manifest>${serializeCanvasManifest(manifest)}</script></body></html>`;
 }
 
+/** A complete iframe document lets the parent tell a known refusal from a timeout. */
 export const canvasAnswer = (
   status: number,
   message: string,

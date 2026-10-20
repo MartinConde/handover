@@ -414,7 +414,7 @@ export async function revert(
   return Response.json({ commit_sha: result.commit_sha, paths: result.paths });
 }
 
-/** Redirect-only changes require an owner; content paths must be configured editable files. */
+// Redirect-only changes require an owner; content paths must be configured editable files.
 const undoPath = (_session: App.Locals['handover']) => (path: string) => {
   if (path === 'src/content/redirects.yaml') return true;
   const match = /^src\/content\/([\w-]+)\/([\w-]+)\/([\w-]+)\.yaml$/.exec(path);

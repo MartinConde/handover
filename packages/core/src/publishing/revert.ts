@@ -227,7 +227,7 @@ export async function revertCommit(
   return { ...result, files };
 }
 
-/** The `_` keys a turn-off rewrites, which are the ones a restore has to put back. */
+// The `_` keys a turn-off rewrites, which are the ones a restore has to put back.
 const MARKS = ['_locales', '_i18n', '_source'];
 
 /** Open drafts take the restored marks, or the next publish writes the language off again. */

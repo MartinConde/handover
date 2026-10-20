@@ -371,7 +371,6 @@ function secureUploadBucket(env: Env, bucket: string, jurisdiction?: string): vo
     );
 }
 
-/** The site's own files. */
 function scaffold(env: Env): void {
   const i18n = i18nOf(env.cwd);
   const theirs = join(env.cwd, 'src/content.config.ts');
@@ -415,7 +414,7 @@ function siteName(cwd: string): string {
     .toLowerCase();
 }
 
-/** Require an account choice to avoid creating resources in the wrong place. */
+// Require an account choice to avoid creating resources in the wrong place.
 function accountId(env: Env): string {
   const accounts = (JSON.parse(env.capture(['wrangler', 'whoami', '--json'])).accounts ?? []) as {
     id: string;

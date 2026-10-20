@@ -286,7 +286,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `pageOf` in `names.ts` finds an entry's address and title for menus and locale links; the
   unused `userExists` and `SeoDefaults` are removed, and the cli's Wrangler config check takes an
   options object and derives the usage text's jurisdictions from the list it validates against;
-  the Canvas policy cache comment names why one script list per worker is guaranteed.
+  the Canvas policy cache comment names why one script list per worker is guaranteed, and the
+  doc blocks on non-exported symbols in core, cli and astro are one-line comments or gone.
 - Internal: the integration's template and media-use wrappers are inlined, and its tests drop
   checks core already makes and the form-descriptor snapshot.
 - Internal: the cli tests share one fake Cloudflare.

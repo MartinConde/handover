@@ -89,10 +89,10 @@ export async function logActivity(siteId: string, db: Db, event: ActivityEntry):
   }
 }
 
-/** Not a parameter: a caller-chosen limit is a self-inflicted scan. */
+// Not a parameter: a caller-chosen limit is a self-inflicted scan.
 const PAGE = 50;
 
-/** `at` is not unique, so the cursor carries the id too; an offset would rescan served rows. */
+// `at` is not unique, so the cursor carries the id too; an offset would rescan served rows.
 const cursorOf = (raw: string | undefined) => {
   const [at, id] = (raw ?? '').split('.');
   const ms = Number(at);
@@ -156,7 +156,7 @@ export async function activityPage(
   };
 }
 
-/** The two commits that take a file away, which are the two a restore is offered over. */
+// The two commits that take a file away, which are the two a restore is offered over.
 const REMOVALS = ['entry-delete', 'locale-off'];
 
 /** Read from the log, not the index: a deleted entry is in neither index nor draft rows. */
@@ -336,7 +336,7 @@ export async function commitAuthors(
   return found;
 }
 
-/** The one exception to never-delete: this is telemetry about client data, not client data. */
+// The one exception to never-delete: this is telemetry about client data, not client data.
 const KEEP = 180 * 24 * 60 * 60 * 1000;
 
 /** Rows older than the window, deleted; the count is what the cron dispatcher logs. */

@@ -33,7 +33,7 @@ const ASTRO_CONFIGS = [
   'astro.config.mts',
 ];
 
-/** Blanks strings and comments while preserving offsets, so delimiters in them are harmless. */
+// Blanks strings and comments while preserving offsets, so delimiters in them are harmless.
 function structure(text: string): string {
   const out = text.split('');
   let state: 'code' | 'single' | 'double' | 'template' | 'line' | 'block' = 'code';
@@ -80,7 +80,7 @@ function structure(text: string): string {
   return out.join('');
 }
 
-/** Reads only a direct property of an object literal. */
+// Reads only a direct property of an object literal.
 function property(text: string, name: string): string | undefined {
   const clean = structure(text);
   if (clean.trimStart()[0] !== '{') return undefined;

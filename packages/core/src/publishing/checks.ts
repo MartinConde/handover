@@ -369,7 +369,7 @@ function valueIn(w: Walk, field: Field, value: unknown, path: string, mode: Tran
   }
 }
 
-/** Reject blank text even when the schema accepts it. */
+// Reject blank text even when the schema accepts it.
 function emptyIn(
   w: Walk,
   field: Extract<Field, { type: 'text' | 'richtext' }>,
@@ -389,7 +389,7 @@ function emptyIn(
   });
 }
 
-/** Resolved the way `<Seo />` resolves it; a collection with no page has nothing to say. */
+// Resolved the way `<Seo />` resolves it; a collection with no page has nothing to say.
 function seoIn(w: Walk, value: unknown, path: string): void {
   if (!w.route) return;
   const seo = resolveSeo(value as SeoValue | undefined, w.input.seoDefaults?.[w.locale], w.title);
@@ -461,7 +461,7 @@ function linkIn(w: Walk, value: unknown, path: string, name: Named): void {
   if (typeof value.href === 'string') urlIn(w, value.href, `${path}.href`, name);
 }
 
-/** A path no collection route could produce is left alone: a template may render it itself. */
+// A path no collection route could produce is left alone: a template may render it itself.
 function urlIn(w: Walk, href: string, fieldPath: string, name: Named): void {
   const label = name.label;
   if (!href.startsWith('/')) return;
@@ -500,7 +500,7 @@ function urlIn(w: Walk, href: string, fieldPath: string, name: Named): void {
     });
 }
 
-/** The renderer drops a dead item silently, which is exactly what nobody notices. */
+// The renderer drops a dead item silently, which is exactly what nobody notices.
 function menusIn(w: Walk, value: unknown, at: string): void {
   if (!Array.isArray(value)) return;
   for (const [i, menu] of value.entries()) {
@@ -539,7 +539,7 @@ function itemsIn(w: Walk, items: unknown, at: string, menu: string): void {
   }
 }
 
-/** The bucket is asked only about keys with no row: a HEAD apiece is a subrequest apiece. */
+// The bucket is asked only about keys with no row: a HEAD apiece is a subrequest apiece.
 async function assetResults(
   siteId: string,
   db: Db,

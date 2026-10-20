@@ -53,7 +53,7 @@ export const entryKey = (path: string): string | undefined => {
   return parts && `${parts.collection}/${parts.name}`;
 };
 
-/** A starter for new entries: one file per collection folder, outside every glob. */
+// A starter for new entries: one file per collection folder, outside every glob.
 const TEMPLATE_PATH = new RegExp(
   `^src/content/_templates/([a-z0-9-]+)/(${ENTRY_SEGMENT_SOURCE})\\.yaml$`,
 );
@@ -87,7 +87,6 @@ const byId = (a: IndexEntry, b: IndexEntry) => a.id.localeCompare(b.id);
 /** Which field holds the entry's title, per collection: `titleField` in cms.config.ts. */
 export type TitleFields = Record<string, string>;
 
-/** Everything the list needs about one file, or nothing if it is not an entry. */
 function indexFile(siteId: string, { path, contents }: ContentFile, titleFields: TitleFields) {
   const found = ENTRY_PATH.exec(path);
   if (!found) return undefined;

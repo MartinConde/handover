@@ -34,14 +34,14 @@ export async function account(
   return Response.json({ ...facts, canChangeEmail: loginMethods().emailLink });
 }
 
-/** Better Auth's own refusal; anything without a code is not its answer and is rethrown. */
+// Better Auth's own refusal; anything without a code is not its answer and is rethrown.
 function refused(err: unknown): Response {
   const body = (err as { body?: { code?: string; message?: string } }).body;
   if (!body?.code) throw err;
   return codedError(400, body.code, body.message ?? body.code);
 }
 
-/** Better Auth's `freshAge`, which none of its routed endpoints applies to this one. */
+// Better Auth's `freshAge`, which none of its routed endpoints applies to this one.
 const FRESH_MS = 24 * 60 * 60 * 1000;
 
 /** Better Auth's `setPassword` is server-only and refuses when a password already exists. */
@@ -122,7 +122,7 @@ export async function members(
   });
 }
 
-/** Two literals only: the admin plugin joins an array with commas and grants on any segment. */
+// Two literals only: the admin plugin joins an array with commas and grants on any segment.
 const roleIn = (body: unknown): Role | undefined => {
   const { role } = (body ?? {}) as { role?: unknown };
   return role === 'owner' || role === 'editor' ? role : undefined;

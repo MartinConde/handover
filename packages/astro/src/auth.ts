@@ -32,7 +32,7 @@ export interface Session {
   sessionId: string;
 }
 
-/** `worker-mailer` imports `cloudflare:sockets` at module scope, hence the import in the send. */
+// `worker-mailer` imports `cloudflare:sockets` at module scope, hence the import in the send.
 function smtpMailer(host: string, port: number, user: string, pass: string, from: string): Mailer {
   return async ({ to, subject, text, html }) => {
     const { LogLevel, WorkerMailer } = await import('worker-mailer');
@@ -93,7 +93,7 @@ export function mailer(): Mailer | undefined {
   return undefined;
 }
 
-/** Never read off the request: a forged `Host` would mail a working sign-in link elsewhere. */
+// Never read off the request: a forged `Host` would mail a working sign-in link elsewhere.
 function baseUrl(): string | undefined {
   const raw = (env as { HANDOVER_BASE_URL?: string }).HANDOVER_BASE_URL;
   if (!raw) return undefined;
@@ -171,13 +171,13 @@ export function createAuth(
   });
 }
 
-/** Names what the message was for and nothing else: never the address, never the link. */
+// Names what the message was for and nothing else: never the address, never the link.
 const mailFailed = (db: Db, what: string) => async (err: unknown) => {
   await logActivity('default', db, { kind: 'mail-failed', detail: { message: what } });
   throw err;
 };
 
-/** The endpoint mails regardless; sending only to a known address stops it mailing strangers. */
+// The endpoint mails regardless; sending only to a known address stops it mailing strangers.
 const signInLink =
   (db: Db, send: Mailer, hint: UiLocale | undefined, ctx?: CloudflareContext) =>
   async ({ email, url }: { email: string; url: string }) => {
@@ -193,10 +193,10 @@ const signInLink =
     else await task;
   };
 
-/** An invite is read in the evening, so a sign-in link's fifteen minutes would often be a lie. */
+// An invite is read in the evening, so a sign-in link's fifteen minutes would often be a lie.
 const INVITE_HOURS = 72;
 
-/** Said for somebody who has never heard of the site; it lands on the account page. */
+// Said for somebody who has never heard of the site; it lands on the account page.
 const inviteLink =
   (db: Db, send: Mailer, site: string, hint: UiLocale | undefined) =>
   async ({ email, url }: { email: string; url: string }) => {

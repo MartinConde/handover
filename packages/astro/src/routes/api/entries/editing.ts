@@ -58,7 +58,7 @@ export async function lockState(
   });
 }
 
-/** Logged only when it moves between people; an unheld entry is not a take-over. */
+// Logged only when it moves between people; an unheld entry is not a take-over.
 async function takeOver(
   ctx: RequestContext,
   collection: string,

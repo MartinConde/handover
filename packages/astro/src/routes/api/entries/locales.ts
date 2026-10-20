@@ -240,7 +240,7 @@ export async function offering(
   return Response.json({});
 }
 
-/** Other entries' file names count too: clearing an address falls back to the name. */
+// Other entries' file names count too: clearing an address falls back to the name.
 async function takenAddresses(
   ctx: RequestContext,
   collection: string,

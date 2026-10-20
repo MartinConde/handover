@@ -62,7 +62,7 @@ export async function buildStatus(ctx: RequestContext): Promise<Response> {
   );
 }
 
-/** A file whose structure disagrees with its other languages is not committed. */
+// A file whose structure disagrees with its other languages is not committed.
 async function refusedPaths(ctx: RequestContext, paths: string[]) {
   const drifted: string[] = [];
   const unresolved: string[] = [];
@@ -92,7 +92,7 @@ async function refusedPaths(ctx: RequestContext, paths: string[]) {
 const ENTRY_KEY = /^[\w-]+\/[\w-]+$/;
 const EXCLUSION = /^([\w-]+\/[\w-]+):([\w-]+)$/;
 
-/** Both publish routes take this; only an empty body means everything. */
+// Both publish routes take this; only an empty body means everything.
 function selection(
   raw: string,
   body: unknown,
@@ -130,7 +130,7 @@ const draftPath = (item: string) => {
   return entryPath(collection, slug, locale);
 };
 
-/** An entry's files at `head` with its pending drafts over them, and whose language it is. */
+// An entry's files at `head` with its pending drafts over them, and whose language it is.
 async function entryAt(ctx: RequestContext, head: string, key: string, pending: Draft[]) {
   const [collection = '', slug = ''] = key.split('/');
   const git = ctx.git();
@@ -157,7 +157,7 @@ async function entryAt(ctx: RequestContext, head: string, key: string, pending: 
   return { files, source: source && 'locale' in source ? source.locale : undefined };
 }
 
-/** Only a file the repository does not have at `head` can wait, and never the entry's own language. */
+// Only a file the repository does not have at `head` can wait, and never the entry's own language.
 const whyKept = (at: Awaited<ReturnType<typeof entryAt>>, locale: string) =>
   at.files.find((file) => file.locale === locale)?.published
     ? ('published' as const)
@@ -184,7 +184,7 @@ const problemsOf = (row: Pick<Draft, 'path' | 'contents'>) => {
     : unbuildable;
 };
 
-/** One resolver for the checks and the commit, so the lint is over exactly what goes out. */
+// One resolver for the checks and the commit, so the lint is over exactly what goes out.
 async function resolveSelection(ctx: RequestContext, request: Request, readiness = false) {
   const raw = await readBodyText(request);
   const asked = selection(raw, await readJson(request));
@@ -453,6 +453,6 @@ export async function publish(
   );
 }
 
-/** Capped at what the dashboard draws: the log's `detail` is small json. */
+// Capped at what the dashboard draws: the log's `detail` is small json.
 const publishedKeys = (paths: readonly string[]) =>
   [...new Set(paths.flatMap((path) => entryKey(path) ?? []))].slice(0, 8);

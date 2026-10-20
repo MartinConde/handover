@@ -31,7 +31,7 @@ async function json<T>(url: string, token: string, fetch: typeof globalThis.fetc
   return (await res.json()) as { result: T };
 }
 
-/** ⚠️ Keyed on the worker's tag, not its name: a name answers `200` with an empty list. */
+// ⚠️ Keyed on the worker's tag, not its name: a name answers `200` with an empty list.
 function tagOf(account: string, name: string, token: string, fetch: typeof globalThis.fetch) {
   const key = `${account}/${name}`;
   const found =
@@ -60,7 +60,7 @@ interface Build {
   build_trigger_metadata?: { commit_hash?: string };
 }
 
-/** ⚠️ Covers the build row appearing, not running; past it the commit has scrolled off the page. */
+// ⚠️ Covers the build row appearing, not running; past it the commit has scrolled off the page.
 const NAMED_WITHIN = 10 * 60 * 1000;
 
 /** A commit no build names yet is `building`, not live; throws when the account cannot be asked. */

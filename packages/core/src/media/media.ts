@@ -69,7 +69,7 @@ const EXTENSIONS: Record<string, string> = {
 };
 
 const SHA256 = /^[0-9a-f]{64}$/;
-/** Long enough for a slow phone, short enough that a leaked url is worth nothing. */
+// Long enough for a slow phone, short enough that a leaked url is worth nothing.
 const TTL = 300;
 
 /** A stale picker must not bring back bytes whose deletion already owns the key. */
@@ -264,7 +264,7 @@ export async function checkStore(
   if (!gone.ok) throw new Error(`The bucket would not delete the object again (${gone.status})`);
 }
 
-/** 403 is the credential and 404 is the bucket; a bare status leaves the key holder guessing. */
+// 403 is the credential and 404 is the bucket; a bare status leaves the key holder guessing.
 const advice = (store: R2Store, status: number) =>
   status === 403
     ? `: check R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY, and that the token has Object Read & Write on ${store.bucket}`

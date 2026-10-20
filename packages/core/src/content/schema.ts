@@ -79,7 +79,7 @@ export function fieldsFrom(_siteId: string, schema: JsonSchema): Field[] {
   return objectFields(schema, schema);
 }
 
-/** The walker stops at `menus`, but keeping the tree in step across languages needs these. */
+// The walker stops at `menus`, but keeping the tree in step across languages needs these.
 const menuItem: Field[] = [
   {
     path: ['label'],
