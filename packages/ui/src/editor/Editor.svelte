@@ -157,7 +157,7 @@ const entrySession = createEntrySession({
   form: entryForm,
   problems: { [entry.sourceLocale]: entry.problems },
   drift: entry.drift,
-  onactivity: renew,
+  onactivity: () => entryLock.renew(),
   onreconciled: reload,
 });
 const data = $derived(entrySession.snapshot(entry.sourceLocale));
@@ -597,24 +597,9 @@ const entryLock = createEntryLock({
   onchanged,
   failure: retainedFailure,
 });
-const tab = entryLock.tab;
-const lock = $derived(entryLock.lock);
-const lost = $derived(entryLock.lost);
-const locked = $derived(entryLock.locked);
-const holderName = $derived(entryLock.holderName);
-const otherTab = $derived(entryLock.otherTab);
 const LOCK_IDLE_MS = 60000;
-const idle = $derived(entryLock.idle);
-const taking = $derived(entryLock.taking);
-const lockFailed = $derived(entryLock.takeFailure);
-const takeBusy = $derived(entryLock.takeBusy);
 let takeTrigger = $state<HTMLButtonElement>();
-const loseLock = entryLock.lose;
-function renew() { entryLock.renew(); }
-const recheck = entryLock.recheck;
-const cancelTake = entryLock.cancelTake;
-const takeOver = entryLock.takeOver;
-const canPublish = $derived(dirty && !saving && !missing.length && !drifted && !locked && !actionBusy);
+const canPublish = $derived(dirty && !saving && !missing.length && !drifted && !entryLock.locked && !actionBusy);
 
 entrySession.configureAutosave((of, snapshot, revision, contentVersion, structure) =>
   of === entry.sourceLocale
@@ -632,14 +617,14 @@ async function writeSourceSave(
   try {
     const res = await postJson(`/admin/api/drafts/${collection}/${slug}`, {
       data: JSON.parse(sent),
-      tab,
+      tab: entryLock.tab,
       revision,
       ...(structure ? { structure } : {}),
     }, 'PUT');
     if (!res.ok) {
       saveError = await retainedFailure(res, 'EDITOR_SAVE_REFUSED');
       const refusal = await classifyDraftSaveRefusal(res.clone());
-      if (refusal.kind === 'lock') loseLock(refusal.lock);
+      if (refusal.kind === 'lock') entryLock.lose(refusal.lock);
       else if (refusal.kind === 'revision') {
         entrySession.freezeHistory();
         // No server detail: its sentence repeats this one.
@@ -653,7 +638,7 @@ async function writeSourceSave(
       revisions?: Record<string, string>;
     };
     entrySession.mergeRevisions(body.revisions);
-    renew();
+    entryLock.renew();
     setPending(entry.sourceLocale, body.pending);
     invalidateEntryDirectory();
     entrySession.acceptProblems(entry.sourceLocale, body.problems, sent, contentVersion);
@@ -674,10 +659,10 @@ async function writeTranslationSave(
   contentVersion: number,
 ): Promise<boolean> {
   try {
-    const res = await postJson(`/admin/api/drafts/${collection}/${slug}/${of}`, { data: JSON.parse(sent), tab, revision }, 'PUT');
+    const res = await postJson(`/admin/api/drafts/${collection}/${slug}/${of}`, { data: JSON.parse(sent), tab: entryLock.tab, revision }, 'PUT');
     if (!res.ok) {
       const refusal = await classifyDraftSaveRefusal(res);
-      if (refusal.kind === 'lock') loseLock(refusal.lock);
+      if (refusal.kind === 'lock') entryLock.lose(refusal.lock);
       else if (refusal.kind === 'revision') entrySession.freezeHistory();
       return false;
     }
@@ -688,7 +673,7 @@ async function writeTranslationSave(
     };
     if (body.revision) entrySession.setRevision(of, body.revision);
     entrySession.acceptProblems(of, body.problems, sent, contentVersion);
-    renew();
+    entryLock.renew();
     setPending(of, body.pending);
     invalidateEntryDirectory();
     // A new revision makes an open dialog's readiness stale.
@@ -849,7 +834,7 @@ async function changeSourceTo(to: string) {
           return revision ? [[of, revision]] : [];
         }),
       );
-      res = await postJson(`/admin/api/entries/${collection}/${slug}/source`, { locale: to, tab, revisions });
+      res = await postJson(`/admin/api/entries/${collection}/${slug}/source`, { locale: to, tab: entryLock.tab, revisions });
       if (uncertainResponse(res))
         throw new TypeError('The source change response was not confirmed.');
       return res.ok;
@@ -870,7 +855,7 @@ async function changeSourceTo(to: string) {
     const refusal = await classifyDraftSaveRefusal(res.clone());
     if (refusal.kind === 'lock') {
       changingSource = false;
-      loseLock(refusal.lock);
+      entryLock.lose(refusal.lock);
     } else sourceFailure = await retainedFailure(res, 'ENTRY_ACTION_FAILED');
   } else sourceFailure = { code: 'ENTRY_ACTION_FAILED' };
 }
@@ -1393,11 +1378,11 @@ async function saveAddress() {
 <svelte:window
   onclick={(e) => languageMenu && !(e.target as HTMLElement).closest('.language-pick') && (languageMenu = undefined)}
   onkeydown={(e) => e.key === 'Escape' && languageMenu && (e.target as HTMLElement).closest('.language-pick') && void closeLanguages()}
-  onfocus={recheck}
+  onfocus={entryLock.recheck}
   onpopstate={fromAddress}
   onbeforeunload={warn}
 />
-<svelte:document onvisibilitychange={recheck} />
+<svelte:document onvisibilitychange={entryLock.recheck} />
 
 {#snippet feedback(message: UiMessage)}{feedbackText(message)} {messageDetail(message, uiLocale)}{/snippet}
 
@@ -1499,7 +1484,7 @@ async function saveAddress() {
             class="btn-link url slug-edit"
             type="button"
             bind:this={addressTrigger}
-            disabled={locked}
+            disabled={entryLock.locked}
             aria-label={`${m.editor_address_edit({}, options)}: ${url}`}
             onclick={editAddress}
           >{url}</button>
@@ -1507,7 +1492,7 @@ async function saveAddress() {
         {:else if url}
           <span class="url">{url}</span>
         {/if}
-        {#if !entry.singleton}{#if addressable || url}<span class="sep" aria-hidden="true">·</span>{/if}<button class="btn-link slug-rename" type="button" disabled={locked || actionBusy} onclick={openRename}>{m.editor_change_file_name({}, options)}</button>{/if}
+        {#if !entry.singleton}{#if addressable || url}<span class="sep" aria-hidden="true">·</span>{/if}<button class="btn-link slug-rename" type="button" disabled={entryLock.locked || actionBusy} onclick={openRename}>{m.editor_change_file_name({}, options)}</button>{/if}
       {/if}
     </div>
   {/if}
@@ -1532,7 +1517,7 @@ async function saveAddress() {
       aria-haspopup="dialog"
       aria-expanded={confirming}
       disabled={!canPublish}
-      title={locked
+      title={entryLock.locked
         ? m.editor_publish_disabled_locked({}, options)
         : drifted
         ? m.editor_publish_disabled_drift({}, options)
@@ -1548,12 +1533,12 @@ async function saveAddress() {
       aria-haspopup="menu"
       aria-expanded={publishMenu}
       aria-label={m.editor_ready_to_publish({}, options)}
-      disabled={locked || actionBusy || (entry.singleton && (lost || (!dirty && !held)))}
+      disabled={entryLock.locked || actionBusy || (entry.singleton && (entryLock.lost || (!dirty && !held)))}
       onclick={() => (publishMenu = !publishMenu)}
     ><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4.5 6 3.5 3.5L11.5 6" /></svg></button>
     {#if publishMenu}
       <div class="menu publish-menu" role="menu" aria-label={m.editor_ready_to_publish({}, options)}>
-        <button type="button" role="menuitemcheckbox" aria-checked={!held} aria-describedby={dirty || held ? undefined : 'hold-unavailable'} disabled={lost || (!dirty && !held)} onclick={() => { publishMenu = false; void toggleHold(); }}>
+        <button type="button" role="menuitemcheckbox" aria-checked={!held} aria-describedby={dirty || held ? undefined : 'hold-unavailable'} disabled={entryLock.lost || (!dirty && !held)} onclick={() => { publishMenu = false; void toggleHold(); }}>
           <span class="check" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="m4 10.3 3.5 3.5L16 5.7" /></svg></span>
           {m.editor_ready_to_publish({}, options)}
           {#if !dirty && !held}<span class="sub" id="hold-unavailable">{m.editor_hold_unavailable({}, options)}</span>{/if}
@@ -1580,7 +1565,7 @@ async function saveAddress() {
       type="button"
       aria-label={m.editor_delete({}, options)}
       title={m.editor_delete({}, options)}
-      disabled={locked || actionBusy}
+      disabled={entryLock.locked || actionBusy}
       onclick={startDeleting}
     ><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3" /></svg></button>
   {/if}
@@ -1593,31 +1578,31 @@ async function saveAddress() {
   {#each entry.offerProblems ?? [] as problem (problem)}
     <div class="lock-banner is-offer">{m.editor_offer_problem({ problem }, options)}</div>
   {/each}
-  {#if lost}
+  {#if entryLock.lost}
     <!-- Leads with where the work went: the draft is in D1. -->
     <div class="lock-banner is-lost">
-      {#if otherTab}
+      {#if entryLock.otherTab}
         {m.editor_lock_lost_other_tab({}, options)}
-      {:else if holderName}
-        {m.editor_lock_lost_taken({ holder: holderName }, options)}
+      {:else if entryLock.holderName}
+        {m.editor_lock_lost_taken({ holder: entryLock.holderName }, options)}
       {:else}
         {m.editor_lock_lost_taken_anonymous({}, options)}
       {/if}
       <button class="btn-link" type="button" onclick={() => void reload()}>{m.editor_lock_reload({}, options)}</button>
     </div>
-  {:else if locked}
+  {:else if entryLock.locked}
     <div class="lock-banner">
-      {#if otherTab}
+      {#if entryLock.otherTab}
         {m.editor_lock_other_tab({}, options)}
         <button class="btn-link" type="button" bind:this={takeTrigger} onclick={entryLock.openTake}>{m.editor_lock_edit_here({}, options)}</button>
-      {:else if lock?.held_by}
-        {#if holderName}
-          {m.editor_lock_held_by({ holder: holderName }, options)}
+      {:else if entryLock.lock?.held_by}
+        {#if entryLock.holderName}
+          {m.editor_lock_held_by({ holder: entryLock.holderName }, options)}
         {:else}
           {m.editor_lock_held_anonymous({}, options)}
         {/if}
         <span class="when">
-          {idle >= LOCK_IDLE_MS
+          {entryLock.idle >= LOCK_IDLE_MS
             ? m.editor_lock_idle({}, options)
             : m.editor_lock_active({}, options)}
         </span>
@@ -1805,11 +1790,11 @@ async function saveAddress() {
               <!-- The source is a property of this form, so it is changed from the form's own heading. -->
               {#if many && present.length > 1}
                 <span class="sep" aria-hidden="true">·</span>
-                <button class="btn-link" type="button" disabled={sourceBlocked !== undefined || locked} title={sourceBlocked ?? m.editor_change_source_sub({ language: language(entry.sourceLocale) }, options)} onclick={openSourceChange}>{m.editor_change_source({}, options)}</button>
+                <button class="btn-link" type="button" disabled={sourceBlocked !== undefined || entryLock.locked} title={sourceBlocked ?? m.editor_change_source_sub({ language: language(entry.sourceLocale) }, options)} onclick={openSourceChange}>{m.editor_change_source({}, options)}</button>
               {/if}
             </span>
           </div>
-          <fieldset disabled={locked || entrySession.localeMutationBlocked(entry.sourceLocale)}>
+          <fieldset disabled={entryLock.locked || entrySession.localeMutationBlocked(entry.sourceLocale)}>
             <Fields {fields} onreveal={(path) => revealPreview(path, entry.sourceLocale)} blocks={shownForm.blocks} blockLabels={shownForm.blockLabels} {problems} {mediaBase} locale={entry.sourceLocale} {uiLocale} session={entrySession} inheritedSeo={inherited(entry.sourceLocale, data)} {site} servedAt={localeUrl(entry.sourceLocale)} bind:root={entrySession.snapshots[entry.sourceLocale]!} structureLocked={entrySession.structureMutationBlocked()} textOnly={entrySession.sourceTextOnly(entry.sourceLocale)} afterTitle={ontopbar && locale === entry.sourceLocale ? addressRow : undefined} titleKey={entry.titleField} />
           </fieldset>
         </form>
@@ -1834,17 +1819,17 @@ async function saveAddress() {
                   <button
                     class="btn btn-primary"
                     type="button"
-                    disabled={actionBusy || locked}
+                    disabled={actionBusy || entryLock.locked}
                     onclick={() =>
                       ask('/admin/api/restore', { commit_sha: putBack?.commit_sha })}
                   >
                     {m.editor_restore_words({ language: language(shown) }, options)}
                   </button>
                   <p>
-                    {m.editor_or({}, options)} <button class="btn-link" type="button" disabled={actionBusy || locked} onclick={() => offer(shown, true)}>{m.editor_restore_empty({ language: language(shown) }, options)}</button>.
+                    {m.editor_or({}, options)} <button class="btn-link" type="button" disabled={actionBusy || entryLock.locked} onclick={() => offer(shown, true)}>{m.editor_restore_empty({ language: language(shown) }, options)}</button>.
                   </p>
                 {:else}
-                  <button class="btn" type="button" disabled={actionBusy || locked} onclick={() => offer(shown, true)}>
+                  <button class="btn" type="button" disabled={actionBusy || entryLock.locked} onclick={() => offer(shown, true)}>
                     {m.editor_turn_back_on({ language: language(shown) }, options)}
                   </button>
                 {/if}
@@ -1852,21 +1837,21 @@ async function saveAddress() {
             {:else}
               <div class="is-wide">
                 <p>{m.editor_create_translation_intro({}, options)}</p>
-                <button class="btn btn-primary btn-create" type="button" disabled={actionBusy || locked} onclick={() => createFrom(shown)}>
+                <button class="btn btn-primary btn-create" type="button" disabled={actionBusy || entryLock.locked} onclick={() => createFrom(shown)}>
                   {m.editor_create_from({ language: language(entry.sourceLocale) }, options)}
                 </button>
                 {#if entry.translator}
-                  <button class="btn btn-fill" type="button" disabled={actionBusy || locked} onclick={() => createFilled(shown)}>
+                  <button class="btn btn-fill" type="button" disabled={actionBusy || entryLock.locked} onclick={() => createFilled(shown)}>
                     {m.editor_create_prefill({}, options)}
                   </button>
                 {/if}
                 {#if missingTargets.length > 1}
                   <p>
-                    <button class="btn btn-create-all" type="button" disabled={actionBusy || locked} onclick={() => createAll(false)}>
+                    <button class="btn btn-create-all" type="button" disabled={actionBusy || entryLock.locked} onclick={() => createAll(false)}>
                       {m.editor_create_all({ count: missingTargets.length }, options)}
                     </button>
                     {#if entry.translator}
-                      <button class="btn btn-fill-all" type="button" disabled={actionBusy || locked} onclick={() => createAll(true)}>
+                      <button class="btn btn-fill-all" type="button" disabled={actionBusy || entryLock.locked} onclick={() => createAll(true)}>
                         {m.editor_create_all_prefill({ count: missingTargets.length }, options)}
                       </button>
                     {/if}
@@ -1877,7 +1862,7 @@ async function saveAddress() {
                 {/if}
                 {#if !entry.singleton}
                   <p>
-                    {m.editor_or({}, options)} <button class="btn-link" type="button" disabled={actionBusy || locked} onclick={() => offer(shown, false)}>{m.editor_do_not_offer({ language: language(shown) }, options)}</button> {m.editor_no_file_written({}, options)}
+                    {m.editor_or({}, options)} <button class="btn-link" type="button" disabled={actionBusy || entryLock.locked} onclick={() => offer(shown, false)}>{m.editor_do_not_offer({ language: language(shown) }, options)}</button> {m.editor_no_file_written({}, options)}
                   </p>
                 {/if}
               </div>
@@ -1917,7 +1902,7 @@ async function saveAddress() {
               problems={entrySession.positionalProblems(shown, uiLocale)}
               inheritedSeo={inherited(shown, entrySession.snapshot(shown))}
               source={entry.sourceLocale}
-              {locked}
+              locked={entryLock.locked}
               stale={entry.stale.includes(shown)}
               answered={answered[shown]}
               work={paneWork}
@@ -1929,7 +1914,7 @@ async function saveAddress() {
               {site}
               {uiLocale}
               onsaved={(pending) => {
-                renew();
+                entryLock.renew();
                 setPending(shown, pending);
               }}
               {mediaBase}
@@ -1971,7 +1956,7 @@ async function saveAddress() {
           {mediaBase}
           {site}
           servedAt={localeUrl(locale)}
-          {locked}
+          locked={entryLock.locked}
           onform={() => setCanvas(false)}
           onnavigateentry={navigateCanvasEntry}
           mobileHidden={mode === 'split' && mobilePane === 'form'}
@@ -2095,19 +2080,19 @@ async function saveAddress() {
       onclose={() => (offing = undefined)}
     />
   {/if}
-  {#if taking}
-    <Modal labelledby="take-h" returnTo={takeTrigger} dismissible={!takeBusy} onclose={cancelTake}>
-        <h2 id="take-h">{holderName
-          ? m.editor_lock_take_question({ holder: holderName }, options)
+  {#if entryLock.taking}
+    <Modal labelledby="take-h" returnTo={takeTrigger} dismissible={!entryLock.takeBusy} onclose={entryLock.cancelTake}>
+        <h2 id="take-h">{entryLock.holderName
+          ? m.editor_lock_take_question({ holder: entryLock.holderName }, options)
           : m.editor_lock_take_question_anonymous({}, options)}</h2>
-        <p>{holderName
-          ? m.editor_lock_take_shared({ holder: holderName }, options)
+        <p>{entryLock.holderName
+          ? m.editor_lock_take_shared({ holder: entryLock.holderName }, options)
           : m.editor_lock_take_shared_anonymous({}, options)}</p>
         <p>{m.editor_lock_take_refusal({}, options)}</p>
-        {#if lockFailed}<p class="notice notice-danger" role="alert">{@render feedback(lockFailed)}</p>{/if}
+        {#if entryLock.takeFailure}<p class="notice notice-danger" role="alert">{@render feedback(entryLock.takeFailure)}</p>{/if}
         <div class="actions">
-          <button class="btn" type="button" disabled={takeBusy} onclick={cancelTake}>{m.common_cancel({}, options)}</button>
-          <button class="btn btn-primary" type="button" disabled={takeBusy} onclick={takeOver}>{m.editor_lock_take_over({}, options)}</button>
+          <button class="btn" type="button" disabled={entryLock.takeBusy} onclick={entryLock.cancelTake}>{m.common_cancel({}, options)}</button>
+          <button class="btn btn-primary" type="button" disabled={entryLock.takeBusy} onclick={entryLock.takeOver}>{m.editor_lock_take_over({}, options)}</button>
         </div>
     </Modal>
   {/if}
