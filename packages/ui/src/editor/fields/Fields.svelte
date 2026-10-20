@@ -314,7 +314,9 @@ function listCommand(at: readonly string[], operation: ListOperation) {
 }
 function add(at: readonly string[], item: unknown) {
   const held = readFrom(root, at);
-  listCommand(at, { type: 'insert', index: Array.isArray(held) ? held.length : 0, value: item });
+  const index = Array.isArray(held) ? held.length : 0;
+  const result = listCommand(at, { type: 'insert', index, value: item });
+  if (!session || result?.ok) folded[keyOf(rows(at), index)] = false;
 }
 // A scalar row has no `_id`; without a key that moves with it a reorder swaps words, not cards.
 const names = new WeakMap<object, string[]>();
@@ -336,7 +338,8 @@ function drop(at: readonly string[], index: number) {
   if (Array.isArray(held) && (!session || result?.ok)) names.get(held)?.splice(index, 1);
 }
 function duplicate(at: readonly string[], index: number) {
-  listCommand(at, { type: 'duplicate', index });
+  const result = listCommand(at, { type: 'duplicate', index });
+  if (result?.ok) folded[keyOf(rows(at), index + 1)] = false;
 }
 type Handlers = Required<DragDropEventHandlers>;
 let origin = -1;
@@ -413,8 +416,20 @@ const block = (row: unknown) =>
 let folded = $state<Record<string, boolean>>({});
 function excerpt(row: unknown, inner: Field[] | undefined): string {
   for (const f of inner ?? []) {
+    if (f.advanced) continue;
     const v = f.path.reduce<unknown>((node, key) => (node as Data | undefined)?.[key], row);
-    if (typeof v === 'string' && v.trim()) return v.length > 80 ? `${v.slice(0, 79)}…` : v;
+    if ((f.type === 'text' || f.type === 'richtext') && typeof v === 'string' && v.trim())
+      return v.length > 100 ? `${v.slice(0, 99)}…` : v;
+    if (f.type === 'group') {
+      const words = excerpt(v, f.fields);
+      if (words) return words;
+    }
+    if (f.type === 'array' && Array.isArray(v)) {
+      for (const item of v) {
+        const words = excerpt(item, f.item);
+        if (words) return words;
+      }
+    }
   }
   return '';
 }
@@ -611,7 +626,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
 {/snippet}
 
 {#snippet groupLabel(id: string, field: Field, text: string, at: readonly string[] = [])}
-  <div class="label-row"><span id="{id}-l">{text}{#if 'required' in field && field.required}<span class="req" aria-hidden="true">*</span>{/if}</span>{#if prose(field)}{@render machineMark(address(at), text)}{/if}</div>
+  <div class="label-row"><span id="{id}-l">{text}{#if 'required' in field && field.required}<span class="req" aria-hidden="true">*</span>{/if}</span>{#if field.type === 'array' || field.type === 'blocks'}<span class="section-count">{m.field_item_count({ count: rows(at).length }, options)}</span>{/if}{#if prose(field)}{@render machineMark(address(at), text)}{/if}</div>
 {/snippet}
 
 {#snippet icon(d: string)}
@@ -813,10 +828,27 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
         <DragDropProvider onDragStart={(e) => begun(at, e)} onDragOver={(e) => over(at, e)} onDragEnd={(e) => ended(at, e)}>
         {#each items as row, i (keyOf(items, i))}
           {@const s = sortable(() => keyOf(items, i), () => i)}
-          <div class={['row-card', { 'is-scalar': scalar, 'is-dragging': s.isDragging }]} {@attach s.attach}>
+          {@const name = m.field_row_name({ field: text, index: i + 1 }, options)}
+          {@const open = broken([...at, String(i)])}
+          {@const shut = !open && folded[keyOf(items, i)] !== false}
+          {#if scalar}
+          <div class={['row-card', { 'is-scalar': true, 'is-dragging': s.isDragging }]} {@attach s.attach}>
             <div class="row-fields"><Fields fields={field.item} bind:root {blocks} {blockLabels} {problems} path={[...at, String(i)]} rowLabel="{text} {i + 1}" {translating} {machine} {ontranslate} {sourceChanged} bind:dismissed {sourceLabel} {translatedAt} {onretranslate} {prefix} {mediaBase} {locale} {uiLocale} {site} {servedAt} {session} {oncommand} viewRoot={displayedRoot} inherited={mode} {structureLocked} {textOnly} {reference} /></div>
-            {#if !translating}{@render controls(at, i, m.field_row_name({ field: text, index: i + 1 }, messageOptions(uiLocale)), s.attachHandle)}{/if}
+            {#if !translating}{@render controls(at, i, name, s.attachHandle)}{/if}
           </div>
+          {:else}
+          <article class={['block-card section-card', { 'is-dragging': s.isDragging, 'is-folded': shut }]} id="{id}.{i}" aria-labelledby="{id}.{i}-h" {@attach s.attach}>
+            <header>
+              <button class="btn btn-ghost fold section-toggle" type="button" disabled={open} aria-expanded={!shut} aria-controls="{id}.{i}-b" onclick={() => (folded[keyOf(items, i)] = !shut)}>
+                {@render icon('m9 6 6 6-6 6')}
+                <span class="section-number">{i + 1}</span>
+                <span class="section-copy"><span class="label" id="{id}.{i}-h">{name}</span>{#if shut} <span class="excerpt">{excerpt(row, field.item)}</span>{/if}</span>
+              </button>
+              {#if !translating}{@render controls(at, i, name, s.attachHandle)}{/if}
+            </header>
+            {#if !shut}<div class="form" id="{id}.{i}-b"><Fields fields={field.item} bind:root {blocks} {blockLabels} {problems} path={[...at, String(i)]} rowLabel="{text} {i + 1}" {translating} {machine} {ontranslate} {sourceChanged} bind:dismissed {sourceLabel} {translatedAt} {onretranslate} {prefix} {mediaBase} {locale} {uiLocale} {site} {servedAt} {session} {oncommand} viewRoot={displayedRoot} inherited={mode} {structureLocked} {textOnly} {reference} /></div>{/if}
+          </article>
+          {/if}
         {:else}
           <p class="hint">{m.field_list_empty({}, messageOptions(uiLocale))}</p>
         {/each}
@@ -845,14 +877,17 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
         {#each items as row, i (keyOf(items, i))}
           {@const name = blockName(row)}
           {@const inner = blockFields(row)}
+          {@const label = block(row)._label || capitalise(name.replace(/([a-z])([A-Z])/g, '$1 $2'))}
           {@const s = sortable(() => keyOf(items, i), () => i)}
           {@const open = broken([...at, String(i)])}
-          {@const shut = !open && folded[keyOf(items, i)] === true}
-          <article class={['block-card', { 'is-dragging': s.isDragging, 'is-folded': shut }]} id="{id}.{i}" aria-labelledby="{id}.{i}-h" {@attach s.attach}>
+          {@const shut = !open && folded[keyOf(items, i)] !== false}
+          <article class={['block-card section-card', { 'is-dragging': s.isDragging, 'is-folded': shut }]} id="{id}.{i}" aria-labelledby="{id}.{i}-h" {@attach s.attach}>
             <header>
-              <button class="btn btn-ghost btn-icon fold" type="button" disabled={open} aria-expanded={!shut} aria-controls="{id}.{i}-b" aria-label={shut ? m.field_expand({ item: name }, messageOptions(uiLocale)) : m.field_collapse({ item: name }, messageOptions(uiLocale))} onclick={() => (folded[keyOf(items, i)] = !shut)}>{@render icon('m9 6 6 6-6 6')}</button>
-              <span class="label" id="{id}.{i}-h" title="{block(row)._type} · {block(row)._id}">{block(row)._label || name.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, (letter) => letter.toUpperCase())}</span>
-              {#if shut}<span class="excerpt">{excerpt(row, inner)}</span>{/if}
+              <button class="btn btn-ghost fold section-toggle" type="button" disabled={open} aria-expanded={!shut} aria-controls="{id}.{i}-b" onclick={() => (folded[keyOf(items, i)] = !shut)}>
+                {@render icon('m9 6 6 6-6 6')}
+                <span class="section-number">{i + 1}</span>
+                <span class="section-copy"><span class="label" id="{id}.{i}-h" title="{block(row)._type} · {block(row)._id}">{label}</span>{#if shut} <span class="excerpt">{excerpt(row, inner)}</span>{/if}</span>
+              </button>
               {#if !translating}{@render controls(at, i, name, s.attachHandle, true)}{/if}
             </header>
             {#if shut}
@@ -1135,3 +1170,15 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
   </details>
 {/if}
 {#each plain.slice(foldAt) as field (field.path.join('.'))}{@render row(field)}{/each}
+
+<style>
+  .section-count { margin-left: auto; color: var(--ink-3); font-size: var(--text-xs); font-weight: 400; }
+  .section-card > header { align-items: flex-start; }
+  .section-card > header .section-toggle { width: auto; min-width: 0; flex: 1; justify-content: flex-start; align-items: flex-start; gap: 8px; padding: 5px 3px; text-align: left; white-space: normal; }
+  .section-toggle > :global(svg) { flex: none; margin-top: 2px; }
+  .section-number { flex: none; min-width: 20px; font-size: var(--text-xs); font-variant-numeric: tabular-nums; color: var(--ink-3); line-height: 20px; }
+  .section-copy { display: grid; gap: 3px; min-width: 0; }
+  .section-card > header .label { max-width: none; font-size: var(--text-sm); }
+  .section-card > header .excerpt { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; font-size: var(--text-xs); font-weight: 400; white-space: normal; overflow-wrap: anywhere; }
+  .section-card > header :global(.row-controls) { flex: none; margin-top: 3px; }
+</style>

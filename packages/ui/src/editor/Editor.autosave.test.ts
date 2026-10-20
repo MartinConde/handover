@@ -348,9 +348,10 @@ test('two problems are counted as two, and Publish is held back until they are g
   expect($<HTMLButtonElement>(root, 'button.btn-primary')?.disabled).toBe(true);
 });
 
-test('the problem count moves focus to the first field it is counting', () => {
+test('the problem count moves focus to the first field it is counting', async () => {
   const root = withProblems([{ path: 'seo.description', message: 'Required' }]);
   $<HTMLButtonElement>(root, '.problems')?.click();
+  await tick();
   flushSync();
   expect(document.activeElement?.id).toBe('f-seo.description');
 });

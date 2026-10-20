@@ -172,6 +172,8 @@ test('structured field state and open feedback survive a live locale switch', as
   await tick();
   flushSync();
 
+  click('#f-rooms\\.0 > header .fold');
+  click('#f-blocks\\.0 > header .fold');
   const nested = q<HTMLInputElement>('input#f-rooms\\.0\\.name');
   nested.focus();
   type('input#f-rooms\\.0\\.name', 'Garden room');

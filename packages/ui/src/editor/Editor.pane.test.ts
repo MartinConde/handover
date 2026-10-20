@@ -10,6 +10,7 @@ import {
   HELD,
   isLock,
   languagePick,
+  openCards,
   settle,
   show,
   state,
@@ -484,6 +485,7 @@ test('German reads under the French title, rich text and a field inside a block'
   await frenchBesideEnglish(root);
 
   chooseReference(root, 'German');
+  openCards(root, '.pane .block-card');
 
   expect(peek(root, 'title')).toBe('German Haus am Hafen');
   expect($(root, '#t-title-field .reference-peek [lang="de"]')?.textContent).toBe('Haus am Hafen');
@@ -499,6 +501,7 @@ test('a French row in another order still peeks at the German row with its id', 
   await frenchBesideEnglish(root);
 
   chooseReference(root, 'German');
+  openCards(root, '.pane .section-card');
 
   expect($<HTMLInputElement>(root, '#t-rooms\\.0\\.name')?.value).toBe('Chambre du port');
   expect(peek(root, 'rooms\\.0\\.name')).toBe('German Hafenzimmer');
@@ -514,6 +517,7 @@ test('an empty German value and a row German lacks say so instead of drawing not
   await frenchBesideEnglish(root);
 
   chooseReference(root, 'German');
+  openCards(root, '.pane .section-card');
 
   expect(peek(root, 'title')).toBe('German Not written in German yet');
   expect(peek(root, 'rooms\\.0\\.name')).toBe('German This row is not in German');
@@ -797,8 +801,6 @@ test('a folded block is opened so the run lands on the input itself', async () =
   const root = show(sixLanguages('staleAndPartial'));
   await frenchBesideEnglish(root);
   await settle(3);
-  $<HTMLButtonElement>(root, '.pane .block-card button.fold')?.click();
-  flushSync();
   expect($(root, 'input#t-body\\.0\\.heading')).toBeNull();
 
   await runTodo(root);
@@ -903,6 +905,7 @@ test('a marker dismissed inside a block reaches the pane, which then has nothing
   const root = show(sixLanguages('base'));
   await frenchBesideEnglish(root);
   await settle(3);
+  openCards(root, '.pane .block-card');
 
   $<HTMLButtonElement>(root, '.pane .block-card .stale')?.click();
   flushSync();
@@ -961,6 +964,7 @@ test('a re-translated field is answered but stays in the run until its marker go
   await frenchBesideEnglish(root);
   await settle(3);
   expect(answered(root)).toBe('1 of 2 texts written');
+  openCards(root, '.pane .block-card');
 
   $<HTMLButtonElement>(root, '.pane .block-card .stale')?.click();
   flushSync();
@@ -998,6 +1002,7 @@ test('failed stale-marker loading does not announce that the work is finished', 
   await frenchBesideEnglish(root);
   await settle(3);
   type(root, 'input#t-subtitle', 'Sous-titre');
+  openCards(root, '.pane .block-card');
   type(root, 'input#t-body\\.0\\.heading', 'Titre');
   await settle(3);
 
@@ -1029,6 +1034,7 @@ test('a network failure loading stale markers can be retried successfully', asyn
   await frenchBesideEnglish(root);
   await settle(3);
   type(root, 'input#t-subtitle', 'Sous-titre');
+  openCards(root, '.pane .block-card');
   type(root, 'input#t-body\\.0\\.heading', 'Titre');
   await settle(3);
 

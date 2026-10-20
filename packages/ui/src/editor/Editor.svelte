@@ -968,7 +968,11 @@ async function toggleHold() {
 }
 
 // Scrolling there is not enough on its own: the count is a button, so it has to land somewhere.
-function land(field: HTMLElement | null) {
+async function land(prefix: string, path: string | undefined) {
+  const field = path ? (await unfolded(`${prefix}-${path}`)) ?? drawn(prefix, path) : null;
+  for (let node = field?.parentElement; node; node = node.parentElement)
+    if (node instanceof HTMLDetailsElement) node.open = true;
+  await tick();
   field?.scrollIntoView({ block: 'center' });
   field?.focus();
 }
@@ -988,10 +992,10 @@ async function goTo(path: string | undefined) {
     // As in `jumpTo`: the shell redraws the section from the address, so the move has to land first.
     if (!(await navigate(`/admin/c/${collection}/${slug}/seo${queueTail}`))) return;
     await tick();
-    land(drawn('f', path));
+    await land('f', path);
     return;
   }
-  land(field);
+  await land('f', path);
 }
 const focusable = (node: Element) =>
   node.matches('input, textarea, select, [contenteditable="true"]');
@@ -1044,7 +1048,7 @@ const goToFirst = () => {
     setCanvas(false);
     locale = entry.sourceLocale;
     void tick().then(() => goTo(missing[0]));
-  } else goTo(missing[0]);
+  } else return goTo(missing[0]);
 };
 
 function reviewCanvasProblems() {
@@ -1056,8 +1060,8 @@ function reviewCanvasProblems() {
   setCanvas(false);
   if (of !== entry.sourceLocale) setBeside('language');
   void tick().then(() => {
-    if (of === entry.sourceLocale) goTo(path);
-    else land(drawn('t', path));
+    if (of === entry.sourceLocale) return goTo(path);
+    return land('t', path);
   });
 }
 
@@ -1090,7 +1094,7 @@ function fromAddress() {
   if (!field) return;
   const at = fieldPosition('default', field, inColumn ? entrySession.snapshot(of) : data);
   if (!at) return;
-  void tick().then(() => land(drawn(inColumn ? 't' : 'f', at.join('.'))));
+  void tick().then(() => land(inColumn ? 't' : 'f', at.join('.')));
 }
 onMount(() => {
   fromAddress();

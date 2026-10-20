@@ -80,6 +80,12 @@ export const $ = <T extends Element>(root: ParentNode, sel: string) => root.quer
 export const $$ = <T extends Element>(root: ParentNode, sel: string) =>
   Array.from(root.querySelectorAll<T>(sel));
 
+export const openCards = (root: ParentNode, selector: string) => {
+  for (const button of $$<HTMLButtonElement>(root, `${selector}.is-folded > header button.fold`))
+    button.click();
+  flushSync();
+};
+
 export const type = (root: ParentNode, sel: string, value: string) => {
   const input = $<HTMLInputElement>(root, sel);
   if (!input) throw new Error(`${sel} missing`);

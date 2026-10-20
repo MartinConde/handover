@@ -4,6 +4,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Existing blocks and object-list items open as compact, collapsed cards with content
+  summaries. New items open for editing; validation and field navigation reveal nested
+  fields automatically. Simple lists remain directly editable.
+
 - In the entry list, the entry served at `/` comes first and carries a house icon and **Home page** (**Startseite**) beside its title.
 - A global can set `.meta({ descriptions: { en, de } })` beside its `label`, and the Site settings cards read the one for the interface language; a plain `description` string still works. The default navigation global's description now has both. A collection can set `newLabel: { en: 'New page', de: 'Neue Seite' }`, shown as written on its new-entry button and dialog heading; without it the wording is built from `singular` as before.
 - Emails Handover sends (password reset, email-change approval and confirmation, sign-in link, invitation, password-set notice, test email) are written in English or German: the recipient's saved interface language, else the inviting or requesting owner's, else the request's device language or `Accept-Language`, else English. The preview error page follows the signed-in account's language the same way. Response bodies are unchanged.

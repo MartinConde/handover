@@ -12,6 +12,7 @@ import {
   isLock,
   languageChoices,
   languagePick,
+  openCards,
   openLanguages,
   settle,
   show,
@@ -335,6 +336,7 @@ test('a block moved in the source column moves in the second column at once', as
   await press(document.body, 'Space');
 
   expect(germanBlocks(root)).toEqual(['Cta', 'Hero']);
+  openCards(root, '.pane .block-card');
   // Its words went with it: the German heading is still the hero's.
   expect($<HTMLInputElement>(root, 'input#t-body\\.1\\.heading')?.value).toBe('Über dem Hafen');
   expect(wrote(fetchMock)).toHaveLength(0);
@@ -497,6 +499,7 @@ test('the second language draws a block to translate but nothing to move it with
 
   $<HTMLButtonElement>(root, 'button.btn-sbs')?.click();
   flushSync();
+  openCards(root, '.pane .block-card');
 
   expect($<HTMLInputElement>(root, 'input#t-body\\.0\\.heading')?.value).toBe('Über dem Hafen');
   expect($(root, '.pane.is-locale button.add')).toBeNull();
@@ -981,6 +984,7 @@ test('a block a machine filled is badged where the block is, not at the top', ()
   });
   $<HTMLButtonElement>(root, 'button.btn-sbs')?.click();
   flushSync();
+  openCards(root, '.pane .block-card');
 
   expect(
     $(root, '.field:has(> .label-row > label[for="t-body.0.heading"]) .badge-machine'),

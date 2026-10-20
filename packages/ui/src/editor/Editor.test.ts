@@ -707,6 +707,7 @@ test('a check error is counted as a problem and marks the widget its field is dr
   expect($(root, '#f-photo-err')?.textContent).toBe(BROKEN.message);
   // `photo.src` has no control of its own, so the jump lands on the picture's card.
   $<HTMLButtonElement>(root, '.problems')?.click();
+  await tick();
   flushSync();
   expect(document.activeElement?.id).toBe('f-photo');
 });
@@ -1313,6 +1314,34 @@ const movedBlock = {
     ],
   },
 };
+
+test('an address jump reveals a folded block and its advanced field before focusing it', async () => {
+  const root = show({
+    entry: {
+      ...bilingual,
+      blocks: {
+        hero: [
+          { path: ['heading'], label: 'Heading', type: 'text', required: true, advanced: true },
+        ],
+      },
+    },
+  });
+  const fold = $<HTMLButtonElement>(root, '.block-card button.fold');
+  if (fold?.getAttribute('aria-expanded') === 'true') fold.click();
+  flushSync();
+  expect($(root, 'input#f-body\\.0\\.heading')).toBeNull();
+
+  history.pushState(
+    {},
+    '',
+    '/admin/c/listings/seaview-cottage?field=body%5B_id%3Dk3nf9a2p%5D.heading',
+  );
+  dispatchEvent(new PopStateEvent('popstate'));
+  await settle(3);
+
+  expect(document.activeElement?.id).toBe('f-body.0.heading');
+  expect($<HTMLDetailsElement>(root, '.block-card details')?.open).toBe(true);
+});
 
 test('the field the address names is focused when the entry opens, wherever its row now sits', async () => {
   at('/admin/c/listings/seaview-cottage?field=body%5B_id%3Dk3nf9a2p%5D.heading');

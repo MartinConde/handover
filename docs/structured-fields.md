@@ -132,6 +132,12 @@ of cards, each headed by its `_label` or `_type`, and Add block offers one butto
 in your registry. Reordering never rewrites an `_id`, so translations and `_machine` paths
 keep pointing at the same block.
 
+Existing blocks and object-list items start collapsed, with a content summary so editors
+can scan the page before choosing a section. Open any number of cards independently;
+simple lists such as paragraphs stay directly editable. New and duplicated items open
+for editing. Cards with validation problems open automatically, and field links and
+translation jumps reveal the nested field before focusing it.
+
 Group counts, list empty states, row actions, block controls, references, link controls, embed
 guidance and the SEO panel follow the account's interface language. Switching English/Deutsch
 updates open block and page pickers, an embed replacement with a retained refusal, SEO notices and

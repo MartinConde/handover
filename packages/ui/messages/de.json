@@ -1053,6 +1053,16 @@
       }
     }
   ],
+  "field_item_count": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{count} Eintrag",
+        "countPlural=other": "{count} Einträge"
+      }
+    }
+  ],
   "field_advanced": "Erweitert",
   "field_alt_text": "Alternativtext",
   "field_title": "Titel",

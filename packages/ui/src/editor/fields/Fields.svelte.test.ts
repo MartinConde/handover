@@ -26,6 +26,7 @@ const show = (
   inheritedSeo?: ResolvedSeo,
   over: Record<string, unknown> = {},
 ) => {
+  const { initiallyCollapsed = false, ...props } = over;
   const translating = over.translating === true;
   const locale = typeof over.locale === 'string' ? over.locale : translating ? 'de' : 'en';
   const session = createEntrySession({
@@ -46,7 +47,7 @@ const show = (
       session,
       // The form is showing English: what a link typed into rich text has to point at.
       locale,
-      ...over,
+      ...props,
       get root() {
         return root;
       },
@@ -56,6 +57,16 @@ const show = (
     },
   });
   flushSync();
+  if (!initiallyCollapsed) {
+    for (let depth = 0; depth < 10; depth++) {
+      const folds = document.querySelectorAll<HTMLButtonElement>(
+        'button.fold[aria-expanded="false"]',
+      );
+      if (!folds.length) break;
+      for (const fold of Array.from(folds)) fold.click();
+      flushSync();
+    }
+  }
   return document.body;
 };
 afterEach(() => {
@@ -1088,7 +1099,9 @@ tags:
 test('array: reordering by keyboard and by mouse emit the same YAML and both _ids survive', async () => {
   laidOut();
   show([rooms, tags], arrayData());
-  expect(document.querySelectorAll('#f-rooms .row-card')).toHaveLength(2);
+  expect(
+    document.querySelectorAll('#f-rooms button[aria-label^="Reorder Rooms row"]'),
+  ).toHaveLength(2);
   await keyMove('Rooms row 1', 1);
   expect(stringifyEntry('default', snap())).toBe(MOVED);
   await keyMove('Rooms row 2', -1);
@@ -1254,6 +1267,54 @@ test('blocks: duplicate copies only that subtree with fresh descendant ids', () 
   expect(
     after[2]?.columns?.flatMap((column) => column.blocks.map((block) => block._id)),
   ).not.toEqual(after[1]?.columns?.flatMap((column) => column.blocks.map((block) => block._id)));
+});
+
+test('blocks: existing sections start collapsed with their first words', () => {
+  show(pageFields, blocksData(), registry, {}, undefined, { initiallyCollapsed: true });
+  expect(q('#f-blocks\\.0 > header .fold').getAttribute('aria-expanded')).toBe('false');
+  expect(q('#f-blocks\\.0 > header .excerpt').textContent).toBe('Move to the coast');
+  expect(document.querySelector('input#f-blocks\\.0\\.heading')).toBeNull();
+  click('#f-blocks\\.0 > header .fold');
+  expect(q<HTMLInputElement>('input#f-blocks\\.0\\.heading').value).toBe('Move to the coast');
+  expect(q('#f-blocks\\.1 > header .fold').getAttribute('aria-expanded')).toBe('false');
+});
+
+test('array: complex rows start collapsed while scalar rows stay inline', () => {
+  show([rooms, tags], arrayData(), {}, {}, undefined, { initiallyCollapsed: true });
+  expect(q('#f-rooms\\.0 > header .fold').getAttribute('aria-expanded')).toBe('false');
+  expect(q('#f-rooms\\.0 > header .excerpt').textContent).toBe('Kitchen');
+  expect(document.querySelector('input#f-rooms\\.0\\.name')).toBeNull();
+  expect(q<HTMLInputElement>('input#f-tags\\.0').value).toBe('coastal');
+  click('#f-rooms\\.0 > header .fold');
+  expect(q<HTMLInputElement>('input#f-rooms\\.0\\.name').value).toBe('Kitchen');
+  expect(q('#f-rooms\\.1 > header .fold').getAttribute('aria-expanded')).toBe('false');
+});
+
+test('array: a row containing a validation error opens its field', () => {
+  show([rooms], arrayData(), {}, { 'rooms.0.name': 'Required' }, undefined, {
+    initiallyCollapsed: true,
+  });
+  expect(q('#f-rooms\\.0 > header .fold').getAttribute('aria-expanded')).toBe('true');
+  expect(q('#f-rooms\\.0\\.name-err').textContent).toBe('Required');
+  expect(q('#f-rooms\\.1 > header .fold').getAttribute('aria-expanded')).toBe('false');
+});
+
+test('blocks: duplicating a collapsed section opens the new copy', () => {
+  show(pageFields, blocksData(), registry, {}, undefined, { initiallyCollapsed: true });
+  click('[aria-label="Duplicate hero"]');
+  expect(q('#f-blocks\\.0 > header .fold').getAttribute('aria-expanded')).toBe('false');
+  expect(q('#f-blocks\\.1 > header .fold').getAttribute('aria-expanded')).toBe('true');
+  expect(q<HTMLInputElement>('input#f-blocks\\.1\\.heading').value).toBe('Move to the coast');
+});
+
+test('array: an expanded row follows its content when reordered', async () => {
+  laidOut();
+  show([rooms], arrayData(), {}, {}, undefined, { initiallyCollapsed: true });
+  click('#f-rooms\\.0 > header .fold');
+  await keyMove('Rooms row 1', 1);
+  expect(q('#f-rooms\\.0 > header .fold').getAttribute('aria-expanded')).toBe('false');
+  expect(q('#f-rooms\\.1 > header .fold').getAttribute('aria-expanded')).toBe('true');
+  expect(q<HTMLInputElement>('input#f-rooms\\.1\\.name').value).toBe('Kitchen');
 });
 
 test('blocks: a collapsed block keeps its header, shows its first words and stays put on a move', async () => {
