@@ -1,9 +1,6 @@
 <script lang="ts">
 import type { DiffGroup } from '@handover/core';
-import type {
-  HistoricalRestoreResponse,
-  ReplacementResult,
-} from '../editor/entry-session.svelte';
+import type { HistoricalRestoreResponse, ReplacementResult } from '../editor/entry-session.svelte';
 import { messageText, responseMessage, type UiMessage } from '../errors.js';
 import {
   formatExactTime,
