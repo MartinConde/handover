@@ -111,6 +111,10 @@ export async function openDraft(
   return loadDraft(siteId, db, path);
 }
 
+/** Somebody's work not yet in the repository; a published row waits for its build instead. */
+export const isPending = async (row: Draft) =>
+  !row.publishedSha && (await blobSha(row.contents)) !== row.baseBlob;
+
 /** An unedited row holds nobody's work, so a file changed under it is read again on open. */
 export async function refreshUntouched(
   siteId: string,
@@ -120,7 +124,7 @@ export async function refreshUntouched(
   file: { contents: string; blob_sha: string } | undefined,
 ): Promise<Draft | undefined> {
   if (!row || !file || row.publishedSha || row.baseBlob === file.blob_sha) return row;
-  if ((await blobSha(row.contents)) !== row.baseBlob) return row;
+  if (await isPending(row)) return row;
   if (file.contents) parseEntry(siteId, file.contents);
   // A new revision, so a tab still showing the old file is refused rather than merged over it.
   await db
@@ -485,9 +489,7 @@ export async function pendingDrafts(siteId: string, db: Db): Promise<Draft[]> {
     .select()
     .from(drafts)
     .where(and(eq(drafts.siteId, siteId), isNull(drafts.publishedSha)));
-  const pending = await Promise.all(
-    rows.map(async (r) => (await blobSha(r.contents)) !== r.baseBlob),
-  );
+  const pending = await Promise.all(rows.map(isPending));
   return rows.filter((_, i) => pending[i]).sort((a, b) => b.updatedAt - a.updatedAt);
 }
 

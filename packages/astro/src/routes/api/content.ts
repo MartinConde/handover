@@ -22,6 +22,7 @@ import {
   entrySource,
   entryUrl,
   formOf,
+  isPending,
   labelIn,
   labelsOf,
   loadDraft,
@@ -234,20 +235,27 @@ export async function entryLocales(
     locales.map(async (locale) => {
       const path = entryPath(collection, slug, locale);
       const file = await git.getFile(path, head);
-      const row = await loadDraft('default', database, path);
+      const loaded = await loadDraft('default', database, path);
       // Only on open: a save reads here too and must keep the base its revision was taken at.
-      return {
-        locale,
-        path,
-        file,
-        row: capture ? await refreshUntouched('default', database, row, head, file) : row,
-      };
+      const row = capture
+        ? await refreshUntouched('default', database, loaded, head, file)
+        : loaded;
+      // An unedited row of an older file is that file, so it reads as the file now is.
+      const stale =
+        row &&
+        file &&
+        row.baseBlob !== file.blob_sha &&
+        !row.publishedSha &&
+        !(await isPending(row));
+      return { locale, path, file, row, stale };
     }),
   );
   // An empty file is still the language's file, so it opens as an empty entry.
   const dataOf = (contents: string | undefined, file: unknown) =>
     contents ? parseEntry('default', contents) : file ? {} : undefined;
-  const parsed = read.map(({ file, row }) => dataOf(row?.contents || file?.contents, file));
+  const parsed = read.map(({ file, row, stale }) =>
+    dataOf((!stale && row?.contents) || file?.contents, file),
+  );
   const present = Object.fromEntries(
     read.flatMap(({ locale }, i) => (parsed[i] === undefined ? [] : [[locale, parsed[i]]])),
   );
@@ -265,7 +273,8 @@ export async function entryLocales(
     read.map(async ({ locale, file, row }, i) => {
       const data = parsed[i];
       if (data === undefined) return undefined;
-      const pending = row ? (await blobSha(row.contents)) !== file?.blob_sha : false;
+      // The drawer's reading, so the editor and the drawer agree on what is waiting.
+      const pending = row ? await isPending(row) : false;
       return [
         locale,
         {

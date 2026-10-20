@@ -4,6 +4,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- A draft nobody edited no longer shows an older version of its file in preview, the entry
+  lists or the SEO defaults after the file changed in the repository, and the editor no longer
+  calls it waiting to publish.
 - A rich-text change in History, Pending changes and the conflict resolver now shows the words
   without Markdown symbols instead of "changed" or raw source. A change to only a link or only
   the formatting says so.

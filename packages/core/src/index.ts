@@ -173,6 +173,7 @@ export {
   holdEntry,
   isDraftRace,
   isMediaRace,
+  isPending,
   loadDraft,
   openDraft,
   pendingDrafts,

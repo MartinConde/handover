@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers';
 import config from 'virtual:handover/config';
-import { uses } from 'virtual:handover/index';
+import index, { uses } from 'virtual:handover/index';
 import type { MediaRow, Upload } from '@handover/core';
 import {
   claimResource,
@@ -94,7 +94,7 @@ export async function library(ctx: RequestContext, url: URL): Promise<Response> 
       q: url.searchParams.get('q') ?? undefined,
       withArchived,
     }),
-    draftFiles('default', database),
+    draftFiles('default', database, index),
   ]);
   const used = mediaUsage('default', uses, drafts);
   return Response.json({ media: rows.map((row) => libraryItem(row, used[row.r2Key])) });
@@ -153,7 +153,7 @@ export async function describeMedia(
       subject: id,
       detail: { archived, name: row.filename },
     });
-  const drafts = await draftFiles('default', database);
+  const drafts = await draftFiles('default', database, index);
   const used = mediaUsage('default', uses, drafts);
   return Response.json({ media: libraryItem(row, used[row.r2Key]) });
 }
@@ -176,7 +176,7 @@ export async function deleteAsset(
     return Response.json({ code: 'MEDIA_NOT_FOUND', error: 'Not found' }, { status: 404 });
   const [tree, drafts] = await Promise.all([
     ctx.git().contentFiles(),
-    draftFiles('default', database),
+    draftFiles('default', database, index),
   ]);
   // Keep the current-content refusal distinct from usage only the repository/deployment has.
   const drafted = new Set(drafts.map((d) => d.path));

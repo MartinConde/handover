@@ -294,7 +294,7 @@ test('a sibling change after reading a conflict aborts the complete resolution b
   const report = await entryConflict('default', db, repo, PAGE_FORM, { en: PAGE_EN, de: sibling });
   if (!report) throw new Error('Expected a conflict');
   await saveDraft('default', db, repo, sibling, { title: 'New German' });
-  const before = await draftFiles('default', db);
+  const before = await draftFiles('default', db, {});
   await expect(
     resolveConflict(
       'default',
@@ -304,5 +304,5 @@ test('a sibling change after reading a conflict aborts the complete resolution b
       report.questions.map((q) => ({ path: q.path, locale: q.locale, side: 'theirs' })),
     ),
   ).rejects.toThrow();
-  expect(await draftFiles('default', db)).toEqual(before);
+  expect(await draftFiles('default', db, {})).toEqual(before);
 });

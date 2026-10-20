@@ -17,7 +17,9 @@ change pushed a moment earlier is caught rather than read as no change at all:
   for a branch that moves while the commit is being written
 - **A draft nobody has edited is not a conflict.** Opening an entry starts a draft of the
   file as it is. If the file changes in the repository before anybody types in it, the
-  next open reads the new version instead of the one it started from
+  next open reads the new version instead of the one it started from. Until then the
+  entry is not listed as waiting to publish, and preview and the entry lists show the
+  new version once the site has been rebuilt with it
 - **The refusal is about that entry, not about the batch.** A refused entry takes itself
   out of the set — its checkbox goes off and cannot go back on — so pressing Publish again
   sends the rest. **Publish this entry** in the header has no rest to send, so it puts the

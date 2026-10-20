@@ -59,7 +59,7 @@ vi.mock('virtual:handover/config', () => ({
 const { siteScript } = vi.hoisted(() => ({
   siteScript: "document.documentElement.classList.add('js');",
 }));
-vi.mock('virtual:handover/index', () => ({ scripts: [siteScript] }));
+vi.mock('virtual:handover/index', () => ({ default: {}, scripts: [siteScript] }));
 
 vi.mock('cloudflare:workers', () => ({ env: { DB: {} } }));
 vi.mock('@handover/core', async (original) => ({

@@ -1,5 +1,5 @@
 import config from 'virtual:handover/config';
-import { scripts } from 'virtual:handover/index';
+import built, { scripts } from 'virtual:handover/index';
 import loaders from 'virtual:handover/loaders';
 import {
   type AstroContent,
@@ -298,7 +298,7 @@ export async function preview(ctx: Ctx, astro: AstroContent<string>): Promise<Re
   const source = draftSource(
     'default',
     staticSource('default', astro),
-    [...transient, ...(await draftFiles('default', db()))],
+    [...transient, ...(await draftFiles('default', db(), built))],
     validate,
   );
 

@@ -1,4 +1,5 @@
 import config from 'virtual:handover/config';
+import index from 'virtual:handover/index';
 import type { ContentFile, Db, Operation } from '@handover/core';
 import {
   beginOperation,
@@ -171,7 +172,7 @@ export async function sourcesList(
   const base = await ctx.git().getHead();
   const [published, drafted, pending] = await Promise.all([
     ctx.git().contentFiles(base),
-    draftFiles('default', database),
+    draftFiles('default', database, index),
     pendingPaths(database),
   ]);
   const found = await unrecorded(published, drafted, pending);
@@ -231,7 +232,7 @@ export async function recordSources(
   if ((await git.getHead()) !== body.base) return changed();
   const [published, drafted, pending] = await Promise.all([
     git.contentFiles(body.base),
-    draftFiles('default', database),
+    draftFiles('default', database, index),
     pendingPaths(database),
   ]);
   const found = await unrecorded(published, drafted, pending);

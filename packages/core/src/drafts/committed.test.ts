@@ -280,7 +280,9 @@ test('the draft files are every row as it stands, published ones included', asyn
     publishedSha: 'commit-B',
   });
 
-  const files = (await draftFiles('default', db)).sort((a, b) => a.path.localeCompare(b.path));
+  const files = (await draftFiles('default', db, indexOf({}))).sort((a, b) =>
+    a.path.localeCompare(b.path),
+  );
   expect(files).toEqual([
     { path: OTHER, contents: '' },
     { path: PATH, contents: expect.stringContaining('The Mill House') },
@@ -409,6 +411,28 @@ test('a published entry reopened before its build is listed', async () => {
   await openDraft('default', db, ORPHAN, head, await repo.getFile(ORPHAN, head));
 
   expect(await listed(db, indexOf({}))).toEqual([['gone', 'Brand new']]);
+});
+
+test('an unedited draft of an older file lists the title the build has', async () => {
+  const db = await fresh();
+  await openDraft('default', db, PATH, 'commit-A', {
+    contents: FILE,
+    blob_sha: await blobSha(FILE),
+  });
+
+  const built = indexOf({ [PATH]: FILE.replace('The Mill House', 'Mill House') });
+  expect(await listed(db, built)).toEqual([['mill-house', 'Mill House']]);
+});
+
+test('an unedited draft renamed before its build is listed under the new name', async () => {
+  const db = await fresh();
+  await openDraft('default', db, PATH, 'commit-A', {
+    contents: FILE,
+    blob_sha: await blobSha(FILE),
+  });
+  await recordRenames('default', db, [{ from: PATH, to: RENAMED, contents: FILE }], 'commit-B');
+
+  expect(await listed(db, indexOf({ [PATH]: FILE }))).toEqual([['the-old-mill', 'The Mill House']]);
 });
 
 test('overlay cleanup cannot delete a recreated entry after reading its deletion marker', async () => {

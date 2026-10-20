@@ -6,6 +6,8 @@ import {
   draftFiles,
   draftSource,
   entryAt,
+  type GitClient,
+  indexFrom,
   loadDraft,
   logActivity,
   openDb,
@@ -21,6 +23,7 @@ import { migrateTestD1, newTestD1 } from '../../../core/src/db.fixture.js';
 import * as tables from '../../../core/src/tables.js';
 import { onRequest } from '../middleware.js';
 import { MAX_JSON_BYTES } from './api/body.js';
+import { entryLocales } from './api/content.js';
 import { DELETE, GET, POST, PUT } from './api.js';
 
 const boundary = vi.hoisted(() => ({
@@ -753,7 +756,7 @@ test('hide remains public during pending/failed builds, disappears when live, an
   const preview = draftSource(
     'default',
     snapshot(oldDeployment),
-    await draftFiles('default', db),
+    await draftFiles('default', db, {}),
     (_collection, data) => data,
   );
   for (const locale of ['en', 'de'])
@@ -773,6 +776,52 @@ test('hide remains public during pending/failed builds, disappears when live, an
       expect(Boolean(page)).toBe(state !== 'live');
     }
   }
+});
+
+// The build at head, with today's drafts over it, the way the preview route reads them.
+async function previewed() {
+  const tree = trees[head] ?? {};
+  const built = indexFrom(
+    'default',
+    Object.entries(tree).map(([path, contents]) => ({ path, contents })),
+  );
+  const source = draftSource(
+    'default',
+    snapshot(head),
+    await draftFiles('default', db, built),
+    (_collection, data) => data,
+  );
+  return (await entryAt('default', source, PUBLIC_SITE, 'pages', 'en', 'home'))?.data;
+}
+
+test('preview shows the built file over an unedited draft of an older one', async () => {
+  await opened();
+  push([{ path: PATH, contents: INITIAL.replace('Original body', 'Developer body') }]);
+  expect(await previewed()).toMatchObject({ body: 'Developer body' });
+});
+
+test('preview keeps the edits of a draft made before the file changed', async () => {
+  const entry = await opened();
+  expect((await save('My title', entry.revisions.en ?? '')).status).toBe(200);
+  push([{ path: PATH, contents: INITIAL.replace('Original body', 'Developer body') }]);
+  expect(await previewed()).toMatchObject({ title: 'My title', body: 'Original body' });
+});
+
+// What a read after the open sees, e.g. a translation pre-fill or the SEO defaults.
+async function readAfterDeveloperChange() {
+  await opened();
+  push([{ path: PATH, contents: INITIAL.replace('Original body', 'Developer body') }]);
+  const ctx = { db: () => db, git: () => boundary.repo as GitClient };
+  const loaded = await entryLocales(ctx, 'pages', 'home', ['en']);
+  return loaded.en as { data: { body: string }; pending: boolean };
+}
+
+test('an unedited draft of an older file is not pending in the editor', async () => {
+  expect((await readAfterDeveloperChange()).pending).toBe(false);
+});
+
+test('an unedited draft of an older file reads as the changed file', async () => {
+  expect((await readAfterDeveloperChange()).data.body).toBe('Developer body');
 });
 
 test('media stays protected until the running deployment removes its final usage', async () => {

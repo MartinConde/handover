@@ -1,10 +1,10 @@
 import { and, eq, inArray, isNull, lt, ne, or, sql } from 'drizzle-orm';
 import { type ContentFile, type ContentIndex, entryKey, indexHasPath } from '../content/entries.js';
 import { offeredEntry, parseEntry, stringifyEntry, withSource } from '../content/entry-format.js';
-import { batchAll, chunksOf, D1_MAX_BOUND_PARAMETERS, type Db } from '../db.js';
+import { batchAll, chunksOf, D1_MAX_BOUND_PARAMETERS, type Db, type Draft } from '../db.js';
 import { blobSha, type GitClient } from '../publishing/git.js';
 import { drafts, pathReservations } from '../tables.js';
-import { loadDraft, nextRevision, stampOf } from './drafts.js';
+import { isPending, loadDraft, nextRevision, stampOf } from './drafts.js';
 import type { PathReservation } from './paths.js';
 
 /** The index lags the build, so an empty row says the path has gone until the build is live. */
@@ -219,13 +219,32 @@ export async function overlayRows(
           ),
         ),
       );
-  return rows.filter((r) => !settled.includes(r)).map(({ path, contents }) => ({ path, contents }));
+  return current(
+    rows.filter((r) => !settled.includes(r)),
+    index,
+  );
 }
 
 /** What preview reads: a render is a GET, so it does not tidy rows the way `overlayRows` does. */
-export async function draftFiles(siteId: string, db: Db): Promise<ContentFile[]> {
-  const rows = await db.select().from(drafts).where(eq(drafts.siteId, siteId));
-  return rows.map(({ path, contents }) => ({ path, contents }));
+export async function draftFiles(
+  siteId: string,
+  db: Db,
+  index: ContentIndex,
+): Promise<ContentFile[]> {
+  return current(await db.select().from(drafts).where(eq(drafts.siteId, siteId)), index);
+}
+
+// An unedited row may be older than the build; one at a path the build lacks is all there is.
+async function current(rows: Draft[], index: ContentIndex): Promise<ContentFile[]> {
+  const built = new Set(
+    Object.values(index).flatMap((entries) =>
+      entries.flatMap((e) => Object.values(e.locales).map((l) => l.path)),
+    ),
+  );
+  const stale = await Promise.all(
+    rows.map(async (r) => built.has(r.path) && !r.publishedSha && !(await isPending(r))),
+  );
+  return rows.filter((_, i) => !stale[i]).map(({ path, contents }) => ({ path, contents }));
 }
 
 /** A rename or delete is a commit then a D1 write; this must not race the second half. */
