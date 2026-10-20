@@ -171,8 +171,8 @@ $effect(() => {
   picker = `${prefix}-${[...path, ...image.path].join('.')}`;
 });
 
-// Dismiss lasts for the screen's life: what would bring the marker back is a reload anyway.
 let opened = $state('');
+// Dismiss lasts for the screen's life: what would bring the marker back is a reload anyway.
 const behind = (path: string) => !dismissed.includes(path) && sourceChanged[path] !== undefined;
 const when = (iso: string) => {
   const at = Date.parse(iso);
