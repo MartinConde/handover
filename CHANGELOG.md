@@ -4,6 +4,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- The entries an index menu item lists now come sorted by file name, as the menu editor shows
+  them, instead of in whatever order Astro's loader read the files.
 - A draft nobody edited no longer shows an older version of its file in preview, the entry
   lists or the SEO defaults after the file changed in the repository, and the editor no longer
   calls it waiting to publish.

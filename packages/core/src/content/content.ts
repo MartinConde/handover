@@ -276,7 +276,9 @@ async function entryLinks<C extends Record<string, unknown>>(
   const of = site.collections[collection];
   const links: NavLink[] = [];
   const all = await source.getCollection(collection as keyof C & string, locale);
-  for (const entry of filterLive(siteId, all)) {
+  // By name, as the menu editor lists them: the loader's own order is whichever file was read first.
+  const live = filterLive(siteId, all).sort((a, b) => a.id.localeCompare(b.id));
+  for (const entry of live) {
     const name = entry.id.slice(locale.length + 1);
     // The index page's own copy is the item that lists these.
     if (of?.index && name === 'index') continue;

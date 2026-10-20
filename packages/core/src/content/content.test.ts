@@ -603,6 +603,25 @@ test("an index item set to list its entries has the language's live entries unde
   ]);
 });
 
+// Astro's loader fills the collection in file-read order, which no one chose; the editor lists by name.
+test('the entries under an index item come by name, whatever order the source returns them in', async () => {
+  const source = staticSource<{ listings: unknown }>('default', {
+    getEntry: async () => undefined,
+    getCollection: async () =>
+      ['en/zebra', 'en/apple', 'en/mango'].map((id) => ({ id, data: { title: id.slice(3) } })),
+  });
+  const nav = menu([
+    item({ label: 'Listings', link: { type: 'index', collection: 'listings' }, entries: true }),
+  ]);
+
+  const [listing] = (await menusAt('default', source, site, nav, 'en')).header ?? [];
+  expect(listing?.children.map((c) => c.href)).toEqual([
+    '/listings/apple',
+    '/listings/mango',
+    '/listings/zebra',
+  ]);
+});
+
 // A collection's index is not an entry, so the item names the collection instead of a file.
 test("an index item points at the language's own index page, named by the collection", async () => {
   const nav = menu([item({ link: { type: 'index', collection: 'listings' } })]);

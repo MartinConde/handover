@@ -56,8 +56,8 @@ heading over *About* and *Team*. There is no page to name it, so a language wher
 An `index` item with `entries: true` lists the collection's live entries under it, in each
 language, before any items added by hand. A *Services* item then always shows every service.
 Each listed item carries its `entry` (`{ id, data }`), so a flyout can draw teasers from the
-entry's fields. They come in the collection's file order; sort them in the site if the order
-matters. The client sets it with **List its pages under it** in the item editor. The menu editor then
+entry's fields. They come sorted by file name, the order the menu editor shows them in; sort them in the
+site if another order matters. The client sets it with **List its pages under it** in the item editor. The menu editor then
 shows those entries under the item as plain rows, marked as added automatically; they cannot be
 moved or removed there.
 
