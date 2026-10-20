@@ -1148,6 +1148,7 @@
   "editor_restored_drift": "Seitdem stimmen die Sprachen bei den Blöcken nicht mehr überein — entscheide, was bleiben soll, und veröffentliche dann.",
   "editor_restored_unpublished": "Sie liegt jetzt als unveröffentlichte Änderungen vor — bis zur Veröffentlichung ist nichts live.",
   "editor_drift_blocked": "Die Sprachen dieses Eintrags stimmen bei den Blöcken nicht überein — die Veröffentlichung bleibt gesperrt, bis das geklärt ist.",
+  "editor_offer_problem": "Die Datei dieses Eintrags sagt etwas, dem seine Sprachen widersprechen — {problem}. Behebe das im Repository; bis dahin gilt, was in den Dateien steht.",
   "entry_source_unresolved": "Die Dateien dieses Eintrags nennen keine gemeinsame Ausgangssprache mehr. Lade ihn neu, um zu sehen, was jede Datei nennt.",
   "entry_source_target_undeclared": "Diese Sprache ist auf dieser Website nicht eingerichtet und kann daher nicht die Ausgangssprache sein.",
   "entry_source_unchanged": "Dieser Eintrag ist bereits in dieser Sprache geschrieben. Nichts wurde geändert.",

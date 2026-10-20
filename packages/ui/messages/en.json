@@ -1142,6 +1142,7 @@
   "editor_restored_drift": "The languages disagree about its blocks since then — decide what to keep, then publish.",
   "editor_restored_unpublished": "It is here as unpublished changes — nothing is live until you publish.",
   "editor_drift_blocked": "The languages of this entry disagree about its blocks — publishing is blocked until that is settled.",
+  "editor_offer_problem": "This entry's file says something its languages contradict — {problem}. Fix it in the repository; until then the files are what counts.",
   "entry_source_unresolved": "This entry’s files no longer agree about the language it is written in. Reload it to see what each file says.",
   "entry_source_target_undeclared": "That language isn’t one this site declares, so it can’t be the source.",
   "entry_source_unchanged": "This entry is already written in that language. Nothing was changed.",

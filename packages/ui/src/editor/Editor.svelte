@@ -1659,10 +1659,7 @@ async function saveAddress() {
   {#if holdFailed}<p class="notice notice-danger" role="alert">{feedbackText(holdFailed)} {messageDetail(holdFailed, uiLocale)}</p>{/if}
   {#if saveError}<p class="notice notice-danger" role="alert">{feedbackText(saveError)} {messageDetail(saveError, uiLocale)} <button class="btn-link" type="button" onclick={() => flush()}>{m.editor_save_retry({}, options)}</button></p>{/if}
   {#each entry.offerProblems ?? [] as problem (problem)}
-    <div class="lock-banner is-offer">
-      This entry's file says something its languages contradict — {problem}. Fix it in the
-      repository; until then the files are what counts.
-    </div>
+    <div class="lock-banner is-offer">{m.editor_offer_problem({ problem }, options)}</div>
   {/each}
   {#if lost}
     <!-- Leads with where the work went: the draft is in D1. -->
