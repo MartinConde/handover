@@ -214,11 +214,7 @@ const editorOpen = (frame: HTMLIFrameElement) => {
   }
 };
 
-/**
- * Owns full-document Canvas replacement. Each attempt gets a new browsing context; the current
- * document remains live until the candidate has both loaded and completed the exact bridge
- * handshake.
- */
+// The current document stays live until the candidate has loaded and finished the bridge handshake.
 export function createCanvasRenderer(options: CanvasRendererOptions) {
   const timeoutMs = options.timeoutMs ?? 10_000;
   const renderDelayMs = options.renderDelayMs ?? 200;

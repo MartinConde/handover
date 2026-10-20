@@ -42,10 +42,7 @@ export interface EntryDirectoryReader {
   invalidate(): void;
 }
 
-/**
- * One catalogue cache for one authenticated app or Canvas runtime. Concurrent consumers share the
- * request; failures are deliberately not cached so opening another picker can retry.
- */
+// Failures are not cached, so opening another picker can retry.
 export function createEntryDirectoryReader(
   fetcher: typeof globalThis.fetch,
   endpoint = '/admin/api/entries',

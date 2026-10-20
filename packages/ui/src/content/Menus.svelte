@@ -1,18 +1,18 @@
 <script module lang="ts">
-/** One item of the `navigation` global, as the format stores it. */
+// One item of the `navigation` global, as the format stores it.
 export interface MenuItem {
   _id: string;
-  /** The languages this item is shown in; absent is all of them. */
+  // The languages this item is shown in; absent is all of them.
   _locales?: string[];
   label: string;
-  /** Absent on a label that only opens the items under it. */
+  // Absent on a label that only opens the items under it.
   link?:
     | { type: 'url'; href: string }
     | { type: 'entry' | 'page'; ref: string }
     | { type: 'index'; collection: string };
   newTab?: boolean;
   variant?: string;
-  /** On an index item: the collection's live entries are listed under it. */
+  // On an index item: the collection's live entries are listed under it.
   entries?: true;
   children?: MenuItem[];
 }
@@ -22,10 +22,10 @@ export interface Menu {
   items: MenuItem[];
 }
 
-/** The format is recursive; the cap is this editor's. */
+// The format is recursive; the cap is this editor's.
 const MAX_DEPTH = 3;
 
-/** How many levels the item itself is, so indenting cannot push its children past the cap. */
+// How many levels the item itself is, so indenting cannot push its children past the cap.
 function heightOf(item: MenuItem): number {
   return 1 + Math.max(0, ...(item.children ?? []).map(heightOf));
 }
@@ -57,36 +57,36 @@ let {
   uiLocale = 'en',
   variants = {},
 }: {
-  /** The field's own id; every control on the screen is named under it. */
+  // The field's own id; every control on the screen is named under it.
   id: string;
-  /** The heading the whole builder belongs to. */
+  // The heading the whole builder belongs to.
   labelId: string;
-  /** Edited in place; a developer declares them and the client fills them. */
+  // Edited in place; a developer declares them and the client fills them.
   menus: Menu[];
-  /** The language this column writes: which address a row shows, and what is missing where. */
+  // The language this column writes: which address a row shows, and what is missing where.
   locale?: string;
-  /** A second language's column: the tree is read, and its labels are what can be typed. */
+  // A second language's column: the tree is read, and its labels are what can be typed.
   translating?: boolean;
-  /** The source language's display name, supplied by the translation pane. */
+  // The source language's display name, supplied by the translation pane.
   sourceLabel?: string;
   uiLocale?: UiLocale;
-  /** How the site can draw an item, declared by the developer in `defineNavigation`. */
+  // How the site can draw an item, declared by the developer in `defineNavigation`.
   variants?: Record<string, string | Labels>;
 } = $props();
 
 let tab = $state(0);
-/** The item whose editor is open under its row, by `_id`. */
+// The item whose editor is open under its row, by `_id`.
 let editing = $state('');
-/** What that item was when the editor opened, so Cancel puts it back. */
+// What that item was when the editor opened, so Cancel puts it back.
 let before: MenuItem | undefined;
-/** The item waiting to be confirmed away, and the button to give focus back to. */
+// The item waiting to be confirmed away, and the button to give focus back to.
 let removing = $state<MenuItem>();
 let trigger = $state<HTMLElement>();
-/** The editor's picker is open over the link summary. */
+// The editor's picker is open over the link summary.
 let changing = $state(false);
-/** A disclosure and not `role="menu"`, as on the entry list. */
+// A disclosure and not `role="menu"`, as on the entry list.
 let menuFor = $state('');
-/** Feedback stays beside the library, so adding several pages never loses your place. */
+// Feedback stays beside the library, so adding several pages never loses your place.
 type AddedFeedback =
   | { kind: 'entry'; title: string; menu: string }
   | { kind: 'url' }
@@ -115,7 +115,7 @@ async function loadDirectory() {
 const language = $derived(locale || known.locales[0] || '');
 const languageName = (of: string) => formatLanguageName(of, uiLocale);
 
-/** What a link names in the picker's list: the entry's path, the collection of an index. */
+// What a link names in the picker's list: the entry's path, the collection of an index.
 const keyOf = (link: MenuItem['link']) =>
   !link || link.type === 'url' ? '' : link.type === 'index' ? link.collection : link.ref;
 const entryOf = (item: MenuItem) => {
@@ -124,14 +124,14 @@ const entryOf = (item: MenuItem) => {
   const rows = link.type === 'index' ? (known.indexes ?? []) : known.entries;
   return rows.find((e) => e.path === keyOf(link));
 };
-/** What the row is called when nobody has typed a label: the page's own title. */
+// What the row is called when nobody has typed a label: the page's own title.
 const fallback = (item: MenuItem) =>
   !item.link ? '' : item.link.type === 'url' ? item.link.href : (entryOf(item)?.titles?.[language] ?? entryOf(item)?.title ?? keyOf(item.link));
 const name = (item: MenuItem) => item.label || fallback(item) || m.menus_untitled({}, options);
-/** Where it goes in this language, which is what the client recognises the page by. */
+// Where it goes in this language, which is what the client recognises the page by.
 const target = (item: MenuItem) =>
   !item.link ? '' : item.link.type === 'url' ? item.link.href : (entryOf(item)?.urls[language] ?? keyOf(item.link));
-/** The quiet word after the name: what kind of thing the row points at. */
+// The quiet word after the name: what kind of thing the row points at.
 const kind = (item: MenuItem) => {
   const link = item.link;
   if (!link) return m.menus_no_link({}, options);
@@ -156,7 +156,7 @@ const flag = (item: MenuItem): { chip: string; why: string } | undefined => {
   return undefined;
 };
 
-/** What the site draws under an index item that lists its entries: this language's built, visible ones. */
+// What the site draws under an index item that lists its entries: this language's built, visible ones.
 const listed = (item: MenuItem): PickEntry[] => {
   const link = item.link;
   if (item.entries !== true || link?.type !== 'index') return [];
@@ -172,7 +172,7 @@ const listed = (item: MenuItem): PickEntry[] => {
   );
 };
 
-/** The list an item at this path is a row of. */
+// The list an item at this path is a row of.
 const listAt = (path: number[]): MenuItem[] =>
   path.reduce<MenuItem[]>((list, i) => list[i]?.children ?? [], menu?.items ?? []);
 function move(list: MenuItem[], from: number, to: number) {
@@ -231,7 +231,7 @@ function act(item: MenuItem, what: () => void) {
   what();
   tick().then(() => trigger?.isConnected && trigger.focus());
 }
-/** Where the item waiting to be confirmed away sits now — it can be moved from under a dialog. */
+// Where the item waiting to be confirmed away sits now — it can be moved from under a dialog.
 const pathOf = (item: MenuItem, list = menu?.items ?? [], at: number[] = []): number[] => {
   for (const [i, row] of list.entries()) {
     if (row === item) return [...at, i];
@@ -314,7 +314,7 @@ function find(list: MenuItem[], key: string): MenuItem | undefined {
   }
   return undefined;
 }
-/** `_locales` as a question about visitors: everywhere, or this one language. */
+// `_locales` as a question about visitors: everywhere, or this one language.
 const shownIn = (item: MenuItem) =>
   item._locales?.length === 1 ? (item._locales[0] as string) : '';
 function showIn(item: MenuItem, only: string) {
@@ -324,20 +324,20 @@ function showIn(item: MenuItem, only: string) {
 
 type Handlers = Required<DragDropEventHandlers>;
 type Manager = Parameters<Handlers['onDragOver']>[1];
-/** How far sideways a drag must travel to mean one level deeper: the branch indent. */
+// How far sideways a drag must travel to mean one level deeper: the branch indent.
 const INDENT = 36;
 interface Slot {
   kind: 'line' | 'into' | 'blocked';
-  /** Where the indicator is drawn: the list it sits in and the row it follows. */
+  // Where the indicator is drawn: the list it sits in and the row it follows.
   list: MenuItem[];
   after?: MenuItem;
   deeper: boolean;
-  /** What a drop would do: into this parent (the root when absent), after this sibling. */
+  // What a drop would do: into this parent (the root when absent), after this sibling.
   parent?: MenuItem;
   sib?: MenuItem;
 }
 let mark = $state<Slot>();
-/** Levels asked for with → and ← during a keyboard drag, on top of the pointer's travel. */
+// Levels asked for with → and ← during a keyboard drag, on top of the pointer's travel.
 let shift = 0;
 
 interface Row {

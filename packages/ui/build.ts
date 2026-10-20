@@ -15,10 +15,7 @@ function handoverScreens(screens?: string): Plugin {
   };
 }
 
-/**
- * The admin SPA's build, shared by this package's own build and the site-local rebuild the Astro
- * integration runs when a site declares screens. `screens` is the generated import-map source.
- */
+// Shared by the package build and the site-local rebuild when a site declares screens.
 export function uiBuildConfig({
   outDir,
   screens,

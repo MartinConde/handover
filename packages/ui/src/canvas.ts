@@ -1,8 +1,4 @@
-/**
- * The site-page Canvas runtime has its own entry so it never executes in the admin shell or on a
- * public page. The rich editor remains a separate lazy boundary until an annotated rich-text field
- * asks for it.
- */
+// Own entry so the Canvas runtime never executes in the admin shell or on a public page.
 import { createCanvasChildBridge, readCanvasManifest } from './canvas/canvas-bridge';
 import { sameCanvasTarget } from './canvas/canvas-target';
 import { createCanvasLinkRuntime } from './canvas/runtime/canvas-link-field';

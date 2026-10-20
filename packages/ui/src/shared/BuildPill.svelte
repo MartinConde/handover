@@ -28,9 +28,8 @@ $effect(() => {
   return () => clearInterval(id);
 });
 
-// ⚠️ From the commit, not the build's start: right after a publish there is no build yet.
+// From the commit, not the build's start: right after a publish there is no build yet.
 const from = $derived(build.committed_at ?? build.started_at);
-// "0m 45s", the way the mockup reads it.
 const elapsed = (from: number) => {
   const total = Math.max(0, Math.round((now - from) / 1000));
   return `${Math.floor(total / 60)}m ${String(total % 60).padStart(2, '0')}s`;
