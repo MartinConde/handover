@@ -99,7 +99,7 @@ does not identify whether the row is a content block.
 |---|---|
 | `field(name)` | Advance to a field and emit `data-handover-field`. |
 | `list(name)` | Advance to a block or stable-row list and emit `data-handover-list`. Annotate empty lists too. |
-| `block(row)` | Advance by `row._id` and emit `data-handover-block`. Pass the whole row so `row._label` or `row._type` also names it in Structure; a string ID also works, and that block falls back to its position. |
+| `block(row)` | Advance by `row._id` and emit `data-handover-block`. Pass the whole row so `row._label`, else the humanised `row._type` ("Faq item"), also names it in Structure; a string ID also works, and that block falls back to its position. |
 | `child(name)` | Advance through a group without emitting an annotation; for example `edit.child('address').field('city')`. |
 | `active` | `true` only in a verified Canvas render. It is not emitted when the context is spread. |
 | `target` | The current stable document, locale, and field address, for typed integrations. It is not emitted when spread. |

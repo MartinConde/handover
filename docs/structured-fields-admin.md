@@ -7,7 +7,8 @@ references, embeds and the SEO tab. Pictures and files have their own page,
 `group` is a collapsible fieldset. An `array` is a list of rows with Add, Remove and move
 up / down buttons — the first row's up and the last row's down are disabled. Every row
 keeps its `_id` across moves; a new row gets a fresh one. A `blocks` field is the same list
-of cards, each headed by its `_label` or `_type`, and Add block offers one button per type
+of cards, each headed by its `_label`, else its type's label, else the type humanised
+(`faq_item` reads "Faq item"), and Add block offers one button per type
 in your registry in a wide, responsive dialog, including inside nested lists. The choices
 scroll independently, keeping the heading and Cancel action visible. Cancel or Escape closes it
 without adding a block and returns focus to Add block. Reordering never rewrites an `_id`, so translations and `_machine` paths
