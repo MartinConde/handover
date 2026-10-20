@@ -12,7 +12,7 @@ import type { CreatedAll } from './editor/Editor.svelte';
 import type { EditorEntry } from './editor/entry-payload';
 import SourceRecovery, { type SourceProblem } from './editor/SourceRecovery.svelte';
 import { invalidateEntryDirectory } from './entry-directory.js';
-import { messageDetail, retainedFailure } from './errors.js';
+import { messageDetail } from './errors.js';
 import {
   type CollectionLabels,
   capitalise,
@@ -31,14 +31,15 @@ import Activity from './manage/Activity.svelte';
 import Diagnostics from './manage/Diagnostics.svelte';
 import Members from './manage/Members.svelte';
 import Library from './media/Library.svelte';
-import { coordinateEntryReplacement, flushNavigation, navigate } from './navigate';
+import { flushNavigation, navigate } from './navigate';
 import * as m from './paraglide/messages.js';
 import Pending from './publishing/Pending.svelte';
+import RevertDialog from './publishing/RevertDialog.svelte';
 import { request as fetch, localPath, sitePath, uncertainResponse } from './request.js';
 import type { ScreenProps } from './screen.js';
-import BuildPill, { type Build } from './shared/BuildPill.svelte';
-import ConfirmDialog from './shared/ConfirmDialog.svelte';
+import BuildPill from './shared/BuildPill.svelte';
 import Skeleton from './shared/Skeleton.svelte';
+import { createShellStatus } from './shell-status.svelte';
 
 export interface Session {
   collections: string[];
@@ -229,30 +230,12 @@ const openScreen = $derived.by(() => {
 });
 
 const collections = $derived(session?.collections ?? []);
-let pending = $state<
-  {
-    key: string;
-    title: string;
-    collection: string;
-    locales: string[];
-    files: string[];
-    redirects?: number;
-    updated_at: number;
-    held_by?: { id: string; name: string | null } | null;
-  }[]
->([]);
-let defaultLocale = $state('');
-let pendingStatus = $state<'loading' | 'ready' | 'error'>('loading');
-let pendingKnown = $state(false);
+const status = createShellStatus();
 let indicator = $state<HTMLButtonElement>();
-/** Where the site's newest commit has got to; null on a site with no build status. */
-let build = $state<Build | null>(null);
-let buildStatus = $state<'loading' | 'ready' | 'error'>('loading');
 /** Bumped after a revert: the drawer's account of the publish it undid has to go with it. */
 let drawerKey = $state(0);
 /** The commit whose revert is waiting to be confirmed. */
 let confirmRevert = $state<string>();
-let reverting = $state(false);
 let revertError = $state<ShellMessage>();
 let drawer = $state(false);
 // Puts the sidebar back over the screen on a phone, where the narrow rule hides it.
@@ -294,15 +277,15 @@ function dismiss(id: number) {
 
 $effect(() => {
   if (session) {
-    loadPending();
-    loadBuild();
+    status.loadPending();
+    status.loadBuild();
   }
 });
 
 // A plain click on an admin route swaps the screen in place; anything else is the browser's.
 const moved = () => {
   path = localPath(location.pathname);
-  if (session) loadPending();
+  if (session) status.loadPending();
 };
 const back = async () => {
   const to = location.href;
@@ -334,14 +317,6 @@ function follow(event: MouseEvent) {
   navigate(a.pathname + a.search);
 }
 
-// A boolean, not the object: an effect reading `build` would be rebuilt by every poll.
-const building = $derived(build?.state === 'building');
-// A finished build does not start on its own, and the next publish loads it.
-$effect(() => {
-  if (!building) return;
-  const poll = setInterval(() => void loadBuild(), 10_000);
-  return () => clearInterval(poll);
-});
 // Ping answers 401 until there is a session, so the shell's data arrives after the login form.
 async function loadSession() {
   sessionBusy = true;
@@ -426,143 +401,15 @@ async function signOut() {
   session = null;
 }
 
-let pendingRequest = 0;
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  value !== null && typeof value === 'object' && !Array.isArray(value);
-
-/** Entries a publish was refused over, which the drawer offers to resolve when it opens. */
-let conflicted = $state<string[]>([]);
-const isPendingEnvelope = (
-  value: unknown,
-): value is { entries?: typeof pending; defaultLocale?: string } =>
-  isRecord(value) &&
-  (value.entries === undefined || Array.isArray(value.entries)) &&
-  (value.defaultLocale === undefined || typeof value.defaultLocale === 'string');
-
-async function loadPending() {
-  const mine = ++pendingRequest;
-  pendingStatus = 'loading';
-  const res = await fetch('/admin/api/drafts');
-  if (mine !== pendingRequest) return;
-  if (!res.ok) {
-    pendingStatus = 'error';
-    return;
-  }
-  let body: unknown;
-  try {
-    body = (await res.json()) as typeof body;
-  } catch {
-    if (mine === pendingRequest) pendingStatus = 'error';
-    return;
-  }
-  if (mine !== pendingRequest) return;
-  if (!isPendingEnvelope(body)) {
-    pendingStatus = 'error';
-    return;
-  }
-  pending = body.entries ?? [];
-  conflicted = conflicted.filter((key) => pending.some((e) => e.key === key));
-  defaultLocale = body.defaultLocale ?? '';
-  pendingKnown = true;
-  pendingStatus = 'ready';
-}
-
-/** A publish redeploys the Worker, so this tab may be reloaded before the build finishes. */
-let buildRequest = 0;
-const isBuildEnvelope = (value: unknown): value is Partial<NonNullable<typeof build>> =>
-  isRecord(value) &&
-  (value.state === undefined ||
-    value.state === 'building' ||
-    value.state === 'live' ||
-    value.state === 'failed');
-
-async function loadBuild() {
-  const mine = ++buildRequest;
-  buildStatus = 'loading';
-  const res = await fetch('/admin/api/build');
-  if (mine !== buildRequest) return;
-  if (!res.ok) {
-    buildStatus = 'error';
-    return;
-  }
-  let body: unknown;
-  try {
-    body = (await res.json()) as typeof body;
-  } catch {
-    if (mine === buildRequest) buildStatus = 'error';
-    return;
-  }
-  if (mine !== buildRequest) return;
-  if (!isBuildEnvelope(body)) {
-    buildStatus = 'error';
-    return;
-  }
-  // Without `commit_sha` nothing was published yet and the pill reports the worker's own build.
-  build = body.state ? { ...body, state: body.state } : null;
-  buildStatus = 'ready';
-}
-
 /** Every repository commit refreshes the shell-owned views that can move because of it. */
 async function commitChanged() {
   invalidateEntryDirectory();
-  await Promise.all([loadPending(), loadBuild()]);
+  await Promise.all([status.loadPending(), status.loadBuild()]);
 }
 
 function askRevert(sha: string) {
   revertError = undefined;
   confirmRevert = sha;
-}
-
-function closeRevert() {
-  confirmRevert = undefined;
-}
-
-// The pill's and the drawer's Revert are the same inverse commit over whichever sha is named.
-async function revert() {
-  const sha = confirmRevert;
-  if (!sha) return;
-  reverting = true;
-  let res: Response | undefined;
-  const outcome = await coordinateEntryReplacement(undefined, async () => {
-    res = await fetch('/admin/api/revert', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ commit_sha: sha }),
-    });
-    if (uncertainResponse(res)) throw new TypeError('The revert response was not confirmed.');
-    return res.ok;
-  });
-  reverting = false;
-  closeRevert();
-  if (!outcome.ok && outcome.reason === 'save') {
-    revertError = { code: 'REVERT_SAVE_FAILED' };
-    return;
-  }
-  if (!outcome.ok && (outcome.reason === 'uncertain' || outcome.reason === 'reload')) {
-    revertError = { code: 'REVERT_UNCERTAIN' };
-    return;
-  }
-  if (!outcome.ok) {
-    if (!res) {
-      revertError = { code: 'REVERT_UNCERTAIN' };
-      return;
-    }
-    // A file that has moved on since is named in the interface language; any other 409 keeps the server's sentence.
-    const refusal = res.status === 409 ? await retainedFailure(res, 'REVERT_FAILED') : undefined;
-    revertError =
-      refusal?.code === 'REVERT_CONFLICT'
-        ? { code: 'REVERT_CONFLICT', paths: refusal.paths ?? [] }
-        : {
-            code: 'REVERT_FAILED',
-            status: res.status,
-            ...(refusal?.detail ? { detail: refusal.detail } : {}),
-          };
-    return;
-  }
-  await commitChanged();
-  notify({ code: 'REVERTED_PUBLISH' });
-  // The drawer describes a commit just undone, so it goes with the publish it was about.
-  drawerKey += 1;
 }
 
 async function loadEntry(collection: string, slug: string): Promise<EditorEntry> {
@@ -594,7 +441,7 @@ async function reloadEntry() {
   const collection = editing.collection;
   const slug = editing.slug;
   invalidateEntryDirectory();
-  await loadPending();
+  await status.loadPending();
   let outcome: NonNullable<typeof preparedEntry>['outcome'];
   try {
     outcome = { value: await loadEntry(collection, slug) };
@@ -629,8 +476,8 @@ const manageLabel = (label: (typeof MANAGE)[number]['label']) =>
         : m.shell_settings({}, options);
 
 // `oldest`, not "started": a draft row carries when it was last written, not when it began.
-const oldest = $derived(Math.min(...pending.map((e) => e.updated_at)));
-const held = $derived(pending.filter((e) => e.held_by).length);
+const oldest = $derived(Math.min(...status.pending.map((e) => e.updated_at)));
+const held = $derived(status.pending.filter((e) => e.held_by).length);
 
 /** The editor's title getter, tied to its entry so the next one never shows the last name. */
 let titled = $state<{ entry: string; read: () => string }>();
@@ -683,7 +530,7 @@ const initial = $derived(
 <div class={['shell', { 'is-canvas': Boolean(editing) && editorMode === 'canvas', 'is-collapsed': collapsed }]} onclick={follow}>
   <a class="skip-link" href="#workspace" onclick={(event) => { event.preventDefault(); document.getElementById('workspace')?.focus(); }}>{m.shell_skip_to_content({}, options)}</a>
   <!-- A banner, not a toast, since it outlives a page load; the pill is the live region. -->
-  {#if building}
+  {#if status.building}
     <div class="banner banner-info">
       {m.build_publishing_banner({}, options)}
     </div>
@@ -696,45 +543,45 @@ const initial = $derived(
     <div class="sidebar-status">
       <!-- Always in the DOM so the first state is announced; the ticking clock stays out of it. -->
       <span class="build-status" role="status">
-        {#if build}
-          <BuildPill {build} {uiLocale}>
+        {#if status.build}
+          <BuildPill build={status.build} {uiLocale}>
             <!-- Only over the admin's own commit; otherwise the pill is the developer's deploy. -->
-            {#if build.state === 'failed' && build.commit_sha}
+            {#if status.build.state === 'failed' && status.build.commit_sha}
               <span class="sep" aria-hidden="true">·</span>
-              <button class="btn-link" type="button" onclick={() => askRevert(build?.commit_sha ?? '')}>
+              <button class="btn-link" type="button" onclick={() => askRevert(status.build?.commit_sha ?? '')}>
                 {m.build_revert_last({}, options)}
               </button>
             {/if}
           </BuildPill>
         {/if}
       </span>
-      {#if buildStatus === 'error'}
+      {#if status.buildStatus === 'error'}
         <span class="build-read-error" role="alert">
-          {build ? m.build_status_stale({}, options) : m.build_status_unavailable({}, options)}
-          <button class="btn-link" type="button" onclick={loadBuild}>{m.common_retry({}, options)}</button>
+          {status.build ? m.build_status_stale({}, options) : m.build_status_unavailable({}, options)}
+          <button class="btn-link" type="button" onclick={status.loadBuild}>{m.common_retry({}, options)}</button>
         </span>
       {/if}
       <button
-        class={['indicator', { 'is-lit': pending.length && pendingKnown }]}
+        class={['indicator', { 'is-lit': status.pending.length && status.pendingKnown }]}
         type="button"
         aria-haspopup="dialog"
         aria-expanded={drawer}
-        disabled={pendingStatus !== 'ready'}
+        disabled={status.pendingStatus !== 'ready'}
         onclick={() => (drawer = true)}
-        title={pendingStatus === 'loading' && !pendingKnown ? m.shell_pending_checking({}, options) : pendingStatus === 'error' && !pendingKnown ? m.shell_pending_unavailable({}, options) : pending.length ? m.shell_pending_count({ count: pending.length }, options) : m.shell_no_pending({}, options)}
+        title={status.pendingStatus === 'loading' && !status.pendingKnown ? m.shell_pending_checking({}, options) : status.pendingStatus === 'error' && !status.pendingKnown ? m.shell_pending_unavailable({}, options) : status.pending.length ? m.shell_pending_count({ count: status.pending.length }, options) : m.shell_no_pending({}, options)}
         bind:this={indicator}
       >
         <span class="dot" aria-hidden="true"></span>
-        {#if pendingStatus === 'loading' && !pendingKnown}
+        {#if status.pendingStatus === 'loading' && !status.pendingKnown}
           {m.shell_pending_checking({}, options)}
-        {:else if pendingStatus === 'error' && !pending.length}
+        {:else if status.pendingStatus === 'error' && !status.pending.length}
           {m.shell_pending_unavailable({}, options)}
         {:else}
           <!-- Collapsed, the sidebar clips the words and shows the count alone. -->
-          <span class="count" aria-hidden="true">{pendingKnown ? pending.length : '…'}</span>
-          <span class="nav-text">{pending.length ? m.shell_pending_count({ count: pending.length }, options) : m.shell_no_pending({}, options)}</span>
+          <span class="count" aria-hidden="true">{status.pendingKnown ? status.pending.length : '…'}</span>
+          <span class="nav-text">{status.pending.length ? m.shell_pending_count({ count: status.pending.length }, options) : m.shell_no_pending({}, options)}</span>
         {/if}
-        {#if pending.length && pendingKnown}
+        {#if status.pending.length && status.pendingKnown}
           <span class="detail">
             <span class="sep" aria-hidden="true">·</span>
             {m.shell_oldest({ when: formatRelativeTime(oldest, uiLocale) }, options)}
@@ -743,10 +590,10 @@ const initial = $derived(
         {/if}
         <svg class="indicator-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="m8 5 5 5-5 5" /></svg>
       </button>
-      {#if pendingStatus === 'error'}
+      {#if status.pendingStatus === 'error'}
         <span class="pending-read-error" role="alert">
-          {pendingKnown ? m.shell_pending_stale({}, options) : m.shell_pending_failed({}, options)}
-          <button class="btn-link" type="button" onclick={loadPending}>{m.common_retry({}, options)}</button>
+          {status.pendingKnown ? m.shell_pending_stale({}, options) : m.shell_pending_failed({}, options)}
+          <button class="btn-link" type="button" onclick={status.loadPending}>{m.common_retry({}, options)}</button>
         </span>
       {/if}
     </div>
@@ -878,7 +725,7 @@ const initial = $derived(
           userId={session?.user.id}
           onchanged={async () => {
             invalidateEntryDirectory();
-            await loadPending();
+            await status.loadPending();
             if (await flushNavigation()) reload += 1;
           }}
           onreload={async () => {
@@ -886,8 +733,8 @@ const initial = $derived(
             // remounting so a failure leaves that session's reload-only recovery control visible.
             await reloadEntry();
           }}
-          onpending={loadPending}
-          onconflict={() => (conflicted = [...new Set([...conflicted, editingAt])])}
+          onpending={status.loadPending}
+          onconflict={() => (status.conflicted = [...new Set([...status.conflicted, editingAt])])}
           oncommitted={commitChanged}
           onpublished={async (title) => {
             notify({ code: 'PUBLISHED_ENTRY', name: title });
@@ -917,7 +764,7 @@ const initial = $derived(
               onchosen={async (locale) => {
                 sourceChanged = { entry: editingAt, locale };
                 invalidateEntryDirectory();
-                await loadPending();
+                await status.loadPending();
                 reload += 1;
               }}
               onreload={() => (reload += 1)}
@@ -936,7 +783,7 @@ const initial = $derived(
         {uiLocale}
         onchanged={() => {
           invalidateEntryDirectory();
-          return loadPending();
+          return status.loadPending();
         }}
         oncommitted={commitChanged}
         onsaved={(name) => notify({ code: 'SAVED_TEMPLATE', name })}
@@ -983,17 +830,17 @@ const initial = $derived(
       <Diagnostics {uiLocale} oncommitted={commitChanged} />
     {:else}
       <Dashboard
-        {pending}
-        {pendingStatus}
-        {build}
-        {buildStatus}
+        pending={status.pending}
+        pendingStatus={status.pendingStatus}
+        build={status.build}
+        buildStatus={status.buildStatus}
         {collections}
         {uiLocale}
         role={session.role}
         onreview={() => (drawer = true)}
         onrevert={askRevert}
-        onretryPending={loadPending}
-        onretryBuild={loadBuild}
+        onretryPending={status.loadPending}
+        onretryBuild={status.loadBuild}
         oncommitted={commitChanged}
       />
     {/if}
@@ -1002,12 +849,12 @@ const initial = $derived(
   {#if drawer}
     {#key drawerKey}
     <Pending
-      entries={pending}
-      {defaultLocale}
+      entries={status.pending}
+      defaultLocale={status.defaultLocale}
       {uiLocale}
       mediaBase={session?.mediaBase ?? ''}
-      {build}
-      {conflicted}
+      build={status.build}
+      conflicted={status.conflicted}
       onrevert={askRevert}
       onclose={() => {
         drawer = false;
@@ -1017,11 +864,11 @@ const initial = $derived(
         notify({ code: 'PUBLISHED_CHANGES', count });
         await commitChanged();
       }}
-      onrefused={(keys) => (conflicted = [...new Set([...conflicted, ...keys])])}
+      onrefused={(keys) => (status.conflicted = [...new Set([...status.conflicted, ...keys])])}
       ondiscarded={async (key) => {
-        conflicted = conflicted.filter((k) => k !== key);
+        status.conflicted = status.conflicted.filter((k) => k !== key);
         invalidateEntryDirectory();
-        await loadPending();
+        await status.loadPending();
       }}
     />
     {/key}
@@ -1034,22 +881,16 @@ const initial = $derived(
       </div>
     {/each}
   </div>
-  {#if confirmRevert}
-    <ConfirmDialog
-      labelledby="revert-h"
-      describedby="revert-p"
-      role="dialog"
-      title={m.build_revert_question({}, options)}
-      cancel={m.common_cancel({}, options)}
-      confirm={reverting ? m.build_reverting({}, options) : m.build_revert({}, options)}
-      busy={reverting}
-      onconfirm={revert}
-      onclose={closeRevert}
-    >
-      <p id="revert-p">
-        {m.build_revert_explanation({}, options)}
-      </p>
-    </ConfirmDialog>
-  {/if}
+  <RevertDialog
+    bind:sha={confirmRevert}
+    {uiLocale}
+    onfailed={(failure) => (revertError = failure)}
+    onreverted={async () => {
+      await commitChanged();
+      notify({ code: 'REVERTED_PUBLISH' });
+      // The drawer describes a commit just undone, so it goes with the publish it was about.
+      drawerKey += 1;
+    }}
+  />
 </div>
 {/if}
