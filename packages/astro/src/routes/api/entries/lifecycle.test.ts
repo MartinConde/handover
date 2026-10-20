@@ -63,9 +63,11 @@ test('discarding waits for the editor who has the entry open', async () => {
   const res = await DELETE(ctx('drafts/listings/mill-house'));
 
   expect(res.status).toBe(409);
-  expect(await res.text()).toBe(
-    'Anna Berg is editing this entry — it can be discarded once they are done',
-  );
+  expect(res.headers.get('content-type')).toContain('application/json');
+  expect(await res.json()).toEqual({
+    error: 'Anna Berg is editing this entry — it can be discarded once they are done',
+    held_by: { id: 'someone-else', name: 'Anna Berg' },
+  });
   expect(discardDraft).not.toHaveBeenCalled();
   state.holder = undefined;
 });
@@ -205,9 +207,10 @@ test('renaming waits for the editor who has the entry open', async () => {
   );
 
   expect(res.status).toBe(409);
-  expect(await res.text()).toBe(
-    'Anna Berg is editing this entry — it can be renamed once they are done',
-  );
+  expect(await res.json()).toEqual({
+    error: 'Anna Berg is editing this entry — it can be renamed once they are done',
+    held_by: { id: 'someone-else', name: 'Anna Berg' },
+  });
   expect(publish).not.toHaveBeenCalled();
 });
 
@@ -218,7 +221,9 @@ test('deleting waits for the editor who has the entry open', async () => {
   const res = await del('entries/listings/mill-house');
 
   expect(res.status).toBe(409);
-  expect(await res.text()).toContain('it can be deleted once they are done');
+  expect(await res.json()).toMatchObject({
+    error: expect.stringContaining('it can be deleted once they are done'),
+  });
   expect(publish).not.toHaveBeenCalled();
 });
 

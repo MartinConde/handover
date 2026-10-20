@@ -1,7 +1,7 @@
 import { z } from 'astro/zod';
 import { expect, test } from 'vitest';
 import { entryProblems } from '../../astro/src/problems.js';
-import { messageLine, messageText, problemText, responseMessage } from './errors.js';
+import { messageDetail, messageLine, messageText, problemText, responseMessage } from './errors.js';
 
 test('integer and ordinary number problems render distinct remedies', () => {
   const problems = entryProblems(z.object({ whole: z.number().int(), amount: z.number() }), {
@@ -368,4 +368,21 @@ test('a message line carries the technical detail only when there is one', () =>
   expect(messageLine({ code: 'MEMBER_LIST_FAILED', status: 0 }, 'en')).toBe(
     'Could not load the members.',
   );
+});
+
+test('a refusal naming who holds the entry is phrased in the interface language', async () => {
+  const named = await responseMessage(
+    Response.json(
+      { error: 'Anna is editing this entry', held_by: { id: 'u2', name: 'Anna' } },
+      { status: 409 },
+    ),
+    'ENTRY_ACTION_FAILED',
+  );
+  const anonymous = await responseMessage(
+    Response.json({ error: 'x', held_by: { id: 'u2', name: null } }, { status: 409 }),
+    'ENTRY_ACTION_FAILED',
+  );
+
+  expect(messageDetail(named, 'de')).toBe('Wird von Anna bearbeitet');
+  expect(messageDetail(anonymous, 'de')).toBe('Eine andere Person bearbeitet diesen Eintrag');
 });

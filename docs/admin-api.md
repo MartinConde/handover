@@ -23,6 +23,9 @@ Conventions across all of them:
 - **`409` is somebody else's work in the way** — a lock, a file that moved in the
   repository, a name already taken. Where more than one kind of `409` is possible the body
   carries a `reason`, so they can be told apart
+- **A `409` because somebody else is editing the entry** (rename, delete, hide, show, restore,
+  discard, resolve) is JSON: `{ "error": "<sentence>", "held_by": { "id", "name" } }`. `name` is
+  `null` when the holder has none; the admin phrases it in the interface language
 - Times are epoch milliseconds
 
 Accounts, members and the mailer check are not here: they are Better Auth's, and what a site

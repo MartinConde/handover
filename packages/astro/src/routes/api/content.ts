@@ -409,8 +409,12 @@ export async function heldByAnother(
 ): Promise<Response | undefined> {
   const holder = await lockHolder('default', ctx.db(), `${collection}/${slug}`);
   if (!holder || holder.userId === session?.user.id) return undefined;
-  return new Response(
-    `${holder.name ?? 'Somebody else'} is editing this entry — it can be ${doing} once they are done`,
+  // `held_by` is the same shape the draft endpoints use, so the admin can phrase it in its own language.
+  return Response.json(
+    {
+      error: `${holder.name ?? 'Somebody else'} is editing this entry — it can be ${doing} once they are done`,
+      held_by: { id: holder.userId, name: holder.name },
+    },
     { status: 409 },
   );
 }

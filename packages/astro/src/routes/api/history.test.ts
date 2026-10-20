@@ -221,9 +221,10 @@ test('answering a conflict waits for the editor who has the entry open', async (
   );
 
   expect(res.status).toBe(409);
-  expect(await res.text()).toBe(
-    'Anna Berg is editing this entry — it can be resolved once they are done',
-  );
+  expect(await res.json()).toEqual({
+    error: 'Anna Berg is editing this entry — it can be resolved once they are done',
+    held_by: { id: 'someone-else', name: 'Anna Berg' },
+  });
   expect(resolveConflict).not.toHaveBeenCalled();
   state.holder = undefined;
 });
@@ -599,9 +600,10 @@ test('a restore is refused while somebody else has the entry open', async () => 
   const res = await restoring('history/listings/mill-house/restore', { commit_sha: 'abc1234' });
 
   expect(res.status).toBe(409);
-  expect(await res.text()).toBe(
-    'Anna is editing this entry — it can be restored once they are done',
-  );
+  expect(await res.json()).toEqual({
+    error: 'Anna is editing this entry — it can be restored once they are done',
+    held_by: { id: 'u9', name: 'Anna' },
+  });
   expect(restoreDraft).not.toHaveBeenCalled();
 });
 
@@ -639,9 +641,10 @@ test('restoring waits for the editor who has the entry open', async () => {
   const res = await POST(post('restore', JSON.stringify({ commit_sha: 'del111' })));
 
   expect(res.status).toBe(409);
-  expect(await res.text()).toBe(
-    'Anna Berg is editing this entry — it can be restored once they are done',
-  );
+  expect(await res.json()).toEqual({
+    error: 'Anna Berg is editing this entry — it can be restored once they are done',
+    held_by: { id: 'someone-else', name: 'Anna Berg' },
+  });
   expect(restoreCommit).not.toHaveBeenCalled();
 });
 

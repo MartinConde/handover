@@ -461,9 +461,10 @@ test('hiding waits for the editor who has the entry open', async () => {
   );
 
   expect(res.status).toBe(409);
-  expect(await res.text()).toBe(
-    'Anna Berg is editing this entry — it can be hidden once they are done',
-  );
+  expect(await res.json()).toEqual({
+    error: 'Anna Berg is editing this entry — it can be hidden once they are done',
+    held_by: { id: 'someone-else', name: 'Anna Berg' },
+  });
   expect(setEntryStatus).not.toHaveBeenCalled();
 });
 

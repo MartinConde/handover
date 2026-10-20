@@ -261,11 +261,14 @@ test('an entry nothing refused still offers Discard, and confirming deletes its 
 test('a discard refused because somebody else holds the entry names them', async () => {
   vi.stubGlobal(
     'fetch',
-    vi.fn(
-      async () =>
-        new Response('Anna is editing this entry — it can be discarded once they are done', {
-          status: 409,
-        }),
+    vi.fn(async () =>
+      Response.json(
+        {
+          error: 'Anna is editing this entry — it can be discarded once they are done',
+          held_by: { id: 'u2', name: 'Anna' },
+        },
+        { status: 409 },
+      ),
     ),
   );
   const root = show();
@@ -277,7 +280,7 @@ test('a discard refused because somebody else holds the entry names them', async
   flushSync();
 
   expect(q(root, '.notice-danger')?.textContent).toBe(
-    'Those changes were not discarded (409). Technical detail: Anna is editing this entry — it can be discarded once they are done',
+    'Those changes were not discarded (409). Being edited by Anna',
   );
   expect(discarded).not.toHaveBeenCalled();
 });

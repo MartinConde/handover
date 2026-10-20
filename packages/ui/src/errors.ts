@@ -6,6 +6,8 @@ export interface UiMessage {
   code: string;
   status?: number;
   detail?: string;
+  /** Who holds the entry a refusal is about; null when the lock has no name. */
+  holder?: string | null;
   limit?: number;
   inclusive?: boolean;
   exact?: boolean;
@@ -38,7 +40,15 @@ export async function responseMessage(response: Response, fallback: string): Pro
   const code = headerCode ?? responseCode ?? fallback;
   const known = KNOWN_CODES.has(code);
   const detailValue = typeof body?.error === 'string' ? body.error : body?.message;
-  const detail = typeof detailValue === 'string' && !known ? detailValue : undefined;
+  const heldBy = body?.held_by;
+  const holder =
+    heldBy && typeof heldBy === 'object' && 'name' in heldBy
+      ? typeof heldBy.name === 'string'
+        ? heldBy.name
+        : null
+      : undefined;
+  const detail =
+    typeof detailValue === 'string' && !known && holder === undefined ? detailValue : undefined;
   const strings = (key: string) =>
     Array.isArray(body?.[key]) && body[key].every((value) => typeof value === 'string')
       ? (body[key] as string[])
@@ -47,6 +57,7 @@ export async function responseMessage(response: Response, fallback: string): Pro
     code: known ? code : fallback,
     status: response.status,
     ...(detail ? { detail } : {}),
+    ...(holder !== undefined ? { holder } : {}),
     ...(typeof body?.limit === 'number' ? { limit: body.limit } : {}),
     ...(typeof body?.address === 'string' ? { address: body.address } : {}),
     ...(typeof body?.collection === 'string' ? { collection: body.collection } : {}),
@@ -553,10 +564,13 @@ export function messageText(message: UiMessage, locale: UiLocale): string {
   }
 }
 
-export const messageDetail = (message: Pick<UiMessage, 'detail'>, locale: UiLocale) =>
-  message.detail
-    ? m.common_technical_detail({ detail: message.detail }, messageOptions(locale))
-    : '';
+export function messageDetail(message: Pick<UiMessage, 'detail' | 'holder'>, locale: UiLocale) {
+  const options = messageOptions(locale);
+  if (message.holder === null) return m.editor_lock_held_anonymous({}, options);
+  if (message.holder !== undefined)
+    return m.editor_lock_held_by({ holder: message.holder }, options);
+  return message.detail ? m.common_technical_detail({ detail: message.detail }, options) : '';
+}
 
 export const messageLine = (message: UiMessage, locale: UiLocale) =>
   [messageText(message, locale), messageDetail(message, locale)].filter(Boolean).join(' ');

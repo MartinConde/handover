@@ -4,6 +4,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- A Discard refused because somebody else is editing the entry now names them in the interface
+  language (en, de). The `409` for any action refused over the lock is JSON, `{ error, held_by }`,
+  instead of plain text.
 - The menu editor no longer lists an entry that has never been published under an index item
   that lists its pages; the site does not draw it either.
 - Resolving a conflict where the two sides differ only in a link or in bold or italic now shows
