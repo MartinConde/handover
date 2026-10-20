@@ -4,6 +4,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Internal: the admin shell's drafts and build status and its revert dialog sit in their own
+  module and component, and the Canvas panel resizing in its own module.
 - Internal: the editor's field form is split into one component per widget family (image, file,
   embed, SEO, link, lists) on a shared field level; the image card and the nested form are
   written once. The editor's field reveal, publish flow and entry lock sit in their own modules,
