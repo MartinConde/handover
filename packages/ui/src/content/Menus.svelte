@@ -155,6 +155,20 @@ const flag = (item: MenuItem): { chip: string; why: string } | undefined => {
   return undefined;
 };
 
+/** What the site draws under an index item that lists its entries: this language's visible ones. */
+const listed = (item: MenuItem): PickEntry[] => {
+  const link = item.link;
+  if (item.entries !== true || link?.type !== 'index') return [];
+  // The index page's own copy is the item itself, as on the site.
+  return known.entries.filter(
+    (e) =>
+      e.collection === link.collection &&
+      e.path !== `${link.collection}/index` &&
+      e.locales.includes(language) &&
+      !e.hiddenLocales?.includes(language),
+  );
+};
+
 /** The list an item at this path is a row of. */
 const listAt = (path: number[]): MenuItem[] =>
   path.reduce<MenuItem[]>((list, i) => list[i]?.children ?? [], menu?.items ?? []);
@@ -469,6 +483,7 @@ function walkTabs(event: KeyboardEvent) {
     {#each list as item, i (item._id)}
       {@const here = [...path, i]}
       {@const says = flag(item)}
+      {@const auto = listed(item)}
       {@const open = editing === item._id}
       {@const s = sortable(() => item._id, () => i)}
       <li>
@@ -500,6 +515,12 @@ function walkTabs(event: KeyboardEvent) {
           </div>
         </div>
         {#if open && found}{@render editor(found, says)}{/if}
+        {#if auto.length && item.link?.type === 'index'}
+          <ul class="branch auto-entries">
+            {#each auto as entry (entry.path)}<li>{entry.titles?.[language] ?? entry.title}</li>{/each}
+          </ul>
+          <p class="auto-note">{m.menus_entries_automatic({ collection: capitalise(collectionName(item.link.collection, uiLocale)) }, options)}</p>
+        {/if}
         {#if item.children?.length}
           {@render branch(item.children, here)}
         {/if}

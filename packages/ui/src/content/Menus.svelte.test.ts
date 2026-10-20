@@ -360,6 +360,33 @@ test('an index item can list its entries, and the choice goes when the link stop
   expect($state.snapshot(menus[0]?.items[0])).not.toHaveProperty('entries');
 });
 
+test('an item that lists its entries shows the ones the site draws as read-only rows', async () => {
+  const listing = item({
+    label: 'Listings',
+    link: { type: 'index', collection: 'listings' },
+    entries: true,
+  });
+  show([listing], ['header'], false, 'de');
+  await settle();
+  expect(
+    Array.from(document.querySelectorAll('.auto-entries li')).map((li) => li.textContent?.trim()),
+  ).toEqual(['Das Mühlenhaus']);
+  expect(q('.auto-note').textContent?.trim()).toBe('Added automatically from Listings');
+  expect(document.querySelectorAll('.auto-entries button')).toHaveLength(0);
+});
+
+test('an entry hidden in the menu language is not listed under the item', async () => {
+  const listing = item({
+    label: 'Listings',
+    link: { type: 'index', collection: 'listings' },
+    entries: true,
+  });
+  show([listing]);
+  await settle();
+  expect(document.querySelector('.auto-entries')).toBeNull();
+  expect(document.querySelector('.auto-note')).toBeNull();
+});
+
 // The renderer drops these items; the editor is where somebody can see that it is going to.
 test('an item the site will skip says so on the row', async () => {
   show([

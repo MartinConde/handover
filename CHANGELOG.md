@@ -4,6 +4,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- The menu editor shows the entries a **List its pages under it** item lists as read-only rows
+  under the item, with a line saying they are added automatically.
 - The conflict **Resolve** dialog shows the text of each side of a rich-text field, where it
   used to say *rewritten* for both.
 - History and Pending show a rich-text change that only adds or removes a line break as a

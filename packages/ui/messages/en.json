@@ -2058,6 +2058,7 @@
   "menus_style": "Style",
   "menus_style_standard": "Standard",
   "menus_list_entries": "List its pages under it",
+  "menus_entries_automatic": "Added automatically from {collection}",
   "menus_language_labels": "{language} menu labels",
   "menus_structure": "Menu structure",
   "menus_translate_labels": "Translate the labels visitors see in this language.",
