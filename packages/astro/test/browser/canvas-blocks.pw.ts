@@ -200,9 +200,9 @@ test('an inserted block saves while incomplete, renders once completed, and dele
   await insertAfterFirst.click();
   await expect(
     editor.getByRole('list', { name: 'Allowed block types' }).getByRole('button'),
-  ).toHaveText([/repeated/, /promo/, /columns/]);
+  ).toHaveText([/Repeated/, /Promo/, /Columns/]);
   const postsBeforeIncompleteBlock = posts();
-  await editor.getByRole('button', { name: /repeated/ }).click();
+  await editor.getByRole('button', { name: /Repeated/ }).click();
   await expect(editor).toHaveCount(0);
   await expect(inspector).toBeVisible();
   await expect(page.locator('.canvas-validation.is-incomplete')).toContainText(
@@ -235,7 +235,7 @@ test('Insert after renders the new block, Back cancels without a render, and emp
     await openBlockControls(page);
   await clickFirst();
   await useCanvasAction('Insert after', 'Block 1');
-  await editor.getByRole('button', { name: /promo/ }).click();
+  await editor.getByRole('button', { name: /Promo/ }).click();
   await inspector.getByLabel('Heading').fill('New promotion');
   await inspector.getByLabel('Heading').press('Tab');
   await expect(frame.getByText('New promotion')).toBeVisible();
@@ -253,7 +253,7 @@ test('Insert after renders the new block, Back cancels without a render, and emp
 
   await frame.locator('[data-empty-list]').click();
   await frame.getByRole('button', { name: 'Add block to Blocks' }).click();
-  await editor.getByRole('button', { name: /repeated/ }).click();
+  await editor.getByRole('button', { name: /Repeated/ }).click();
   await inspector.getByLabel('Heading').fill('Nested list insertion');
   await inspector.getByLabel('Heading').press('Tab');
   await expect(frame.getByText('Nested list insertion')).toBeVisible();
@@ -451,7 +451,7 @@ test('a failed render keeps the last page and the edit, and Retry renders it', a
   await clickFirst();
   await openStructure();
   await useCanvasAction('Insert after', 'Block 1');
-  await editor.getByRole('button', { name: /repeated/ }).click();
+  await editor.getByRole('button', { name: /Repeated/ }).click();
   failNextRender();
   await inspector.getByLabel('Heading').fill('Retained after render failure');
   await inspector.getByLabel('Heading').press('Tab');
