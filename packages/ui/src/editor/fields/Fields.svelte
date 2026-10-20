@@ -12,7 +12,6 @@ import {
   fieldAddress,
   labelIn,
   newId,
-  type Preset,
   parseEmbedUrl,
   type ResolvedSeo,
   SEO_DESCRIPTION_LIMIT,
@@ -30,7 +29,7 @@ import type { UiLocale } from '../../i18n.js';
 import { capitalise, formatFieldTime, messageOptions } from '../../i18n.js';
 import Focal from '../../media/Focal.svelte';
 import Media from '../../media/Media.svelte';
-import { fileSize, type MediaItem } from '../../media/upload.js';
+import type { MediaItem } from '../../media/upload.js';
 import * as m from '../../paraglide/messages.js';
 import MediaImage from '../../shared/MediaImage.svelte';
 import Modal from '../../shared/Modal.svelte';
@@ -43,11 +42,15 @@ import type {
   ListOperation,
 } from '../entry-session.svelte';
 import Fields from './Fields.svelte';
+import FileField from './FileField.svelte';
+import { aspect, centred, type Data, type FieldLevel, readFrom, stored } from './field-level.js';
+import ImageCard from './ImageCard.svelte';
+import ImageField from './ImageField.svelte';
+import PerLanguageInput from './PerLanguageInput.svelte';
 import ReferencePeek, { type Reference } from './ReferencePeek.svelte';
 import RichText from './RichText.svelte';
 import TextField from './TextField.svelte';
 
-type Data = Record<string, unknown>;
 let {
   fields,
   root = $bindable(),
@@ -224,9 +227,6 @@ const crumbs = $derived(
 let projection = $state<Data>();
 const displayedRoot = $derived(projection ?? viewRoot ?? root);
 
-function readFrom(data: Data, at: readonly string[]): unknown {
-  return at.reduce<unknown>((node, key) => (node as Data | undefined)?.[key], data);
-}
 function read(at: readonly string[]): unknown {
   return readFrom(displayedRoot, at);
 }
@@ -456,7 +456,6 @@ $effect(() => {
       .catch(() => (known = EMPTY_ENTRY_DIRECTORY));
 });
 
-const aspect = (preset: Preset) => preset.ratio?.replace(':', ' / ') ?? '4 / 3';
 const src = (at: readonly string[]) => {
   const key = str([...at, 'src']);
   return key ? `${mediaBase}/${key}` : '';
@@ -522,26 +521,6 @@ function seoWrite(at: readonly string[], key: string, value: unknown) {
   else write([...at, key], value);
 }
 
-const bytes = (at: readonly string[]) =>
-  fileSize(read([...at, 'bytes']) as number | undefined, uiLocale);
-
-/** One picked asset as the format stores it — and in that order. */
-const stored = (type: 'image' | 'file', item: MediaItem, pageAlt?: unknown) =>
-  type === 'image'
-    ? // A page keeps its own words; otherwise selection takes a snapshot of the library default.
-      {
-        src: item.src,
-        alt: typeof pageAlt === 'string' ? pageAlt : item.alt || undefined,
-        width: item.width,
-        height: item.height,
-        focal: centred(item.focal) ? undefined : item.focal,
-      }
-    : { src: item.src, name: item.filename, bytes: item.bytes, mime: item.mime };
-
-/** The middle is where a crop holds when nothing says otherwise, so it is not written. */
-const centred = (focal?: [number, number] | null) =>
-  !focal || (focal[0] === 0.5 && focal[1] === 0.5);
-
 function picked(at: readonly string[], type: 'image' | 'file', items: MediaItem[]) {
   const held = read(at) as { alt?: unknown } | undefined;
   write(at, stored(type, items[0] as MediaItem, held?.alt));
@@ -583,6 +562,50 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
     { path: [type === 'url' ? 'ref' : 'href'], value: undefined },
   ]);
 }
+
+const level: FieldLevel = {
+  read,
+  str,
+  num,
+  write,
+  writeMany,
+  address,
+  childAddress,
+  src,
+  point,
+  picked,
+  dropOn,
+  get picker() {
+    return picker;
+  },
+  set picker(id) {
+    picker = id;
+  },
+  get dropped() {
+    return dropped;
+  },
+  set dropped(files) {
+    dropped = files;
+  },
+  get uiLocale() {
+    return uiLocale;
+  },
+  get options() {
+    return options;
+  },
+  get mediaBase() {
+    return mediaBase;
+  },
+  get reference() {
+    return reference;
+  },
+  get translating() {
+    return translating;
+  },
+  get structureLocked() {
+    return structureLocked;
+  },
+};
 </script>
 
 {#snippet machineMark(path: string, text: string)}
@@ -654,17 +677,9 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
   </div>
 {/snippet}
 
-{#snippet altField(id: string, at: readonly string[])}
-  <div class="field"><div class="label-row"><label for="{id}.alt">{m.field_alt_text({}, options)}</label><span class="mode">{m.field_per_language({}, options)}</span></div><input class="input" id="{id}.alt" type="text" value={str([...at, 'alt'])} oninput={(e) => write([...at, 'alt'], e.currentTarget.value || undefined)} />{#if reference}<ReferencePeek {reference} path={childAddress(at, 'alt')} {uiLocale} />{/if}</div>
-{/snippet}
-
 {#snippet embedThumbnail(value: EmbedValue)}
   {@const still = embedThumb(value)}
   <span class="thumb" style="aspect-ratio: 16 / 9">{#if still}<MediaImage src={still} alt="" loading="lazy" {uiLocale} />{/if}</span>
-{/snippet}
-
-{#snippet titleField(id: string, at: readonly string[])}
-  <div class="field"><div class="label-row"><label for="{id}.title">{m.field_title({}, options)}</label><span class="mode">{m.field_per_language({}, options)}</span></div><input class="input" id="{id}.title" type="text" value={str([...at, 'title'])} oninput={(e) => write([...at, 'title'], e.currentTarget.value || undefined)} />{#if reference}<ReferencePeek {reference} path={childAddress(at, 'title')} {uiLocale} />{/if}</div>
 {/snippet}
 
 {#snippet previews(at: readonly string[])}
@@ -708,10 +723,6 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
     {#if reference}<ReferencePeek {reference} path={childAddress(at, key)} {uiLocale} />{/if}
     {#if hint}<p class="hint" id="{id}.{key}-hint">{hint}</p>{/if}
   </div>
-{/snippet}
-
-{#snippet nameField(id: string, at: readonly string[])}
-  <div class="field"><div class="label-row"><label for="{id}.name">{m.field_display_name({}, options)}</label><span class="mode">{m.field_per_language({}, options)}</span></div><input class="input" id="{id}.name" type="text" value={str([...at, 'name'])} oninput={(e) => write([...at, 'name'], e.currentTarget.value || undefined)} />{#if reference}<ReferencePeek {reference} path={childAddress(at, 'name')} {uiLocale} />{/if}</div>
 {/snippet}
 
 {#snippet chosenEntry(id: string, labelId: string, says: string | undefined, ref: string, open: () => void)}
@@ -868,18 +879,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
         {@const cellId = `${id}.${i}`}
         <Modal labelledby="{cellId}-h" panelClass="dialog gallery-dialog" initialFocus="input" onclose={() => (editing = undefined)}>
           <header><h2 id="{cellId}-h">{m.field_gallery_image({ index: i + 1, count: items.length }, options)}</h2></header>
-          <div class="media-card is-image">
-            <button class="thumb field-image-preview" type="button" aria-label={m.field_picture_set_focal({}, options)} title={m.field_picture_set_focal({}, options)} onclick={() => (framing = cellId)} style="aspect-ratio: {aspect(preset)}"><MediaImage src={src(cell)} alt="" style="object-position: {dot(cell)[0]}% {dot(cell)[1]}%" {uiLocale} /><span class="focal" style="left: {dot(cell)[0]}%; top: {dot(cell)[1]}%" aria-hidden="true"></span></button>
-            <div class="meta">
-              <div class="field-image-name"><span title={str([...cell, 'src'])}>{str([...cell, 'src']).split('/').pop()}</span>{#if num([...cell, 'width']) && num([...cell, 'height'])}<small>{num([...cell, 'width'])} × {num([...cell, 'height'])}</small>{/if}</div>
-              {@render altField(cellId, cell)}
-              <div class="actions">
-                <button class="btn btn-sm" type="button" onclick={() => (framing = cellId)}>{m.field_picture_set_focal({}, options)}</button>
-                <button class="btn btn-sm" type="button" onclick={() => (picker = cellId)}>{m.field_replace({}, options)}</button>
-                <button class="btn btn-sm btn-ghost btn-icon image-remove" type="button" aria-label={m.field_remove_value({}, options)} title={m.field_remove_value({}, options)} disabled={structureLocked} onclick={() => { drop(at, i); editing = undefined; }}>{@render icon('M3 6h18M9 6V4h6v2M5 6l1 14h12l1-14M10 10v6M14 10v6')}</button>
-              </div>
-            </div>
-          </div>
+          <ImageCard {level} id={cellId} at={cell} ratio={aspect(preset)} onframe={() => (framing = cellId)} onreplace={() => (picker = cellId)} onremove={() => { drop(at, i); editing = undefined; }} locked={structureLocked} />
           <div class="actions"><button class="btn btn-primary" type="button" onclick={() => (editing = undefined)}>{m.field_gallery_done({}, options)}</button></div>
         </Modal>
         {#if framing === cellId}
@@ -978,72 +978,12 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
         </div>
         {/if}
       </div>
-    {:else if field.type === 'image' && translating}
-      <!-- A translation owns the words and not the picture: the alt, and nothing else. -->
-      {@render groupLabel(id, field, text, at)}
-      <div class="media-card is-image" {id} role="group" tabindex="-1" aria-labelledby="{id}-l">
-        <span class="thumb" style="aspect-ratio: {aspect(field.preset)}"><MediaImage src={src(at)} alt="" style="object-position: {dot(at)[0]}% {dot(at)[1]}%" {uiLocale} /><span class="focal" style="left: {dot(at)[0]}%; top: {dot(at)[1]}%" aria-hidden="true"></span></span>
-        <div class="meta">
-          <div class="field-image-name"><span title={str([...at, 'src'])}>{str([...at, 'src']).split('/').pop()}</span>{#if num([...at, 'width']) && num([...at, 'height'])}<small>{num([...at, 'width'])} × {num([...at, 'height'])}</small>{/if}</div>
-          {@render altField(id, at)}
-          <p class="hint">{m.field_picture_same({}, options)}</p>
-        </div>
-      </div>
-    {:else if field.type === 'image' && read(at) !== undefined}
-      {@render groupLabel(id, field, text, at)}
-      <div class="media-card is-image" {id} role="group" tabindex="-1" aria-labelledby="{id}-l">
-        <button class="thumb field-image-preview" type="button" aria-label={m.field_picture_set_focal({}, options)} title={m.field_picture_set_focal({}, options)} onclick={() => (framing = id)} style="aspect-ratio: {aspect(field.preset)}"><MediaImage src={src(at)} alt="" style="object-position: {dot(at)[0]}% {dot(at)[1]}%" {uiLocale} /><span class="focal" style="left: {dot(at)[0]}%; top: {dot(at)[1]}%" aria-hidden="true"></span></button>
-        <div class="meta">
-          <div class="field-image-name"><span title={str([...at, 'src'])}>{str([...at, 'src']).split('/').pop()}</span>{#if num([...at, 'width']) && num([...at, 'height'])}<small>{num([...at, 'width'])} × {num([...at, 'height'])}</small>{/if}</div>
-          {@render altField(id, at)}
-          <div class="actions">
-            <button class="btn btn-sm" type="button" onclick={() => (framing = id)}>{m.field_picture_set_focal({}, options)}</button>
-            <button class="btn btn-sm" type="button" onclick={() => (picker = id)}>{m.field_replace({}, options)}</button>
-            <button class="btn btn-sm btn-ghost btn-icon image-remove" type="button" aria-label={m.field_remove_value({}, options)} title={m.field_remove_value({}, options)} onclick={() => write(at, undefined)}>{@render icon('M3 6h18M9 6V4h6v2M5 6l1 14h12l1-14M10 10v6M14 10v6')}</button>
-          </div>
-        </div>
-      </div>
     {:else if field.type === 'image'}
       {@render groupLabel(id, field, text, at)}
-      <!-- svelte-ignore a11y_no_static_element_interactions -- the child button is the control -->
-      <div class="dropzone" role="group" aria-labelledby="{id}-l" aria-describedby={says} ondragover={(e) => e.preventDefault()} ondrop={(e) => dropOn(id, e)}>
-        <span>{m.field_image_drop({}, options)}</span>
-        {#if field.preset.ratio || field.preset.min}<span class="hint">{[field.preset.ratio, field.preset.min && m.field_image_min_width({ min: field.preset.min }, options)].filter(Boolean).join(' · ')}</span>{/if}
-        <span class="hint">{m.field_image_formats({ max: field.preset.max ?? 2400 }, options)}</span>
-        <button class="btn btn-sm" type="button" onclick={() => (picker = id)}>{m.field_picture_choose({}, options)}</button>
-      </div>
-    {:else if field.type === 'file' && translating}
-      <!-- The download is one file for every language; what it is called is not. -->
-      {@render groupLabel(id, field, text, at)}
-      <div class="media-card is-file" {id} role="group" tabindex="-1" aria-labelledby="{id}-l">
-        <div class="file-icon" aria-hidden="true">{(str([...at, 'mime']).split('/').pop() ?? '').toUpperCase()}</div>
-        <div class="meta">
-          <div><div class="sub">{str([...at, 'src'])}</div></div>
-          {@render nameField(id, at)}
-          <p class="hint">{m.field_file_same({}, options)}</p>
-        </div>
-      </div>
-    {:else if field.type === 'file' && read(at) !== undefined}
-      {@render groupLabel(id, field, text, at)}
-      <div class="media-card is-file" {id} role="group" tabindex="-1" aria-labelledby="{id}-l">
-        <div class="file-icon" aria-hidden="true">{(str([...at, 'mime']).split('/').pop() ?? '').toUpperCase()}</div>
-        <div class="meta">
-          <div><div class="sub">{str([...at, 'src'])} · {bytes(at)} · {str([...at, 'mime'])}</div></div>
-          {@render nameField(id, at)}
-          <div class="actions">
-            <button class="btn btn-sm" type="button" onclick={() => (picker = id)}>{m.field_replace({}, options)}</button>
-            <button class="btn btn-sm btn-ghost" type="button" onclick={() => write(at, undefined)}>{m.field_remove_value({}, options)}</button>
-          </div>
-        </div>
-      </div>
+      <ImageField {level} {id} {at} {field} {text} {says} />
     {:else if field.type === 'file'}
       {@render groupLabel(id, field, text, at)}
-      <!-- svelte-ignore a11y_no_static_element_interactions -- the child button is the control -->
-      <div class="dropzone" role="group" aria-labelledby="{id}-l" aria-describedby={says} ondragover={(e) => e.preventDefault()} ondrop={(e) => dropOn(id, e)}>
-        <span>{m.field_file_drop({}, options)}</span>
-        <span class="hint">{m.field_file_types({ formats: field.accept.map((mime) => (mime.split('/').pop() ?? '').toUpperCase()).join(', ') }, options)}</span>
-        <button class="btn btn-sm" type="button" onclick={() => (picker = id)}>{m.field_picture_choose({}, options)}</button>
-      </div>
+      <FileField {level} {id} {at} {field} {text} {says} />
     {:else if field.type === 'reference'}
       {@render groupLabel(id, field, text, at)}
       {#if picker === id}
@@ -1062,7 +1002,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
           {@render embedThumbnail(value)}
           <div class="meta">
             <div><div class="name"><span class="badge badge-info">{EMBED_LABELS[value.provider]}</span> <span class="sub">{value.id}</span></div></div>
-            {@render titleField(id, at)}
+            <PerLanguageInput {level} {id} {at} key="title" label={m.field_title({}, options)} />
             <p class="hint">{m.field_video_same({}, options)}</p>
           </div>
         </div>
@@ -1087,7 +1027,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
             {#if pasting === id}
               <div class="actions"><button class="btn btn-sm btn-ghost" type="button" onclick={() => { pasting = ''; refused = { id: '' }; focusOn(`${id}-change`); }}>{m.field_embed_keep({}, options)}</button></div>
             {:else}
-              {@render titleField(id, at)}
+              <PerLanguageInput {level} {id} {at} key="title" label={m.field_title({}, options)} />
               {#if value.provider !== 'google-maps'}
                 <div class="field"><div class="label-row"><label for="{id}.start">{m.field_embed_start({}, options)}</label></div><input class="input" id="{id}.start" type="number" min="0" step="1" aria-describedby="{id}.start-hint" value={num([...at, 'start'])} oninput={(e) => write([...at, 'start'], e.currentTarget.value === '' ? undefined : e.currentTarget.valueAsNumber)} /><p class="hint" id="{id}.start-hint">{m.field_embed_seconds_optional({}, options)}</p></div>
               {/if}
@@ -1109,7 +1049,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
           <div class="media-card">
             <span class="thumb" style="aspect-ratio: {aspect(SOCIAL_CARD)}"><MediaImage src={src([...at, 'image'])} alt="" style="object-position: {dot([...at, 'image'])[0]}% {dot([...at, 'image'])[1]}%" {uiLocale} /></span>
             <div class="meta">
-              {@render altField(`${id}.image`, [...at, 'image'])}
+              <PerLanguageInput {level} id="{id}.image" at={[...at, 'image']} key="alt" label={m.field_alt_text({}, options)} />
               <p class="hint">{m.field_picture_same({}, options)}</p>
             </div>
           </div>
@@ -1131,7 +1071,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
               <span class="thumb" style="aspect-ratio: {aspect(SOCIAL_CARD)}"><MediaImage src={src(image)} alt="" style="object-position: {dot(image)[0]}% {dot(image)[1]}%" {uiLocale} /><span class="focal" style="left: {dot(image)[0]}%; top: {dot(image)[1]}%" aria-hidden="true"></span></span>
               <div class="meta">
                 <div><div class="sub">{str([...image, 'src'])} · {num([...image, 'width'])} × {num([...image, 'height'])}</div></div>
-                {@render altField(`${id}.image`, image)}
+                <PerLanguageInput {level} id="{id}.image" at={image} key="alt" label={m.field_alt_text({}, options)} />
                 <div class="actions">
                   <button class="btn btn-sm" type="button" onclick={() => (framing = `${id}.image`)}>{m.field_picture_set_focal({}, options)}</button>
                   <button class="btn btn-sm" type="button" onclick={() => (picker = `${id}.image`)}>{m.field_replace({}, options)}</button>
@@ -1171,18 +1111,6 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
     {/if}
     {#if err}<p class="error" id="{id}-err">{err}</p>{/if}
     {#if marked}{@render stale(marked)}{/if}
-    {#if framing === id && field.type === 'image'}
-      <!-- The page's own dot wins over the library's default and is the same in every language. -->
-      <Focal
-        name={text}
-        url={src(at)}
-        focal={point(at)}
-        presets={field.preset.ratio ? [{ label: text, preset: field.preset }] : []}
-        {uiLocale}
-        onsave={(moved) => { write([...at, 'focal'], centred(moved) ? undefined : moved); framing = ''; }}
-        onclose={() => (framing = '')}
-      />
-    {/if}
     {#if framing === `${id}.image` && field.type === 'seo'}
       {@const image = [...at, 'image']}
       <!-- A 1.91:1 card cut from a 3:2 photo loses a band top and bottom. -->
@@ -1205,19 +1133,6 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
         {dropped}
         {uiLocale}
         onpick={(items) => { seoWrite(at, 'image', stored('image', items[0] as MediaItem)); picker = ''; dropped = []; }}
-        onclose={() => { picker = ''; dropped = []; }}
-      />
-    {/if}
-    {#if picker === id && (field.type === 'image' || field.type === 'file')}
-      <Media
-        kind={field.type === 'image' ? 'images' : 'files'}
-        label={text}
-        preset={field.type === 'image' ? field.preset : {}}
-        accept={field.type === 'file' ? field.accept : []}
-        base={mediaBase}
-        {dropped}
-        {uiLocale}
-        onpick={(items) => picked(at, field.type as 'image' | 'file', items)}
         onclose={() => { picker = ''; dropped = []; }}
       />
     {/if}
