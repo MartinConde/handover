@@ -118,7 +118,8 @@ GET /admin/api/diff/:collection/:slug  →  { "groups", "redirects" }
 
 What one entry would put in the next commit, field by field: the drawer's expanded row.
 `groups` is the [per-field diff](pending-changes.md#the-drawer) — one group per language of the
-entry plus one for the values they all share, each with the changes in it — of the draft
+entry plus one for the values they all share, each with the changes in it, in the [shape the
+history diff documents](admin-api-entries.md#the-shape-of-a-change) — of the draft
 against the file **at HEAD**, not against the commit the draft was loaded from: the question
 a row answers is what is about to go out. `redirects` is the address changes riding along in
 the same commit, `{ "from", "to" }` each. A language with a file and no draft is in `groups`
@@ -135,7 +136,7 @@ The three-way view of an entry the repository moved under, and the answers to it
 entry is read at HEAD and at the commit each draft row was loaded from; `questions` are the
 fields **both** sides changed — `path`, `label`, the `locale` it belongs to or none for a
 value every language shares, the `base` both started from, and `ours` / `theirs` as the same
-change shapes the diff uses — and `merged` are the ones only one side changed, each with the
+[change shapes](admin-api-entries.md#the-shape-of-a-change) the diff uses — and `merged` are the ones only one side changed, each with the
 `side` that changed it. `files` is the paths that moved, and `head` the commit they are being
 answered against. `version` fingerprints the complete report, including HEAD and all draft revisions. Send it unchanged with the answers. If either side changed, the server returns `409`; reload the report and review the new values. Draft revisions are checked again atomically when writing the resolution.
 

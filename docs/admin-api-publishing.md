@@ -35,7 +35,8 @@ count and the build pill are not in it: the shell has already loaded both, and a
 answer about the same drafts is how a count and a drawer come to disagree.
 
 `recent` is up to eight entries, newest first —
-`{ "key", "title", "collection", "href", "at", "by", "kind", "editing" }`. `kind` is
+`{ "key", "title", "collection", "href", "at", "by", "kind", "editing" }`, plus `labels` on a
+global when its schema gives the label per language. `kind` is
 `"edit"` for an entry with a draft row and `"publish"` for one whose last change is already
 out; `by` is a name or `null`, never an address; `editing` is the lock holder where there is
 one. `href` is where that entry is edited, which for a global is `/admin/site/<name>`.

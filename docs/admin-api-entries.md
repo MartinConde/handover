@@ -146,18 +146,22 @@ the entry never opened; drift and the schema are not checked, nothing is taken f
 and no mark moves.
 
 ```
-GET /admin/api/globals  →  { "globals": [{ "key", "label", "description", "locales", "pending" }], "locales": ["en", "de"] }
+GET /admin/api/globals  →  { "globals": [{ "key", "label", "labels", "description", "descriptions", "locales", "pending", "editing", "edited" }], "locales": ["en", "de"] }
 ```
 
 The Site settings list: one card per global `cms.config.ts` declares, in that order. `label`
-and `description` come from the schema's own `.meta()` and fall back to the key; `locales` is
-the languages this global has a file in — drafted counts — and `pending` says whether any of
-them is ahead of the repository. The response's `locales` is the languages the site declares.
+and `description` come from the schema's own `.meta()` and fall back to the key (`description`
+is absent when there is none). `labels` and `descriptions` are there only when the schema gave
+them per language, as `{ "en": "…", "de": "…" }`; the admin picks the interface language from
+them. `locales` is the languages this global has a file in — drafted counts — and `pending` says
+whether any of them is ahead of the repository. `editing` is the lock holder where somebody has
+it open, and `edited` is the entry list's `{ at, by, kind }` plus `key` (`globals/<key>`), `null` when the
+activity log goes back no further. The response's `locales` is the languages the site declares.
 Like the entry list it reads the content index and the draft rows, and nothing from GitHub.
 
 A global itself is read and written through the entry routes above: `GET
 /admin/api/entries/globals/site` answers the same body with `singleton: true` and the `label`
-on it, and with no `route`, `index` or `localizedSlugs` — there is no page of its own to link
+(and `labels`, where given per language) on it, and with no `route`, `index` or `localizedSlugs` — there is no page of its own to link
 to. The drafts, translation, lock, hold and publish routes take it unchanged. What it is
 refused is what a collection's routes are for: create, rename, delete, address and turning a
 language off ([entry lifecycle](admin-api-lifecycle.md)) all answer `404`.
@@ -223,6 +227,26 @@ What the version named by `to` says that the one named by `from` does not, in th
 branch as it is now, so what is marked is what restoring `to` would change. A version from
 before a rename is read under the `name` the list gave it — `&name=` for `to`, `&fromName=`
 for `from`. `400` when either is not a commit, or a name is not one.
+
+### The shape of a change
+
+`groups` is one entry per language of the entry, plus one first for the values they all share
+when the entry has more than one: `{ "locale", "changes": [ … ] }` — no `locale` on the shared
+group, and `"removed": true` with no changes on a language whose file is gone. The same
+`changes` are in the answers of the [drafts](admin-api-drafts.md) routes `/diff` and `/conflict`.
+
+Every change has `path`, which addresses the value the way `_machine` does
+(`blocks[_id=k3nf9a2p].heading`), and `label`, what a reader sees: the field's name, joined with
+` · ` to its group's or its property's (*Intro · Alt text*). `labels` is the same name as
+`{ "en", "de" }` when the site or the package knows it in both. `kind` says what else is on it:
+
+| `kind` | Other keys |
+|---|---|
+| `words` | `parts`: `[{ "text", "mark" }]`, `mark` being `del`, `ins` or absent for what stayed. Text, word-array and rich-text fields; rich text is read as the page shows it, with a line break as `↵` |
+| `value` | `before`, `after` as strings, absent on the side that has none. A select adds `beforeLabels` and `afterLabels`, the option's name in each interface language |
+| `picture` | `before`, `after`: the two storage keys of a replaced image |
+| `whole` | `after`, the new text, where it is too long to compare word by word or the field has no diff. Rich text whose words are unchanged adds `markup`, the new markup, and `what`: `link` or `formatting` |
+| `row` | A block or array row: `type` (numbered, *Text 2*, where a type appears more than once) and `types` in each interface language; `at`, one of `added`, `removed`, `moved-up`, `moved-down`, `same`; `above`, on an added or moved row, the name of the row that follows it, with `aboveLabels`; and `changes`, the same shape one level down |
 
 ```
 POST /admin/api/history/:collection/:slug/restore   { "commit_sha", "name" }  →  { "paths": [ … ] }
