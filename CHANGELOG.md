@@ -4,6 +4,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Resolving a conflict where the two sides differ only in a link or in bold or italic now shows
+  each side's Markdown, instead of the same words twice.
 - Discarding an entry from the pending-changes drawer while somebody else is editing it now says
   who, as the editor already did, instead of only "not discarded (409)".
 - The entries an index menu item lists now come sorted by file name, as the menu editor shows

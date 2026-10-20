@@ -143,7 +143,14 @@ test('a rich text change that only moves a link says that the link changed', () 
   );
 
   expect(changes).toEqual([
-    { path: 'body', label: 'Body', kind: 'whole', after: 'See the docs.', what: 'link' },
+    {
+      path: 'body',
+      label: 'Body',
+      kind: 'whole',
+      after: 'See the docs.',
+      markup: 'See [the docs](https://b.example).',
+      what: 'link',
+    },
   ]);
 });
 
@@ -151,7 +158,14 @@ test('a rich text change that only adds bold says that the formatting changed', 
   const changes = enChanges(listing, { body: 'A mill.' }, { body: 'A **mill**.' });
 
   expect(changes).toEqual([
-    { path: 'body', label: 'Body', kind: 'whole', after: 'A mill.', what: 'formatting' },
+    {
+      path: 'body',
+      label: 'Body',
+      kind: 'whole',
+      after: 'A mill.',
+      markup: 'A **mill**.',
+      what: 'formatting',
+    },
   ]);
 });
 

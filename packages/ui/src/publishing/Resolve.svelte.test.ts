@@ -176,6 +176,33 @@ test("a rewritten field shows each side's text, line breaks kept", async () => {
   ]);
 });
 
+test('a link-only or formatting-only conflict shows each side with its markup', async () => {
+  const whole = (markup: string, what: 'link' | 'formatting') => ({
+    path: 'body',
+    label: 'Body',
+    kind: 'whole',
+    after: 'See the docs.',
+    markup,
+    what,
+  });
+  answering([
+    {
+      path: 'body',
+      label: 'Body',
+      ours: whole('See [the docs](https://a.example).', 'link'),
+      theirs: whole('See [the docs](https://b.example).', 'link'),
+    },
+  ]);
+  const root = show();
+  await tick();
+  flushSync();
+
+  expect(all(root, '.choice .quote').map((n) => n.textContent?.trim())).toEqual([
+    'See [the docs](https://a.example).',
+    'See [the docs](https://b.example).',
+  ]);
+});
+
 test('Keep all mine answers every question at once and says what that costs', async () => {
   const fetchMock = answering();
   const root = show();

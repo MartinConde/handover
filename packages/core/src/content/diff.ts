@@ -24,7 +24,7 @@ export type Change = { path: string; label: string; labels?: Labels } & (
   /** Two keys into storage, never a value that moved. */
   | { kind: 'picture'; before?: string; after?: string }
   /** `after` is the new text, for the one who must choose between two rewrites. */
-  | { kind: 'whole'; after?: string; what?: 'link' | 'formatting' }
+  | { kind: 'whole'; after?: string; markup?: string; what?: 'link' | 'formatting' }
   | {
       kind: 'row';
       type?: string;
@@ -165,7 +165,10 @@ function leafIn(
             ...label,
             kind: 'whole',
             after: readableText(str(after)),
-            ...(was === now ? { what: linked ? 'link' : 'formatting' } : {}),
+            // Resolve needs the markup: the readable text is the same on both sides.
+            ...(was === now
+              ? { markup: str(after), what: linked ? ('link' as const) : ('formatting' as const) }
+              : {}),
           },
     );
   } else if (field.type === 'unsupported') found.push({ path, ...label, kind: 'whole' });
