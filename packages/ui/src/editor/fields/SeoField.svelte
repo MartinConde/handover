@@ -95,17 +95,49 @@ function put(key: string, value: unknown) {
 
 {#snippet words(key: string, label: string, limit: number, placeholder: string, hint: string)}
   {@const value = level.str([...at, key])}
-  {@const described = [`${id}.${key}-meter`, hint ? `${id}.${key}-hint` : ''].filter(Boolean).join(' ')}
+  {@const described = [`${id}.${key}-meter`, hint ? `${id}.${key}-hint` : '']
+    .filter(Boolean)
+    .join(' ')}
   {@const over = value.trim().length > limit}
   <div class="field">
-    <div class="label-row"><label for="{id}.{key}">{label}</label><span class={['meter', { 'is-over': over }]} id="{id}.{key}-meter">{value.trim().length ? m.field_seo_meter({ count: value.trim().length, limit }, options) : m.field_seo_meter_empty({ limit }, options)}{over ? ` — ${m.field_seo_may_cut({}, options)}` : ''}</span></div>
+    <div class="label-row">
+      <label for="{id}.{key}">{label}</label><span
+        class={['meter', { 'is-over': over }]}
+        id="{id}.{key}-meter"
+        >{value.trim().length
+          ? m.field_seo_meter({ count: value.trim().length, limit }, options)
+          : m.field_seo_meter_empty({ limit }, options)}{over
+          ? ` — ${m.field_seo_may_cut({}, options)}`
+          : ''}</span
+      >
+    </div>
     {#if key === 'description'}
-      <textarea class="input textarea" id="{id}.{key}" {placeholder} aria-describedby={described} {value} oninput={(e) => put(key, e.currentTarget.value || undefined)}></textarea>
+      <textarea
+        class="input textarea"
+        id="{id}.{key}"
+        {placeholder}
+        aria-describedby={described}
+        {value}
+        oninput={(e) => put(key, e.currentTarget.value || undefined)}></textarea>
     {:else}
-      <input class="input" id="{id}.{key}" type="text" {placeholder} aria-describedby={described} {value} oninput={(e) => put(key, e.currentTarget.value || undefined)} />
+      <input
+        class="input"
+        id="{id}.{key}"
+        type="text"
+        {placeholder}
+        aria-describedby={described}
+        {value}
+        oninput={(e) => put(key, e.currentTarget.value || undefined)}
+      />
     {/if}
-    <div class={['gauge', { 'is-long': over }]} aria-hidden="true"><span style="width: {Math.min(100, Math.round((value.trim().length / limit) * 100))}%"></span></div>
-    {#if level.reference}<ReferencePeek reference={level.reference} path={level.childAddress(at, key)} uiLocale={level.uiLocale} />{/if}
+    <div class={['gauge', { 'is-long': over }]} aria-hidden="true">
+      <span style="width: {Math.min(100, Math.round((value.trim().length / limit) * 100))}%"></span>
+    </div>
+    {#if level.reference}<ReferencePeek
+        reference={level.reference}
+        path={level.childAddress(at, key)}
+        uiLocale={level.uiLocale}
+      />{/if}
     {#if hint}<p class="hint" id="{id}.{key}-hint">{hint}</p>{/if}
   </div>
 {/snippet}
@@ -131,45 +163,142 @@ function put(key: string, value: unknown) {
   {@const canonical = level.str([...at, 'canonical'])}
   {@const scheme = unsafeLinkScheme('default', canonical)}
   <div class="form" {id} role="group" aria-labelledby="{id}-l" aria-describedby={says}>
-    {@render words('title', m.field_seo_search_title({}, options), SEO_TITLE_LIMIT, inheritedSeo?.title ?? '', m.field_seo_pattern_fallback({}, options))}
-    {@render words('description', m.field_seo_description({}, options), SEO_DESCRIPTION_LIMIT, inheritedSeo?.description ?? '', '')}
+    {@render words(
+      'title',
+      m.field_seo_search_title({}, options),
+      SEO_TITLE_LIMIT,
+      inheritedSeo?.title ?? '',
+      m.field_seo_pattern_fallback({}, options),
+    )}
+    {@render words(
+      'description',
+      m.field_seo_description({}, options),
+      SEO_DESCRIPTION_LIMIT,
+      inheritedSeo?.description ?? '',
+      '',
+    )}
     <div class="field">
-      <div class="label-row"><span id="{id}.image-l">{m.field_seo_social_image({}, options)}</span><span class="mode">{m.field_same_every_language({}, options)}</span></div>
+      <div class="label-row">
+        <span id="{id}.image-l">{m.field_seo_social_image({}, options)}</span><span class="mode"
+          >{m.field_same_every_language({}, options)}</span
+        >
+      </div>
       {#if level.read(image) !== undefined}
-        <div class="media-card" id="{id}.image" role="group" tabindex="-1" aria-labelledby="{id}.image-l">
-          <span class="thumb" style="aspect-ratio: {aspect(SOCIAL_CARD)}"><MediaImage src={level.src(image)} alt="" style="object-position: {dot[0]}% {dot[1]}%" uiLocale={level.uiLocale} /><span class="focal" style="left: {dot[0]}%; top: {dot[1]}%" aria-hidden="true"></span></span>
+        <div
+          class="media-card"
+          id="{id}.image"
+          role="group"
+          tabindex="-1"
+          aria-labelledby="{id}.image-l"
+        >
+          <span class="thumb" style="aspect-ratio: {aspect(SOCIAL_CARD)}"
+            ><MediaImage
+              src={level.src(image)}
+              alt=""
+              style="object-position: {dot[0]}% {dot[1]}%"
+              uiLocale={level.uiLocale}
+            /><span class="focal" style="left: {dot[0]}%; top: {dot[1]}%" aria-hidden="true"
+            ></span></span
+          >
           <div class="meta">
-            <div><div class="sub">{level.str([...image, 'src'])} · {level.num([...image, 'width'])} × {level.num([...image, 'height'])}</div></div>
-            <PerLanguageInput {level} id="{id}.image" at={image} key="alt" label={m.field_alt_text({}, options)} />
+            <div>
+              <div class="sub">
+                {level.str([...image, 'src'])} · {level.num([...image, 'width'])} × {level.num([
+                  ...image,
+                  'height',
+                ])}
+              </div>
+            </div>
+            <PerLanguageInput
+              {level}
+              id="{id}.image"
+              at={image}
+              key="alt"
+              label={m.field_alt_text({}, options)}
+            />
             <div class="actions">
-              <button class="btn btn-sm" type="button" onclick={() => (framing = true)}>{m.field_picture_set_focal({}, options)}</button>
-              <button class="btn btn-sm" type="button" onclick={() => (level.picker = `${id}.image`)}>{m.field_replace({}, options)}</button>
-              <button class="btn btn-sm btn-ghost" type="button" onclick={() => level.write(image, undefined)}>{inheritedSeo?.image ? m.field_seo_site_default({}, options) : m.field_remove_value({}, options)}</button>
+              <button class="btn btn-sm" type="button" onclick={() => (framing = true)}
+                >{m.field_picture_set_focal({}, options)}</button
+              >
+              <button
+                class="btn btn-sm"
+                type="button"
+                onclick={() => (level.picker = `${id}.image`)}
+                >{m.field_replace({}, options)}</button
+              >
+              <button
+                class="btn btn-sm btn-ghost"
+                type="button"
+                onclick={() => level.write(image, undefined)}
+                >{inheritedSeo?.image
+                  ? m.field_seo_site_default({}, options)
+                  : m.field_remove_value({}, options)}</button
+              >
             </div>
           </div>
         </div>
       {:else}
         <!-- svelte-ignore a11y_no_static_element_interactions -- the child button is the control -->
-        <div class="dropzone" role="group" aria-labelledby="{id}.image-l" ondragover={(e) => e.preventDefault()} ondrop={(e) => level.dropOn(`${id}.image`, e)}>
-          <span>{inheritedSeo?.image ? m.field_seo_site_card({}, options) : m.field_image_drop({}, options)}</span>
-          <span class="hint">{SOCIAL_CARD.ratio} · {m.field_image_min_width({ min: SOCIAL_CARD.min ?? 0 }, options)}</span>
-          <button class="btn btn-sm" type="button" onclick={() => (level.picker = `${id}.image`)}>{m.field_picture_choose({}, options)}</button>
+        <div
+          class="dropzone"
+          role="group"
+          aria-labelledby="{id}.image-l"
+          ondragover={(e) => e.preventDefault()}
+          ondrop={(e) => level.dropOn(`${id}.image`, e)}
+        >
+          <span
+            >{inheritedSeo?.image
+              ? m.field_seo_site_card({}, options)
+              : m.field_image_drop({}, options)}</span
+          >
+          <span class="hint"
+            >{SOCIAL_CARD.ratio} · {m.field_image_min_width(
+              { min: SOCIAL_CARD.min ?? 0 },
+              options,
+            )}</span
+          >
+          <button class="btn btn-sm" type="button" onclick={() => (level.picker = `${id}.image`)}
+            >{m.field_picture_choose({}, options)}</button
+          >
         </div>
       {/if}
     </div>
     <div class="field">
-      <label class="switch" for="{id}.noindex"><input type="checkbox" role="switch" id="{id}.noindex" checked={hiding} onchange={(e) => put('noindex', e.currentTarget.checked)} /><span>{m.field_seo_hide({}, options)}</span></label>
+      <label class="switch" for="{id}.noindex"
+        ><input
+          type="checkbox"
+          role="switch"
+          id="{id}.noindex"
+          checked={hiding}
+          onchange={(e) => put('noindex', e.currentTarget.checked)}
+        /><span>{m.field_seo_hide({}, options)}</span></label
+      >
       {#if hiding}
         <p class="notice notice-warn">{m.field_seo_hide_notice({}, options)}</p>
       {/if}
     </div>
     {#if host}{@render previews()}{/if}
     <details class="group">
-      <summary>{m.field_seo_canonical({}, options)}{#if canonical}<span class="count">{canonical}</span>{/if}</summary>
+      <summary
+        >{m.field_seo_canonical({}, options)}{#if canonical}<span class="count">{canonical}</span
+          >{/if}</summary
+      >
       <div class={['field', { 'is-invalid': scheme }]}>
-        <div class="label-row"><label for="{id}.canonical">{m.field_seo_canonical({}, options)}</label></div>
-        <input class="input" id="{id}.canonical" type="url" aria-invalid={scheme ? 'true' : undefined} aria-describedby="{id}.canonical-hint{scheme ? ` ${id}.canonical-err` : ''}" value={canonical} oninput={(e) => put('canonical', e.currentTarget.value || undefined)} />
-        {#if scheme}<p class="error" id="{id}.canonical-err">{m.field_link_scheme_not_allowed({ scheme }, options)}</p>{/if}
+        <div class="label-row">
+          <label for="{id}.canonical">{m.field_seo_canonical({}, options)}</label>
+        </div>
+        <input
+          class="input"
+          id="{id}.canonical"
+          type="url"
+          aria-invalid={scheme ? 'true' : undefined}
+          aria-describedby="{id}.canonical-hint{scheme ? ` ${id}.canonical-err` : ''}"
+          value={canonical}
+          oninput={(e) => put('canonical', e.currentTarget.value || undefined)}
+        />
+        {#if scheme}<p class="error" id="{id}.canonical-err">
+            {m.field_link_scheme_not_allowed({ scheme }, options)}
+          </p>{/if}
         <p class="hint" id="{id}.canonical-hint">{m.field_seo_canonical_hint({}, options)}</p>
       </div>
     </details>

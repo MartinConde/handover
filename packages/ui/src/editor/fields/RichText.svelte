@@ -388,19 +388,51 @@ const active = (b: { mark: string; attrs?: Record<string, unknown> }) =>
     <div class="rte-toolbar" role="toolbar" aria-label={m.rich_text_formatting({}, options)}>
       {#each buttons as b (b.kind)}
         {@const label = buttonLabel(b)}
-        <button type="button" aria-label={label} aria-pressed={active(b)} disabled={!editor} onclick={() => editor && b.run(editor)} title={label}>
+        <button
+          type="button"
+          aria-label={label}
+          aria-pressed={active(b)}
+          disabled={!editor}
+          onclick={() => editor && b.run(editor)}
+          title={label}
+        >
           {#if b.mark === 'bold'}<strong aria-hidden="true">B</strong>
           {:else if b.mark === 'italic'}<em aria-hidden="true">I</em>
-          {:else if b.mark === 'heading'}<span class="heading-tool" aria-hidden="true">H{b.attrs?.level}</span>
-          {:else if b.mark === 'link'}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m10 13 4-4M8 16l-1 1a4 4 0 0 1-6-6l4-4a4 4 0 0 1 6 0m2 1 1-1a4 4 0 0 1 6 6l-4 4a4 4 0 0 1-6 0"/></svg>
-          {:else if b.mark === 'bulletList' || b.mark === 'orderedList'}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h12M9 12h12M9 18h12"/>{#if b.mark === 'bulletList'}<path d="M3 6h.1M3 12h.1M3 18h.1" stroke-width="3"/>{:else}<path d="M2 4h1v5M2 13c3-2 4 1 0 5h3"/>{/if}</svg>
-          {:else}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h5v6H4zm11 0h5v6h-5zM9 13c0 4-2 5-4 5m15-5c0 4-2 5-4 5"/></svg>{/if}
+          {:else if b.mark === 'heading'}<span class="heading-tool" aria-hidden="true"
+              >H{b.attrs?.level}</span
+            >
+          {:else if b.mark === 'link'}<svg viewBox="0 0 24 24" aria-hidden="true"
+              ><path
+                d="m10 13 4-4M8 16l-1 1a4 4 0 0 1-6-6l4-4a4 4 0 0 1 6 0m2 1 1-1a4 4 0 0 1 6 6l-4 4a4 4 0 0 1-6 0"
+              /></svg
+            >
+          {:else if b.mark === 'bulletList' || b.mark === 'orderedList'}<svg
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+              ><path d="M9 6h12M9 12h12M9 18h12" />{#if b.mark === 'bulletList'}<path
+                  d="M3 6h.1M3 12h.1M3 18h.1"
+                  stroke-width="3"
+                />{:else}<path d="M2 4h1v5M2 13c3-2 4 1 0 5h3" />{/if}</svg
+            >
+          {:else}<svg viewBox="0 0 24 24" aria-hidden="true"
+              ><path d="M4 7h5v6H4zm11 0h5v6h-5zM9 13c0 4-2 5-4 5m15-5c0 4-2 5-4 5" /></svg
+            >{/if}
         </button>
       {/each}
     </div>
     <div bind:this={element}></div>
     {#if linking}
-      <PagePicker id="{id}-link" label={m.page_picker_label_link_targets({}, options)} labelKind="link-targets" labelId={labelId} {locale} {uiLocale} onpick={(entry) => linkTo(entry.urls[locale] ?? '', entry.title)} onurl={linkTo} onclose={() => (linking = false)} />
+      <PagePicker
+        id="{id}-link"
+        label={m.page_picker_label_link_targets({}, options)}
+        labelKind="link-targets"
+        {labelId}
+        {locale}
+        {uiLocale}
+        onpick={(entry) => linkTo(entry.urls[locale] ?? '', entry.title)}
+        onurl={linkTo}
+        onclose={() => (linking = false)}
+      />
     {/if}
   </div>
 {/if}

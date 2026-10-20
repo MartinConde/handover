@@ -262,11 +262,35 @@ function pickedInto(items: MediaItem[]) {
   <svg class="field-icon" viewBox="0 0 24 24" aria-hidden="true"><path {d} /></svg>
 {/snippet}
 
-{#snippet controls(i: number, name: string, handle: (node: HTMLElement) => () => void, duplicable = false)}
+{#snippet controls(
+  i: number,
+  name: string,
+  handle: (node: HTMLElement) => () => void,
+  duplicable = false,
+)}
   <div class="row-controls">
-    <button class="btn btn-ghost btn-icon handle" type="button" aria-label={m.field_reorder({ item: name }, options)} disabled={level.structureLocked} {@attach handle}>{@render icon('M9 6h.01M9 12h.01M9 18h.01M15 6h.01M15 12h.01M15 18h.01')}</button>
-    {#if duplicable}<button class="btn btn-ghost btn-icon" type="button" aria-label={m.field_duplicate({ item: name }, options)} disabled={level.structureLocked} onclick={() => duplicate(i)}>{@render icon('M9 9h10v10H9zM5 15V5h10')}</button>{/if}
-    <button class="btn btn-ghost btn-icon remove-row" type="button" aria-label={m.field_remove({ item: name }, options)} disabled={level.structureLocked} onclick={() => drop(i)}>{@render icon('M7 7l10 10M17 7 7 17')}</button>
+    <button
+      class="btn btn-ghost btn-icon handle"
+      type="button"
+      aria-label={m.field_reorder({ item: name }, options)}
+      disabled={level.structureLocked}
+      {@attach handle}
+      >{@render icon('M9 6h.01M9 12h.01M9 18h.01M15 6h.01M15 12h.01M15 18h.01')}</button
+    >
+    {#if duplicable}<button
+        class="btn btn-ghost btn-icon"
+        type="button"
+        aria-label={m.field_duplicate({ item: name }, options)}
+        disabled={level.structureLocked}
+        onclick={() => duplicate(i)}>{@render icon('M9 9h10v10H9zM5 15V5h10')}</button
+      >{/if}
+    <button
+      class="btn btn-ghost btn-icon remove-row"
+      type="button"
+      aria-label={m.field_remove({ item: name }, options)}
+      disabled={level.structureLocked}
+      onclick={() => drop(i)}>{@render icon('M7 7l10 10M17 7 7 17')}</button
+    >
   </div>
 {/snippet}
 
@@ -275,42 +299,138 @@ function pickedInto(items: MediaItem[]) {
   {@const preset = field.item[0]?.type === 'image' ? field.item[0].preset : {}}
   <div class="list gallery" {id} role="group" aria-labelledby="{id}-l">
     <DragDropProvider onDragStart={begun} onDragOver={over} onDragEnd={ended}>
-    {#each items as _row, i (keyOf(items, i))}
-      {@const s = sortable(() => keyOf(items, i), () => i, GALLERY_SENSORS)}
-      {@const cell = [...at, String(i)]}
-      {@const name = m.field_gallery_image({ index: i + 1, count: items.length }, options)}
-      <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -- the edit button is the keyboard route -->
-      <div class={['gallery-item', { 'is-dragging': s.isDragging }]} {@attach s.attach} onclick={(e) => !e.defaultPrevented && (editing = i)}>
-        <span class="thumb"><MediaImage src={level.src(cell)} alt="" loading="lazy" style="object-position: {dot(cell)[0]}% {dot(cell)[1]}%" uiLocale={level.uiLocale} /></span>
-        <span class="gallery-number">{i + 1}</span>
-        {#if !level.str([...cell, 'alt'])}<span class="gallery-no-alt">{m.field_gallery_no_alt({}, options)}</span>{/if}
-        <div class="row-controls">
-          <button class="btn btn-ghost btn-icon handle" type="button" aria-label={m.field_reorder({ item: name }, options)} disabled={level.structureLocked} {@attach s.attachHandle}>{@render icon('M9 6h.01M9 12h.01M9 18h.01M15 6h.01M15 12h.01M15 18h.01')}</button>
-          <button class="btn btn-ghost btn-icon" type="button" aria-label={m.field_gallery_edit({ index: i + 1 }, options)} onclick={() => (editing = i)}>{@render icon('M4 20h4L19 9l-4-4L4 16zM14 6l4 4')}</button>
-          <button class="btn btn-ghost btn-icon remove-row" type="button" aria-label={m.field_remove({ item: name }, options)} disabled={level.structureLocked} onclick={() => drop(i)}>{@render icon('M7 7l10 10M17 7 7 17')}</button>
+      {#each items as _row, i (keyOf(items, i))}
+        {@const s = sortable(
+          () => keyOf(items, i),
+          () => i,
+          GALLERY_SENSORS,
+        )}
+        {@const cell = [...at, String(i)]}
+        {@const name = m.field_gallery_image({ index: i + 1, count: items.length }, options)}
+        <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -- the edit button is the keyboard route -->
+        <div
+          class={['gallery-item', { 'is-dragging': s.isDragging }]}
+          {@attach s.attach}
+          onclick={(e) => !e.defaultPrevented && (editing = i)}
+        >
+          <span class="thumb"
+            ><MediaImage
+              src={level.src(cell)}
+              alt=""
+              loading="lazy"
+              style="object-position: {dot(cell)[0]}% {dot(cell)[1]}%"
+              uiLocale={level.uiLocale}
+            /></span
+          >
+          <span class="gallery-number">{i + 1}</span>
+          {#if !level.str([...cell, 'alt'])}<span class="gallery-no-alt"
+              >{m.field_gallery_no_alt({}, options)}</span
+            >{/if}
+          <div class="row-controls">
+            <button
+              class="btn btn-ghost btn-icon handle"
+              type="button"
+              aria-label={m.field_reorder({ item: name }, options)}
+              disabled={level.structureLocked}
+              {@attach s.attachHandle}
+              >{@render icon('M9 6h.01M9 12h.01M9 18h.01M15 6h.01M15 12h.01M15 18h.01')}</button
+            >
+            <button
+              class="btn btn-ghost btn-icon"
+              type="button"
+              aria-label={m.field_gallery_edit({ index: i + 1 }, options)}
+              onclick={() => (editing = i)}
+              >{@render icon('M4 20h4L19 9l-4-4L4 16zM14 6l4 4')}</button
+            >
+            <button
+              class="btn btn-ghost btn-icon remove-row"
+              type="button"
+              aria-label={m.field_remove({ item: name }, options)}
+              disabled={level.structureLocked}
+              onclick={() => drop(i)}>{@render icon('M7 7l10 10M17 7 7 17')}</button
+            >
+          </div>
         </div>
-      </div>
-    {/each}
+      {/each}
     </DragDropProvider>
-    <button class="btn btn-sm add" type="button" aria-label={m.field_list_add_label({ field: text }, options)} disabled={level.structureLocked} onclick={() => (level.picker = id)}>{m.field_gallery_add({}, options)}</button>
+    <button
+      class="btn btn-sm add"
+      type="button"
+      aria-label={m.field_list_add_label({ field: text }, options)}
+      disabled={level.structureLocked}
+      onclick={() => (level.picker = id)}>{m.field_gallery_add({}, options)}</button
+    >
   </div>
   {#if level.picker === id}
-    <Media kind="images" label={text} {preset} base={level.mediaBase} many uiLocale={level.uiLocale} onpick={pickedInto} onclose={() => (level.picker = '')} />
+    <Media
+      kind="images"
+      label={text}
+      {preset}
+      base={level.mediaBase}
+      many
+      uiLocale={level.uiLocale}
+      onpick={pickedInto}
+      onclose={() => (level.picker = '')}
+    />
   {/if}
   {#if editing !== undefined && items[editing] !== undefined}
     {@const i = editing}
     {@const cell = [...at, String(i)]}
     {@const cellId = `${id}.${i}`}
-    <Modal labelledby="{cellId}-h" panelClass="dialog gallery-dialog" initialFocus="input" onclose={() => (editing = undefined)}>
-      <header><h2 id="{cellId}-h">{m.field_gallery_image({ index: i + 1, count: items.length }, options)}</h2></header>
-      <ImageCard {level} id={cellId} at={cell} ratio={aspect(preset)} onframe={() => (framing = true)} onreplace={() => (level.picker = cellId)} onremove={() => { drop(i); editing = undefined; }} locked={level.structureLocked} />
-      <div class="actions"><button class="btn btn-primary" type="button" onclick={() => (editing = undefined)}>{m.field_gallery_done({}, options)}</button></div>
+    <Modal
+      labelledby="{cellId}-h"
+      panelClass="dialog gallery-dialog"
+      initialFocus="input"
+      onclose={() => (editing = undefined)}
+    >
+      <header>
+        <h2 id="{cellId}-h">
+          {m.field_gallery_image({ index: i + 1, count: items.length }, options)}
+        </h2>
+      </header>
+      <ImageCard
+        {level}
+        id={cellId}
+        at={cell}
+        ratio={aspect(preset)}
+        onframe={() => (framing = true)}
+        onreplace={() => (level.picker = cellId)}
+        onremove={() => {
+          drop(i);
+          editing = undefined;
+        }}
+        locked={level.structureLocked}
+      />
+      <div class="actions">
+        <button class="btn btn-primary" type="button" onclick={() => (editing = undefined)}
+          >{m.field_gallery_done({}, options)}</button
+        >
+      </div>
     </Modal>
     {#if framing}
-      <Focal name={text} url={level.src(cell)} focal={level.point(cell)} presets={preset.ratio ? [{ label: text, preset }] : []} uiLocale={level.uiLocale} onsave={(moved) => { level.write([...cell, 'focal'], centred(moved) ? undefined : moved); framing = false; }} onclose={() => (framing = false)} />
+      <Focal
+        name={text}
+        url={level.src(cell)}
+        focal={level.point(cell)}
+        presets={preset.ratio ? [{ label: text, preset }] : []}
+        uiLocale={level.uiLocale}
+        onsave={(moved) => {
+          level.write([...cell, 'focal'], centred(moved) ? undefined : moved);
+          framing = false;
+        }}
+        onclose={() => (framing = false)}
+      />
     {/if}
     {#if level.picker === cellId}
-      <Media kind="images" label={text} {preset} base={level.mediaBase} uiLocale={level.uiLocale} onpick={(picks) => level.picked(cell, 'image', picks)} onclose={() => (level.picker = '')} />
+      <Media
+        kind="images"
+        label={text}
+        {preset}
+        base={level.mediaBase}
+        uiLocale={level.uiLocale}
+        onpick={(picks) => level.picked(cell, 'image', picks)}
+        onclose={() => (level.picker = '')}
+      />
     {/if}
   {/if}
 {:else if field.type === 'array'}
@@ -318,86 +438,174 @@ function pickedInto(items: MediaItem[]) {
   {@const scalar = field.item.length === 1 && field.item[0]?.path.length === 0}
   <div class="list" {id} role="group" aria-labelledby="{id}-l">
     <DragDropProvider onDragStart={begun} onDragOver={over} onDragEnd={ended}>
-    {#each items as row, i (keyOf(items, i))}
-      {@const s = sortable(() => keyOf(items, i), () => i)}
-      {@const name = m.field_row_name({ field: text, index: i + 1 }, options)}
-      {@const open = broken([...at, String(i)])}
-      {@const shut = !open && folded[keyOf(items, i)] !== false}
-      {#if scalar}
-      <div class={['row-card', { 'is-scalar': true, 'is-dragging': s.isDragging }]} {@attach !level.translating && s.attach}>
-        <div class="row-fields">{@render form(field.item, [...at, String(i)], mode, level.view, `${text} ${i + 1}`)}</div>
-        {#if !level.translating}{@render controls(i, name, s.attachHandle)}{/if}
-      </div>
+      {#each items as row, i (keyOf(items, i))}
+        {@const s = sortable(
+          () => keyOf(items, i),
+          () => i,
+        )}
+        {@const name = m.field_row_name({ field: text, index: i + 1 }, options)}
+        {@const open = broken([...at, String(i)])}
+        {@const shut = !open && folded[keyOf(items, i)] !== false}
+        {#if scalar}
+          <div
+            class={['row-card', { 'is-scalar': true, 'is-dragging': s.isDragging }]}
+            {@attach !level.translating && s.attach}
+          >
+            <div class="row-fields">
+              {@render form(field.item, [...at, String(i)], mode, level.view, `${text} ${i + 1}`)}
+            </div>
+            {#if !level.translating}{@render controls(i, name, s.attachHandle)}{/if}
+          </div>
+        {:else}
+          <article
+            class={['block-card section-card', { 'is-dragging': s.isDragging, 'is-folded': shut }]}
+            id="{id}.{i}"
+            aria-labelledby="{id}.{i}-h"
+            {@attach !level.translating && s.attach}
+          >
+            <header>
+              <button
+                class="btn btn-ghost fold section-toggle"
+                type="button"
+                disabled={open}
+                aria-expanded={!shut}
+                aria-controls="{id}.{i}-b"
+                onclick={() => {
+                  const opening = shut;
+                  folded[keyOf(items, i)] = !opening;
+                  if (opening) onreveal?.([...at, String(i)]);
+                }}
+              >
+                {@render icon('m9 6 6 6-6 6')}
+                <span class="section-number">{i + 1}</span>
+                <span class="section-copy"
+                  ><span class="label" id="{id}.{i}-h">{name}</span>{#if shut}
+                    <span class="excerpt">{excerpt(row, field.item)}</span>{/if}</span
+                >
+              </button>
+              {#if !level.translating}{@render controls(i, name, s.attachHandle)}{/if}
+            </header>
+            {#if !shut}<div class="form" id="{id}.{i}-b">
+                {@render form(field.item, [...at, String(i)], mode, level.view, `${text} ${i + 1}`)}
+              </div>{/if}
+          </article>
+        {/if}
       {:else}
-      <article class={['block-card section-card', { 'is-dragging': s.isDragging, 'is-folded': shut }]} id="{id}.{i}" aria-labelledby="{id}.{i}-h" {@attach !level.translating && s.attach}>
-        <header>
-          <button class="btn btn-ghost fold section-toggle" type="button" disabled={open} aria-expanded={!shut} aria-controls="{id}.{i}-b" onclick={() => { const opening = shut; folded[keyOf(items, i)] = !opening; if (opening) onreveal?.([...at, String(i)]); }}>
-            {@render icon('m9 6 6 6-6 6')}
-            <span class="section-number">{i + 1}</span>
-            <span class="section-copy"><span class="label" id="{id}.{i}-h">{name}</span>{#if shut} <span class="excerpt">{excerpt(row, field.item)}</span>{/if}</span>
-          </button>
-          {#if !level.translating}{@render controls(i, name, s.attachHandle)}{/if}
-        </header>
-        {#if !shut}<div class="form" id="{id}.{i}-b">{@render form(field.item, [...at, String(i)], mode, level.view, `${text} ${i + 1}`)}</div>{/if}
-      </article>
-      {/if}
-    {:else}
-      <p class="hint">{m.field_list_empty({}, options)}</p>
-    {/each}
+        <p class="hint">{m.field_list_empty({}, options)}</p>
+      {/each}
     </DragDropProvider>
     {#if !level.translating}
-      <button class="btn btn-sm add" type="button" aria-label={m.field_list_add_label({ field: text }, options)} disabled={level.structureLocked} onclick={() => add(scalar ? '' : { _id: newId('default') })}>{m.field_list_add({}, options)}</button>
+      <button
+        class="btn btn-sm add"
+        type="button"
+        aria-label={m.field_list_add_label({ field: text }, options)}
+        disabled={level.structureLocked}
+        onclick={() => add(scalar ? '' : { _id: newId('default') })}
+        >{m.field_list_add({}, options)}</button
+      >
     {/if}
   </div>
 {:else if field.type === 'blocks'}
   {@const items = rows()}
   <div class="list" {id} role="group" aria-labelledby="{id}-l">
     <DragDropProvider onDragStart={begun} onDragOver={over} onDragEnd={ended}>
-    {#each items as row, i (keyOf(items, i))}
-      {@const name = blockName(row)}
-      {@const inner = blockFields(row)}
-      {@const label = block(row)._label || capitalise(name.replace(/([a-z])([A-Z])/g, '$1 $2'))}
-      {@const s = sortable(() => keyOf(items, i), () => i)}
-      {@const open = broken([...at, String(i)])}
-      {@const shut = !open && folded[keyOf(items, i)] !== false}
-      <article class={['block-card section-card', { 'is-dragging': s.isDragging, 'is-folded': shut }]} id="{id}.{i}" aria-labelledby="{id}.{i}-h" {@attach !level.translating && s.attach}>
-        <header>
-          <button class="btn btn-ghost fold section-toggle" type="button" disabled={open} aria-expanded={!shut} aria-controls="{id}.{i}-b" onclick={() => { const opening = shut; folded[keyOf(items, i)] = !opening; if (opening) onreveal?.([...at, String(i)]); }}>
-            {@render icon('m9 6 6 6-6 6')}
-            <span class="section-number">{i + 1}</span>
-            <span class="section-copy"><span class="label" id="{id}.{i}-h" title="{block(row)._type} · {block(row)._id}">{label}</span>{#if shut} <span class="excerpt">{excerpt(row, inner)}</span>{/if}</span>
-          </button>
-          {#if !level.translating}{@render controls(i, name, s.attachHandle, true)}{/if}
-        </header>
-        {#if shut}
-          <!-- folded: the header is the whole card -->
-        {:else if inner}
-          <div class="form" id="{id}.{i}-b">{@render form(inner, [...at, String(i)], mode, level.view)}</div>
-        {:else}
-          <p class="ref-note" id="{id}.{i}-b">{block(row)._ref ?? m.field_block_missing({ type: block(row)._type ?? '' }, options)} — {m.field_not_editable({}, options)}</p>
-        {/if}
-      </article>
-    {:else}
-      <p class="hint">{m.field_list_empty({}, options)}</p>
-    {/each}
+      {#each items as row, i (keyOf(items, i))}
+        {@const name = blockName(row)}
+        {@const inner = blockFields(row)}
+        {@const label = block(row)._label || capitalise(name.replace(/([a-z])([A-Z])/g, '$1 $2'))}
+        {@const s = sortable(
+          () => keyOf(items, i),
+          () => i,
+        )}
+        {@const open = broken([...at, String(i)])}
+        {@const shut = !open && folded[keyOf(items, i)] !== false}
+        <article
+          class={['block-card section-card', { 'is-dragging': s.isDragging, 'is-folded': shut }]}
+          id="{id}.{i}"
+          aria-labelledby="{id}.{i}-h"
+          {@attach !level.translating && s.attach}
+        >
+          <header>
+            <button
+              class="btn btn-ghost fold section-toggle"
+              type="button"
+              disabled={open}
+              aria-expanded={!shut}
+              aria-controls="{id}.{i}-b"
+              onclick={() => {
+                const opening = shut;
+                folded[keyOf(items, i)] = !opening;
+                if (opening) onreveal?.([...at, String(i)]);
+              }}
+            >
+              {@render icon('m9 6 6 6-6 6')}
+              <span class="section-number">{i + 1}</span>
+              <span class="section-copy"
+                ><span class="label" id="{id}.{i}-h" title="{block(row)._type} · {block(row)._id}"
+                  >{label}</span
+                >{#if shut}
+                  <span class="excerpt">{excerpt(row, inner)}</span>{/if}</span
+              >
+            </button>
+            {#if !level.translating}{@render controls(i, name, s.attachHandle, true)}{/if}
+          </header>
+          {#if shut}
+            <!-- folded: the header is the whole card -->
+          {:else if inner}
+            <div class="form" id="{id}.{i}-b">
+              {@render form(inner, [...at, String(i)], mode, level.view)}
+            </div>
+          {:else}
+            <p class="ref-note" id="{id}.{i}-b">
+              {block(row)._ref ??
+                m.field_block_missing({ type: block(row)._type ?? '' }, options)} — {m.field_not_editable({}, options)}
+            </p>
+          {/if}
+        </article>
+      {:else}
+        <p class="hint">{m.field_list_empty({}, options)}</p>
+      {/each}
     </DragDropProvider>
     {#if !level.translating}
-    <div class="pop-anchor">
-      <button class="btn btn-sm add" type="button" disabled={level.structureLocked} aria-haspopup="dialog" aria-expanded={level.picker === id} onclick={() => (level.picker = id)}>{m.field_add_block({}, options)}</button>
-      {#if level.picker === id}
-        <Modal labelledby="{id}-picker-h" panelClass="dialog block-picker" initialFocus=".type-card" onclose={() => (level.picker = '')}>
-          <header><h2 id="{id}-picker-h">{m.field_add_block({}, options)}</h2></header>
-          <div class="types">
-            {#each field.types as type (type)}
-              <button class="type-card" type="button" value={type} disabled={level.structureLocked} onclick={() => { add({ _type: type, _id: newId('default') }); level.picker = ''; }}>{labelIn(blockLabels?.[type], level.uiLocale) ?? type}</button>
-            {/each}
-          </div>
-          <div class="actions">
-            <button class="btn" type="button" onclick={() => (level.picker = '')}>{m.common_cancel({}, options)}</button>
-          </div>
-        </Modal>
-      {/if}
-    </div>
+      <div class="pop-anchor">
+        <button
+          class="btn btn-sm add"
+          type="button"
+          disabled={level.structureLocked}
+          aria-haspopup="dialog"
+          aria-expanded={level.picker === id}
+          onclick={() => (level.picker = id)}>{m.field_add_block({}, options)}</button
+        >
+        {#if level.picker === id}
+          <Modal
+            labelledby="{id}-picker-h"
+            panelClass="dialog block-picker"
+            initialFocus=".type-card"
+            onclose={() => (level.picker = '')}
+          >
+            <header><h2 id="{id}-picker-h">{m.field_add_block({}, options)}</h2></header>
+            <div class="types">
+              {#each field.types as type (type)}
+                <button
+                  class="type-card"
+                  type="button"
+                  value={type}
+                  disabled={level.structureLocked}
+                  onclick={() => {
+                    add({ _type: type, _id: newId('default') });
+                    level.picker = '';
+                  }}>{labelIn(blockLabels?.[type], level.uiLocale) ?? type}</button
+                >
+              {/each}
+            </div>
+            <div class="actions">
+              <button class="btn" type="button" onclick={() => (level.picker = '')}
+                >{m.common_cancel({}, options)}</button
+              >
+            </div>
+          </Modal>
+        {/if}
+      </div>
     {/if}
   </div>
 {/if}

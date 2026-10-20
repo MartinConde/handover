@@ -29,14 +29,39 @@ let framing = $state(false);
   <!-- A translation owns the words and not the picture: the alt, and nothing else. -->
   <ImageCard {level} {id} {at} ratio={aspect(field.preset)} labelledby="{id}-l" />
 {:else if level.read(at) !== undefined}
-  <ImageCard {level} {id} {at} ratio={aspect(field.preset)} labelledby="{id}-l" onframe={() => (framing = true)} onreplace={() => (level.picker = id)} onremove={() => level.write(at, undefined)} />
+  <ImageCard
+    {level}
+    {id}
+    {at}
+    ratio={aspect(field.preset)}
+    labelledby="{id}-l"
+    onframe={() => (framing = true)}
+    onreplace={() => (level.picker = id)}
+    onremove={() => level.write(at, undefined)}
+  />
 {:else}
   <!-- svelte-ignore a11y_no_static_element_interactions -- the child button is the control -->
-  <div class="dropzone" role="group" aria-labelledby="{id}-l" aria-describedby={says} ondragover={(e) => e.preventDefault()} ondrop={(e) => level.dropOn(id, e)}>
+  <div
+    class="dropzone"
+    role="group"
+    aria-labelledby="{id}-l"
+    aria-describedby={says}
+    ondragover={(e) => e.preventDefault()}
+    ondrop={(e) => level.dropOn(id, e)}
+  >
     <span>{m.field_image_drop({}, options)}</span>
-    {#if field.preset.ratio || field.preset.min}<span class="hint">{[field.preset.ratio, field.preset.min && m.field_image_min_width({ min: field.preset.min }, options)].filter(Boolean).join(' · ')}</span>{/if}
+    {#if field.preset.ratio || field.preset.min}<span class="hint"
+        >{[
+          field.preset.ratio,
+          field.preset.min && m.field_image_min_width({ min: field.preset.min }, options),
+        ]
+          .filter(Boolean)
+          .join(' · ')}</span
+      >{/if}
     <span class="hint">{m.field_image_formats({ max: field.preset.max ?? 2400 }, options)}</span>
-    <button class="btn btn-sm" type="button" onclick={() => (level.picker = id)}>{m.field_picture_choose({}, options)}</button>
+    <button class="btn btn-sm" type="button" onclick={() => (level.picker = id)}
+      >{m.field_picture_choose({}, options)}</button
+    >
   </div>
 {/if}
 {#if framing}

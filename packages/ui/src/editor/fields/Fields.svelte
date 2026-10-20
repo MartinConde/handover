@@ -363,7 +363,12 @@ const level: FieldLevel = {
     >
   {/if}
   {#if ontranslate && path}
-    <button class="btn btn-ghost btn-translate" type="button" aria-label={m.translation_field_aria({ field: text }, options)} onclick={() => ontranslate?.(path)}>{m.translation_field({}, options)}</button>
+    <button
+      class="btn btn-ghost btn-translate"
+      type="button"
+      aria-label={m.translation_field_aria({ field: text }, options)}
+      onclick={() => ontranslate?.(path)}>{m.translation_field({}, options)}</button
+    >
   {/if}
 {/snippet}
 
@@ -402,10 +407,23 @@ const level: FieldLevel = {
 {/snippet}
 
 {#snippet groupLabel(id: string, field: Field, text: string, at: readonly string[] = [])}
-  <div class="label-row"><span id="{id}-l">{text}{#if 'required' in field && field.required}<span class="req" aria-hidden="true">*</span>{/if}</span>{#if field.type === 'array' || field.type === 'blocks'}<span class="section-count">{m.field_item_count({ count: rows(at).length }, options)}</span>{/if}{#if prose(field)}{@render machineMark(address(at), text)}{/if}</div>
+  <div class="label-row">
+    <span id="{id}-l"
+      >{text}{#if 'required' in field && field.required}<span class="req" aria-hidden="true">*</span
+        >{/if}</span
+    >{#if field.type === 'array' || field.type === 'blocks'}<span class="section-count"
+        >{m.field_item_count({ count: rows(at).length }, options)}</span
+      >{/if}{#if prose(field)}{@render machineMark(address(at), text)}{/if}
+  </div>
 {/snippet}
 
-{#snippet chosenEntry(id: string, labelId: string, says: string | undefined, ref: string, open: () => void)}
+{#snippet chosenEntry(
+  id: string,
+  labelId: string,
+  says: string | undefined,
+  ref: string,
+  open: () => void,
+)}
   {@const found = known.entries.find((e) => e.path === ref)}
   <div class="ref-list" {id} role="group" aria-labelledby={labelId} aria-describedby={says}>
     <div class="ref-item">
@@ -432,12 +450,51 @@ const level: FieldLevel = {
 
 {#snippet labelRow(id: string, field: Field, text: string, at: readonly string[] = [])}
   <div class="label-row">
-    <label for={id}>{text}{#if 'required' in field && field.required}<span class="req" aria-hidden="true">*</span>{/if}</label>
+    <label for={id}
+      >{text}{#if 'required' in field && field.required}<span class="req" aria-hidden="true">*</span
+        >{/if}</label
+    >
     {#if prose(field)}{@render machineMark(address(at), text)}{/if}
   </div>
 {/snippet}
 
-{#snippet nested(inner: readonly Field[], at: readonly string[], mode: Translation, view: Data, rowLabel?: string)}<Fields fields={inner} bind:root {blocks} {blockLabels} {problems} path={at} {rowLabel} {translating} {machine} {ontranslate} {sourceChanged} bind:dismissed {sourceLabel} {translatedAt} {onretranslate} {prefix} {mediaBase} {locale} {uiLocale} {site} {servedAt} {session} {oncommand} {onreveal} viewRoot={view} inherited={mode} {structureLocked} {textOnly} {reference} />{/snippet}
+{#snippet nested(
+  inner: readonly Field[],
+  at: readonly string[],
+  mode: Translation,
+  view: Data,
+  rowLabel?: string,
+)}<Fields
+    fields={inner}
+    bind:root
+    {blocks}
+    {blockLabels}
+    {problems}
+    path={at}
+    {rowLabel}
+    {translating}
+    {machine}
+    {ontranslate}
+    {sourceChanged}
+    bind:dismissed
+    {sourceLabel}
+    {translatedAt}
+    {onretranslate}
+    {prefix}
+    {mediaBase}
+    {locale}
+    {uiLocale}
+    {site}
+    {servedAt}
+    {session}
+    {oncommand}
+    {onreveal}
+    viewRoot={view}
+    inherited={mode}
+    {structureLocked}
+    {textOnly}
+    {reference}
+  />{/snippet}
 
 {#snippet row(field: Field)}
   {@const at = [...path, ...field.path]}
@@ -448,62 +505,202 @@ const level: FieldLevel = {
   {@const bad = err ? 'true' : undefined}
   {@const says = err ? `${id}-err` : undefined}
   {@const marked = [address(at), childAddress(at, 'label')].find((p) => p && opened === p)}
-  <div class={['field', { 'is-invalid': err, 'pop-anchor': marked }]} data-field-type={field.type} id="{id}-field" tabindex="-1" inert={textOnly && !structural(field) && ((field.type !== 'text' && field.type !== 'richtext') || mode !== true) ? true : undefined}>
+  <div
+    class={['field', { 'is-invalid': err, 'pop-anchor': marked }]}
+    data-field-type={field.type}
+    id="{id}-field"
+    tabindex="-1"
+    inert={textOnly &&
+    !structural(field) &&
+    ((field.type !== 'text' && field.type !== 'richtext') || mode !== true)
+      ? true
+      : undefined}
+  >
     {#if field.type === 'menus'}
       {@render groupLabel(id, field, text, at)}
-      <Menus {id} labelId="{id}-l" menus={rows(at) as Menu[]} {locale} {uiLocale} {translating} {sourceLabel} variants={field.variants} />
+      <Menus
+        {id}
+        labelId="{id}-l"
+        menus={rows(at) as Menu[]}
+        {locale}
+        {uiLocale}
+        {translating}
+        {sourceLabel}
+        variants={field.variants}
+      />
     {:else if translating && mode === 'duplicate' && !structural(field)}
       {@render groupLabel(id, field, text, at)}
-      <div class="readonly" {id} role="region" tabindex="-1" aria-labelledby="{id}-l">{read(at) ?? ''}</div>
+      <div class="readonly" {id} role="region" tabindex="-1" aria-labelledby="{id}-l">
+        {read(at) ?? ''}
+      </div>
       <p class="hint">{m.field_same_every_language({}, options)}</p>
     {:else if field.type === 'text'}
       {@render labelRow(id, field, text, at)}
-      <TextField {id} invalid={bad} describedBy={says} required={field.required} value={str(at)} onvalue={(value) => write(at, value)} />
+      <TextField
+        {id}
+        invalid={bad}
+        describedBy={says}
+        required={field.required}
+        value={str(at)}
+        onvalue={(value) => write(at, value)}
+      />
       {#if reference}<ReferencePeek {reference} path={address(at)} {uiLocale} />{/if}
     {:else if field.type === 'number'}
       {@render labelRow(id, field, text, at)}
-      <input class="input" {id} type="number" step="any" aria-invalid={bad} aria-describedby={says} aria-required={field.required ? 'true' : undefined} value={num(at)} oninput={(e) => write(at, e.currentTarget.value === '' ? undefined : e.currentTarget.valueAsNumber)} />
+      <input
+        class="input"
+        {id}
+        type="number"
+        step="any"
+        aria-invalid={bad}
+        aria-describedby={says}
+        aria-required={field.required ? 'true' : undefined}
+        value={num(at)}
+        oninput={(e) =>
+          write(at, e.currentTarget.value === '' ? undefined : e.currentTarget.valueAsNumber)}
+      />
     {:else if field.type === 'boolean'}
-      <label class="switch" for={id}><input type="checkbox" role="switch" {id} aria-invalid={bad} aria-describedby={says} aria-required={field.required ? 'true' : undefined} checked={read(at) === true} onchange={(e) => write(at, e.currentTarget.checked || field.required || heldWhenOpened(at) ? e.currentTarget.checked : undefined)} /><span>{text}</span></label>
+      <label class="switch" for={id}
+        ><input
+          type="checkbox"
+          role="switch"
+          {id}
+          aria-invalid={bad}
+          aria-describedby={says}
+          aria-required={field.required ? 'true' : undefined}
+          checked={read(at) === true}
+          onchange={(e) =>
+            write(
+              at,
+              e.currentTarget.checked || field.required || heldWhenOpened(at)
+                ? e.currentTarget.checked
+                : undefined,
+            )}
+        /><span>{text}</span></label
+      >
     {:else if field.type === 'date'}
       {@render labelRow(id, field, text, at)}
-      <input class="input" {id} type="date" aria-invalid={bad} aria-describedby={says} aria-required={field.required ? 'true' : undefined} value={str(at)} oninput={(e) => write(at, e.currentTarget.value || undefined)} />
+      <input
+        class="input"
+        {id}
+        type="date"
+        aria-invalid={bad}
+        aria-describedby={says}
+        aria-required={field.required ? 'true' : undefined}
+        value={str(at)}
+        oninput={(e) => write(at, e.currentTarget.value || undefined)}
+      />
     {:else if field.type === 'select'}
       {#if field.options.length <= 5}
         <fieldset aria-describedby={says}>
-          <legend>{text}{#if field.required}<span class="req" aria-hidden="true">*</span>{/if}</legend>
+          <legend
+            >{text}{#if field.required}<span class="req" aria-hidden="true">*</span>{/if}</legend
+          >
           {#each field.options as option (option)}
-            <label class="choice"><input type="radio" name={id} value={option} required={field.required} checked={read(at) === option} onchange={() => write(at, option)} /><span>{labelIn(field.optionLabels?.[option], uiLocale) ?? capitalise(option)}</span></label>
+            <label class="choice"
+              ><input
+                type="radio"
+                name={id}
+                value={option}
+                required={field.required}
+                checked={read(at) === option}
+                onchange={() => write(at, option)}
+              /><span>{labelIn(field.optionLabels?.[option], uiLocale) ?? capitalise(option)}</span
+              ></label
+            >
           {/each}
         </fieldset>
       {:else}
         {@render labelRow(id, field, text, at)}
-        <select class="input" {id} aria-invalid={bad} aria-describedby={says} aria-required={field.required ? 'true' : undefined} value={str(at)} onchange={(e) => write(at, e.currentTarget.value || undefined)}>
+        <select
+          class="input"
+          {id}
+          aria-invalid={bad}
+          aria-describedby={says}
+          aria-required={field.required ? 'true' : undefined}
+          value={str(at)}
+          onchange={(e) => write(at, e.currentTarget.value || undefined)}
+        >
           <option value="">{m.field_choose({}, options)}</option>
           {#each field.options as option (option)}
-            <option value={option}>{labelIn(field.optionLabels?.[option], uiLocale) ?? capitalise(option)}</option>
+            <option value={option}
+              >{labelIn(field.optionLabels?.[option], uiLocale) ?? capitalise(option)}</option
+            >
           {/each}
         </select>
       {/if}
     {:else if field.type === 'link' && translating}
       <!-- A link's label is the half a translation owns. -->
       {@render groupLabel(id, field, text, at)}
-      <div class="field"><div class="label-row"><label for="{id}.label">{m.field_link_label({}, options)}</label>{@render machineMark(childAddress(at, 'label'), `${text} label`)}</div><input class="input" id="{id}.label" type="text" value={str([...at, 'label'])} oninput={(e) => write([...at, 'label'], e.currentTarget.value || undefined)} />{#if reference}<ReferencePeek {reference} path={childAddress(at, 'label')} {uiLocale} />{/if}</div>
+      <div class="field"
+        ><div class="label-row"
+          ><label for="{id}.label">{m.field_link_label({}, options)}</label>{@render machineMark(
+            childAddress(at, 'label'),
+            `${text} label`,
+          )}</div
+        ><input
+          class="input"
+          id="{id}.label"
+          type="text"
+          value={str([...at, 'label'])}
+          oninput={(e) => write([...at, 'label'], e.currentTarget.value || undefined)}
+        />{#if reference}<ReferencePeek
+            {reference}
+            path={childAddress(at, 'label')}
+            {uiLocale}
+          />{/if}</div
+      >
     {:else if field.type === 'link'}
       {@render groupLabel(id, field, text, at)}
       <LinkField {level} {id} {at} {text} {says} chosen={chosenEntry} empty={noEntry} />
     {:else if field.type === 'richtext'}
       {@render groupLabel(id, field, text, at)}
-      <RichText {id} labelId="{id}-l" {locale} {uiLocale} tier={field.tier} invalid={!!err} describedby={says} value={str(at)} address={address(at)} {session} onchange={(md, history) => write(at, md, history)} />
-      {#if reference}<ReferencePeek {reference} path={address(at)} tier={field.tier} {uiLocale} />{/if}
+      <RichText
+        {id}
+        labelId="{id}-l"
+        {locale}
+        {uiLocale}
+        tier={field.tier}
+        invalid={!!err}
+        describedby={says}
+        value={str(at)}
+        address={address(at)}
+        {session}
+        onchange={(md, history) => write(at, md, history)}
+      />
+      {#if reference}<ReferencePeek
+          {reference}
+          path={address(at)}
+          tier={field.tier}
+          {uiLocale}
+        />{/if}
     {:else if field.type === 'group'}
       <details class="group" open>
-        <summary>{text}<span class="count">{m.field_count({ count: field.fields.length }, options)}</span></summary>
+        <summary
+          >{text}<span class="count">{m.field_count({ count: field.fields.length }, options)}</span
+          ></summary
+        >
         <div class="form">{@render nested(field.fields, at, mode, displayedRoot)}</div>
       </details>
     {:else if field.type === 'array' || field.type === 'blocks'}
       {@render groupLabel(id, field, text, at)}
-      <ListField {level} {id} {at} {field} {text} {mode} form={nested} bind:root {session} {locale} {oncommand} {onreveal} {blocks} {blockLabels} {problems} />
+      <ListField
+        {level}
+        {id}
+        {at}
+        {field}
+        {text}
+        {mode}
+        form={nested}
+        bind:root
+        {session}
+        {locale}
+        {oncommand}
+        {onreveal}
+        {blocks}
+        {blockLabels}
+        {problems}
+      />
     {:else if field.type === 'image'}
       {@render groupLabel(id, field, text, at)}
       <ImageField {level} {id} {at} {field} {text} {says} />

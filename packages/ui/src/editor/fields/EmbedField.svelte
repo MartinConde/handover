@@ -100,26 +100,96 @@ const refusal = (reason: EmbedRefusalReason | undefined) => {
   {#if value && pasting !== id}
     {@render label()}
   {:else}
-    <div class="label-row"><label for={id} id="{id}-l">{text}{#if field.required}<span class="req" aria-hidden="true">*</span>{/if}</label></div>
-    <input class="input" {id} type="url" placeholder={m.field_embed_placeholder({}, options)} aria-invalid={refused.id === id ? 'true' : bad} aria-describedby={[refused.id === id ? `${id}-paste` : '', value ? `${id}-keep` : '', says].filter(Boolean).join(' ') || undefined} oninput={(e) => paste(e.currentTarget)} />
+    <div class="label-row"
+      ><label for={id} id="{id}-l"
+        >{text}{#if field.required}<span class="req" aria-hidden="true">*</span>{/if}</label
+      ></div
+    >
+    <input
+      class="input"
+      {id}
+      type="url"
+      placeholder={m.field_embed_placeholder({}, options)}
+      aria-invalid={refused.id === id ? 'true' : bad}
+      aria-describedby={[refused.id === id ? `${id}-paste` : '', value ? `${id}-keep` : '', says]
+        .filter(Boolean)
+        .join(' ') || undefined}
+      oninput={(e) => paste(e.currentTarget)}
+    />
     {#if refused.id === id}<p class="error" id="{id}-paste">{refusal(refused.reason)}</p>{/if}
     {#if value}<p class="hint" id="{id}-keep">{m.field_embed_keep_hint({}, options)}</p>{/if}
   {/if}
   {#if value}
-    <div class="media-card" id={pasting === id ? undefined : id} role="group" aria-labelledby="{id}-l" aria-describedby={pasting === id ? undefined : says}>
+    <div
+      class="media-card"
+      id={pasting === id ? undefined : id}
+      role="group"
+      aria-labelledby="{id}-l"
+      aria-describedby={pasting === id ? undefined : says}
+    >
       {@render thumbnail(value)}
       <div class="meta">
-        <div><div class="name"><span class="badge badge-info">{EMBED_LABELS[value.provider]}</span> <span class="sub">{value.id}</span></div></div>
+        <div
+          ><div class="name"
+            ><span class="badge badge-info">{EMBED_LABELS[value.provider]}</span>
+            <span class="sub">{value.id}</span></div
+          ></div
+        >
         {#if pasting === id}
-          <div class="actions"><button class="btn btn-sm btn-ghost" type="button" onclick={() => { pasting = ''; refused = { id: '' }; focusOn(`${id}-change`); }}>{m.field_embed_keep({}, options)}</button></div>
+          <div class="actions"
+            ><button
+              class="btn btn-sm btn-ghost"
+              type="button"
+              onclick={() => {
+                pasting = '';
+                refused = { id: '' };
+                focusOn(`${id}-change`);
+              }}>{m.field_embed_keep({}, options)}</button
+            ></div
+          >
         {:else}
           <PerLanguageInput {level} {id} {at} key="title" label={m.field_title({}, options)} />
           {#if value.provider !== 'google-maps'}
-            <div class="field"><div class="label-row"><label for="{id}.start">{m.field_embed_start({}, options)}</label></div><input class="input" id="{id}.start" type="number" min="0" step="1" aria-describedby="{id}.start-hint" value={level.num([...at, 'start'])} oninput={(e) => level.write([...at, 'start'], e.currentTarget.value === '' ? undefined : e.currentTarget.valueAsNumber)} /><p class="hint" id="{id}.start-hint">{m.field_embed_seconds_optional({}, options)}</p></div>
+            <div class="field"
+              ><div class="label-row"
+                ><label for="{id}.start">{m.field_embed_start({}, options)}</label></div
+              ><input
+                class="input"
+                id="{id}.start"
+                type="number"
+                min="0"
+                step="1"
+                aria-describedby="{id}.start-hint"
+                value={level.num([...at, 'start'])}
+                oninput={(e) =>
+                  level.write(
+                    [...at, 'start'],
+                    e.currentTarget.value === '' ? undefined : e.currentTarget.valueAsNumber,
+                  )}
+              /><p class="hint" id="{id}.start-hint"
+                >{m.field_embed_seconds_optional({}, options)}</p
+              ></div
+            >
           {/if}
           <div class="actions">
-            <button class="btn btn-sm" id="{id}-change" type="button" onclick={() => { pasting = id; focusOn(id); }}>{m.field_change({}, options)}</button>
-            <button class="btn btn-sm btn-ghost" type="button" onclick={() => { level.write(at, undefined); pasting = ''; focusOn(id); }}>{m.field_remove_value({}, options)}</button>
+            <button
+              class="btn btn-sm"
+              id="{id}-change"
+              type="button"
+              onclick={() => {
+                pasting = id;
+                focusOn(id);
+              }}>{m.field_change({}, options)}</button
+            >
+            <button
+              class="btn btn-sm btn-ghost"
+              type="button"
+              onclick={() => {
+                level.write(at, undefined);
+                pasting = '';
+                focusOn(id);
+              }}>{m.field_remove_value({}, options)}</button
+            >
           </div>
         {/if}
       </div>
