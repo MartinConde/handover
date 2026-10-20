@@ -84,9 +84,9 @@ const shown = $derived(groups.filter((g) => g.locale !== undefined || g.changes.
       </div>
     {:else if change.kind === 'value'}
       <div class="row">
-        <small>{label}</small>{#if change.before !== undefined}<del>{change.before}</del>{/if}{#if change.before !== undefined && change.after !== undefined}<span
+        <small>{label}</small>{#if change.before !== undefined}<del>{change.beforeLabels?.[uiLocale] ?? change.before}</del>{/if}{#if change.before !== undefined && change.after !== undefined}<span
             aria-hidden="true"
-          >{' → '}</span>{/if}{#if change.after !== undefined}<ins>{change.after}</ins>{/if}
+          >{' → '}</span>{/if}{#if change.after !== undefined}<ins>{change.afterLabels?.[uiLocale] ?? change.after}</ins>{/if}
       </div>
     {:else}
       <div class="row"><small>{label}</small>{change.kind === 'whole' && change.what === 'link' ? m.diff_link_changed({}, options) : change.kind === 'whole' && change.what === 'formatting' ? m.diff_formatting_changed({}, options) : m.diff_changed({}, options)}</div>

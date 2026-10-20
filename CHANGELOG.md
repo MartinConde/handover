@@ -4,6 +4,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- A select's options can be named with `.meta({ options: { value: 'Name' | { en, de } } })` and
+  show in the interface language in the form, History, pending changes and conflicts. The
+  History and conflict API values carry `beforeLabels` and `afterLabels` for them. The menu's
+  built-in field names, the picture and search sub-field names in History and conflicts, and the
+  name of a block type with no label are now in the interface language too (en, de).
 - A Discard refused because somebody else is editing the entry now names them in the interface
   language (en, de). The `409` for any action refused over the lock is JSON, `{ error, held_by }`,
   instead of plain text.

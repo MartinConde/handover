@@ -96,11 +96,26 @@ export const listing = z.object({
 
 A label with one string per interface language is read in the language each editor picked, in the
 form, History, pending changes and conflicts. A block type is named the same way. Without a label,
-the block picker shows the type:
+the block picker shows the type, humanised (`faq_item` reads "Faq item"):
 
 ```ts
 hero: defineBlock('hero', { heading: z.string() }).meta({ label: { en: 'Hero', de: 'Bühne' } }),
 ```
+
+The options of a select (an enum) read as the value, capitalised. Name them with
+`.meta({ options })`, one string or one per interface language for each value you want to
+rename. The form, History, pending changes and conflicts show the one each editor picked. A value
+left out keeps its capitalised value, and a name for a value the enum does not hold is ignored:
+
+```ts
+status: z.enum(['sale', 'rent']).meta({
+  options: { sale: { en: 'For sale', de: 'Zu verkaufen' }, rent: 'To rent' },
+}),
+```
+
+The sub-fields the package draws itself (a picture's alt text and focal point, the search title,
+description and social image of `seo`) are named in the interface language as well, in History,
+pending changes and conflicts.
 
 ### Settings the client rarely needs
 

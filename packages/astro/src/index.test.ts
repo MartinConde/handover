@@ -516,6 +516,17 @@ test('a label names the field, on a plain type and on top of a helper', () => {
   ]);
 });
 
+test('an enum names its options through .meta({ options })', () => {
+  const schema = z.object({
+    status: z
+      .enum(['sale', 'rent'])
+      .meta({ options: { sale: { en: 'For sale', de: 'Zu verkaufen' } } }),
+  });
+  expect(fieldsFrom('default', formSchema(schema))).toMatchObject([
+    { type: 'select', optionLabels: { sale: { en: 'For sale', de: 'Zu verkaufen' } } },
+  ]);
+});
+
 test('a field marked advanced says so in the form', () => {
   const schema = z.object({
     title: z.string(),

@@ -223,10 +223,51 @@ test('only the properties a translator retypes are per-language', () => {
   expect(changesIn(groups, 'en')).toEqual([
     {
       path: 'image.alt',
-      label: 'Image · Alt',
+      label: 'Image · Alt text',
+      labels: { en: 'Image · Alt text', de: 'Image · Alternativtext' },
       kind: 'value',
       before: 'The front',
       after: 'The garden',
+    },
+  ]);
+});
+
+test('a changed select carries the option names in every interface language', () => {
+  const form: Form = {
+    fields: [
+      {
+        path: ['status'],
+        label: 'Status',
+        type: 'select',
+        required: true,
+        options: ['sale', 'rent'],
+        optionLabels: { sale: { en: 'For sale', de: 'Zu verkaufen' }, rent: 'To rent' },
+      },
+    ],
+    blocks: {},
+  };
+
+  expect(enChanges(form, { status: 'sale' }, { status: 'rent' })).toEqual([
+    {
+      path: 'status',
+      label: 'Status',
+      kind: 'value',
+      before: 'sale',
+      after: 'rent',
+      beforeLabels: { en: 'For sale', de: 'Zu verkaufen' },
+      afterLabels: { en: 'To rent', de: 'To rent' },
+    },
+  ]);
+});
+
+test('a picture property is named in every interface language', () => {
+  const before = { image: { src: 'media/a.webp', alt: 'The front', width: 1, height: 1 } };
+  const after = { image: { ...before.image, alt: 'The garden' } };
+
+  expect(enChanges(listing, before, after)).toMatchObject([
+    {
+      label: 'Image · Alt text',
+      labels: { en: 'Image · Alt text', de: 'Image · Alternativtext' },
     },
   ]);
 });
@@ -452,7 +493,14 @@ test('every other field type has a shape, including the one the schema cannot re
     { path: 'status', label: 'Status', kind: 'value', before: 'a', after: 'b' },
     { path: 'agent', label: 'Agent', kind: 'value', before: 'anna', after: 'martin' },
     { path: 'link.href', label: 'Link · Href', kind: 'value', before: '/one', after: '/two' },
-    { path: 'link.label', label: 'Link · Label', kind: 'value', before: 'One', after: 'Two' },
+    {
+      path: 'link.label',
+      label: 'Link · Label',
+      labels: { en: 'Link · Label', de: 'Link · Beschriftung' },
+      kind: 'value',
+      before: 'One',
+      after: 'Two',
+    },
     {
       path: 'brochure.src',
       label: 'Brochure · Src',
@@ -474,11 +522,26 @@ test('every other field type has a shape, including the one the schema cannot re
       before: 'https://v/1',
       after: 'https://v/2',
     },
-    { path: 'video.title', label: 'Video · Title', kind: 'value', before: 'Tour', after: 'Walk' },
-    { path: 'seo.title', label: 'SEO · Title', kind: 'value', before: 'One', after: 'Two' },
+    {
+      path: 'video.title',
+      label: 'Video · Title',
+      labels: { en: 'Video · Title', de: 'Video · Titel' },
+      kind: 'value',
+      before: 'Tour',
+      after: 'Walk',
+    },
+    {
+      path: 'seo.title',
+      label: 'SEO · Search title',
+      labels: { en: 'SEO · Search title', de: 'SEO · Suchtitel' },
+      kind: 'value',
+      before: 'One',
+      after: 'Two',
+    },
     {
       path: 'seo.description',
       label: 'SEO · Description',
+      labels: { en: 'SEO · Description', de: 'SEO · Beschreibung' },
       kind: 'value',
       before: 'First',
       after: 'Second',
@@ -577,7 +640,8 @@ test('the sharing image is a picture too, named by the steps down to it', () => 
   expect(changes).toEqual([
     {
       path: 'seo.image.src',
-      label: 'SEO · Image',
+      label: 'SEO · Social image',
+      labels: { en: 'SEO · Social image', de: 'SEO · Social-Media-Bild' },
       kind: 'picture',
       before: 'media/a.webp',
       after: 'media/b.webp',
@@ -600,7 +664,11 @@ test('a property inside a structured field is named by every step down to it', (
   expect(changes).toEqual([
     {
       path: 'seo.image.alt',
-      label: 'SEO · Image · Alt',
+      label: 'SEO · Social image · Alt text',
+      labels: {
+        en: 'SEO · Social image · Alt text',
+        de: 'SEO · Social-Media-Bild · Alternativtext',
+      },
       kind: 'value',
       before: 'The front',
       after: 'The quay',
@@ -684,6 +752,7 @@ test('a menu label retyped in one language is that language’s change, not a sh
             {
               path: 'menus[_id=n1].items[_id=l1].label',
               label: 'Label',
+              labels: { en: 'Label', de: 'Bezeichnung' },
               kind: 'words',
               parts: [
                 { text: 'Neuigkeiten', mark: 'del' },
@@ -718,6 +787,7 @@ test('a menu item with no label is named by its target, and a swapped target is 
         {
           path: 'menus[_id=n1].items[_id=x1].link',
           label: 'Links to',
+          labels: { en: 'Links to', de: 'Verlinkt auf' },
           kind: 'value',
           before: '/',
           after: 'listings',

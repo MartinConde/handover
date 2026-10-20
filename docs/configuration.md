@@ -130,8 +130,9 @@ letter. In a collection's `label` or `singular`, a key other than `en` or `de` s
 cms.config.ts › collections.listings.label: "ger" is not an interface language — en, de
 ```
 
-Globals, fields and block types take the same shape through `.meta({ label })`. See
-[Field types](field-types.md#labels) for fields and block types, and `globals` below. A
+Globals, fields and block types take the same shape through `.meta({ label })`, and the options
+of a select through `.meta({ options: { value: { en, de } } })`. See
+[Field types](field-types.md#labels) for fields, options and block types, and `globals` below. A
 description stays one string. Two places keep one name however the admin is set. The Canvas
 Structure list names a block by `_label` or its type, because the site renders it. The
 publish-check sentences are English and use the English label.

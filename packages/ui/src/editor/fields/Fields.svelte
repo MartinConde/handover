@@ -752,7 +752,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
         <fieldset aria-describedby={says}>
           <legend>{text}{#if field.required}<span class="req" aria-hidden="true">*</span>{/if}</legend>
           {#each field.options as option (option)}
-            <label class="choice"><input type="radio" name={id} value={option} required={field.required} checked={read(at) === option} onchange={() => write(at, option)} /><span>{capitalise(option)}</span></label>
+            <label class="choice"><input type="radio" name={id} value={option} required={field.required} checked={read(at) === option} onchange={() => write(at, option)} /><span>{labelIn(field.optionLabels?.[option], uiLocale) ?? capitalise(option)}</span></label>
           {/each}
         </fieldset>
       {:else}
@@ -760,7 +760,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
         <select class="input" {id} aria-invalid={bad} aria-describedby={says} aria-required={field.required ? 'true' : undefined} value={str(at)} onchange={(e) => write(at, e.currentTarget.value || undefined)}>
           <option value="">{m.field_choose({}, messageOptions(uiLocale))}</option>
           {#each field.options as option (option)}
-            <option value={option}>{capitalise(option)}</option>
+            <option value={option}>{labelIn(field.optionLabels?.[option], uiLocale) ?? capitalise(option)}</option>
           {/each}
         </select>
       {/if}

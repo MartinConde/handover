@@ -33,7 +33,15 @@ type FieldOf =
   | { path: string[]; label: string; type: 'number'; required: boolean }
   | { path: string[]; label: string; type: 'boolean'; required: boolean }
   | { path: string[]; label: string; type: 'date'; required: boolean }
-  | { path: string[]; label: string; type: 'select'; required: boolean; options: string[] }
+  | {
+      path: string[];
+      label: string;
+      type: 'select';
+      required: boolean;
+      options: string[];
+      /** `.meta({ options })`: a name per option value; a value without one reads as itself. */
+      optionLabels?: Record<string, string | Labels>;
+    }
   | { path: string[]; label: string; type: 'link'; required: boolean }
   | { path: string[]; label: string; type: 'image'; required: boolean; preset: Preset }
   | { path: string[]; label: string; type: 'file'; required: boolean; accept: string[] }
@@ -73,23 +81,67 @@ export function fieldsFrom(_siteId: string, schema: JsonSchema): Field[] {
 
 /** The walker stops at `menus`, but keeping the tree in step across languages needs these. */
 const menuItem: Field[] = [
-  { path: ['label'], label: 'Label', type: 'text', required: false, i18n: true },
+  {
+    path: ['label'],
+    label: 'Label',
+    labels: { en: 'Label', de: 'Bezeichnung' },
+    type: 'text',
+    required: false,
+    i18n: true,
+  },
   // One value the CMS never looks inside: swapping a page for a URL replaces the whole target.
-  { path: ['link'], label: 'Links to', type: 'unsupported' },
-  { path: ['newTab'], label: 'Open in a new tab', type: 'boolean', required: false },
-  { path: ['variant'], label: 'Style', type: 'text', required: false },
-  { path: ['entries'], label: 'List its pages', type: 'boolean', required: false },
+  {
+    path: ['link'],
+    label: 'Links to',
+    labels: { en: 'Links to', de: 'Verlinkt auf' },
+    type: 'unsupported',
+  },
+  {
+    path: ['newTab'],
+    label: 'Open in a new tab',
+    labels: { en: 'Open in a new tab', de: 'In einem neuen Tab öffnen' },
+    type: 'boolean',
+    required: false,
+  },
+  {
+    path: ['variant'],
+    label: 'Style',
+    labels: { en: 'Style', de: 'Darstellung' },
+    type: 'text',
+    required: false,
+  },
+  {
+    path: ['entries'],
+    label: 'List its pages',
+    labels: { en: 'List its pages', de: 'Seiten darunter auflisten' },
+    type: 'boolean',
+    required: false,
+  },
 ];
 menuItem.push({
   path: ['children'],
   label: 'Items',
+  labels: { en: 'Items', de: 'Einträge' },
   type: 'array',
   required: false,
   item: menuItem,
 });
 const menuFields: Field[] = [
-  { path: ['key'], label: 'Key', type: 'text', required: true },
-  { path: ['items'], label: 'Items', type: 'array', required: true, item: menuItem },
+  {
+    path: ['key'],
+    label: 'Key',
+    labels: { en: 'Key', de: 'Schlüssel' },
+    type: 'text',
+    required: true,
+  },
+  {
+    path: ['items'],
+    label: 'Items',
+    labels: { en: 'Items', de: 'Einträge' },
+    type: 'array',
+    required: true,
+    item: menuItem,
+  },
 ];
 
 export type FieldsOf = (row: Record<string, unknown>) => readonly Field[] | undefined;
@@ -165,10 +217,14 @@ export function formIn(form: Form, locale: UiLocale): Form {
       return { ...field, label };
     });
   const blocks = Object.fromEntries(Object.entries(form.blocks).map(([t, f]) => [t, named(f)]));
-  if (!form.blockLabels) return { fields: named(form.fields), blocks };
+  // The diff names an unlabelled block the same way (humanised), so the editor must too.
   const blockLabels = Object.fromEntries(
-    Object.entries(form.blockLabels).map(([type, label]) => [type, labelIn(label, locale) ?? type]),
+    Object.keys(blocks).map((type) => [
+      type,
+      labelIn(form.blockLabels?.[type], locale) ?? humanise(type),
+    ]),
   );
+  if (Object.keys(blockLabels).length === 0) return { fields: named(form.fields), blocks };
   return { fields: named(form.fields), blocks, blockLabels };
 }
 
@@ -292,8 +348,19 @@ function fieldFrom(
   if (child.type === 'object')
     return [{ path, label, type: 'group', required, fields: objectFields(root, child) }];
   if (child.type === 'string') {
-    if (isStringArray(child.enum))
-      return [{ path, label, type: 'select', required, options: child.enum }];
+    if (isStringArray(child.enum)) {
+      const names = optionNames(child.options, child.enum);
+      return [
+        {
+          path,
+          label,
+          type: 'select',
+          required,
+          options: child.enum,
+          ...(names ? { optionLabels: names } : {}),
+        },
+      ];
+    }
     if (child.format === 'date') return [{ path, label, type: 'date', required }];
     return [{ path, label, type: 'text', required }];
   }
@@ -310,6 +377,20 @@ function fieldFrom(
     return [{ path, label, type: 'array', required, item }];
   }
   return [{ path, label, type: 'unsupported' }];
+}
+
+// Names for values the enum does not hold are dropped, as are empty ones.
+function optionNames(
+  named: unknown,
+  values: string[],
+): Record<string, string | Labels> | undefined {
+  if (typeof named !== 'object' || named === null) return undefined;
+  const found = Object.entries(named).flatMap(([value, label]): [string, string | Labels][] => {
+    const text = labelIn(label, 'en');
+    const labels = labelsOf(label);
+    return values.includes(value) && text ? [[value, labels ?? text]] : [];
+  });
+  return found.length ? Object.fromEntries(found) : undefined;
 }
 
 const isStringArray = (v: unknown): v is string[] =>

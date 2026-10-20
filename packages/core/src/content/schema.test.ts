@@ -67,6 +67,23 @@ test('a string enum is a select field carrying its options', () => {
   ]);
 });
 
+test('option names go onto the select as authored, and unknown values are dropped', () => {
+  const schema = obj({
+    status: {
+      type: 'string',
+      enum: ['sale', 'rent'],
+      options: { sale: { en: 'For sale', de: 'Zu verkaufen' }, rent: 'To rent', gone: 'Gone' },
+    },
+  });
+  expect(fieldsFrom('default', schema)).toMatchObject([
+    {
+      type: 'select',
+      options: ['sale', 'rent'],
+      optionLabels: { sale: { en: 'For sale', de: 'Zu verkaufen' }, rent: 'To rent' },
+    },
+  ]);
+});
+
 test('a schema tagged handover: link is a link field, whatever its shape', () => {
   const schema = obj({ button: { oneOf: [obj({ href: { type: 'string' } })], handover: 'link' } });
   expect(fieldsFrom('default', schema)).toEqual([
@@ -417,6 +434,14 @@ test('formIn names every field and block type in the language asked for', () => 
   expect(note?.label).toBe('Note');
   expect(form.blocks.hero?.[0]?.label).toBe('Überschrift');
   expect(form.blockLabels).toEqual({ hero: 'Bühne' });
+});
+
+test('formIn names a block type with no label by its humanised type', () => {
+  const faq = obj({ _type: { type: 'string', const: 'faq_item' } });
+  const schema = obj({
+    body: { type: 'array', handover: 'blocks', types: ['faq_item'], items: { anyOf: [faq] } },
+  });
+  expect(formIn(formOf('default', schema), 'de').blockLabels).toEqual({ faq_item: 'Faq item' });
 });
 
 test('groups, arrays, blocks and unsupported leaves are labelled too', () => {

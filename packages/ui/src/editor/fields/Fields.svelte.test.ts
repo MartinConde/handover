@@ -369,6 +369,54 @@ test('select: five options or fewer are radios and store the value', () => {
   expect(stringifyEntry('default', $state.snapshot(root))).toBe(golden('select'));
 });
 
+test('select: option names are read in the interface language, else capitalised', () => {
+  show(
+    [
+      {
+        path: ['status'],
+        label: 'Status',
+        type: 'select',
+        required: true,
+        options: ['sale', 'rent'],
+        optionLabels: { sale: { en: 'For sale', de: 'Zu verkaufen' } },
+      },
+    ],
+    { _version: 1 },
+    {},
+    {},
+    undefined,
+    { uiLocale: 'de' },
+  );
+  expect(Array.from(document.querySelectorAll('.choice span'), (n) => n.textContent)).toEqual([
+    'Zu verkaufen',
+    'Rent',
+  ]);
+});
+
+test('select: a dropdown reads its option names in the interface language', () => {
+  const options = ['a', 'b', 'c', 'd', 'e', 'f'];
+  show(
+    [
+      {
+        path: ['energy'],
+        label: 'Energy',
+        type: 'select',
+        required: false,
+        options,
+        optionLabels: { a: { en: 'Best', de: 'Beste' } },
+      },
+    ],
+    { _version: 1 },
+    {},
+    {},
+    undefined,
+    { uiLocale: 'de' },
+  );
+  expect(
+    Array.from(document.querySelectorAll('select#f-energy option'), (n) => n.textContent)[1],
+  ).toBe('Beste');
+});
+
 test('select: more than five options is a dropdown; Choose… removes the key', () => {
   const options = ['a', 'b', 'c', 'd', 'e', 'f', 'g'];
   show([{ path: ['energy'], label: 'Energy', type: 'select', required: false, options }], {

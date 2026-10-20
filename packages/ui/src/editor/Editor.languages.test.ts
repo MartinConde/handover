@@ -328,7 +328,7 @@ test('a block moved in the source column moves in the second column at once', as
   flushSync();
   expect(germanBlocks(root)).toEqual(['Hero', 'Cta']);
 
-  const handle = $<HTMLButtonElement>(root, '[aria-label="Reorder hero"]');
+  const handle = $<HTMLButtonElement>(root, '[aria-label="Reorder Hero"]');
   if (!handle) throw new Error('no handle');
   await press(handle, 'Space');
   await press(document.body, 'ArrowDown');
@@ -358,7 +358,7 @@ test('a duplicated block autosaves its scoped locale subtree and captured revisi
     entry: { ...twoBlocks, revisions: { en: 'en-opened', de: 'de-opened' } },
   });
 
-  $<HTMLButtonElement>(root, '[aria-label="Duplicate cta"]')?.click();
+  $<HTMLButtonElement>(root, '[aria-label="Duplicate Cta"]')?.click();
   flushSync();
   await vi.advanceTimersByTimeAsync(2100);
 

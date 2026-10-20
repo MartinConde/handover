@@ -317,6 +317,37 @@ test('an open choice and retained refusal retranslate without another request', 
   expect(fetchMock).toHaveBeenCalledTimes(calls);
 });
 
+test('a select conflict reads its option names in the interface language', async () => {
+  const side = (after: string, name: string) => ({
+    path: 'status',
+    label: 'Status',
+    kind: 'value',
+    before: 'sale',
+    after,
+    beforeLabels: { en: 'For sale', de: 'Zu verkaufen' },
+    afterLabels: { en: name, de: `${name} (de)` },
+  });
+  answering([
+    {
+      path: 'status',
+      label: 'Status',
+      base: 'sale',
+      ours: side('rent', 'To rent'),
+      theirs: side('let', 'Let'),
+    },
+  ]);
+  uiLocale = 'de';
+  const root = show();
+  await tick();
+  flushSync();
+
+  expect(q(root, '.resolve-field .base')?.textContent).toContain('Zu verkaufen');
+  expect(all(root, '.resolve-field .choice b').map((n) => n.textContent?.trim())).toEqual([
+    'Deine Version — To rent (de)',
+    'Repository-Version — Let (de)',
+  ]);
+});
+
 test('a failed conflict refresh leaves the previous report visible but not actionable', async () => {
   let reads = 0;
   const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {

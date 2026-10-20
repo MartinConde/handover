@@ -20,7 +20,14 @@ export type RowAt = 'added' | 'removed' | 'moved-up' | 'moved-down' | 'same';
 
 export type Change = { path: string; label: string; labels?: Labels } & (
   | { kind: 'words'; parts: WordPart[] }
-  | { kind: 'value'; before?: string; after?: string }
+  | {
+      kind: 'value';
+      before?: string;
+      after?: string;
+      /** A select's option names, one per interface language; `before` and `after` stay the values. */
+      beforeLabels?: Labels;
+      afterLabels?: Labels;
+    }
   /** Two keys into storage, never a value that moved. */
   | { kind: 'picture'; before?: string; after?: string }
   /** `after` is the new text, for the one who must choose between two rewrites. */
@@ -172,7 +179,29 @@ function leafIn(
           },
     );
   } else if (field.type === 'unsupported') found.push({ path, ...label, kind: 'whole' });
-  else found.push({ path, ...label, kind: 'value', before: show(before), after: show(after) });
+  else
+    found.push({
+      path,
+      ...label,
+      kind: 'value',
+      before: show(before),
+      after: show(after),
+      ...optionNames(field, 'beforeLabels', before),
+      ...optionNames(field, 'afterLabels', after),
+    });
+}
+
+function optionNames<K extends 'beforeLabels' | 'afterLabels'>(
+  field: Field,
+  key: K,
+  value: unknown,
+): { [P in K]?: Labels } {
+  const named = field.type === 'select' && typeof value === 'string' && field.optionLabels?.[value];
+  if (!named) return {};
+  const names = Object.fromEntries(
+    UI_LOCALES.map((locale) => [locale, labelIn(named, locale) ?? String(value)]),
+  );
+  return { [key]: names } as { [P in K]?: Labels };
 }
 
 function propsIn(
@@ -213,7 +242,7 @@ function propsIn(
     if (picture && key === 'src')
       found.push({
         path: to,
-        ...joinedName(label, { label: under.map(humanise).join(' · ') }),
+        ...joinedName(label, propName(field, under)),
         kind: 'picture',
         ...(typeof was === 'string' ? { before: was } : {}),
         ...(typeof now === 'string' ? { after: now } : {}),
@@ -221,12 +250,42 @@ function propsIn(
     else
       found.push({
         path: to,
-        ...joinedName(label, { label: inner.map(humanise).join(' · ') }),
+        ...joinedName(label, propName(field, inner)),
         kind: 'value',
         before: show(was),
         after: show(now),
       });
   }
+}
+
+// The package's own sub-fields, named as the admin names them; core cannot read the UI messages.
+const PROP_NAMES: Record<string, Labels> = {
+  alt: { en: 'Alt text', de: 'Alternativtext' },
+  focal: { en: 'Focal point', de: 'Fokuspunkt' },
+};
+const PROP_NAMES_OF: Partial<Record<Field['type'], Record<string, Labels>>> = {
+  seo: {
+    title: { en: 'Search title', de: 'Suchtitel' },
+    description: { en: 'Description', de: 'Beschreibung' },
+    image: { en: 'Social image', de: 'Social-Media-Bild' },
+    noindex: { en: 'Hide from search engines', de: 'Vor Suchmaschinen verbergen' },
+    canonical: { en: 'Canonical URL', de: 'Kanonische URL' },
+  },
+  embed: { title: { en: 'Title', de: 'Titel' }, start: { en: 'Start at', de: 'Startzeit' } },
+  link: {
+    label: { en: 'Label', de: 'Beschriftung' },
+    newTab: { en: 'Open in a new tab', de: 'In neuem Tab öffnen' },
+  },
+};
+
+/** Property names under a structured field, in each language where the package knows them. */
+function propName(field: Field, keys: string[]): Named {
+  const known = keys.map((k) => PROP_NAMES_OF[field.type]?.[k] ?? PROP_NAMES[k]);
+  const label = (locale: 'en' | 'de' | undefined) =>
+    keys.map((k, i) => (locale && known[i]?.[locale]) || humanise(k)).join(' · ');
+  return known.some(Boolean)
+    ? { label: label('en'), labels: { en: label('en'), de: label('de') } }
+    : { label: label(undefined) };
 }
 
 /** Keyed by `_id` so a moved block says so; rows without one pair by position and never move. */

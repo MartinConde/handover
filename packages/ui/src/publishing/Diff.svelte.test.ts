@@ -190,3 +190,29 @@ test('a rich text change the words cannot show says what kind it was', () => {
     'Otherchanged',
   ]);
 });
+
+test('a select change reads its option names in the interface language', () => {
+  const body = show(
+    [
+      {
+        locale: 'en',
+        changes: [
+          {
+            path: 'status',
+            label: 'Status',
+            kind: 'value',
+            before: 'sale',
+            after: 'rent',
+            beforeLabels: { en: 'For sale', de: 'Zu verkaufen' },
+            afterLabels: { en: 'To rent', de: 'Zu vermieten' },
+          },
+        ],
+      },
+    ],
+    '',
+    'de',
+  );
+
+  expect(body.querySelector('del')?.textContent).toBe('Zu verkaufen');
+  expect(body.querySelector('ins')?.textContent).toBe('Zu vermieten');
+});

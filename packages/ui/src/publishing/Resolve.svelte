@@ -131,11 +131,17 @@ const said = (change: Change): string => {
         : m.conflict_row_changed({ change: change.at }, options);
   if (change.kind === 'value')
     return change.before === undefined
-      ? m.conflict_set_to({ value: String(change.after ?? '') }, options)
+      ? m.conflict_set_to(
+          { value: change.afterLabels?.[uiLocale] ?? String(change.after ?? '') },
+          options,
+        )
       : change.after === undefined
         ? m.conflict_cleared({}, options)
         : m.conflict_value_changed(
-            { before: String(change.before), after: String(change.after) },
+            {
+              before: change.beforeLabels?.[uiLocale] ?? String(change.before),
+              after: change.afterLabels?.[uiLocale] ?? String(change.after),
+            },
             options,
           );
   return m.conflict_rewritten({}, options);
@@ -144,7 +150,7 @@ const said = (change: Change): string => {
 
 <!-- What this side says, with what it added marked. -->
 {#snippet value(change: Change)}
-  {#if change.kind === 'value'}{change.after ?? m.conflict_empty({}, options)}
+  {#if change.kind === 'value'}{change.afterLabels?.[uiLocale] ?? change.after ?? m.conflict_empty({}, options)}
   {:else if change.kind === 'words'}{#each change.parts.filter((p) => p.mark !== 'del') as part}{#if part.mark === 'ins'}<ins
         >{part.text}</ins
       >{:else}{part.text}{/if}{/each}
@@ -226,7 +232,7 @@ const said = (change: Change): string => {
             {/if}
           </div>
           {#if q.base !== undefined}
-            <p class="base">{m.conflict_both_started({}, options)} <b>{q.base}</b></p>
+            <p class="base">{m.conflict_both_started({}, options)} <b>{(q.ours.kind === 'value' && q.ours.beforeLabels?.[uiLocale]) || q.base}</b></p>
           {/if}
           <fieldset class="sides">
             <legend class="visually-hidden">{m.conflict_which_to_keep({ label: q.labels?.[uiLocale] ?? q.label }, options)}</legend>
