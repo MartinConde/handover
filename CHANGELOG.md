@@ -8,7 +8,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   embed, SEO, link, lists) on a shared field level; the image card and the nested form are
   written once. The editor's field reveal, publish flow and entry lock sit in their own modules,
   its banners in their own component, and its repeated reload, feedback and request code is
-  written once.
+  written once. The entry session's path helpers and its undo history sit in their own modules,
+  and each list operation is its own function.
 - Internal: the admin's menus close on a click outside or Escape through one shared attachment, and
   its confirm dialogs and autosave status share one component each, and the new-entry label takes its
   fallback as an argument, instead of hand-written copies.
