@@ -1,7 +1,7 @@
 import { parse } from 'yaml';
 import type { ContentFile } from './entries.js';
 import { isObject, parseEntry } from './entry-format.js';
-import { entryAddress, entryPageUrl, entryUrl, type I18nRouting } from './names.js';
+import { entryAddress, entryUrl, type I18nRouting, pageOf } from './names.js';
 import { filterLive, isLive } from './reserved.js';
 import { humanise } from './schema.js';
 import { type Labels, labelsOf } from './ui-locale.js';
@@ -180,17 +180,7 @@ export async function getEntryLocales<C extends Record<string, unknown>>(
     site.i18n.locales.map(async (locale) => {
       const entry = await entryMetadata(source, collection, `${locale}/${slug}`);
       if (!entry || !isLive(siteId, entry.data)) return undefined;
-      const address = site.collections[collection]?.localizedSlugs
-        ? entryAddress(siteId, entry.data, slug)
-        : slug;
-      const url = entryPageUrl(
-        siteId,
-        site.i18n,
-        site.collections[collection],
-        slug,
-        address,
-        locale,
-      );
+      const { url } = pageOf(siteId, site.i18n, site.collections[collection], entry, slug, locale);
       return url ? { locale, url } : undefined;
     }),
   );
@@ -282,12 +272,10 @@ async function entryLinks<C extends Record<string, unknown>>(
     const name = entry.id.slice(locale.length + 1);
     // The index page's own copy is the item that lists these.
     if (of?.index && name === 'index') continue;
-    const address = of?.localizedSlugs ? entryAddress(siteId, entry.data, name) : name;
-    const url = entryPageUrl(siteId, site.i18n, of, name, address, locale);
+    const { url, title } = pageOf(siteId, site.i18n, of, entry, name, locale);
     if (!url) continue;
-    const titled = isObject(entry.data) ? entry.data[of?.titleField ?? 'title'] : undefined;
     links.push({
-      label: typeof titled === 'string' ? titled : name,
+      label: title,
       href: url,
       entry: { id: entry.id, data: entry.data },
       children: [],
@@ -334,10 +322,8 @@ async function href<C extends Record<string, unknown>>(
   const entry = await entryMetadata(source, collection as keyof C & string, `${locale}/${name}`);
   if (!entry || !isLive(siteId, entry.data)) return undefined;
   const of = site.collections[collection];
-  const address = of?.localizedSlugs ? entryAddress(siteId, entry.data, name) : name;
-  const url = entryPageUrl(siteId, site.i18n, of, name, address, locale);
-  const titled = isObject(entry.data) ? entry.data[of?.titleField ?? 'title'] : undefined;
-  return url ? { href: url, name: typeof titled === 'string' ? titled : name } : undefined;
+  const { url, title } = pageOf(siteId, site.i18n, of, entry, name, locale);
+  return url ? { href: url, name: title } : undefined;
 }
 
 /** With localized slugs a file whose `slug` moved is not served under its file name. */

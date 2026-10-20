@@ -1,3 +1,5 @@
+import { isObject } from './entry-format.js';
+
 // Letters NFD cannot reduce to ASCII; other scripts drop out and fall back to `untitled`.
 const LETTERS: Record<string, string> = {
   ä: 'ae',
@@ -215,6 +217,25 @@ export function entryPageUrl(
   return collection?.index && name === 'index'
     ? entryUrl(siteId, i18n, collection.index, '', locale)
     : entryUrl(siteId, i18n, collection?.route, address, locale);
+}
+
+/** Where an entry answers in this language, and the title a link to it carries. */
+export function pageOf(
+  siteId: string,
+  i18n: I18nRouting,
+  collection:
+    | { route?: string; index?: string; localizedSlugs?: boolean; titleField?: string }
+    | undefined,
+  entry: { data: unknown },
+  name: string,
+  locale: string,
+): { url: string | undefined; title: string } {
+  const address = collection?.localizedSlugs ? entryAddress(siteId, entry.data, name) : name;
+  const titled = isObject(entry.data) ? entry.data[collection?.titleField ?? 'title'] : undefined;
+  return {
+    url: entryPageUrl(siteId, i18n, collection, name, address, locale),
+    title: typeof titled === 'string' ? titled : name,
+  };
 }
 
 /** A path written the other way is a hop through the asset server's redirect. */
