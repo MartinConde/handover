@@ -139,6 +139,9 @@ let {
 } = $props();
 const options = $derived(messageOptions(uiLocale));
 const feedbackText = (message: UiMessage) => messageText(message, uiLocale);
+function reload() {
+  return onreload ? onreload() : onchanged();
+}
 
 // svelte-ignore state_referenced_locally -- the loaded files seed this opened entry's session
 const entryForm = { fields: [...entry.fields], blocks: entry.blocks };
@@ -153,7 +156,7 @@ const entrySession = createEntrySession({
   problems: { [entry.sourceLocale]: entry.problems },
   drift: entry.drift,
   onactivity: renew,
-  onreconciled: () => (onreload ? onreload() : onchanged()),
+  onreconciled: reload,
 });
 const data = $derived(entrySession.snapshot(entry.sourceLocale));
 const saveState = $derived(entrySession.saveState(entry.sourceLocale));
@@ -260,6 +263,7 @@ $effect(() => {
 
 // A site with one language draws none of the language controls.
 const many = $derived(entry.locales.length > 1);
+const drifted = $derived(entry.drift.length > 0);
 const others = $derived(entry.locales.filter((l) => l !== entry.sourceLocale));
 // The column beside the source language.
 const target = $derived(locale === entry.sourceLocale ? others[0] : locale);
@@ -514,7 +518,7 @@ async function createAll(fill: boolean) {
       if (report.failed?.unconfirmed) throw new TypeError('A language was not confirmed.');
       return Object.keys(report.done).length > 0;
     },
-    () => (onreload ? onreload() : onchanged()),
+    reload,
   );
   creatingAll = undefined;
   if (outcome.ok || outcome.reason === 'refused') return;
@@ -635,6 +639,7 @@ function renew() { entryLock.renew(); }
 const recheck = entryLock.recheck;
 const cancelTake = entryLock.cancelTake;
 const takeOver = entryLock.takeOver;
+const canPublish = $derived(dirty && !saving && !missing.length && !drifted && !locked && !actionBusy);
 
 entrySession.configureAutosave((of, snapshot, revision, contentVersion, structure) =>
   of === entry.sourceLocale
@@ -739,11 +744,10 @@ const warn = (event: BeforeUnloadEvent) => {
 };
 onMount(() => {
   const release = guardNavigation(flush);
-  const reloadAfterExternalAction = () => (onreload ? onreload() : onchanged());
   const releaseActions = guardEntryActions({
     key: `${collection}/${slug}`,
-    publish: (request) => entrySession.finalPublish(request, reloadAfterExternalAction),
-    replace: (request) => entrySession.authoritativeChange(request, reloadAfterExternalAction),
+    publish: (request) => entrySession.finalPublish(request, reload),
+    replace: (request) => entrySession.authoritativeChange(request, reload),
   });
   return () => {
     entrySession.closeSaveGate();
@@ -834,7 +838,7 @@ async function discardDraft() {
       if (!res.ok) actionFailed = await retainedFailure(res, 'PENDING_DISCARD_FAILED');
       return res.ok;
     },
-    () => (onreload ? onreload() : onchanged()),
+    reload,
   );
   discardBusy = false;
   if (outcome.ok) return;
@@ -849,7 +853,7 @@ const present = $derived(
 );
 const saveBroken = $derived(present.some((of) => entrySession.saveState(of).phase === 'failed'));
 const sourceBlocked = $derived(
-  entry.drift.length
+  drifted
     ? m.editor_change_source_drift({}, options)
     : saveBroken
       ? m.editor_change_source_unsaved({}, options)
@@ -895,7 +899,7 @@ async function changeSourceTo(to: string) {
       // Unconfirmed: this session stays closed and only the dialog's Reload goes on from here.
       if (outcome === 'uncertain') return;
       onsourcechanged?.(to);
-      await (onreload ? onreload() : onchanged());
+      await reload();
     },
   );
   sendingSource = false;
@@ -1244,7 +1248,7 @@ async function publishEntry() {
       if (res.ok) await onpublished?.(title);
       return res.ok;
     },
-    () => (onreload ? onreload() : onchanged()),
+    reload,
   );
   sending = false;
   if (outcome.ok) {
@@ -1462,6 +1466,8 @@ async function saveAddress() {
 />
 <svelte:document onvisibilitychange={recheck} />
 
+{#snippet feedback(message: UiMessage)}{feedbackText(message)} {messageDetail(message, uiLocale)}{/snippet}
+
 {#snippet languageMark(of: string)}
   {#if off(of)}<span class="visually-hidden"> — {m.editor_language_off_a11y({}, options)}</span>{:else if untranslated(of)}<span class="visually-hidden"> — {m.editor_language_untranslated_a11y({}, options)}</span><span class="mark is-empty" aria-hidden="true"></span>{:else if entry.stale.includes(of)}<span class="visually-hidden"> — {otherSource(of) ? m.editor_language_other_source_a11y({ language: language(otherSource(of) ?? ''), source: language(entry.sourceLocale) }, options) : m.editor_language_stale_a11y({ source: language(entry.sourceLocale) }, options)}</span><span class="mark" aria-hidden="true"></span>{:else if partial(of)}{@const count = partial(of)}<span class="visually-hidden"> — {m.editor_language_partial_a11y({ written: count?.written ?? 0, count: count?.of ?? 0 }, options)}</span><span class="mark is-partial" aria-hidden="true"></span>{/if}
 {/snippet}
@@ -1524,7 +1530,7 @@ async function saveAddress() {
 
 {#snippet canvasPublish()}
   <button class="btn btn-primary canvas-publish" type="button" aria-haspopup="dialog" aria-expanded={confirming}
-    disabled={!dirty || saving || missing.length > 0 || entry.drift.length > 0 || locked || actionBusy}
+    disabled={!canPublish}
     onclick={askToPublish} bind:this={canvasPublishButton}>{m.editor_publish_short({}, options)}</button>
 {/snippet}
 
@@ -1553,7 +1559,7 @@ async function saveAddress() {
             <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 5 10 10m0-10L5 15" /></svg>
           </button>
         </span>
-        {#if addressFailed}<span class="mode is-bad">{feedbackText(addressFailed)} {messageDetail(addressFailed, uiLocale)}</span>{/if}
+        {#if addressFailed}<span class="mode is-bad">{@render feedback(addressFailed)}</span>{/if}
       {:else}
         {#if addressable}
           <button
@@ -1592,10 +1598,10 @@ async function saveAddress() {
       type="button"
       aria-haspopup="dialog"
       aria-expanded={confirming}
-      disabled={!dirty || saving || missing.length > 0 || entry.drift.length > 0 || locked || actionBusy}
+      disabled={!canPublish}
       title={locked
         ? m.editor_publish_disabled_locked({}, options)
-        : entry.drift.length
+        : drifted
         ? m.editor_publish_disabled_drift({}, options)
         : missing.length
           ? m.editor_publish_disabled_missing({}, options)
@@ -1648,9 +1654,9 @@ async function saveAddress() {
 {/snippet}
 
 <main class={['main main-editor', { 'is-canvas-fullscreen': mode === 'canvas' }]} style:--entry-header-h={`calc(var(--topbar-stuck, 0px) + ${headerHeight}px)`}>
-  {#if actionFailed && !renaming && !deleting && !offing && !discarding}<p class="notice notice-danger" role="alert">{feedbackText(actionFailed)} {messageDetail(actionFailed, uiLocale)}</p>{/if}
-  {#if holdFailed}<p class="notice notice-danger" role="alert">{feedbackText(holdFailed)} {messageDetail(holdFailed, uiLocale)}</p>{/if}
-  {#if saveError}<p class="notice notice-danger" role="alert">{feedbackText(saveError)} {messageDetail(saveError, uiLocale)} <button class="btn-link" type="button" onclick={() => flush()}>{m.editor_save_retry({}, options)}</button></p>{/if}
+  {#if actionFailed && !renaming && !deleting && !offing && !discarding}<p class="notice notice-danger" role="alert">{@render feedback(actionFailed)}</p>{/if}
+  {#if holdFailed}<p class="notice notice-danger" role="alert">{@render feedback(holdFailed)}</p>{/if}
+  {#if saveError}<p class="notice notice-danger" role="alert">{@render feedback(saveError)} <button class="btn-link" type="button" onclick={() => flush()}>{m.editor_save_retry({}, options)}</button></p>{/if}
   {#each entry.offerProblems ?? [] as problem (problem)}
     <div class="lock-banner is-offer">{m.editor_offer_problem({ problem }, options)}</div>
   {/each}
@@ -1664,7 +1670,7 @@ async function saveAddress() {
       {:else}
         {m.editor_lock_lost_taken_anonymous({}, options)}
       {/if}
-      <button class="btn-link" type="button" onclick={() => void (onreload ? onreload() : onchanged())}>{m.editor_lock_reload({}, options)}</button>
+      <button class="btn-link" type="button" onclick={() => void reload()}>{m.editor_lock_reload({}, options)}</button>
     </div>
   {:else if locked}
     <div class="lock-banner">
@@ -1685,23 +1691,23 @@ async function saveAddress() {
         <button class="btn-link" type="button" bind:this={takeTrigger} onclick={entryLock.openTake}>{m.editor_lock_take_over({}, options)}</button>
       {:else}
         {m.editor_lock_nobody({}, options)}
-        <button class="btn-link" type="button" onclick={() => void (onreload ? onreload() : onchanged())}>{m.editor_lock_reload({}, options)}</button>
+        <button class="btn-link" type="button" onclick={() => void reload()}>{m.editor_lock_reload({}, options)}</button>
       {/if}
     </div>
   {/if}
   {#if restored && entry.pending.length}
     <!-- The restore is over by the time this draws, so this is what says what just happened. -->
-    <div class={['lock-banner', { 'is-drift': entry.drift.length > 0 }]} role="status">
+    <div class={['lock-banner', { 'is-drift': drifted }]} role="status">
       <span>
         <b>{m.editor_restored_version({ date: when(Date.parse(restored)).toLowerCase() }, options)}</b>
-        {#if entry.drift.length}
+        {#if drifted}
           {m.editor_restored_drift({}, options)}
         {:else}
           {m.editor_restored_unpublished({}, options)}
         {/if}
       </span>
     </div>
-  {:else if entry.drift.length}
+  {:else if drifted}
     <div class="lock-banner is-drift">{m.editor_drift_blocked({}, options)}</div>
   {:else if sourceChanged === entry.sourceLocale && entry.pending.length}
     <div class="lock-banner" role="status">{m.editor_source_changed({ language: language(entry.sourceLocale) }, options)}</div>
@@ -1714,7 +1720,7 @@ async function saveAddress() {
         {/each}
       </ul>
       {#if createdAll.failed && !(createdAll.failed.unconfirmed && !reportedHere)}
-        <p>{feedbackText(createdAll.failed.message)} {messageDetail(createdAll.failed.message, uiLocale)}</p>
+        <p>{@render feedback(createdAll.failed.message)}</p>
       {/if}
       <button class="btn-link" type="button" onclick={() => oncreatedall?.(undefined)}>{m.editor_created_all_dismiss({}, options)}</button>
     </div>
@@ -1744,7 +1750,7 @@ async function saveAddress() {
         {#if hiddenRedirect}{m.editor_hidden_redirecting({ address: hiddenRedirect }, options)}{:else}{m.editor_hidden_not_found({}, options)}{/if}
       </p>
     {/if}
-    {#if statusFailed}<p class="subline is-bad" role="alert">{feedbackText(statusFailed)} {messageDetail(statusFailed, uiLocale)}</p>{/if}
+    {#if statusFailed}<p class="subline is-bad" role="alert">{@render feedback(statusFailed)}</p>{/if}
     <div class="workspace-toolbar">
       <div class="toolbar-start">
         <!-- A global has no SEO or versions of its own: no dead section controls. -->
@@ -1792,13 +1798,13 @@ async function saveAddress() {
                   class={{ 'btn-sbs': of === 'language' }}
                   title={label}
                   aria-pressed={beside === of && mode !== 'canvas'}
-                  disabled={entry.drift.length > 0}
+                  disabled={drifted}
                   onclick={() => leaving(() => (of === 'page' && beside === 'page' ? collapse() : setBeside(!pageShown && side && of === 'language' ? 'none' : of)))}
                 ><svg class="workspace-icon" viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="3" width="14" height="14" rx="2" />{#if of === 'page'}<path d="M9 3v14M12 7h2M12 10h2" />{:else}<path d="M10 3v14M5 7h2M13 7h2M5 10h2M13 10h2" />{/if}</svg><span class="visually-hidden">{label}</span></button>
               {/each}
             {/if}
             {#if !entry.singleton && canvasSupported}
-              <button class="canvas-open" type="button" title={m.editor_view_canvas({}, options)} disabled={entry.drift.length > 0} onclick={() => setCanvas(true)}><svg class="workspace-icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M7.5 3H3v4.5M12.5 3H17v4.5M7.5 17H3v-4.5M12.5 17H17v-4.5" /></svg><span class="visually-hidden">{m.editor_view_canvas({}, options)}</span></button>
+              <button class="canvas-open" type="button" title={m.editor_view_canvas({}, options)} disabled={drifted} onclick={() => setCanvas(true)}><svg class="workspace-icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M7.5 3H3v4.5M12.5 3H17v4.5M7.5 17H3v-4.5M12.5 17H17v-4.5" /></svg><span class="visually-hidden">{m.editor_view_canvas({}, options)}</span></button>
             {/if}
           </div>
         {/if}
@@ -1819,7 +1825,7 @@ async function saveAddress() {
         // The old session is already closed, so this authoritative replacement bypasses its
         // navigation guard and lands on Content before the parent re-reads every locale.
         navigateAfterAuthoritativeChange(`/admin/c/${collection}/${slug}${queueTail}`);
-        await (onreload ? onreload() : onchanged());
+        await reload();
       }}
     />
   {:else}
@@ -1828,14 +1834,14 @@ async function saveAddress() {
     class={[
       'entry-body',
       {
-        'has-pane': !entry.drift.length && (mode === 'split' || (mode === 'form' && !alone && shown !== undefined)),
+        'has-pane': !drifted && (mode === 'split' || (mode === 'form' && !alone && shown !== undefined)),
         'is-canvas': mode === 'canvas',
         'is-split': mode === 'split',
         'is-full': pageShown && beside === 'none' && !alone,
       },
     ]}
   >
-    {#if entry.drift.length}
+    {#if drifted}
       <DriftPanel
         {collection}
         {slug}
@@ -1947,18 +1953,18 @@ async function saveAddress() {
               </div>
             {/if}
             {#if actionFailed}
-              <div class="notice notice-danger" role="alert">{feedbackText(actionFailed)} {messageDetail(actionFailed, uiLocale)}</div>
+              <div class="notice notice-danger" role="alert">{@render feedback(actionFailed)}</div>
             {/if}
             {#if createAllFailure}
               <div class="notice notice-danger" role="alert">
                 {feedbackText(createAllFailure)}
                 {#if createAllFailure.code === 'CREATE_ALL_RELOAD_FAILED'}
-                  <button class="btn-link" type="button" onclick={() => void (onreload ? onreload() : onchanged())}>{m.editor_lock_reload({}, options)}</button>
+                  <button class="btn-link" type="button" onclick={() => void reload()}>{m.editor_lock_reload({}, options)}</button>
                 {/if}
               </div>
             {/if}
             {#if localeFailure?.locale === shown}
-              <div class="notice notice-danger" role="alert">{feedbackText(localeFailure.message)} {messageDetail(localeFailure.message, uiLocale)}</div>
+              <div class="notice notice-danger" role="alert">{@render feedback(localeFailure.message)}</div>
             {/if}
           </div>
         </section>
@@ -2092,7 +2098,7 @@ async function saveAddress() {
       returnTo={actionTrigger}
       onconfirm={changeSourceTo}
       onclose={() => (changingSource = false)}
-      onreload={() => void (onreload ? onreload() : onchanged())}
+      onreload={() => void reload()}
     />
   {/if}
   {#if renaming}
@@ -2106,7 +2112,7 @@ async function saveAddress() {
               {m.entry_list_saved_as({}, options)} <span class="filename">{willBe}</span>. {m.entry_list_rename_hint({}, options)}
             </p>
           </div>
-          {#if actionFailed}<div class="notice notice-danger" role="alert">{feedbackText(actionFailed)} {messageDetail(actionFailed, uiLocale)}</div>{/if}
+          {#if actionFailed}<div class="notice notice-danger" role="alert">{@render feedback(actionFailed)}</div>{/if}
           <div class="actions">
             <button class="btn" type="button" disabled={busy} onclick={() => (renaming = false)}>{m.common_cancel({}, options)}</button>
             <button class="btn btn-primary" type="submit" disabled={busy}>{busy ? m.entry_list_renaming({}, options) : m.editor_rename({}, options)}</button>
@@ -2133,7 +2139,7 @@ async function saveAddress() {
     <Modal labelledby="discard-h" returnTo={actionTrigger} dismissible={!discardBusy} onclose={() => (discarding = false)}>
         <h2 id="discard-h">{m.pending_discard_question({ title }, options)}</h2>
         <p>{entry.published.length ? m.pending_discard_explanation({}, options) : m.pending_discard_created({}, options)}</p>
-        {#if actionFailed}<div class="notice notice-danger" role="alert">{feedbackText(actionFailed)} {messageDetail(actionFailed, uiLocale)}</div>{/if}
+        {#if actionFailed}<div class="notice notice-danger" role="alert">{@render feedback(actionFailed)}</div>{/if}
         <div class="actions">
           <button class="btn" type="button" disabled={discardBusy} onclick={() => (discarding = false)}>{m.common_cancel({}, options)}</button>
           <button class="btn btn-danger" type="button" disabled={discardBusy} onclick={discardDraft}>
@@ -2168,7 +2174,7 @@ async function saveAddress() {
           ? m.editor_lock_take_shared({ holder: holderName }, options)
           : m.editor_lock_take_shared_anonymous({}, options)}</p>
         <p>{m.editor_lock_take_refusal({}, options)}</p>
-        {#if lockFailed}<p class="notice notice-danger" role="alert">{feedbackText(lockFailed)} {messageDetail(lockFailed, uiLocale)}</p>{/if}
+        {#if lockFailed}<p class="notice notice-danger" role="alert">{@render feedback(lockFailed)}</p>{/if}
         <div class="actions">
           <button class="btn" type="button" disabled={takeBusy} onclick={cancelTake}>{m.common_cancel({}, options)}</button>
           <button class="btn btn-primary" type="button" disabled={takeBusy} onclick={takeOver}>{m.editor_lock_take_over({}, options)}</button>
