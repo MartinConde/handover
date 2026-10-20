@@ -18,16 +18,19 @@ const target: CanvasTarget = {
   },
 };
 
+const occurrence = target.occurrence;
+if (!occurrence) throw new Error('fixture needs an occurrence');
+
 const reordered: CanvasTarget = {
   address: target.address,
   locale: target.locale,
   document: { id: target.document.id, collection: target.document.collection },
   occurrence: {
-    address: target.occurrence!.address,
-    locale: target.occurrence!.locale,
+    address: occurrence.address,
+    locale: occurrence.locale,
     document: {
-      id: target.occurrence!.document.id,
-      collection: target.occurrence!.document.collection,
+      id: occurrence.document.id,
+      collection: occurrence.document.collection,
     },
   },
 };
@@ -49,16 +52,13 @@ test.each([
     {
       ...target,
       occurrence: {
-        ...target.occurrence!,
-        document: { ...target.occurrence!.document, id: 'footer' },
+        ...occurrence,
+        document: { ...occurrence.document, id: 'footer' },
       },
     },
   ],
-  ['occurrence locale', { ...target, occurrence: { ...target.occurrence!, locale: 'de' } }],
-  [
-    'occurrence address',
-    { ...target, occurrence: { ...target.occurrence!, address: 'items[_id=about]' } },
-  ],
+  ['occurrence locale', { ...target, occurrence: { ...occurrence, locale: 'de' } }],
+  ['occurrence address', { ...target, occurrence: { ...occurrence, address: 'items[_id=about]' } }],
   ['missing occurrence', { ...target, occurrence: undefined }],
 ] satisfies [string, CanvasTarget][])('keeps a different %s distinct', (_label, other) => {
   expect(sameCanvasTarget(target, other)).toBe(false);

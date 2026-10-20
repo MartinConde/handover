@@ -76,6 +76,11 @@ afterEach(() => {
 });
 
 const q = <T extends Element>(root: ParentNode, sel: string) => root.querySelector<T>(sel);
+const must = <T extends Element>(root: ParentNode, sel: string) => {
+  const found = q<T>(root, sel);
+  if (!found) throw new Error(`no element matches ${sel}`);
+  return found;
+};
 const boxes = (root: ParentNode) =>
   Array.from(root.querySelectorAll<HTMLInputElement>('.change-row .lead input'));
 const tick = () => new Promise((r) => setTimeout(r, 0));
@@ -1219,9 +1224,9 @@ test('closing keeps the drawer mounted until its exit animation finishes, then c
   const root = show();
   const done = deferred<void>();
   const animate = vi.fn(() => ({ finished: done.promise, cancel: vi.fn() }));
-  const panel = root.querySelector<HTMLElement>('.drawer')!;
+  const panel = must<HTMLElement>(root, '.drawer');
   Object.defineProperty(panel, 'animate', { value: animate, configurable: true });
-  const close = root.querySelector<HTMLButtonElement>('[aria-label="Close"]')!;
+  const close = must<HTMLButtonElement>(root, '[aria-label="Close"]');
   close.click();
   close.click();
   flushSync();
@@ -1237,10 +1242,10 @@ test('closing keeps the drawer mounted until its exit animation finishes, then c
 test('reduced motion closes immediately without animating', () => {
   vi.stubGlobal('matchMedia', () => ({ matches: true }));
   const root = show();
-  const panel = root.querySelector<HTMLElement>('.drawer')!;
+  const panel = must<HTMLElement>(root, '.drawer');
   const animate = vi.fn();
   Object.defineProperty(panel, 'animate', { value: animate, configurable: true });
-  root.querySelector<HTMLButtonElement>('[aria-label="Close"]')!.click();
+  must<HTMLButtonElement>(root, '[aria-label="Close"]').click();
   expect(animate).not.toHaveBeenCalled();
   expect(closed).toHaveBeenCalledTimes(1);
 });

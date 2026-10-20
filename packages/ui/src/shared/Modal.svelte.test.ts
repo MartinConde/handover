@@ -5,6 +5,12 @@ import ModalFixture from './Modal.fixture.svelte';
 let app: ReturnType<typeof mount>;
 afterEach(() => unmount(app));
 
+function must<T extends Element>(selector: string): T {
+  const found = document.querySelector<T>(selector);
+  if (!found) throw new Error(`no element matches ${selector}`);
+  return found;
+}
+
 function clickOverlay(element: Element) {
   element.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
   element.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -16,12 +22,12 @@ test.each(['dialog', 'sheet'])(
   (panelClass) => {
     app = mount(ModalFixture, { target: document.body, props: { panelClass } });
     flushSync();
-    const opener = document.querySelector<HTMLButtonElement>('button')!;
+    const opener = must<HTMLButtonElement>('button');
     opener.focus();
     opener.click();
     flushSync();
 
-    clickOverlay(document.querySelector('.modal-scrim')!);
+    clickOverlay(must('.modal-scrim'));
 
     expect(document.querySelector('dialog')).toBeNull();
     expect(document.activeElement).toBe(opener);
@@ -31,10 +37,10 @@ test.each(['dialog', 'sheet'])(
 test('a busy modal keeps its boundary when its overlay is clicked', () => {
   app = mount(ModalFixture, { target: document.body, props: { dismissible: false } });
   flushSync();
-  document.querySelector<HTMLButtonElement>('button')!.click();
+  must<HTMLButtonElement>('button').click();
   flushSync();
 
-  clickOverlay(document.querySelector('.modal-scrim')!);
+  clickOverlay(must('.modal-scrim'));
 
   expect(document.querySelector('dialog')?.getAttribute('aria-labelledby')).toBe('modal-title');
 });
@@ -42,11 +48,11 @@ test('a busy modal keeps its boundary when its overlay is clicked', () => {
 test('a pointer gesture starting inside the panel does not dismiss it outside', () => {
   app = mount(ModalFixture, { target: document.body });
   flushSync();
-  document.querySelector<HTMLButtonElement>('button')!.click();
+  must<HTMLButtonElement>('button').click();
   flushSync();
 
-  document.querySelector('h2')!.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
-  document.querySelector('.modal-scrim')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  must('h2').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+  must('.modal-scrim').dispatchEvent(new MouseEvent('click', { bubbles: true }));
   flushSync();
 
   expect(document.querySelector('dialog')?.getAttribute('aria-labelledby')).toBe('modal-title');
@@ -55,15 +61,16 @@ test('a pointer gesture starting inside the panel does not dismiss it outside', 
 test('overlay dismissal acts only on the topmost modal', () => {
   app = mount(ModalFixture, { target: document.body });
   flushSync();
-  document.querySelector<HTMLButtonElement>('button')!.click();
+  must<HTMLButtonElement>('button').click();
   flushSync();
-  document.querySelector<HTMLButtonElement>('dialog button')!.click();
+  must<HTMLButtonElement>('dialog button').click();
   flushSync();
-  const overlays = document.querySelectorAll('.modal-scrim');
+  const [first, second] = Array.from(document.querySelectorAll('.modal-scrim'));
+  if (!first || !second) throw new Error('expected two overlays');
 
-  clickOverlay(overlays[0]!);
+  clickOverlay(first);
   expect(document.querySelectorAll('dialog')).toHaveLength(2);
-  clickOverlay(overlays[1]!);
+  clickOverlay(second);
 
   expect(document.querySelectorAll('dialog')).toHaveLength(1);
   expect(document.querySelector('dialog')?.getAttribute('aria-labelledby')).toBe('modal-title');
