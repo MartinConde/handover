@@ -329,7 +329,7 @@ let rendered: Promise<string> | undefined;
 
 /** `GATE`'s policy for a rendered draft, with Astro's and the site's own scripts allowed by hash. */
 export function renderedPolicy(siteScripts: string[]): Promise<string> {
-  // The site's scripts are fixed at build, so the first call's list is every call's.
+  // The one caller passes the build-time `scripts` import, so a worker only ever sees one list.
   rendered ??= Promise.all(
     [...ASTRO_SCRIPTS, ...siteScripts].map(async (script) => {
       const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(script));
