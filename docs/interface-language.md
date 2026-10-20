@@ -162,6 +162,13 @@ authentication codes select specific recovery text. Unknown technical detail sta
 the translated summary where it is useful and safe to show. In particular, an entry read uses the
 specific not-found message only when the response carries `x-handover-error-code:
 ENTRY_NOT_FOUND`; an unidentified `404` keeps the generic localized load summary and status.
+Account refusals from Better Auth — an invalid email, an unknown account, an email not yet
+verified, an email change that is unavailable, a failed update, a password that is already set and
+an expired session — read in the interface language, chosen by the `code` Better Auth sends. Its
+rate limiter answers `429` with a message and no `code`; the admin reads any `429` without one as
+`RESOURCE_LIMIT`. The responses themselves are unchanged. A Settings check that the provider
+refused or the site never set up shows a localized sentence first, and the provider's own sentence
+after it as *Technical detail*.
 A failed entry read offers **Retry**, which reads the entry again; *No such entry* offers none,
 because reading again cannot change it.
 

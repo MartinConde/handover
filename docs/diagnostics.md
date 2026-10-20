@@ -37,14 +37,14 @@ site has nothing to translate into and says so.
 A failing row opens by itself, so its reason is visible without a click. A check whose thing the
 site never configured reads **Not in use** rather than failing: a site
 with no `DEEPL_API_KEY` is not broken. A check that was configured and refused reads **Not
-working**, and its result line is the refusal itself — `RESEND_API_KEY is not set: …`, the
-bucket's own status, the sentence naming the four R2 values. That is the wording to send to
-whoever holds the credentials.
+working**. Its result line says so in the interface language, followed by *Technical detail:*
+and the refusal itself — `RESEND_API_KEY is not set: …`, the bucket's own status, the sentence
+naming the four R2 values. That detail is the wording to send to whoever holds the credentials.
 
 Those two states come from stable response codes, not from treating every `502` or `503` as the
 same cause. Known successful and optional-off results are formatted by the browser in the current
-interface language. A service refusal or configuration detail stays verbatim so a translated
-summary cannot obscure the value that needs fixing.
+interface language. A service refusal or configuration detail stays verbatim, after the translated
+sentence, so the summary cannot obscure the value that needs fixing.
 
 ## Translation and AI
 
