@@ -27,6 +27,7 @@ import {
   resolveStagedBlockIndex,
   type StagedBlockTarget,
 } from './canvas-commands.svelte';
+import { createCanvasPanels, PANEL_WIDTHS } from './canvas-panels.svelte';
 import type {
   CanvasRendererState,
   CanvasRenderRequest,
@@ -42,14 +43,6 @@ import StructureTree from './StructureTree.svelte';
 
 type Renderer = ReturnType<typeof createCanvasRenderer>;
 type Width = 'desktop' | 'tablet' | 'phone';
-type ResizablePanel = 'structure' | 'inspector';
-
-const PANEL_WIDTHS = {
-  structure: { default: 250, min: 210, max: 420 },
-  inspector: { default: 380, min: 320, max: 640 },
-} as const;
-const PANEL_WIDTH_STORAGE = 'handover.canvas.panel-widths';
-const MIN_CANVAS_WIDTH = 360;
 const treeDomId = $props.id();
 
 let {
@@ -118,7 +111,6 @@ let renderer: Renderer | undefined;
 let rendererState = $state.raw<CanvasRendererState>({ phase: 'idle' });
 let width = $state<Width>('desktop');
 let structureOpen = $state(false);
-let structureWidth = $state<number>(PANEL_WIDTHS.structure.default);
 let initializedPanels = false;
 $effect(() => {
   if (active && fullscreen && !initializedPanels) {
@@ -149,13 +141,6 @@ $effect(() => {
   const next = fullscreen ? 'edit' : 'select';
   untrack(() => setInteractionMode(next));
 });
-let inspectorWidth = $state<number>(PANEL_WIDTHS.inspector.default);
-let resizing = $state<{
-  panel: ResizablePanel;
-  pointerId: number;
-  startX: number;
-  startWidth: number;
-}>();
 const incomplete = $derived(session.incompleteFields(locale, uiLocale));
 const incompletePaths = $derived(Object.keys(incomplete));
 const issues = $derived(Object.entries({ ...incomplete, ...problems }));
@@ -426,107 +411,11 @@ function toggleInspector() {
   inspectorOpen = !inspectorOpen;
 }
 
-const clamp = (value: number, minimum: number, maximum: number) =>
-  Math.min(Math.max(value, minimum), maximum);
-
-function panelMaximum(panel: ResizablePanel) {
-  const available = workspace?.clientWidth ?? window.innerWidth;
-  const other =
-    panel === 'structure'
-      ? inspectorOpen
-        ? inspectorWidth
-        : 0
-      : structureVisible
-        ? structureWidth
-        : 0;
-  return Math.max(
-    PANEL_WIDTHS[panel].min,
-    Math.min(PANEL_WIDTHS[panel].max, available - other - MIN_CANVAS_WIDTH),
-  );
-}
-
-function setPanelWidth(panel: ResizablePanel, value: number) {
-  const width = Math.round(clamp(value, PANEL_WIDTHS[panel].min, panelMaximum(panel)));
-  if (panel === 'structure') structureWidth = width;
-  else inspectorWidth = width;
-}
-
-function storePanelWidths() {
-  try {
-    localStorage.setItem(
-      PANEL_WIDTH_STORAGE,
-      JSON.stringify({ structure: structureWidth, inspector: inspectorWidth }),
-    );
-  } catch {
-    // Private browsing can disable storage; resizing still works for the current session.
-  }
-}
-
-function beginPanelResize(panel: ResizablePanel, event: PointerEvent) {
-  if (narrow || event.button !== 0) return;
-  event.preventDefault();
-  const handle = event.currentTarget as HTMLElement;
-  handle.setPointerCapture(event.pointerId);
-  resizing = {
-    panel,
-    pointerId: event.pointerId,
-    startX: event.clientX,
-    startWidth: panel === 'structure' ? structureWidth : inspectorWidth,
-  };
-}
-
-function continuePanelResize(event: PointerEvent) {
-  const activeResize = resizing;
-  if (!activeResize || activeResize.pointerId !== event.pointerId) return;
-  const movement = event.clientX - activeResize.startX;
-  setPanelWidth(
-    activeResize.panel,
-    activeResize.startWidth + (activeResize.panel === 'structure' ? movement : -movement),
-  );
-}
-
-function finishPanelResize(event: PointerEvent) {
-  if (!resizing || resizing.pointerId !== event.pointerId) return;
-  const handle = event.currentTarget as HTMLElement;
-  if (handle.hasPointerCapture(event.pointerId)) handle.releasePointerCapture(event.pointerId);
-  resizing = undefined;
-  storePanelWidths();
-}
-
-function resizePanelWithKeyboard(panel: ResizablePanel, event: KeyboardEvent) {
-  if (event.key === 'Home' || event.key === 'End') {
-    event.preventDefault();
-    setPanelWidth(panel, event.key === 'Home' ? PANEL_WIDTHS[panel].min : panelMaximum(panel));
-    storePanelWidths();
-    return;
-  }
-  if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
-  event.preventDefault();
-  const movement = event.key === 'ArrowRight' ? 16 : -16;
-  const current = panel === 'structure' ? structureWidth : inspectorWidth;
-  setPanelWidth(panel, current + (panel === 'structure' ? movement : -movement));
-  storePanelWidths();
-}
-
-function resetPanelWidth(panel: ResizablePanel) {
-  setPanelWidth(panel, PANEL_WIDTHS[panel].default);
-  storePanelWidths();
-}
-
-// A saved wide-screen preference must not squeeze the Canvas out when a smaller desktop opens
-// both panels. Reduce the Inspector first, then Structure, while keeping both usable.
-$effect(() => {
-  if (narrow || !workspace || !structureVisible || !inspectorOpen) return;
-  const available = workspace.clientWidth - MIN_CANVAS_WIDTH;
-  if (structureWidth + inspectorWidth <= available) return;
-  inspectorWidth = Math.max(
-    PANEL_WIDTHS.inspector.min,
-    Math.min(inspectorWidth, available - structureWidth),
-  );
-  structureWidth = Math.max(
-    PANEL_WIDTHS.structure.min,
-    Math.min(structureWidth, available - inspectorWidth),
-  );
+const panels = createCanvasPanels({
+  workspace: () => workspace,
+  narrow: () => narrow,
+  structureVisible: () => structureVisible,
+  inspectorOpen: () => inspectorOpen,
 });
 
 function selectionChanged(next: CanvasSelection | undefined, reason?: 'restore') {
@@ -948,16 +837,7 @@ function bootstrapRenderer() {
 }
 
 onMount(() => {
-  try {
-    const stored = JSON.parse(localStorage.getItem(PANEL_WIDTH_STORAGE) ?? '{}') as Record<
-      string,
-      unknown
-    >;
-    if (typeof stored.structure === 'number') setPanelWidth('structure', stored.structure);
-    if (typeof stored.inspector === 'number') setPanelWidth('inspector', stored.inspector);
-  } catch {
-    // Ignore malformed or unavailable local storage and keep the considered defaults.
-  }
+  panels.restore();
   const resize = new ResizeObserver(fitWorkspace);
   if (workspace) resize.observe(workspace);
   const header = workspace?.closest('.main-editor')?.querySelector('.entry-header');
@@ -1133,9 +1013,9 @@ onMount(() => {
   <div
     class={[
       'canvas-workarea',
-      { 'has-structure': structureVisible, 'has-inspector': inspectorOpen, 'is-resizing': !!resizing },
+      { 'has-structure': structureVisible, 'has-inspector': inspectorOpen, 'is-resizing': !!panels.resizing },
     ]}
-    style={`--canvas-structure-width:${structureWidth}px;--canvas-inspector-width:${inspectorWidth}px`}
+    style={`--canvas-structure-width:${panels.structureWidth}px;--canvas-inspector-width:${panels.inspectorWidth}px`}
   >
     <div class={['canvas-panel-slot canvas-structure-slot', { 'is-open': structureVisible }]} aria-hidden={!structureVisible} inert={!structureVisible}>
       <aside class={['canvas-structure', { 'is-block-editor': !!blockEditor }]} id="canvas-structure" aria-labelledby="canvas-structure-title">
@@ -1182,22 +1062,22 @@ onMount(() => {
       {#if structureVisible && !narrow}
         <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -- ARIA's adjustable separator pattern is keyboard interactive. -->
         <div
-          class={['canvas-panel-resizer canvas-structure-resizer', { 'is-active': resizing?.panel === 'structure' }]}
+          class={['canvas-panel-resizer canvas-structure-resizer', { 'is-active': panels.resizing?.panel === 'structure' }]}
           role="separator"
           aria-label={m.canvas_resize_structure({}, options)}
           aria-orientation="vertical"
           aria-valuemin={PANEL_WIDTHS.structure.min}
-          aria-valuemax={panelMaximum('structure')}
-          aria-valuenow={structureWidth}
-          aria-valuetext={m.canvas_pixels({ count: structureWidth }, options)}
+          aria-valuemax={panels.maximum('structure')}
+          aria-valuenow={panels.structureWidth}
+          aria-valuetext={m.canvas_pixels({ count: panels.structureWidth }, options)}
           tabindex="0"
           title={m.canvas_resize_hint({}, options)}
-          onpointerdown={(event) => beginPanelResize('structure', event)}
-          onpointermove={continuePanelResize}
-          onpointerup={finishPanelResize}
-          onpointercancel={finishPanelResize}
-          onkeydown={(event) => resizePanelWithKeyboard('structure', event)}
-          ondblclick={() => resetPanelWidth('structure')}
+          onpointerdown={(event) => panels.beginResize('structure', event)}
+          onpointermove={panels.continueResize}
+          onpointerup={panels.finishResize}
+          onpointercancel={panels.finishResize}
+          onkeydown={(event) => panels.resizeWithKeyboard('structure', event)}
+          ondblclick={() => panels.reset('structure')}
         ></div>
       {/if}
     </div>
@@ -1209,22 +1089,22 @@ onMount(() => {
         {#if !narrow}
           <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -- ARIA's adjustable separator pattern is keyboard interactive. -->
           <div
-            class={['canvas-panel-resizer canvas-inspector-resizer', { 'is-active': resizing?.panel === 'inspector' }]}
+            class={['canvas-panel-resizer canvas-inspector-resizer', { 'is-active': panels.resizing?.panel === 'inspector' }]}
             role="separator"
             aria-label={m.canvas_resize_inspector({}, options)}
             aria-orientation="vertical"
             aria-valuemin={PANEL_WIDTHS.inspector.min}
-            aria-valuemax={panelMaximum('inspector')}
-            aria-valuenow={inspectorWidth}
-            aria-valuetext={m.canvas_pixels({ count: inspectorWidth }, options)}
+            aria-valuemax={panels.maximum('inspector')}
+            aria-valuenow={panels.inspectorWidth}
+            aria-valuetext={m.canvas_pixels({ count: panels.inspectorWidth }, options)}
             tabindex="0"
             title={m.canvas_resize_hint({}, options)}
-            onpointerdown={(event) => beginPanelResize('inspector', event)}
-            onpointermove={continuePanelResize}
-            onpointerup={finishPanelResize}
-            onpointercancel={finishPanelResize}
-            onkeydown={(event) => resizePanelWithKeyboard('inspector', event)}
-            ondblclick={() => resetPanelWidth('inspector')}
+            onpointerdown={(event) => panels.beginResize('inspector', event)}
+            onpointermove={panels.continueResize}
+            onpointerup={panels.finishResize}
+            onpointercancel={panels.finishResize}
+            onkeydown={(event) => panels.resizeWithKeyboard('inspector', event)}
+            ondblclick={() => panels.reset('inspector')}
           ></div>
         {/if}
         <div class="canvas-inspector-motion" transition:fly={{ x: 20, duration: 200, easing: cubicOut }}>
