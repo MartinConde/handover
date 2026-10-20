@@ -30,7 +30,7 @@ import {
   translationSource,
   unresolvedSource,
 } from '../content.js';
-import { codedError, notFound } from '../respond.js';
+import { notFound } from '../respond.js';
 
 /** One lock per entry: `read` never takes it, `beat` extends ours, `take` moves it. */
 export async function lockState(
@@ -340,18 +340,8 @@ export async function autosave(
       body.revision,
     );
   } catch (err) {
-    if (err instanceof DraftRevisionError || isDraftRace(err))
-      return Response.json(
-        { error: new DraftRevisionError().message, reason: 'revision' },
-        { status: 409 },
-      );
-    if (isMediaRace(err))
-      return codedError(
-        409,
-        'MEDIA_UNAVAILABLE',
-        'That media item is being deleted. Choose another file before saving.',
-        { reason: 'media' },
-      );
+    // `answering` has the 409s for these.
+    if (err instanceof DraftRevisionError || isDraftRace(err) || isMediaRace(err)) throw err;
     // A shape the serialiser cannot write (a nested array) is refused with its reason.
     return new Response(err instanceof Error ? err.message : 'Bad request', { status: 400 });
   }
