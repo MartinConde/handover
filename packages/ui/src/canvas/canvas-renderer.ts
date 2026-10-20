@@ -44,13 +44,7 @@ interface CanvasInteractionState {
   dragging: boolean;
 }
 
-type CanvasRenderFailure =
-  | 'bootstrap'
-  | 'disposed'
-  | 'render'
-  | 'stale'
-  | 'superseded'
-  | 'timeout';
+type CanvasRenderFailure = 'bootstrap' | 'disposed' | 'render' | 'stale' | 'superseded' | 'timeout';
 
 type CanvasRenderResult =
   | { ok: true; requestId: string; contentVersion: number }

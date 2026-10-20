@@ -170,11 +170,7 @@ type CanvasTransportRefusal =
   | 'not-ready'
   | 'protocol'
   | `stale-${'document' | 'epoch' | 'locale' | 'request' | 'target' | 'version'}`;
-type CanvasCommandRefusal =
-  | CanvasTransportRefusal
-  | FieldCommandFailure
-  | 'empty'
-  | 'frozen';
+type CanvasCommandRefusal = CanvasTransportRefusal | FieldCommandFailure | 'empty' | 'frozen';
 export type CanvasCommandResult =
   | { ok: true; contentVersion: number; update?: CanvasTextUpdate }
   | { ok: false; reason: FieldCommandFailure | 'empty' | 'frozen' };
