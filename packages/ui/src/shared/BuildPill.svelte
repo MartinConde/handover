@@ -34,11 +34,25 @@ const elapsed = (from: number) => {
   const total = Math.max(0, Math.round((now - from) / 1000));
   return `${Math.floor(total / 60)}m ${String(total % 60).padStart(2, '0')}s`;
 };
+const stateLabel = $derived(
+  build.state === 'building'
+    ? m.build_building({}, options)
+    : build.state === 'live'
+      ? build.live_at
+        ? m.build_live_since_label({}, options)
+        : m.build_live({}, options)
+      : m.build_failed({}, options),
+);
+const title = $derived(
+  build.state === 'live' && build.live_at
+    ? `${stateLabel} ${formatPublishTime(build.live_at, uiLocale)}`
+    : stateLabel,
+);
 </script>
 
-<span class="pill pill-{build.state}" title={build.state === 'live' && build.live_at ? `${m.build_live_since_label({}, options)} ${formatPublishTime(build.live_at, uiLocale)}` : build.state === 'building' ? m.build_building({}, options) : build.state === 'live' ? m.build_live({}, options) : m.build_failed({}, options)}>
+<span class="pill pill-{build.state}" {title}>
   <span class="dot" aria-hidden="true"></span>
-  <span class="build-label">{build.state === 'building' ? m.build_building({}, options) : build.state === 'live' ? (build.live_at ? m.build_live_since_label({}, options) : m.build_live({}, options)) : m.build_failed({}, options)}</span>
+  <span class="build-label">{stateLabel}</span>
   {#if build.state === 'live' && build.live_at}
     <time class="detail" datetime={new Date(build.live_at).toISOString()}>{formatPublishTime(build.live_at, uiLocale)}</time>
   {:else if build.state === 'building' && from}
