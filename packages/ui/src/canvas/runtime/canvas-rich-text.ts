@@ -27,7 +27,7 @@ import type { CanvasUiLocaleState } from './canvas-ui-locale';
 
 type RichField = Extract<CanvasTextField, { kind: 'richtext' }>;
 
-export interface CanvasRichTextOptions {
+interface CanvasRichTextOptions {
   command: (
     target: CanvasTarget,
     command:

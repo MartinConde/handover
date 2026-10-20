@@ -7,8 +7,6 @@ type Data = Record<string, unknown>;
 const object = (value: unknown): value is Data =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
-export const canvasBlockProblems = requiredFieldProblems;
-
 export function canvasBlockDraft(type: string, id: string, fields: readonly Field[]) {
   const draft: Data = { _type: type, _id: id };
   for (const field of fields) {
@@ -82,7 +80,7 @@ let draft = $state<Record<string, unknown>>({});
 let refusal = $state('');
 let panel = $state<HTMLElement>();
 const fields = $derived(blocks[chosen] ?? []);
-const problems = $derived(chosen ? canvasBlockProblems(fields, draft, blocks) : {});
+const problems = $derived(chosen ? requiredFieldProblems(fields, draft, blocks) : {});
 const ready = $derived(chosen && Object.keys(problems).length === 0 && !locked);
 const refusalText = $derived.by(() => {
   if (refusal === 'stale') return m.canvas_action_stale({}, options);

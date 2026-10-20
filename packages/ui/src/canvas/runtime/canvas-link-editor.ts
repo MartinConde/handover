@@ -8,7 +8,7 @@ import type { CanvasUiLocaleState } from './canvas-ui-locale';
 type CloseReason = 'applied' | 'cancel' | 'outside' | 'removed';
 export type CanvasLinkEditorFeedback = string | ((locale: UiLocale) => string);
 
-export interface CanvasLinkEditorOpen {
+interface CanvasLinkEditorOpen {
   anchor: Element | (() => DOMRect);
   value: CanvasLinkValue;
   locale: string;
@@ -21,7 +21,7 @@ export interface CanvasLinkEditorOpen {
   onClose?: (reason: CloseReason) => void;
 }
 
-export interface CanvasLinkEditorOptions {
+interface CanvasLinkEditorOptions {
   root?: Document;
   owner?: Window;
   readDirectory?: () => Promise<Pickable>;

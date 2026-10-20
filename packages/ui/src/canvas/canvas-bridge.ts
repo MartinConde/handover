@@ -123,7 +123,7 @@ export type CanvasTextField =
   | (CanvasFieldCapability & { kind: 'text' })
   | (CanvasFieldCapability & { kind: 'richtext'; tier: RichtextTier })
   | { kind: 'link'; target: CanvasTarget; value: CanvasLinkValue };
-export interface CanvasTextUpdate {
+interface CanvasTextUpdate {
   value: string;
   selection?: CanvasTextSelection;
 }
@@ -139,7 +139,7 @@ export interface CanvasCommandMessage extends CanvasIdentity {
   target: CanvasTarget;
   command: CanvasMutation;
 }
-export interface CanvasUiLocaleMessage extends CanvasIdentity {
+interface CanvasUiLocaleMessage extends CanvasIdentity {
   type: 'handover:canvas:ui-locale';
   uiLocale: UiLocale;
 }
@@ -158,19 +158,19 @@ export interface CanvasActionMessage extends CanvasIdentity {
   /** Stable same-list destination for a completed pointer move. */
   destination?: CanvasSelection;
 }
-export interface CanvasActionCapability {
+interface CanvasActionCapability {
   selection: CanvasSelection;
   actions: CanvasBlockAction[];
 }
 export type CanvasNavigationMessage = CanvasIdentity &
   CanvasNavigationRequest & { type: 'handover:canvas:navigate' };
-export type CanvasTransportRefusal =
+type CanvasTransportRefusal =
   | 'duplicate-command'
   | 'handler-error'
   | 'not-ready'
   | 'protocol'
   | `stale-${'document' | 'epoch' | 'locale' | 'request' | 'target' | 'version'}`;
-export type CanvasCommandRefusal =
+type CanvasCommandRefusal =
   | CanvasTransportRefusal
   | FieldCommandFailure
   | 'empty'

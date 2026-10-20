@@ -50,7 +50,6 @@ const relativeFormatters = new Map<UiLocale, Intl.RelativeTimeFormat>();
 const dateFormatters = new Map<UiLocale, Intl.DateTimeFormat>();
 const exactFormatters = new Map<UiLocale, Intl.DateTimeFormat>();
 const publishFormatters = new Map<UiLocale, Intl.DateTimeFormat>();
-const clockFormatters = new Map<UiLocale, Intl.DateTimeFormat>();
 const fieldTimeFormatters = new Map<UiLocale, Intl.DateTimeFormat>();
 const mediaDateFormatters = new Map<UiLocale, Intl.DateTimeFormat>();
 const calendarDateFormatters = new Map<UiLocale, Intl.DateTimeFormat>();
@@ -110,13 +109,6 @@ export const formatPublishTime = (at: number, locale: UiLocale): string =>
     publishFormatters,
     locale,
     () => new Intl.DateTimeFormat(languageTag(locale), { dateStyle: 'medium', timeStyle: 'short' }),
-  ).format(at);
-
-export const formatClockTime = (at: number, locale: UiLocale): string =>
-  formatter(
-    clockFormatters,
-    locale,
-    () => new Intl.DateTimeFormat(languageTag(locale), { hour: '2-digit', minute: '2-digit' }),
   ).format(at);
 
 /** Field popovers keep the browser timezone and their compact date shape across locales. */
@@ -180,7 +172,7 @@ export function formatLanguageList(codes: readonly string[], locale: UiLocale): 
   ).format(codes.map((code) => formatLanguageName(code, locale)));
 }
 
-export const DEVICE_LOCALE_COOKIE = 'handover_ui_locale';
+const DEVICE_LOCALE_COOKIE = 'handover_ui_locale';
 
 const supportedLanguage = (value: unknown): UiLocale | undefined => {
   if (typeof value !== 'string') return undefined;

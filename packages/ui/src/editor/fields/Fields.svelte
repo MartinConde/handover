@@ -855,7 +855,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
           </div>
         {/each}
         </DragDropProvider>
-        <button class="btn btn-sm add gallery-add" type="button" aria-label={m.field_list_add_label({ field: text }, options)} disabled={structureLocked} onclick={() => (picker = id)}>{m.field_gallery_add({}, options)}</button>
+        <button class="btn btn-sm add" type="button" aria-label={m.field_list_add_label({ field: text }, options)} disabled={structureLocked} onclick={() => (picker = id)}>{m.field_gallery_add({}, options)}</button>
       </div>
       {#if picker === id}
         <Media kind="images" label={text} {preset} base={mediaBase} many {uiLocale} onpick={(picks) => pickedInto(at, picks)} onclose={() => (picker = '')} />

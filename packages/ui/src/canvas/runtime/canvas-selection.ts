@@ -27,7 +27,7 @@ import type { CanvasUiLocaleState } from './canvas-ui-locale';
 
 type Announcement = { kind: 'selected' | 'empty' | 'focus' } | DragAnnouncement;
 
-export interface CanvasSelectionRuntimeOptions {
+interface CanvasSelectionRuntimeOptions {
   entryDocument?: CanvasTarget['document'];
   adminBase?: string;
   root?: Document;

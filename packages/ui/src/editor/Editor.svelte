@@ -725,7 +725,7 @@ async function writeTranslationSave(
   }
 }
 
-export function flush(): Promise<boolean> {
+function flush(): Promise<boolean> {
   return entrySession.flush();
 }
 const unsaved = () => entrySession.unsaved();
@@ -1935,7 +1935,7 @@ async function saveAddress() {
                   </button>
                 {/if}
                 {#if missingTargets.length > 1}
-                  <p class="create-all">
+                  <p>
                     <button class="btn btn-create-all" type="button" disabled={actionBusy || locked} onclick={() => createAll(false)}>
                       {m.editor_create_all({ count: missingTargets.length }, options)}
                     </button>

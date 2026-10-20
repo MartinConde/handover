@@ -27,7 +27,7 @@ const setLabelText = (element: HTMLElement, label: string) => {
   for (const node of rest) node.remove();
 };
 
-export interface CanvasLinkOptions {
+interface CanvasLinkOptions {
   command: (target: CanvasTarget, command: CanvasFieldMutation) => Promise<CanvasAcknowledgement>;
   interaction: (target: CanvasTarget, state: CanvasEditingState) => void;
   root?: Document;

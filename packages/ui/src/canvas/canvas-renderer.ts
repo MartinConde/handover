@@ -20,7 +20,7 @@ import {
 } from './canvas-bridge';
 import { sameCanvasDocument, sameCanvasSelection, sameCanvasTarget } from './canvas-target';
 
-export interface CanvasRenderSnapshot {
+interface CanvasRenderSnapshot {
   mode: 'canvas';
   protocol: typeof CANVAS_PROTOCOL;
   epoch: string;
@@ -36,15 +36,15 @@ export interface CanvasRenderRequest {
   snapshot: CanvasRenderSnapshot;
 }
 
-export type CanvasRenderRequestFactory = () => CanvasRenderRequest;
+type CanvasRenderRequestFactory = () => CanvasRenderRequest;
 
-export interface CanvasInteractionState {
+interface CanvasInteractionState {
   inlineEditing: boolean;
   composing: boolean;
   dragging: boolean;
 }
 
-export type CanvasRenderFailure =
+type CanvasRenderFailure =
   | 'bootstrap'
   | 'disposed'
   | 'render'
@@ -52,7 +52,7 @@ export type CanvasRenderFailure =
   | 'superseded'
   | 'timeout';
 
-export type CanvasRenderResult =
+type CanvasRenderResult =
   | { ok: true; requestId: string; contentVersion: number }
   | {
       ok: false;

@@ -4,7 +4,6 @@ import {
   DEFAULT_UI_LOCALE,
   deviceLocale,
   deviceLocaleCookie,
-  formatClockTime,
   formatExactTime,
   formatLanguageName,
   formatRelativeTime,
@@ -109,13 +108,6 @@ describe('localized date and time formatting', () => {
     ['de', '25. August 2026 um 14:00'],
   ] as const)('%s selects its exact date-time format', (locale, expected) => {
     expect(formatExactTime(localAfternoon, locale)).toBe(expected);
-  });
-
-  test.each([
-    ['en', '14:00'],
-    ['de', '14:00'],
-  ] as const)('%s selects its compact clock format', (locale, expected) => {
-    expect(formatClockTime(localAfternoon, locale)).toBe(expected);
   });
 
   test('calendar-day bucketing survives a 25-hour daylight-saving boundary', () => {

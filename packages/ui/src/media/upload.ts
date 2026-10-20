@@ -183,7 +183,7 @@ export async function uploadBlob(
 }
 
 /** Strips EXIF so no GPS reaches a public bucket; 0.9 because every crop re-encodes from this. */
-export async function normaliseImage(
+async function normaliseImage(
   file: File,
   max = DEFAULT_MAX,
 ): Promise<{ blob: Blob; width: number; height: number }> {

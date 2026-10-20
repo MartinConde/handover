@@ -59,7 +59,7 @@ export function classifyCanvasNavigation(
   return { kind: 'preview', href: url.href };
 }
 
-export interface CanvasNavigationRuntimeOptions {
+interface CanvasNavigationRuntimeOptions {
   root?: Document;
   owner?: Window;
   documentUrl?: string | URL;

@@ -15,7 +15,7 @@ import type { CanvasUiLocaleState } from './canvas-ui-locale';
 
 type PlainField = Extract<CanvasTextField, { kind: 'text' }>;
 
-export interface CanvasPlainTextOptions {
+interface CanvasPlainTextOptions {
   command: (
     target: CanvasTarget,
     command:
