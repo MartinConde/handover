@@ -16,6 +16,13 @@ import {
 import { problemText, type UiMessage } from '../errors.js';
 import type { UiLocale } from '../i18n.js';
 import {
+  createEntryHistory,
+  type FieldHistory,
+  type HistoryChange,
+  type LogicalSelection,
+  type StructuralHistoryTransaction,
+} from './entry-history.svelte';
+import {
   addInsertedMachinePaths,
   clone,
   type EntryData,
@@ -35,30 +42,11 @@ import {
 import { object, requiredFieldProblems } from './required-fields';
 import { type SaveState, saveCoordinator, saveLane } from './save';
 
-const TYPING_GROUP_MS = 1000;
-
 export type EntryProblem = { path: string; message: string; descriptor?: UiMessage };
 
 export type EntrySession = ReturnType<typeof createEntrySession>;
 
 export type FieldChange = { path?: readonly string[]; value: unknown };
-export type LogicalSelection = {
-  /** Stable entry identity; prevents a selection leaking into a replacement document. */
-  document: string;
-  locale: string;
-  /** Stable field address, independent of the row's current position. */
-  address: string;
-  kind?: 'text' | 'node';
-  anchor?: number;
-  head?: number;
-};
-export type FieldHistory = {
-  /** Typing coalesces for one second; a shared composition id coalesces until its boundary. */
-  kind?: 'change' | 'composition' | 'format' | 'paste' | 'typing';
-  group?: string;
-  before?: LogicalSelection;
-  after?: LogicalSelection;
-};
 type FieldCommand = {
   /** Stable address at or within the schema field which owns every relative change. */
   address: string;
@@ -81,11 +69,6 @@ export type FieldCommandFailure =
 export type FieldCommandResult =
   | { ok: true; contentVersion: number }
   | { ok: false; reason: FieldCommandFailure };
-
-type HistoryFailure = FieldCommandFailure | 'empty' | 'frozen';
-type HistoryResult =
-  | { ok: true; contentVersion: number; selection?: LogicalSelection }
-  | { ok: false; reason: HistoryFailure };
 
 export type ListOperation =
   | { type: 'insert'; index: number; value: unknown }
@@ -152,60 +135,11 @@ type AuthoritativeChangeFailure =
   | 'uncertain';
 type AuthoritativeChangeResult = { ok: true } | { ok: false; reason: AuthoritativeChangeFailure };
 
-type HistoryChange = { path: string[]; value: unknown };
-type FieldHistoryTransaction = {
-  type: 'field';
-  address: string;
-  after?: LogicalSelection;
-  before?: LogicalSelection;
-  forward: HistoryChange[];
-  inverse: HistoryChange[];
-  kind: NonNullable<FieldHistory['kind']>;
-  locale: string;
-};
-
-type StructuralHistoryTransaction = {
-  type: 'structure';
-  address: string;
-  before: unknown[] | undefined;
-  after: unknown[] | undefined;
-  beforeSeeds: Record<string, LocaleSeed[]>;
-  afterSeeds: Record<string, LocaleSeed[]>;
-};
-
-type HistoryTransaction = FieldHistoryTransaction | StructuralHistoryTransaction;
-
-type HistoryStats = {
-  redoTransactions: number;
-  retainedCharacters: number;
-  retainedFieldValues: number;
-  undoTransactions: number;
-};
-
 type PendingStructure = {
   container: string;
   seeds: Record<string, LocaleSeed[]>;
   version: number;
 };
-
-type ActiveHistoryGroup = {
-  address: string;
-  group?: string;
-  kind: 'composition' | 'typing';
-  locale: string;
-  startedAt: number;
-};
-
-// A long typing session must not keep every copy of a large field forever.
-const HISTORY_TRANSACTION_LIMIT = 200;
-const HISTORY_CHARACTER_LIMIT = 2_000_000;
-const historyCharacters = (transaction: HistoryTransaction): number =>
-  transaction.type === 'field'
-    ? [...transaction.forward, ...transaction.inverse].reduce(
-        (total, change) => total + (typeof change.value === 'string' ? change.value.length : 0),
-        0,
-      )
-    : 0;
 
 const STRUCTURAL = new Set<Field['type']>(['array', 'blocks', 'group', 'menus']);
 const PROPERTIES: Partial<Record<Field['type'], readonly string[]>> = {
@@ -333,9 +267,6 @@ export function createEntrySession({
     Object.entries(initialSerialized).map(([locale, value]) => [locale, { version: 0, value }]),
   );
   const validation = $state<Record<string, Record<string, EntryProblem>>>({});
-  const undoStack = $state<HistoryTransaction[]>([]);
-  const redoStack = $state<HistoryTransaction[]>([]);
-  let undoCharacters = 0;
   const pendingStructure = $state<PendingStructure[]>([]);
   const coordinators = new Map<string, ReturnType<typeof saveCoordinator>>();
   const drifted = drift.length > 0;
@@ -371,10 +302,21 @@ export function createEntrySession({
     | undefined
   >();
   let nextActionId = 0;
-  let historyIsFrozen = $state(false);
-  let activeHistoryGroup: ActiveHistoryGroup | undefined;
-  let logicalSelection = $state<LogicalSelection>();
-  let replayingHistory = false;
+  const history = createEntryHistory({
+    document,
+    sourceLocale,
+    form,
+    snapshots,
+    blocked: () => persistedAction !== undefined,
+    apply: (transaction, direction) =>
+      transaction.type === 'structure'
+        ? restoreStructure(transaction, direction)
+        : runFieldCommand(transaction.locale, {
+            address: transaction.address,
+            contentVersion: versionOf(transaction.locale),
+            changes: direction === 'undo' ? transaction.inverse : transaction.forward,
+          }),
+  });
 
   const locales = () => [sourceLocale, ...Object.keys(snapshots).filter((l) => l !== sourceLocale)];
   const coordinator = (locale: string) => {
@@ -401,58 +343,6 @@ export function createEntrySession({
     serialized.set(locale, { version, value });
     return value;
   };
-  const sameSelection = (a: LogicalSelection | undefined, b: LogicalSelection | undefined) =>
-    a === b ||
-    (a !== undefined &&
-      b !== undefined &&
-      a.document === b.document &&
-      a.locale === b.locale &&
-      a.address === b.address &&
-      a.kind === b.kind &&
-      a.anchor === b.anchor &&
-      a.head === b.head);
-  const validSelection = (
-    locale: string,
-    selection: LogicalSelection | undefined,
-  ): LogicalSelection | undefined => {
-    const current = snapshots[locale];
-    if (
-      !selection ||
-      selection.document !== document ||
-      selection.locale !== locale ||
-      !current ||
-      !form
-    )
-      return undefined;
-    return resolveFieldTarget('default', form, selection.address, current).ok
-      ? clone(selection)
-      : undefined;
-  };
-  const clearActiveHistoryGroup = () => {
-    activeHistoryGroup = undefined;
-  };
-  const trimHistory = () => {
-    while (
-      undoStack.length > 1 &&
-      (undoStack.length > HISTORY_TRANSACTION_LIMIT || undoCharacters > HISTORY_CHARACTER_LIMIT)
-    ) {
-      const dropped = undoStack.shift();
-      if (dropped) undoCharacters -= historyCharacters(dropped);
-    }
-  };
-  const freezeHistory = () => {
-    historyIsFrozen = true;
-    clearActiveHistoryGroup();
-  };
-  const resetLocaleHistory = (locale: string) => {
-    const belongsToLocale = (item: HistoryTransaction) =>
-      item.type === 'structure' ? Object.hasOwn(item.beforeSeeds, locale) : item.locale === locale;
-    undoStack.splice(0, undoStack.length, ...undoStack.filter((item) => !belongsToLocale(item)));
-    redoStack.splice(0, redoStack.length, ...redoStack.filter((item) => !belongsToLocale(item)));
-    undoCharacters = undoStack.reduce((total, item) => total + historyCharacters(item), 0);
-    if (activeHistoryGroup?.locale === locale) clearActiveHistoryGroup();
-    if (logicalSelection?.locale === locale) logicalSelection = undefined;
-  };
   const normalize = (snapshot: EntryData, found: EntryProblem[]) => {
     const normalized: Record<string, EntryProblem> = {};
     for (const problem of found) {
@@ -477,7 +367,7 @@ export function createEntrySession({
   };
   const retire = (reloading?: NonNullable<typeof persistedAction>) => {
     mutationOpen = false;
-    freezeHistory();
+    history.freeze();
     epoch += 1;
     if (reloading) persistedAction = reloading;
     for (const saves of coordinators.values()) saves.close();
@@ -559,99 +449,6 @@ export function createEntrySession({
     const snapshot = snapshots[locale];
     if (snapshot) validation[locale] = normalize(snapshot, found);
   }
-
-  const setHistorySelection = (selection?: LogicalSelection) => {
-    const next = selection ? validSelection(selection.locale, selection) : undefined;
-    if (!sameSelection(logicalSelection, next)) clearActiveHistoryGroup();
-    logicalSelection = next;
-  };
-
-  const recordHistory = (
-    locale: string,
-    address: string,
-    forward: HistoryChange[],
-    inverse: HistoryChange[],
-    history: FieldHistory | undefined,
-  ) => {
-    if (historyIsFrozen || replayingHistory) return;
-    const before = validSelection(locale, history?.before ?? logicalSelection);
-    const after = validSelection(locale, history?.after ?? before);
-    const simpleText =
-      forward.length === 1 &&
-      (typeof forward[0]?.value === 'string' || forward[0]?.value === undefined) &&
-      (typeof inverse[0]?.value === 'string' || inverse[0]?.value === undefined);
-    const kind = history?.kind ?? (simpleText ? 'typing' : 'change');
-    const now = Date.now();
-    const current = undoStack.at(-1);
-    const sameTarget =
-      activeHistoryGroup?.locale === locale && activeHistoryGroup.address === address;
-    const groupedTyping =
-      kind === 'typing' &&
-      activeHistoryGroup?.kind === 'typing' &&
-      sameTarget &&
-      now - activeHistoryGroup.startedAt <= TYPING_GROUP_MS &&
-      current?.type === 'field' &&
-      sameSelection(current.after, before);
-    const groupedComposition =
-      kind === 'composition' &&
-      history?.group !== undefined &&
-      activeHistoryGroup?.kind === 'composition' &&
-      sameTarget &&
-      activeHistoryGroup.group === history.group;
-
-    if (current?.type === 'field' && (groupedTyping || groupedComposition)) {
-      const compactTyping =
-        groupedTyping &&
-        current.forward.length === 1 &&
-        current.inverse.length === 1 &&
-        forward.length === 1 &&
-        inverse.length === 1 &&
-        equal(current.forward[0]?.path, forward[0]?.path) &&
-        equal(current.inverse[0]?.path, inverse[0]?.path) &&
-        equal(forward[0]?.path, inverse[0]?.path);
-      const beforeChars = historyCharacters(current);
-      if (compactTyping) {
-        // The first inverse and latest forward are the only values needed to replay a
-        // same-property typing group. Intermediate Markdown/text values can be large.
-        current.forward[0] = forward[0] as HistoryChange;
-      } else {
-        current.forward.push(...forward);
-        current.inverse.unshift(...inverse);
-      }
-      current.after = after;
-      undoCharacters += historyCharacters(current) - beforeChars;
-    } else {
-      const transaction: HistoryTransaction = {
-        type: 'field',
-        address,
-        after,
-        before,
-        forward,
-        inverse,
-        kind,
-        locale,
-      };
-      undoStack.push(transaction);
-      undoCharacters += historyCharacters(transaction);
-    }
-    redoStack.splice(0);
-    trimHistory();
-    logicalSelection = after;
-    activeHistoryGroup =
-      kind === 'typing' || (kind === 'composition' && history?.group !== undefined)
-        ? {
-            address,
-            group: history?.group,
-            kind,
-            locale,
-            startedAt: groupedTyping
-              ? (activeHistoryGroup?.startedAt ?? now)
-              : groupedComposition
-                ? (activeHistoryGroup?.startedAt ?? now)
-                : now,
-          }
-        : undefined;
-  };
 
   const listTarget = (snapshot: EntryData, address: string) => {
     if (!form) return undefined;
@@ -886,7 +683,7 @@ export function createEntrySession({
       (change) => !equal(change.value, read(current, [...context.path, ...change.path])),
     );
     if (!changed) {
-      if (command.history?.after) setHistorySelection(command.history.after);
+      if (command.history?.after) history.select(command.history.after);
       return { ok: true, contentVersion: beforeVersion };
     }
 
@@ -899,49 +696,8 @@ export function createEntrySession({
     const nextVersion = mutated(locale);
     if (locale === sourceLocale && localeFieldProjectionNeeded(context, changes))
       projectFieldLocales(ownerAddress, context, current);
-    recordHistory(locale, ownerAddress, changes, inverse, command.history);
+    history.recordField(locale, ownerAddress, changes, inverse, command.history);
     return { ok: true, contentVersion: nextVersion };
-  };
-
-  const replayHistory = (
-    from: HistoryTransaction[],
-    to: HistoryTransaction[],
-    direction: 'redo' | 'undo',
-  ): HistoryResult => {
-    if (historyIsFrozen) return { ok: false, reason: 'frozen' };
-    if (persistedAction) return { ok: false, reason: 'closed' };
-    const transaction = from.at(-1);
-    if (!transaction) return { ok: false, reason: 'empty' };
-    clearActiveHistoryGroup();
-    replayingHistory = true;
-    let result: FieldCommandResult;
-    try {
-      result =
-        transaction.type === 'structure'
-          ? restoreStructure(transaction, direction)
-          : runFieldCommand(transaction.locale, {
-              address: transaction.address,
-              contentVersion: versionOf(transaction.locale),
-              changes: direction === 'undo' ? transaction.inverse : transaction.forward,
-            });
-    } finally {
-      replayingHistory = false;
-    }
-    if (!result.ok) return result;
-    from.pop();
-    to.push(transaction);
-    if (direction === 'undo') undoCharacters -= historyCharacters(transaction);
-    else undoCharacters += historyCharacters(transaction);
-    const selection = validSelection(
-      transaction.type === 'structure' ? sourceLocale : transaction.locale,
-      transaction.type === 'structure'
-        ? undefined
-        : direction === 'undo'
-          ? transaction.before
-          : transaction.after,
-    );
-    logicalSelection = selection;
-    return selection ? { ...result, selection } : result;
   };
 
   return {
@@ -1114,7 +870,7 @@ export function createEntrySession({
     },
     /** Apply one same-list structural action after re-resolving its stable container. */
     listCommand(locale: string, command: ListCommand): ListCommandResult {
-      clearActiveHistoryGroup();
+      history.boundary();
       const current = snapshots[locale];
       if (!current || !form) return { ok: false, reason: 'schema' };
       if (drifted) return { ok: false, reason: 'drift' };
@@ -1221,7 +977,7 @@ export function createEntrySession({
       const nextVersion = mutated(locale);
       projectLocales(beforeSource, current, duplicateSeeds);
       const afterSeeds = captureSeeds(command.address);
-      undoStack.push({
+      history.recordStructure({
         type: 'structure',
         address: command.address,
         before: held === undefined ? undefined : beforeRows,
@@ -1229,69 +985,51 @@ export function createEntrySession({
         beforeSeeds,
         afterSeeds,
       });
-      redoStack.splice(0);
-      trimHistory();
       queueStructure(command.address, beforeRows, afterRows, afterSeeds);
       return { ok: true, contentVersion: nextVersion };
     },
     canUndo(): boolean {
       return (
-        !historyIsFrozen &&
+        !history.frozen &&
         mutationOpen &&
         !drifted &&
         persistedAction === undefined &&
-        undoStack.length > 0
+        history.undoable
       );
     },
     canRedo(): boolean {
       return (
-        !historyIsFrozen &&
+        !history.frozen &&
         mutationOpen &&
         !drifted &&
         persistedAction === undefined &&
-        redoStack.length > 0
+        history.redoable
       );
     },
     /** Shallow history counts used to verify and profile value retention. */
-    historyStats(): HistoryStats {
-      const retainedFieldValues = [...undoStack, ...redoStack].reduce(
-        (total, transaction) =>
-          transaction.type === 'field'
-            ? total + transaction.forward.length + transaction.inverse.length
-            : total,
-        0,
-      );
-      const retainedCharacters = [...undoStack, ...redoStack].reduce(
-        (total, transaction) => total + historyCharacters(transaction),
-        0,
-      );
-      return {
-        redoTransactions: redoStack.length,
-        retainedCharacters,
-        retainedFieldValues,
-        undoTransactions: undoStack.length,
-      };
+    historyStats() {
+      return history.stats();
     },
-    undo(): HistoryResult {
-      return replayHistory(undoStack, redoStack, 'undo');
+    undo() {
+      return history.undo();
     },
-    redo(): HistoryResult {
-      return replayHistory(redoStack, undoStack, 'redo');
+    redo() {
+      return history.redo();
     },
     /** A cursor move is not history, but it ends any typing transaction in progress. */
     setHistorySelection(selection?: LogicalSelection): void {
-      setHistorySelection(selection);
+      history.select(selection);
     },
     /** The mounted editor matching this target restores it after session replay/reconciliation. */
     historySelection(): LogicalSelection | undefined {
-      return logicalSelection ? clone(logicalSelection) : undefined;
+      return history.selection();
     },
     /** Blur, formatting, paste, and explicit editing transitions call this group boundary. */
     historyBoundary(): void {
-      clearActiveHistoryGroup();
+      history.boundary();
     },
     freezeHistory(): void {
-      freezeHistory();
+      history.freeze();
     },
     /** Drain every loaded locale, including dirty panes which are no longer mounted. */
     async flush(): Promise<boolean> {
@@ -1418,7 +1156,7 @@ export function createEntrySession({
           snapshots[locale] = structuredClone(response.data);
           opened[locale] = structuredClone(response.data);
           mutated(locale);
-          resetLocaleHistory(locale);
+          history.resetLocale(locale);
           if (response.revision !== undefined) openedRevisions[locale] = response.revision;
           const accepted = serialize(locale);
           savedVersions[locale] = versionOf(locale);

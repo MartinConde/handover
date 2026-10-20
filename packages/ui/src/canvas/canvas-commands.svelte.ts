@@ -1,5 +1,6 @@
 import { richtextErrors } from '@handover/core';
-import type { EntrySession, LogicalSelection } from '../editor/entry-session.svelte';
+import type { LogicalSelection } from '../editor/entry-history.svelte';
+import type { EntrySession } from '../editor/entry-session.svelte';
 import type {
   CanvasBlockAction,
   CanvasCommandMessage,

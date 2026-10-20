@@ -17,11 +17,11 @@ import type { UiLocale } from '../../i18n.js';
 import { capitalise, formatFieldTime, messageOptions } from '../../i18n.js';
 import type { MediaItem } from '../../media/upload.js';
 import * as m from '../../paraglide/messages.js';
+import type { FieldHistory } from '../entry-history.svelte';
 import type {
   EntrySession,
   FieldChange,
   FieldCommandResult,
-  FieldHistory,
   ListCommandResult,
 } from '../entry-session.svelte';
 import EmbedField from './EmbedField.svelte';

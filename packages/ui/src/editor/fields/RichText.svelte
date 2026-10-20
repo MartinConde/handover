@@ -9,12 +9,8 @@ import { onMount, untrack } from 'svelte';
 import PagePicker from '../../content/PagePicker.svelte';
 import { messageOptions, type UiLocale } from '../../i18n.js';
 import * as m from '../../paraglide/messages.js';
-import type {
-  EntrySession,
-  FieldCommandResult,
-  FieldHistory,
-  LogicalSelection,
-} from '../entry-session.svelte';
+import type { FieldHistory, LogicalSelection } from '../entry-history.svelte';
+import type { EntrySession, FieldCommandResult } from '../entry-session.svelte';
 import { proseSelection, restoreProseSelection, richTextExtensions } from './rich-text-kit';
 
 let {

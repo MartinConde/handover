@@ -1,7 +1,8 @@
 import type { Preset } from '@handover/core';
 import type { UiLocale } from '../../i18n.js';
 import type { MediaItem } from '../../media/upload.js';
-import type { FieldChange, FieldCommandResult, FieldHistory } from '../entry-session.svelte';
+import type { FieldHistory } from '../entry-history.svelte';
+import type { FieldChange, FieldCommandResult } from '../entry-session.svelte';
 import type { Reference } from './ReferencePeek.svelte';
 
 export type Data = Record<string, unknown>;
