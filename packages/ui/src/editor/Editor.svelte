@@ -1161,15 +1161,49 @@ async function saveAddress() {
 {#snippet feedback(message: UiMessage)}{feedbackText(message)} {messageDetail(message, uiLocale)}{/snippet}
 
 {#snippet languageMark(of: string)}
-  {#if off(of)}<span class="visually-hidden"> — {m.editor_language_off_a11y({}, options)}</span>{:else if untranslated(of)}<span class="visually-hidden"> — {m.editor_language_untranslated_a11y({}, options)}</span><span class="mark is-empty" aria-hidden="true"></span>{:else if entry.stale.includes(of)}<span class="visually-hidden"> — {otherSource(of) ? m.editor_language_other_source_a11y({ language: language(otherSource(of) ?? ''), source: language(entry.sourceLocale) }, options) : m.editor_language_stale_a11y({ source: language(entry.sourceLocale) }, options)}</span><span class="mark" aria-hidden="true"></span>{:else if partial(of)}{@const count = partial(of)}<span class="visually-hidden"> — {m.editor_language_partial_a11y({ written: count?.written ?? 0, count: count?.of ?? 0 }, options)}</span><span class="mark is-partial" aria-hidden="true"></span>{/if}
+  {#if off(of)}
+    <span class="visually-hidden"> — {m.editor_language_off_a11y({}, options)}</span>
+  {:else if untranslated(of)}
+    <span class="visually-hidden"> — {m.editor_language_untranslated_a11y({}, options)}</span
+    ><span class="mark is-empty" aria-hidden="true"></span>
+  {:else if entry.stale.includes(of)}
+    <span class="visually-hidden">
+      — {otherSource(of)
+        ? m.editor_language_other_source_a11y(
+            { language: language(otherSource(of) ?? ''), source: language(entry.sourceLocale) },
+            options,
+          )
+        : m.editor_language_stale_a11y({ source: language(entry.sourceLocale) }, options)}</span
+    ><span class="mark" aria-hidden="true"></span>
+  {:else if partial(of)}
+    {@const count = partial(of)}
+    <span class="visually-hidden">
+      — {m.editor_language_partial_a11y(
+        { written: count?.written ?? 0, count: count?.of ?? 0 },
+        options,
+      )}</span
+    ><span class="mark is-partial" aria-hidden="true"></span>
+  {/if}
 {/snippet}
 
 {#snippet paneHeading(of: string)}
   {#if side && others.length > 1}
     <div class="pop-anchor language-pick">
       <h2 id="pane-{of}">
-        <button class="btn btn-sm" type="button" aria-expanded={languageMenu === 'pane'} aria-controls="pane-languages" bind:this={paneTrigger} onclick={(e) => { languageMenu = languageMenu === 'pane' ? undefined : 'pane'; e.currentTarget.focus(); }}>
-          <span class="visually-hidden">{`${m.editor_pane_language({ source: language(entry.sourceLocale) }, options)}: `}</span>{language(of)}{@render languageMark(of)}
+        <button
+          class="btn btn-sm"
+          type="button"
+          aria-expanded={languageMenu === 'pane'}
+          aria-controls="pane-languages"
+          bind:this={paneTrigger}
+          onclick={(e) => {
+            languageMenu = languageMenu === 'pane' ? undefined : 'pane';
+            e.currentTarget.focus();
+          }}
+        >
+          <span class="visually-hidden"
+            >{`${m.editor_pane_language({ source: language(entry.sourceLocale) }, options)}: `}</span
+          >{language(of)}{@render languageMark(of)}
         </button>
       </h2>
       {#if languageMenu === 'pane'}
@@ -1204,10 +1238,27 @@ async function saveAddress() {
 {/snippet}
 
 {#snippet canvasEntryActions()}
-  <select class="canvas-locale" aria-label={m.editor_language({}, options)} value={locale}
-    onchange={(event) => { const nextLocale = event.currentTarget.value; void leaving(() => (locale = nextLocale)); }}>
+  <select
+    class="canvas-locale"
+    aria-label={m.editor_language({}, options)}
+    value={locale}
+    onchange={(event) => {
+      const nextLocale = event.currentTarget.value;
+      void leaving(() => (locale = nextLocale));
+    }}
+  >
     {#each entry.locales as of (of)}
-      <option value={of}>{of.toUpperCase()}{off(of) ? ` · ${m.editor_language_off({}, options)}` : untranslated(of) ? ` · ${m.editor_language_new({}, options)}` : entry.stale.includes(of) ? ` · ${m.editor_language_changed({}, options)}` : partial(of) ? ` · ${m.editor_language_partial({}, options)}` : ''}</option>
+      <option value={of}
+        >{of.toUpperCase()}{off(of)
+          ? ` · ${m.editor_language_off({}, options)}`
+          : untranslated(of)
+            ? ` · ${m.editor_language_new({}, options)}`
+            : entry.stale.includes(of)
+              ? ` · ${m.editor_language_changed({}, options)}`
+              : partial(of)
+                ? ` · ${m.editor_language_partial({}, options)}`
+                : ''}</option
+      >
     {/each}
   </select>
   <AutosaveStatus
@@ -1244,10 +1295,24 @@ async function saveAddress() {
           onkeydown={addressKeydown}
         />
         <span class="slug-actions">
-          <button class="btn btn-sm slug-action slug-save" type="button" aria-label={m.editor_address_save({}, options)} title={m.editor_address_save({}, options)} disabled={busy} onclick={saveAddress}>
+          <button
+            class="btn btn-sm slug-action slug-save"
+            type="button"
+            aria-label={m.editor_address_save({}, options)}
+            title={m.editor_address_save({}, options)}
+            disabled={busy}
+            onclick={saveAddress}
+          >
             <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m4 10.3 3.5 3.5L16 5.7" /></svg>
           </button>
-          <button class="btn btn-ghost btn-sm slug-action slug-cancel" type="button" aria-label={m.editor_address_cancel({}, options)} title={m.editor_address_cancel({}, options)} disabled={busy} onclick={cancelAddress}>
+          <button
+            class="btn btn-ghost btn-sm slug-action slug-cancel"
+            type="button"
+            aria-label={m.editor_address_cancel({}, options)}
+            title={m.editor_address_cancel({}, options)}
+            disabled={busy}
+            onclick={cancelAddress}
+          >
             <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 5 10 10m0-10L5 15" /></svg>
           </button>
         </span>
@@ -1260,13 +1325,19 @@ async function saveAddress() {
             bind:this={addressTrigger}
             disabled={entryLock.locked}
             aria-label={`${m.editor_address_edit({}, options)}: ${url}`}
-            onclick={editAddress}
-          >{url}</button>
+            onclick={editAddress}>{url}</button
+          >
           {#if !address}<span class="mode">{m.editor_address_file_name({}, options)}</span>{/if}
         {:else if url}
           <span class="url">{url}</span>
         {/if}
-        {#if !entry.singleton}{#if addressable || url}<span class="sep" aria-hidden="true">·</span>{/if}<button class="btn-link slug-rename" type="button" disabled={entryLock.locked || actionBusy} onclick={openRename}>{m.editor_change_file_name({}, options)}</button>{/if}
+        {#if !entry.singleton}{#if addressable || url}<span class="sep" aria-hidden="true">·</span
+            >{/if}<button
+            class="btn-link slug-rename"
+            type="button"
+            disabled={entryLock.locked || actionBusy}
+            onclick={openRename}>{m.editor_change_file_name({}, options)}</button
+          >{/if}
       {/if}
     </div>
   {/if}
@@ -1307,19 +1378,52 @@ async function saveAddress() {
       aria-haspopup="menu"
       aria-expanded={publishMenu}
       aria-label={m.editor_ready_to_publish({}, options)}
-      disabled={entryLock.locked || actionBusy || (entry.singleton && (entryLock.lost || (!dirty && !held)))}
+      disabled={entryLock.locked ||
+        actionBusy ||
+        (entry.singleton && (entryLock.lost || (!dirty && !held)))}
       onclick={() => (publishMenu = !publishMenu)}
-    ><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4.5 6 3.5 3.5L11.5 6" /></svg></button>
+      ><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4.5 6 3.5 3.5L11.5 6" /></svg></button
+    >
     {#if publishMenu}
-      <div class="menu publish-menu" role="menu" aria-label={m.editor_ready_to_publish({}, options)}>
-        <button type="button" role="menuitemcheckbox" aria-checked={!held} aria-describedby={dirty || held ? undefined : 'hold-unavailable'} disabled={entryLock.lost || (!dirty && !held)} onclick={() => { publishMenu = false; void toggleHold(); }}>
-          <span class="check" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="m4 10.3 3.5 3.5L16 5.7" /></svg></span>
+      <div
+        class="menu publish-menu"
+        role="menu"
+        aria-label={m.editor_ready_to_publish({}, options)}
+      >
+        <button
+          type="button"
+          role="menuitemcheckbox"
+          aria-checked={!held}
+          aria-describedby={dirty || held ? undefined : 'hold-unavailable'}
+          disabled={entryLock.lost || (!dirty && !held)}
+          onclick={() => {
+            publishMenu = false;
+            void toggleHold();
+          }}
+        >
+          <span class="check" aria-hidden="true"
+            ><svg viewBox="0 0 20 20"><path d="m4 10.3 3.5 3.5L16 5.7" /></svg></span
+          >
           {m.editor_ready_to_publish({}, options)}
-          {#if !dirty && !held}<span class="sub" id="hold-unavailable">{m.editor_hold_unavailable({}, options)}</span>{/if}
+          {#if !dirty && !held}<span class="sub" id="hold-unavailable"
+              >{m.editor_hold_unavailable({}, options)}</span
+            >{/if}
         </button>
         <!-- Nothing lists a global, so there is nothing to take it off the site from. -->
         {#if !entry.singleton}
-          <button type="button" role="menuitem" onclick={() => { if (hidden) { publishMenu = false; setStatus(false); } else { publishMenu = false; startHiding(); } }}>
+          <button
+            type="button"
+            role="menuitem"
+            onclick={() => {
+              if (hidden) {
+                publishMenu = false;
+                setStatus(false);
+              } else {
+                publishMenu = false;
+                startHiding();
+              }
+            }}
+          >
             <span class="check" aria-hidden="true"></span>
             {hidden ? m.editor_show_on_site({}, options) : m.editor_hide_from_site({}, options)}
           </button>
@@ -1341,14 +1445,34 @@ async function saveAddress() {
       title={m.editor_delete({}, options)}
       disabled={entryLock.locked || actionBusy}
       onclick={startDeleting}
-    ><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3" /></svg></button>
+      ><svg viewBox="0 0 24 24" aria-hidden="true"
+        ><path
+          d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"
+        /></svg
+      ></button
+    >
   {/if}
 {/snippet}
 
-<main class={['main main-editor', { 'is-canvas-fullscreen': mode === 'canvas' }]} style:--entry-header-h={`calc(var(--topbar-stuck, 0px) + ${headerHeight}px)`}>
-  {#if actionFailed && !renaming && !deleting && !offing && !discarding}<p class="notice notice-danger" role="alert">{@render feedback(actionFailed)}</p>{/if}
-  {#if holdFailed}<p class="notice notice-danger" role="alert">{@render feedback(holdFailed)}</p>{/if}
-  {#if saveError}<p class="notice notice-danger" role="alert">{@render feedback(saveError)} <button class="btn-link" type="button" onclick={() => flush()}>{m.editor_save_retry({}, options)}</button></p>{/if}
+<main
+  class={['main main-editor', { 'is-canvas-fullscreen': mode === 'canvas' }]}
+  style:--entry-header-h={`calc(var(--topbar-stuck, 0px) + ${headerHeight}px)`}
+>
+  {#if actionFailed && !renaming && !deleting && !offing && !discarding}<p
+      class="notice notice-danger"
+      role="alert"
+    >
+      {@render feedback(actionFailed)}
+    </p>{/if}
+  {#if holdFailed}<p class="notice notice-danger" role="alert">
+      {@render feedback(holdFailed)}
+    </p>{/if}
+  {#if saveError}<p class="notice notice-danger" role="alert">
+      {@render feedback(saveError)}
+      <button class="btn-link" type="button" onclick={() => flush()}
+        >{m.editor_save_retry({}, options)}</button
+      >
+    </p>{/if}
   <EntryBanners
     {entry}
     {entryLock}
@@ -1414,13 +1538,30 @@ async function saveAddress() {
             </div>
           {:else}
             <div class="pop-anchor language-pick">
-              <button class="btn" type="button" aria-expanded={languageMenu === 'header'} aria-controls="entry-languages" bind:this={languageTrigger} onclick={(e) => { languageMenu = languageMenu === 'header' ? undefined : 'header'; e.currentTarget.focus(); }}>
-                <span class="visually-hidden">{`${m.editor_language({}, options)}: `}</span>{language(locale)}{@render languageMark(locale)}
+              <button
+                class="btn"
+                type="button"
+                aria-expanded={languageMenu === 'header'}
+                aria-controls="entry-languages"
+                bind:this={languageTrigger}
+                onclick={(e) => {
+                  languageMenu = languageMenu === 'header' ? undefined : 'header';
+                  e.currentTarget.focus();
+                }}
+              >
+                <span class="visually-hidden">{`${m.editor_language({}, options)}: `}</span
+                >{language(locale)}{@render languageMark(locale)}
               </button>
               {#if languageMenu === 'header'}
                 <div class="menu language-menu" id="entry-languages">
                   {#each entry.locales as of (of)}
-                    <button type="button" class={{ 'is-off': off(of) }} aria-pressed={locale === of} onclick={() => chooseLanguage(of)}>{language(of)}{@render languageMark(of)}</button>
+                    <button
+                      type="button"
+                      class={{ 'is-off': off(of) }}
+                      aria-pressed={locale === of}
+                      onclick={() => chooseLanguage(of)}
+                      >{language(of)}{@render languageMark(of)}</button
+                    >
                   {/each}
                 </div>
               {/if}
@@ -1438,12 +1579,31 @@ async function saveAddress() {
                   title={label}
                   aria-pressed={beside === of && mode !== 'canvas'}
                   disabled={drifted}
-                  onclick={() => leaving(() => (of === 'page' && beside === 'page' ? collapse() : setBeside(!pageShown && side && of === 'language' ? 'none' : of)))}
-                ><svg class="workspace-icon" viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="3" width="14" height="14" rx="2" />{#if of === 'page'}<path d="M9 3v14M12 7h2M12 10h2" />{:else}<path d="M10 3v14M5 7h2M13 7h2M5 10h2M13 10h2" />{/if}</svg><span class="visually-hidden">{label}</span></button>
+                  onclick={() =>
+                    leaving(() =>
+                      of === 'page' && beside === 'page'
+                        ? collapse()
+                        : setBeside(!pageShown && side && of === 'language' ? 'none' : of),
+                    )}
+                  ><svg class="workspace-icon" viewBox="0 0 20 20" aria-hidden="true"
+                    ><rect x="3" y="3" width="14" height="14" rx="2" />{#if of === 'page'}<path
+                        d="M9 3v14M12 7h2M12 10h2"
+                      />{:else}<path d="M10 3v14M5 7h2M13 7h2M5 10h2M13 10h2" />{/if}</svg
+                  ><span class="visually-hidden">{label}</span></button
+                >
               {/each}
             {/if}
             {#if !entry.singleton && canvasSupported}
-              <button class="canvas-open" type="button" title={m.editor_view_canvas({}, options)} disabled={drifted} onclick={() => setCanvas(true)}><svg class="workspace-icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M7.5 3H3v4.5M12.5 3H17v4.5M7.5 17H3v-4.5M12.5 17H17v-4.5" /></svg><span class="visually-hidden">{m.editor_view_canvas({}, options)}</span></button>
+              <button
+                class="canvas-open"
+                type="button"
+                title={m.editor_view_canvas({}, options)}
+                disabled={drifted}
+                onclick={() => setCanvas(true)}
+                ><svg class="workspace-icon" viewBox="0 0 20 20" aria-hidden="true"
+                  ><path d="M7.5 3H3v4.5M12.5 3H17v4.5M7.5 17H3v-4.5M12.5 17H17v-4.5" /></svg
+                ><span class="visually-hidden">{m.editor_view_canvas({}, options)}</span></button
+              >
             {/if}
           </div>
         {/if}
@@ -1468,223 +1628,348 @@ async function saveAddress() {
       }}
     />
   {:else}
-  <div
-    class={[
-      'entry-body',
-      {
-        'has-pane': !drifted && (mode === 'split' || (mode === 'form' && !alone && shown !== undefined)),
-        'is-canvas': mode === 'canvas',
-        'is-split': mode === 'split',
-        'is-full': pageShown && beside === 'none' && !alone,
-      },
-    ]}
-  >
-    {#if drifted}
-      <!-- Stands where the form would be: every field belongs to a structure not yet agreed on. -->
-      <DriftPanel
-        {collection}
-        {slug}
-        drift={entry.drift}
-        locales={entry.locales}
-        {uiLocale}
-        onresolved={entrySession.afterReconciliation}
-      />
-    {:else}
-      {#if mode === 'split' || (mode === 'form' && side && shown && !alone)}
-        <div class="canvas-mobile-tabs seg" role="group" aria-label={m.editor_split_pane({}, options)}>
-          <button type="button" aria-pressed={mobilePane === 'form'} onclick={() => (mobilePane = 'form')}>{side ? language(entry.sourceLocale) : m.editor_split_form({}, options)}</button>
-          <button type="button" aria-pressed={mobilePane === 'page'} onclick={() => (mobilePane = 'page')}>{side && shown ? language(shown) : m.editor_split_page({}, options)}</button>
-        </div>
-      {/if}
-      <!-- Not drawn when a translation is on its own. -->
-      {#if mode !== 'canvas' && !alone}
-        <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-        <form
-          class={['form', { 'is-mobile-hidden': (mode === 'split' || side) && mobilePane === 'page' }]}
-          onsubmit={(e) => e.preventDefault()}
-          onfocusout={canvasCompleted}
-        >
-          <div class="editor-form-heading">
-            <div><span class="editor-language-code">{entry.sourceLocale.toUpperCase()}</span><h2>{language(entry.sourceLocale)}</h2></div>
-            <span class="editor-source-label">
-              {m.editor_workspace_source({}, options)}
-              <!-- The source is a property of this form, so it is changed from the form's own heading. -->
-              {#if many && present.length > 1}
-                <span class="sep" aria-hidden="true">·</span>
-                <button class="btn-link" type="button" disabled={sourceBlocked !== undefined || entryLock.locked} title={sourceBlocked ?? m.editor_change_source_sub({ language: language(entry.sourceLocale) }, options)} onclick={openSourceChange}>{m.editor_change_source({}, options)}</button>
-              {/if}
-            </span>
-          </div>
-          <fieldset disabled={entryLock.locked || entrySession.localeMutationBlocked(entry.sourceLocale)}>
-            <Fields {fields} onreveal={(path) => revealPreview(path, entry.sourceLocale)} blocks={shownForm.blocks} blockLabels={shownForm.blockLabels} {problems} {mediaBase} locale={entry.sourceLocale} {uiLocale} session={entrySession} inheritedSeo={inherited(entry.sourceLocale, data)} {site} servedAt={localeUrl(entry.sourceLocale)} bind:root={entrySession.snapshots[entry.sourceLocale]!} structureLocked={entrySession.structureMutationBlocked()} textOnly={entrySession.sourceTextOnly(entry.sourceLocale)} afterTitle={ontopbar && locale === entry.sourceLocale ? addressRow : undefined} titleKey={entry.titleField} />
-          </fieldset>
-        </form>
-      {/if}
-      <!-- Split replaces a comparison pane rather than adding a third column. -->
-      {#if mode !== 'canvas' && !(mode === 'split' && !alone) && shown && untranslated(shown)}
-        <!-- An empty form here would autosave a file nobody asked for. -->
-        <section
-          class={['pane is-locale', { 'is-mobile-hidden': (mode === 'split' && mobilePane === 'page') || (side && !alone && mobilePane === 'form') }]}
-          aria-labelledby="pane-{shown}"
-          onfocusout={canvasCompleted}
-        >
-          <div class="pane-head">{@render paneHeading(shown)}<span class="spacer"></span>{@render queueNext()}</div>
-          <div class="empty">
-            {#if off(shown)}
-              <div class="is-wide">
-                <p>{m.editor_not_offered({ language: language(shown) }, options)}</p>
-                {#if putBack}
-                  <p>
-                    {m.editor_turned_off_before({}, options)} <time datetime={new Date(putBack.at).toISOString()}>{formatExactTime(putBack.at, uiLocale)}</time>{m.editor_turned_off_after({ language: language(shown) }, options)}
-                  </p>
-                  <button
-                    class="btn btn-primary"
-                    type="button"
-                    disabled={actionBusy || entryLock.locked}
-                    onclick={() =>
-                      ask('/admin/api/restore', { commit_sha: putBack?.commit_sha })}
-                  >
-                    {m.editor_restore_words({ language: language(shown) }, options)}
-                  </button>
-                  <p>
-                    {m.editor_or({}, options)} <button class="btn-link" type="button" disabled={actionBusy || entryLock.locked} onclick={() => offer(shown, true)}>{m.editor_restore_empty({ language: language(shown) }, options)}</button>.
-                  </p>
-                {:else}
-                  <button class="btn" type="button" disabled={actionBusy || entryLock.locked} onclick={() => offer(shown, true)}>
-                    {m.editor_turn_back_on({ language: language(shown) }, options)}
-                  </button>
-                {/if}
-              </div>
-            {:else}
-              <div class="is-wide">
-                <p>{m.editor_create_translation_intro({}, options)}</p>
-                <button class="btn btn-primary btn-create" type="button" disabled={actionBusy || entryLock.locked} onclick={() => createInPane(shown, false)}>
-                  {m.editor_create_from({ language: language(entry.sourceLocale) }, options)}
-                </button>
-                {#if entry.translator}
-                  <button class="btn btn-fill" type="button" disabled={actionBusy || entryLock.locked} onclick={() => createInPane(shown, true)}>
-                    {m.editor_create_prefill({}, options)}
-                  </button>
-                {/if}
-                {#if missingTargets.length > 1}
-                  <p>
-                    <button class="btn btn-create-all" type="button" disabled={actionBusy || entryLock.locked} onclick={() => createAll(false)}>
-                      {m.editor_create_all({ count: missingTargets.length }, options)}
-                    </button>
-                    {#if entry.translator}
-                      <button class="btn btn-fill-all" type="button" disabled={actionBusy || entryLock.locked} onclick={() => createAll(true)}>
-                        {m.editor_create_all_prefill({ count: missingTargets.length }, options)}
-                      </button>
-                    {/if}
-                  </p>
-                {/if}
-                {#if creatingAll}
-                  <p role="status">{m.editor_creating_language({ language: language(creatingAll) }, options)}</p>
-                {/if}
-                {#if !entry.singleton}
-                  <p>
-                    {m.editor_or({}, options)} <button class="btn-link" type="button" disabled={actionBusy || entryLock.locked} onclick={() => offer(shown, false)}>{m.editor_do_not_offer({ language: language(shown) }, options)}</button> {m.editor_no_file_written({}, options)}
-                  </p>
-                {/if}
-              </div>
-            {/if}
-            {#if actionFailed}
-              <div class="notice notice-danger" role="alert">{@render feedback(actionFailed)}</div>
-            {/if}
-            {#if createAllFailure}
-              <div class="notice notice-danger" role="alert">
-                {feedbackText(createAllFailure)}
-                {#if createAllFailure.code === 'CREATE_ALL_RELOAD_FAILED'}
-                  <button class="btn-link" type="button" onclick={() => void reload()}>{m.editor_lock_reload({}, options)}</button>
-                {/if}
-              </div>
-            {/if}
-            {#if localeFailure?.locale === shown}
-              <div class="notice notice-danger" role="alert">{@render feedback(localeFailure.message)}</div>
-            {/if}
-          </div>
-        </section>
-      {:else if mode !== 'canvas' && !(mode === 'split' && !alone) && shown}
-        <!-- Keyed: another language is another file, not the same one under a new name. -->
-        {#key shown}
+    <div
+      class={[
+        'entry-body',
+        {
+          'has-pane':
+            !drifted && (mode === 'split' || (mode === 'form' && !alone && shown !== undefined)),
+          'is-canvas': mode === 'canvas',
+          'is-split': mode === 'split',
+          'is-full': pageShown && beside === 'none' && !alone,
+        },
+      ]}
+    >
+      {#if drifted}
+        <!-- Stands where the form would be: every field belongs to a structure not yet agreed on. -->
+        <DriftPanel
+          {collection}
+          {slug}
+          drift={entry.drift}
+          locales={entry.locales}
+          {uiLocale}
+          onresolved={entrySession.afterReconciliation}
+        />
+      {:else}
+        {#if mode === 'split' || (mode === 'form' && side && shown && !alone)}
           <div
-            class={['canvas-form-surface', { 'is-mobile-hidden': (mode === 'split' && mobilePane === 'page') || (side && !alone && mobilePane === 'form') }]}
+            class="canvas-mobile-tabs seg"
+            role="group"
+            aria-label={m.editor_split_pane({}, options)}
+          >
+            <button
+              type="button"
+              aria-pressed={mobilePane === 'form'}
+              onclick={() => (mobilePane = 'form')}
+              >{side ? language(entry.sourceLocale) : m.editor_split_form({}, options)}</button
+            >
+            <button
+              type="button"
+              aria-pressed={mobilePane === 'page'}
+              onclick={() => (mobilePane = 'page')}
+              >{side && shown ? language(shown) : m.editor_split_page({}, options)}</button
+            >
+          </div>
+        {/if}
+        <!-- Not drawn when a translation is on its own. -->
+        {#if mode !== 'canvas' && !alone}
+          <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+          <form
+            class={[
+              'form',
+              { 'is-mobile-hidden': (mode === 'split' || side) && mobilePane === 'page' },
+            ]}
+            onsubmit={(e) => e.preventDefault()}
             onfocusout={canvasCompleted}
           >
-            <Translation
-              {collection}
-              {slug}
-              locale={shown}
-              session={entrySession}
-              {fields}
-              blocks={shownForm.blocks}
-              blockLabels={shownForm.blockLabels}
-              bind:data={entrySession.snapshots[shown]!}
-              problems={entrySession.positionalProblems(shown, uiLocale)}
-              inheritedSeo={inherited(shown, entrySession.snapshot(shown))}
-              source={entry.sourceLocale}
-              locked={entryLock.locked}
-              stale={entry.stale.includes(shown)}
-              answered={answered[shown]}
-              work={paneWork}
-              onjump={jumpTo}
-              onreveal={(path) => revealPreview(path, shown)}
-              translator={entry.translator}
-              actionBlocked={busy || entryPublish.sending}
-              url={localeUrl(shown)}
-              {site}
-              {uiLocale}
-              onsaved={(pending) => {
-                entryLock.renew();
-                setPending(shown, pending);
-              }}
-              {mediaBase}
-              heading={paneHeading}
-              afterTitle={ontopbar && shown === locale ? addressRow : undefined}
-              titleKey={entry.titleField}
-              next={queue ? queueNext : undefined}
-              {reference}
-              {references}
-              mark={languageMark}
-              onreference={chooseReference}
-              onclose={side ? () => leaving(() => setBeside('none')) : undefined}
-              onturnoff={entry.singleton ? undefined : () => { rememberActionTrigger(); actionFailed = undefined; offing = shown; }}
-            />
-          </div>
-        {/key}
+            <div class="editor-form-heading">
+              <div
+                ><span class="editor-language-code">{entry.sourceLocale.toUpperCase()}</span><h2
+                  >{language(entry.sourceLocale)}</h2
+                ></div
+              >
+              <span class="editor-source-label">
+                {m.editor_workspace_source({}, options)}
+                <!-- The source is a property of this form, so it is changed from the form's own heading. -->
+                {#if many && present.length > 1}
+                  <span class="sep" aria-hidden="true">·</span>
+                  <button
+                    class="btn-link"
+                    type="button"
+                    disabled={sourceBlocked !== undefined || entryLock.locked}
+                    title={sourceBlocked ??
+                      m.editor_change_source_sub(
+                        { language: language(entry.sourceLocale) },
+                        options,
+                      )}
+                    onclick={openSourceChange}>{m.editor_change_source({}, options)}</button
+                  >
+                {/if}
+              </span>
+            </div>
+            <fieldset
+              disabled={entryLock.locked || entrySession.localeMutationBlocked(entry.sourceLocale)}
+            >
+              <Fields
+                {fields}
+                onreveal={(path) => revealPreview(path, entry.sourceLocale)}
+                blocks={shownForm.blocks}
+                blockLabels={shownForm.blockLabels}
+                {problems}
+                {mediaBase}
+                locale={entry.sourceLocale}
+                {uiLocale}
+                session={entrySession}
+                inheritedSeo={inherited(entry.sourceLocale, data)}
+                {site}
+                servedAt={localeUrl(entry.sourceLocale)}
+                bind:root={entrySession.snapshots[entry.sourceLocale]!}
+                structureLocked={entrySession.structureMutationBlocked()}
+                textOnly={entrySession.sourceTextOnly(entry.sourceLocale)}
+                afterTitle={ontopbar && locale === entry.sourceLocale ? addressRow : undefined}
+                titleKey={entry.titleField}
+              />
+            </fieldset>
+          </form>
+        {/if}
+        <!-- Split replaces a comparison pane rather than adding a third column. -->
+        {#if mode !== 'canvas' && !(mode === 'split' && !alone) && shown && untranslated(shown)}
+          <!-- An empty form here would autosave a file nobody asked for. -->
+          <section
+            class={[
+              'pane is-locale',
+              {
+                'is-mobile-hidden':
+                  (mode === 'split' && mobilePane === 'page') ||
+                  (side && !alone && mobilePane === 'form'),
+              },
+            ]}
+            aria-labelledby="pane-{shown}"
+            onfocusout={canvasCompleted}
+          >
+            <div class="pane-head"
+              >{@render paneHeading(shown)}<span class="spacer"></span>{@render queueNext()}</div
+            >
+            <div class="empty">
+              {#if off(shown)}
+                <div class="is-wide">
+                  <p>{m.editor_not_offered({ language: language(shown) }, options)}</p>
+                  {#if putBack}
+                    <p>
+                      {m.editor_turned_off_before({}, options)}
+                      <time datetime={new Date(putBack.at).toISOString()}
+                        >{formatExactTime(putBack.at, uiLocale)}</time
+                      >{m.editor_turned_off_after({ language: language(shown) }, options)}
+                    </p>
+                    <button
+                      class="btn btn-primary"
+                      type="button"
+                      disabled={actionBusy || entryLock.locked}
+                      onclick={() => ask('/admin/api/restore', { commit_sha: putBack?.commit_sha })}
+                    >
+                      {m.editor_restore_words({ language: language(shown) }, options)}
+                    </button>
+                    <p>
+                      {m.editor_or({}, options)}
+                      <button
+                        class="btn-link"
+                        type="button"
+                        disabled={actionBusy || entryLock.locked}
+                        onclick={() => offer(shown, true)}
+                        >{m.editor_restore_empty({ language: language(shown) }, options)}</button
+                      >.
+                    </p>
+                  {:else}
+                    <button
+                      class="btn"
+                      type="button"
+                      disabled={actionBusy || entryLock.locked}
+                      onclick={() => offer(shown, true)}
+                    >
+                      {m.editor_turn_back_on({ language: language(shown) }, options)}
+                    </button>
+                  {/if}
+                </div>
+              {:else}
+                <div class="is-wide">
+                  <p>{m.editor_create_translation_intro({}, options)}</p>
+                  <button
+                    class="btn btn-primary btn-create"
+                    type="button"
+                    disabled={actionBusy || entryLock.locked}
+                    onclick={() => createInPane(shown, false)}
+                  >
+                    {m.editor_create_from({ language: language(entry.sourceLocale) }, options)}
+                  </button>
+                  {#if entry.translator}
+                    <button
+                      class="btn btn-fill"
+                      type="button"
+                      disabled={actionBusy || entryLock.locked}
+                      onclick={() => createInPane(shown, true)}
+                    >
+                      {m.editor_create_prefill({}, options)}
+                    </button>
+                  {/if}
+                  {#if missingTargets.length > 1}
+                    <p>
+                      <button
+                        class="btn btn-create-all"
+                        type="button"
+                        disabled={actionBusy || entryLock.locked}
+                        onclick={() => createAll(false)}
+                      >
+                        {m.editor_create_all({ count: missingTargets.length }, options)}
+                      </button>
+                      {#if entry.translator}
+                        <button
+                          class="btn btn-fill-all"
+                          type="button"
+                          disabled={actionBusy || entryLock.locked}
+                          onclick={() => createAll(true)}
+                        >
+                          {m.editor_create_all_prefill({ count: missingTargets.length }, options)}
+                        </button>
+                      {/if}
+                    </p>
+                  {/if}
+                  {#if creatingAll}
+                    <p role="status"
+                      >{m.editor_creating_language({ language: language(creatingAll) }, options)}</p
+                    >
+                  {/if}
+                  {#if !entry.singleton}
+                    <p>
+                      {m.editor_or({}, options)}
+                      <button
+                        class="btn-link"
+                        type="button"
+                        disabled={actionBusy || entryLock.locked}
+                        onclick={() => offer(shown, false)}
+                        >{m.editor_do_not_offer({ language: language(shown) }, options)}</button
+                      >
+                      {m.editor_no_file_written({}, options)}
+                    </p>
+                  {/if}
+                </div>
+              {/if}
+              {#if actionFailed}
+                <div class="notice notice-danger" role="alert">{@render feedback(actionFailed)}</div
+                >
+              {/if}
+              {#if createAllFailure}
+                <div class="notice notice-danger" role="alert">
+                  {feedbackText(createAllFailure)}
+                  {#if createAllFailure.code === 'CREATE_ALL_RELOAD_FAILED'}
+                    <button class="btn-link" type="button" onclick={() => void reload()}
+                      >{m.editor_lock_reload({}, options)}</button
+                    >
+                  {/if}
+                </div>
+              {/if}
+              {#if localeFailure?.locale === shown}
+                <div class="notice notice-danger" role="alert"
+                  >{@render feedback(localeFailure.message)}</div
+                >
+              {/if}
+            </div>
+          </section>
+        {:else if mode !== 'canvas' && !(mode === 'split' && !alone) && shown}
+          <!-- Keyed: another language is another file, not the same one under a new name. -->
+          {#key shown}
+            <div
+              class={[
+                'canvas-form-surface',
+                {
+                  'is-mobile-hidden':
+                    (mode === 'split' && mobilePane === 'page') ||
+                    (side && !alone && mobilePane === 'form'),
+                },
+              ]}
+              onfocusout={canvasCompleted}
+            >
+              <Translation
+                {collection}
+                {slug}
+                locale={shown}
+                session={entrySession}
+                {fields}
+                blocks={shownForm.blocks}
+                blockLabels={shownForm.blockLabels}
+                bind:data={entrySession.snapshots[shown]!}
+                problems={entrySession.positionalProblems(shown, uiLocale)}
+                inheritedSeo={inherited(shown, entrySession.snapshot(shown))}
+                source={entry.sourceLocale}
+                locked={entryLock.locked}
+                stale={entry.stale.includes(shown)}
+                answered={answered[shown]}
+                work={paneWork}
+                onjump={jumpTo}
+                onreveal={(path) => revealPreview(path, shown)}
+                translator={entry.translator}
+                actionBlocked={busy || entryPublish.sending}
+                url={localeUrl(shown)}
+                {site}
+                {uiLocale}
+                onsaved={(pending) => {
+                  entryLock.renew();
+                  setPending(shown, pending);
+                }}
+                {mediaBase}
+                heading={paneHeading}
+                afterTitle={ontopbar && shown === locale ? addressRow : undefined}
+                titleKey={entry.titleField}
+                next={queue ? queueNext : undefined}
+                {reference}
+                {references}
+                mark={languageMark}
+                onreference={chooseReference}
+                onclose={side ? () => leaving(() => setBeside('none')) : undefined}
+                onturnoff={entry.singleton
+                  ? undefined
+                  : () => {
+                      rememberActionTrigger();
+                      actionFailed = undefined;
+                      offing = shown;
+                    }}
+              />
+            </div>
+          {/key}
+        {/if}
+        {#if canvasVisited}
+          <CanvasWorkspace
+            bind:this={canvasPane}
+            fullscreen={mode === 'canvas'}
+            entryActions={canvasEntryActions}
+            publishAction={canvasPublish}
+            active={mode === 'split' || mode === 'canvas'}
+            {locale}
+            {uiLocale}
+            {url}
+            request={canvasRequest}
+            currentVersion={() => entrySession.contentVersion(locale)}
+            entryDocument={{ collection, id: slug }}
+            ownerLabel={title}
+            sourceLocale={entry.sourceLocale}
+            session={entrySession}
+            blocks={shownForm.blocks}
+            blockLabels={shownForm.blockLabels}
+            problems={locale === entry.sourceLocale
+              ? problems
+              : entrySession.positionalProblems(locale, uiLocale)}
+            onreviewproblems={reviewCanvasProblems}
+            onselectform={selectForm}
+            {mediaBase}
+            {site}
+            servedAt={localeUrl(locale)}
+            locked={entryLock.locked}
+            onform={() => setCanvas(false)}
+            onnavigateentry={navigateCanvasEntry}
+            mobileHidden={mode === 'split' && mobilePane === 'form'}
+          />
+        {/if}
       {/if}
-      {#if canvasVisited}
-        <CanvasWorkspace
-          bind:this={canvasPane}
-          fullscreen={mode === 'canvas'}
-          entryActions={canvasEntryActions}
-          publishAction={canvasPublish}
-          active={mode === 'split' || mode === 'canvas'}
-          {locale}
-          {uiLocale}
-          {url}
-          request={canvasRequest}
-          currentVersion={() => entrySession.contentVersion(locale)}
-          entryDocument={{ collection, id: slug }}
-          ownerLabel={title}
-          sourceLocale={entry.sourceLocale}
-          session={entrySession}
-          blocks={shownForm.blocks}
-          blockLabels={shownForm.blockLabels}
-          problems={locale === entry.sourceLocale ? problems : entrySession.positionalProblems(locale, uiLocale)}
-          onreviewproblems={reviewCanvasProblems}
-          onselectform={selectForm}
-          {mediaBase}
-          {site}
-          servedAt={localeUrl(locale)}
-          locked={entryLock.locked}
-          onform={() => setCanvas(false)}
-          onnavigateentry={navigateCanvasEntry}
-          mobileHidden={mode === 'split' && mobilePane === 'form'}
-        />
-      {/if}
-    {/if}
-  </div>
+    </div>
   {/if}
   {#if entryPublish.confirming}
     <PublishConfirmation

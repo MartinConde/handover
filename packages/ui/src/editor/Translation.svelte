@@ -289,14 +289,36 @@ const failureDetail = $derived(fillFailure ? messageDetail(fillFailure, uiLocale
   <div class="pane-head">
     {#if heading}{@render heading(locale)}{:else}<h2 id="pane-{locale}">{named(locale)}</h2>{/if}
     {#if answered}
-      <span class="mode answered">{answered.of ? m.editor_language_answered({ written: answered.written, count: answered.of }, options) : m.editor_language_no_source_text({}, options)}</span>
+      <span class="mode answered"
+        >{answered.of
+          ? m.editor_language_answered({ written: answered.written, count: answered.of }, options)
+          : m.editor_language_no_source_text({}, options)}</span
+      >
     {/if}
     {#if stale}
-      <span class="mode">{behind.otherSource && behind.from ? m.translation_other_source({ language: named(behind.from), source: named(source) }, options) : m.translation_source_changed({ source: named(source) }, options)}</span>
+      <span class="mode"
+        >{behind.otherSource && behind.from
+          ? m.translation_other_source(
+              { language: named(behind.from), source: named(source) },
+              options,
+            )
+          : m.translation_source_changed({ source: named(source) }, options)}</span
+      >
     {/if}
     <AutosaveStatus {saving} {failed} unsaved={isUnsaved} {uiLocale}>
       {#snippet failure()}
-        {#if fillFailure?.code === 'TRANSLATION_UNCONFIRMED'}<button type="button" class="btn-link" onclick={() => location.reload()}>{m.editor_lock_reload({}, options)}</button>{:else}<button type="button" class="btn-link" onclick={() => fillFailure ? fill(retryPaths) : session.flush()}>{fillFailure ? m.translation_retry({}, options) : m.editor_save_retry({}, options)}</button>{/if}
+        {#if fillFailure?.code === 'TRANSLATION_UNCONFIRMED'}<button
+            type="button"
+            class="btn-link"
+            onclick={() => location.reload()}>{m.editor_lock_reload({}, options)}</button
+          >{:else}<button
+            type="button"
+            class="btn-link"
+            onclick={() => (fillFailure ? fill(retryPaths) : session.flush())}
+            >{fillFailure
+              ? m.translation_retry({}, options)
+              : m.editor_save_retry({}, options)}</button
+          >{/if}
       {/snippet}
     </AutosaveStatus>
     <span class="spacer"></span>

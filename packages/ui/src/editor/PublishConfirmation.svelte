@@ -134,8 +134,8 @@ const warnings = $derived(lines.filter((c) => c.severity === 'warn'));
       {#if sending}{m.pending_publishing({}, options)}
       {:else if errors.length}{m.pending_fix_errors({ count: errors.length }, options)}
       {:else if choice.unready.length}{choice.unready.every((of) => choice.waitable.includes(of))
-        ? m.pending_finish_or_leave_out({ count: choice.unready.length }, options)
-        : m.pending_finish_languages({ count: choice.unready.length }, options)}
+          ? m.pending_finish_or_leave_out({ count: choice.unready.length }, options)
+          : m.pending_finish_languages({ count: choice.unready.length }, options)}
       {:else if warnings.length}{m.pending_publish_anyway({ count: warnings.length }, options)}
       {:else}{m.pending_publish_this_entry({}, options)}{/if}
     </button>
