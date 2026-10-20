@@ -316,154 +316,191 @@ async function remove() {
       >
     {/if}
     <span class="spacer"></span>
-    <button class="btn btn-primary" type="button" onclick={() => open()}>{m.redirect_add({}, options)}</button>
+    <button class="btn btn-primary" type="button" onclick={() => open()}
+      >{m.redirect_add({}, options)}</button
+    >
   </div>
   <p class="list-note">{m.redirect_intro({}, options)}</p>
-    <div class="redirects">
-      {#if error}<p class="notice notice-danger" role="alert">{messageLine(error, uiLocale)}</p>{/if}
-      {#if readError}
-        <div class="notice notice-danger redirects-read-error" role="alert">
-          {messageLine(readError, uiLocale)}{rulesKnown ? ` ${m.redirect_last_result({}, options)}` : ''}
-          <button class="btn-link" type="button" onclick={load}>{m.common_retry({}, options)}</button>
-        </div>
-      {/if}
-      {#if waiting}
-        <div class="notice notice-info">
-          {m.redirect_pending({ count: waiting }, options)}
-        </div>
-      {/if}
-      <div class="collection-controls">
-        <div class="search-field">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg>
-          <label class="visually-hidden" for="rd-q">{m.redirect_search({}, options)}</label>
-          <input
-            class="input"
-            id="rd-q"
-            type="search"
-            placeholder={m.redirect_search({}, options)}
-            bind:value={query}
-          />
-        </div>
-        <div class="filters">
-          <label class="visually-hidden" for="rd-reason">{m.redirect_reason({}, options)}</label>
-          <select class={['filter', { 'is-on': reason }]} id="rd-reason" bind:value={reason}>
-            <option value="">{m.redirect_every_reason({}, options)}</option>
-            {#each ['slug-change', 'hidden', 'deleted', 'manual'] as key (key)}
-              <option value={key}>{reasonLabel(key as Rule['reason'])}</option>
-            {/each}
-          </select>
-        </div>
+  <div class="redirects">
+    {#if error}<p class="notice notice-danger" role="alert">{messageLine(error, uiLocale)}</p>{/if}
+    {#if readError}
+      <div class="notice notice-danger redirects-read-error" role="alert">
+        {messageLine(readError, uiLocale)}{rulesKnown
+          ? ` ${m.redirect_last_result({}, options)}`
+          : ''}
+        <button class="btn-link" type="button" onclick={load}>{m.common_retry({}, options)}</button>
       </div>
-      {#if loading && !rulesKnown}
-        <Skeleton label={m.common_loading({}, options)} />
-      {:else if readError && !rulesKnown}
-        <p class="placeholder">{m.redirect_unavailable({}, options)}</p>
-      {:else if shown.length}
-        <div class="table is-redirects" role="table" aria-label={m.redirect_title({}, options)}>
-          <div class="row-head" role="row">
-            <div class="th" role="columnheader">{m.redirect_column_redirect({}, options)}</div>
-            <div class="th" role="columnheader">{m.redirect_reason({}, options)}</div>
-            <div class="th" role="columnheader">{m.redirect_column_added({}, options)}</div>
-            <div class="th" role="columnheader"><span class="visually-hidden">{m.redirect_actions({}, options)}</span></div>
+    {/if}
+    {#if waiting}
+      <div class="notice notice-info">
+        {m.redirect_pending({ count: waiting }, options)}
+      </div>
+    {/if}
+    <div class="collection-controls">
+      <div class="search-field">
+        <svg viewBox="0 0 24 24" aria-hidden="true"
+          ><circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 4 4" /></svg
+        >
+        <label class="visually-hidden" for="rd-q">{m.redirect_search({}, options)}</label>
+        <input
+          class="input"
+          id="rd-q"
+          type="search"
+          placeholder={m.redirect_search({}, options)}
+          bind:value={query}
+        />
+      </div>
+      <div class="filters">
+        <label class="visually-hidden" for="rd-reason">{m.redirect_reason({}, options)}</label>
+        <select class={['filter', { 'is-on': reason }]} id="rd-reason" bind:value={reason}>
+          <option value="">{m.redirect_every_reason({}, options)}</option>
+          {#each ['slug-change', 'hidden', 'deleted', 'manual'] as key (key)}
+            <option value={key}>{reasonLabel(key as Rule['reason'])}</option>
+          {/each}
+        </select>
+      </div>
+    </div>
+    {#if loading && !rulesKnown}
+      <Skeleton label={m.common_loading({}, options)} />
+    {:else if readError && !rulesKnown}
+      <p class="placeholder">{m.redirect_unavailable({}, options)}</p>
+    {:else if shown.length}
+      <div class="table is-redirects" role="table" aria-label={m.redirect_title({}, options)}>
+        <div class="row-head" role="row">
+          <div class="th" role="columnheader">{m.redirect_column_redirect({}, options)}</div>
+          <div class="th" role="columnheader">{m.redirect_reason({}, options)}</div>
+          <div class="th" role="columnheader">{m.redirect_column_added({}, options)}</div>
+          <div class="th" role="columnheader">
+            <span class="visually-hidden">{m.redirect_actions({}, options)}</span>
           </div>
-          {#each shown as rule (rule._id)}
-            {@const asking = tested?.id === rule._id}
-            {@const verdict = asking ? tested?.verdict : undefined}
-            <div class={['row', { 'is-managed': managed(rule), 'has-verdict': verdict }]} role="row">
-              <div class="td route" role="cell">
-                <span class="from">{rule.from}</span>
-                <span class="hop is-to">
-                  <svg class="arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span class="visually-hidden">{m.redirect_to({}, options)}</span>
-                  <span class="to">{rule.to}</span>
-                  <span class={['badge code', { 'is-temp': rule.status === 302 }]}
-                    >{rule.status === 302 ? m.redirect_temporary({}, options) : rule.status}</span
-                  >
-                </span>
-                {#if rule.pending}<span class="badge badge-accent">{m.redirect_not_published({}, options)}</span>{/if}
-              </div>
-              <div class="td why" role="cell">
-                <span class="badge">{reasonLabel(rule.reason)}</span>
-                {#if rule.entry}
-                  <a class="owner" href={sitePath(`/admin/c/${rule.entry}`)}>{rule.title ?? rule.entry}</a>
-                {/if}
-                {#if managed(rule)}
-                  <span class="lock-note" id="owns-{rule._id}"
-                    >{m.redirect_managed_by({ title: rule.title ?? m.redirect_the_entry({}, options) }, options)}</span
-                  >
-                {/if}
-              </div>
-              <div class="td num" role="cell" data-label={m.redirect_column_added({}, options)}>
-                {when(rule.createdAt)}
-              </div>
-              <div class="td menu-cell" role="cell">
-                <div class="row-menu">
-                  <button
-                    class="btn btn-ghost btn-sm btn-test"
-                    type="button"
-                    aria-busy={asking && !verdict ? 'true' : undefined}
-                    onclick={() => test(rule)}
-                    >{asking && !verdict ? m.redirect_testing({}, options) : m.redirect_test({}, options)}<span class="visually-hidden">
-                      {rule.from}</span
-                    ></button
-                  >
-                  <!-- aria-disabled, not disabled: a disabled button would skip the reason. -->
-                  <button
-                    class="btn btn-ghost btn-icon"
-                    type="button"
-                    title={m.redirect_edit({}, options)}
-                    aria-disabled={managed(rule) ? 'true' : undefined}
-                    aria-describedby={managed(rule) ? `owns-${rule._id}` : undefined}
-                    onclick={() => !managed(rule) && open(rule)}
-                    ><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l4-1 11-11-3-3L5 16z"/><path d="M14 7l3 3"/></svg><span class="visually-hidden">{m.redirect_edit({}, options)} {rule.from}</span></button
-                  >
-                  <button
-                    class="btn btn-ghost btn-icon btn-delete"
-                    type="button"
-                    title={m.redirect_delete({}, options)}
-                    aria-disabled={managed(rule) ? 'true' : undefined}
-                    aria-describedby={managed(rule) ? `owns-${rule._id}` : undefined}
-                    onclick={() => {
-                      if (managed(rule)) return;
-                      trigger = document.activeElement as HTMLElement;
-                      dropping = rule;
-                    }}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg><span class="visually-hidden">{m.redirect_delete({}, options)} {rule.from}</span></button
-                  >
-                </div>
-              </div>
-              <!-- The verdict sits under its row rather than floating over the next one. -->
-              {#if verdict}
-                <div class="td verdict-cell" role="cell" aria-colspan="4">
-                  <div class="test-pop is-{verdict.kind}" role="status">
-                    <p class="verdict is-{verdict.kind}">{verdictLabel(verdict.kind)}</p>
-                    <p class="line">{verdict.line}</p>
-                    <p>{verdictText(verdict)}</p>
-                    <div class="actions">
-                      <a
-                        class="btn btn-ghost btn-sm open-address"
-                        href={rule.from}
-                        target="_blank"
-                        rel="noreferrer">{m.redirect_open_old({}, options)}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 16 16 8M9 8h7v7"/></svg></a
-                      >
-                      <button class="btn btn-sm" type="button" onclick={() => test(rule)}>{m.redirect_test_again({}, options)}</button>
-                      <button class="btn btn-ghost btn-sm" type="button" onclick={() => (tested = undefined)}>{m.redirect_close({}, options)}</button>
-                    </div>
-                  </div>
-                </div>
+        </div>
+        {#each shown as rule (rule._id)}
+          {@const asking = tested?.id === rule._id}
+          {@const verdict = asking ? tested?.verdict : undefined}
+          <div class={['row', { 'is-managed': managed(rule), 'has-verdict': verdict }]} role="row">
+            <div class="td route" role="cell">
+              <span class="from">{rule.from}</span>
+              <span class="hop is-to">
+                <svg class="arrow" viewBox="0 0 24 24" aria-hidden="true"
+                  ><path d="M5 12h14m-5-5 5 5-5 5" /></svg
+                ><span class="visually-hidden">{m.redirect_to({}, options)}</span>
+                <span class="to">{rule.to}</span>
+                <span class={['badge code', { 'is-temp': rule.status === 302 }]}
+                  >{rule.status === 302 ? m.redirect_temporary({}, options) : rule.status}</span
+                >
+              </span>
+              {#if rule.pending}<span class="badge badge-accent"
+                  >{m.redirect_not_published({}, options)}</span
+                >{/if}
+            </div>
+            <div class="td why" role="cell">
+              <span class="badge">{reasonLabel(rule.reason)}</span>
+              {#if rule.entry}
+                <a class="owner" href={sitePath(`/admin/c/${rule.entry}`)}
+                  >{rule.title ?? rule.entry}</a
+                >
+              {/if}
+              {#if managed(rule)}
+                <span class="lock-note" id="owns-{rule._id}"
+                  >{m.redirect_managed_by(
+                    { title: rule.title ?? m.redirect_the_entry({}, options) },
+                    options,
+                  )}</span
+                >
               {/if}
             </div>
-          {/each}
-        </div>
-      {:else if rules.length}
-        <p class="placeholder">{m.redirect_no_matches({}, options)}</p>
-      {:else}
-        <div class="empty">
-          <div>
-            <h2>{m.redirect_empty_title({}, options)}</h2>
-            <p>{m.redirect_empty_intro({}, options)}</p>
+            <div class="td num" role="cell" data-label={m.redirect_column_added({}, options)}>
+              {when(rule.createdAt)}
+            </div>
+            <div class="td menu-cell" role="cell">
+              <div class="row-menu">
+                <button
+                  class="btn btn-ghost btn-sm btn-test"
+                  type="button"
+                  aria-busy={asking && !verdict ? 'true' : undefined}
+                  onclick={() => test(rule)}
+                  >{asking && !verdict
+                    ? m.redirect_testing({}, options)
+                    : m.redirect_test({}, options)}<span class="visually-hidden">
+                    {rule.from}</span
+                  ></button
+                >
+                <!-- aria-disabled, not disabled: a disabled button would skip the reason. -->
+                <button
+                  class="btn btn-ghost btn-icon"
+                  type="button"
+                  title={m.redirect_edit({}, options)}
+                  aria-disabled={managed(rule) ? 'true' : undefined}
+                  aria-describedby={managed(rule) ? `owns-${rule._id}` : undefined}
+                  onclick={() => !managed(rule) && open(rule)}
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"
+                    ><path d="M4 20l4-1 11-11-3-3L5 16z" /><path d="M14 7l3 3" /></svg
+                  ><span class="visually-hidden">{m.redirect_edit({}, options)} {rule.from}</span
+                  ></button
+                >
+                <button
+                  class="btn btn-ghost btn-icon btn-delete"
+                  type="button"
+                  title={m.redirect_delete({}, options)}
+                  aria-disabled={managed(rule) ? 'true' : undefined}
+                  aria-describedby={managed(rule) ? `owns-${rule._id}` : undefined}
+                  onclick={() => {
+                    if (managed(rule)) return;
+                    trigger = document.activeElement as HTMLElement;
+                    dropping = rule;
+                  }}
+                  ><svg viewBox="0 0 24 24" aria-hidden="true"
+                    ><path
+                      d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"
+                    /></svg
+                  ><span class="visually-hidden">{m.redirect_delete({}, options)} {rule.from}</span
+                  ></button
+                >
+              </div>
+            </div>
+            <!-- The verdict sits under its row rather than floating over the next one. -->
+            {#if verdict}
+              <div class="td verdict-cell" role="cell" aria-colspan="4">
+                <div class="test-pop is-{verdict.kind}" role="status">
+                  <p class="verdict is-{verdict.kind}">{verdictLabel(verdict.kind)}</p>
+                  <p class="line">{verdict.line}</p>
+                  <p>{verdictText(verdict)}</p>
+                  <div class="actions">
+                    <a
+                      class="btn btn-ghost btn-sm open-address"
+                      href={rule.from}
+                      target="_blank"
+                      rel="noreferrer"
+                      >{m.redirect_open_old({}, options)}<svg viewBox="0 0 24 24" aria-hidden="true"
+                        ><path d="M8 16 16 8M9 8h7v7" /></svg
+                      ></a
+                    >
+                    <button class="btn btn-sm" type="button" onclick={() => test(rule)}
+                      >{m.redirect_test_again({}, options)}</button
+                    >
+                    <button
+                      class="btn btn-ghost btn-sm"
+                      type="button"
+                      onclick={() => (tested = undefined)}>{m.redirect_close({}, options)}</button
+                    >
+                  </div>
+                </div>
+              </div>
+            {/if}
           </div>
+        {/each}
+      </div>
+    {:else if rules.length}
+      <p class="placeholder">{m.redirect_no_matches({}, options)}</p>
+    {:else}
+      <div class="empty">
+        <div>
+          <h2>{m.redirect_empty_title({}, options)}</h2>
+          <p>{m.redirect_empty_intro({}, options)}</p>
         </div>
-      {/if}
-    </div>
+      </div>
+    {/if}
+  </div>
 </main>
 
 {#if writing}
@@ -475,110 +512,128 @@ async function remove() {
     dismissible={!saving}
     onclose={close}
   >
-      <h2 id="rd-h">{writing.id ? m.redirect_edit_title({}, options) : m.redirect_add_title({}, options)}</h2>
-      <form
-        onsubmit={(e) => {
-          e.preventDefault();
-          save();
-        }}
-      >
-        {#if knownError && writing.kind === 'page'}
-          <div class="notice notice-danger redirect-directory-error" role="alert">
-            {m.redirect_directory_failed({}, options)}
-            <button class="btn-link" type="button" onclick={loadDirectory}>{m.common_retry({}, options)}</button>
-          </div>
-        {/if}
-        <div class={['field', { 'is-invalid': bad?.field === 'from' }]}>
-          <div class="label-row"><label for="rd-from">{m.redirect_old_address({}, options)}</label></div>
-          <input
-            class="input"
-            id="rd-from"
-            type="text"
-            bind:value={writing.from}
-            aria-invalid={bad?.field === 'from' ? 'true' : undefined}
-            aria-describedby={bad?.field === 'from' ? 'rd-from-e' : 'rd-from-hint'}
-          />
-          {#if bad?.field === 'from'}
-            <p class="error" id="rd-from-e">{bad.message.detail ?? messageText(bad.message, uiLocale)}</p>
-          {:else}
-            <p class="hint" id="rd-from-hint">
-              {m.redirect_old_address_hint({}, options)}
-            </p>
-          {/if}
-        </div>
-        <fieldset>
-          <legend>{m.redirect_send_to({}, options)}</legend>
-          <label class="choice">
-            <input type="radio" name="rd-kind" value="page" bind:group={writing.kind} />
-            {m.redirect_page_destination({}, options)}
-          </label>
-          {#if writing.kind === 'page'}
-            <PagePicker
-              id="rd-pick"
-              label="pages and entries"
-              labelKind="pages-and-entries"
-              labelId="rd-h"
-              {uiLocale}
-              locale={toLocale}
-              chosen={known.entries.find((e) => e.urls[toLocale] === writing?.to)?.path}
-              onpick={(entry) => {
-                if (writing) writing.to = entry.urls[toLocale] ?? '';
-              }}
-            />
-          {/if}
-          <label class="choice">
-            <input type="radio" name="rd-kind" value="url" bind:group={writing.kind} />
-            {m.redirect_web_destination({}, options)}
-          </label>
-          {#if writing.kind === 'url'}
-            <div class="field">
-              <div class="label-row"><label for="rd-url">{m.redirect_web_address({}, options)}</label></div>
-              <input
-                class="input"
-                id="rd-url"
-                type="text"
-                placeholder="https://example.com/brochure.pdf"
-                bind:value={writing.to}
-                aria-invalid={bad?.field === 'to' ? 'true' : undefined}
-                aria-describedby={bad?.field === 'to' ? 'rd-to-e' : undefined}
-              />
-            </div>
-          {/if}
-          <!-- A picked page is an address like any other, so the rule is shown as it will read. -->
-          <p class="hint">
-            {m.redirect_visitors_go_to({ destination: writing.to || '…' }, options)}
-          </p>
-          {#if bad?.field === 'to'}<p class="error" id="rd-to-e">{bad.message.detail ?? messageText(bad.message, uiLocale)}</p>{/if}
-        </fieldset>
-        <!-- A fieldset: a <label> naming no control is a label a screen reader drops. -->
-        <fieldset>
-          <legend>{m.redirect_permanence({}, options)}</legend>
-          <label class="choice">
-            <input type="radio" name="rd-code" value={301} bind:group={writing.status} />
-            {m.redirect_permanent({}, options)} <span class="desc">301</span>
-          </label>
-          <label class="choice">
-            <input type="radio" name="rd-code" value={302} bind:group={writing.status} />
-            {m.redirect_temporary_choice({}, options)} <span class="desc">302</span>
-          </label>
-        </fieldset>
-        {#if chained}
-          <div class="notice notice-info">
-            <b>{m.redirect_already_covered({}, options)}</b>
-            {m.redirect_chain_explanation({ address: chained.from }, options)}
-          </div>
-        {/if}
-        <div class="actions">
-          <button class="btn" type="button" disabled={saving} onclick={close}>{m.common_cancel({}, options)}</button>
-          <button
-            class="btn btn-primary"
-            type="submit"
-            disabled={saving || (writing.kind === 'page' && !knownCurrent)}
+    <h2 id="rd-h">
+      {writing.id ? m.redirect_edit_title({}, options) : m.redirect_add_title({}, options)}
+    </h2>
+    <form
+      onsubmit={(e) => {
+        e.preventDefault();
+        save();
+      }}
+    >
+      {#if knownError && writing.kind === 'page'}
+        <div class="notice notice-danger redirect-directory-error" role="alert">
+          {m.redirect_directory_failed({}, options)}
+          <button class="btn-link" type="button" onclick={loadDirectory}
+            >{m.common_retry({}, options)}</button
           >
-            {saving ? m.redirect_saving({}, options) : writing.id ? m.redirect_save({}, options) : m.redirect_add({}, options)}
-          </button>
         </div>
-      </form>
+      {/if}
+      <div class={['field', { 'is-invalid': bad?.field === 'from' }]}>
+        <div class="label-row">
+          <label for="rd-from">{m.redirect_old_address({}, options)}</label>
+        </div>
+        <input
+          class="input"
+          id="rd-from"
+          type="text"
+          bind:value={writing.from}
+          aria-invalid={bad?.field === 'from' ? 'true' : undefined}
+          aria-describedby={bad?.field === 'from' ? 'rd-from-e' : 'rd-from-hint'}
+        />
+        {#if bad?.field === 'from'}
+          <p class="error" id="rd-from-e">
+            {bad.message.detail ?? messageText(bad.message, uiLocale)}
+          </p>
+        {:else}
+          <p class="hint" id="rd-from-hint">
+            {m.redirect_old_address_hint({}, options)}
+          </p>
+        {/if}
+      </div>
+      <fieldset>
+        <legend>{m.redirect_send_to({}, options)}</legend>
+        <label class="choice">
+          <input type="radio" name="rd-kind" value="page" bind:group={writing.kind} />
+          {m.redirect_page_destination({}, options)}
+        </label>
+        {#if writing.kind === 'page'}
+          <PagePicker
+            id="rd-pick"
+            label="pages and entries"
+            labelKind="pages-and-entries"
+            labelId="rd-h"
+            {uiLocale}
+            locale={toLocale}
+            chosen={known.entries.find((e) => e.urls[toLocale] === writing?.to)?.path}
+            onpick={(entry) => {
+              if (writing) writing.to = entry.urls[toLocale] ?? '';
+            }}
+          />
+        {/if}
+        <label class="choice">
+          <input type="radio" name="rd-kind" value="url" bind:group={writing.kind} />
+          {m.redirect_web_destination({}, options)}
+        </label>
+        {#if writing.kind === 'url'}
+          <div class="field">
+            <div class="label-row">
+              <label for="rd-url">{m.redirect_web_address({}, options)}</label>
+            </div>
+            <input
+              class="input"
+              id="rd-url"
+              type="text"
+              placeholder="https://example.com/brochure.pdf"
+              bind:value={writing.to}
+              aria-invalid={bad?.field === 'to' ? 'true' : undefined}
+              aria-describedby={bad?.field === 'to' ? 'rd-to-e' : undefined}
+            />
+          </div>
+        {/if}
+        <!-- A picked page is an address like any other, so the rule is shown as it will read. -->
+        <p class="hint">
+          {m.redirect_visitors_go_to({ destination: writing.to || '…' }, options)}
+        </p>
+        {#if bad?.field === 'to'}<p class="error" id="rd-to-e">
+            {bad.message.detail ?? messageText(bad.message, uiLocale)}
+          </p>{/if}
+      </fieldset>
+      <!-- A fieldset: a <label> naming no control is a label a screen reader drops. -->
+      <fieldset>
+        <legend>{m.redirect_permanence({}, options)}</legend>
+        <label class="choice">
+          <input type="radio" name="rd-code" value={301} bind:group={writing.status} />
+          {m.redirect_permanent({}, options)} <span class="desc">301</span>
+        </label>
+        <label class="choice">
+          <input type="radio" name="rd-code" value={302} bind:group={writing.status} />
+          {m.redirect_temporary_choice({}, options)} <span class="desc">302</span>
+        </label>
+      </fieldset>
+      {#if chained}
+        <div class="notice notice-info">
+          <b>{m.redirect_already_covered({}, options)}</b>
+          {m.redirect_chain_explanation({ address: chained.from }, options)}
+        </div>
+      {/if}
+      <div class="actions">
+        <button class="btn" type="button" disabled={saving} onclick={close}
+          >{m.common_cancel({}, options)}</button
+        >
+        <button
+          class="btn btn-primary"
+          type="submit"
+          disabled={saving || (writing.kind === 'page' && !knownCurrent)}
+        >
+          {saving
+            ? m.redirect_saving({}, options)
+            : writing.id
+              ? m.redirect_save({}, options)
+              : m.redirect_add({}, options)}
+        </button>
+      </div>
+    </form>
   </Modal>
 {/if}
 

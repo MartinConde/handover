@@ -160,64 +160,86 @@ async function create(event: Event) {
 </script>
 
 <Modal labelledby="new-entry-h" initialFocus="#new-title" dismissible={!busy} {onclose}>
-    <h2 id="new-entry-h">{newLabel(collection, uiLocale, m.new_entry_heading({ collection: headingCollection }, options))}</h2>
-    <form onsubmit={create}>
+  <h2 id="new-entry-h">
+    {newLabel(
+      collection,
+      uiLocale,
+      m.new_entry_heading({ collection: headingCollection }, options),
+    )}
+  </h2>
+  <form onsubmit={create}>
+    <div class="field">
+      <div class="label-row"><label for="new-title">{m.new_entry_title({}, options)}</label></div>
+      <input
+        class="input"
+        id="new-title"
+        type="text"
+        bind:value={text}
+        aria-describedby="new-hint"
+      />
+      <p class="hint" id="new-hint">
+        {#if directoryCurrent}
+          {m.new_entry_saved_as_lead({}, options)} <span class="filename">{preview}</span>. {m.new_entry_saved_as_end(
+            {},
+            options,
+          )}
+        {:else if directoryLoading}
+          {m.new_entry_checking_name({}, options)}
+        {:else}
+          {m.new_entry_name_unavailable({}, options)}
+        {/if}
+      </p>
+    </div>
+    {#if directoryError}
+      <div class="notice notice-danger entry-read-error" role="alert">
+        {directoryText}
+        {#if directoryError.detail}<span class="technical-detail"
+            >{messageDetail(directoryError, uiLocale)}</span
+          >{/if}
+        <button class="btn-link" type="button" onclick={() => load(collection)}
+          >{m.common_retry({}, options)}</button
+        >
+      </div>
+    {/if}
+    {#if locales.length > 1}
       <div class="field">
-        <div class="label-row"><label for="new-title">{m.new_entry_title({}, options)}</label></div>
-        <input
-          class="input"
-          id="new-title"
-          type="text"
-          bind:value={text}
-          aria-describedby="new-hint"
-        />
-        <p class="hint" id="new-hint">
-          {#if directoryCurrent}
-            {m.new_entry_saved_as_lead({}, options)} <span class="filename">{preview}</span>. {m.new_entry_saved_as_end({}, options)}
-          {:else if directoryLoading}
-            {m.new_entry_checking_name({}, options)}
-          {:else}
-            {m.new_entry_name_unavailable({}, options)}
-          {/if}
-        </p>
-      </div>
-      {#if directoryError}
-        <div class="notice notice-danger entry-read-error" role="alert">
-          {directoryText}
-          {#if directoryError.detail}<span class="technical-detail">{messageDetail(directoryError, uiLocale)}</span>{/if}
-          <button class="btn-link" type="button" onclick={() => load(collection)}>{m.common_retry({}, options)}</button>
+        <div class="label-row">
+          <label for="new-locale">{m.new_entry_language({}, options)}</label>
         </div>
-      {/if}
-      {#if locales.length > 1}
-        <div class="field">
-          <div class="label-row"><label for="new-locale">{m.new_entry_language({}, options)}</label></div>
-          <select class="input" id="new-locale" bind:value={locale}>
-            {#each locales as code (code)}
-              <option value={code}>{formatLanguageName(code, uiLocale)}</option>
-            {/each}
-          </select>
-        </div>
-      {/if}
-      {#if templates.length}
-        <fieldset>
-          <legend>{m.new_entry_start_from({}, options)}</legend>
-          <label class="choice">
-            <input type="radio" name="starter" value="" bind:group={starter} /> {m.new_entry_blank({}, options)}
-          </label>
-          {#each templates as name (name)}
-            <label class="choice">
-              <input type="radio" name="starter" value={name} bind:group={starter} />
-              {starterLabel(name)} <span class="desc">{m.new_entry_template({}, options)}</span>
-            </label>
+        <select class="input" id="new-locale" bind:value={locale}>
+          {#each locales as code (code)}
+            <option value={code}>{formatLanguageName(code, uiLocale)}</option>
           {/each}
-        </fieldset>
-      {/if}
-      {#if error}<div class="notice notice-danger" role="alert">{messageText(error, uiLocale)}{#if error.detail}<span class="technical-detail">{messageDetail(error, uiLocale)}</span>{/if}</div>{/if}
-      <div class="actions">
-        <button class="btn" type="button" disabled={busy} onclick={onclose}>{m.common_cancel({}, options)}</button>
-        <button class="btn btn-primary" type="submit" disabled={busy || !directoryCurrent}>
-          {busy ? m.new_entry_creating({}, options) : m.new_entry_create({}, options)}
-        </button>
+        </select>
       </div>
-    </form>
+    {/if}
+    {#if templates.length}
+      <fieldset>
+        <legend>{m.new_entry_start_from({}, options)}</legend>
+        <label class="choice">
+          <input type="radio" name="starter" value="" bind:group={starter} />
+          {m.new_entry_blank({}, options)}
+        </label>
+        {#each templates as name (name)}
+          <label class="choice">
+            <input type="radio" name="starter" value={name} bind:group={starter} />
+            {starterLabel(name)} <span class="desc">{m.new_entry_template({}, options)}</span>
+          </label>
+        {/each}
+      </fieldset>
+    {/if}
+    {#if error}<div class="notice notice-danger" role="alert">
+        {messageText(error, uiLocale)}{#if error.detail}<span class="technical-detail"
+            >{messageDetail(error, uiLocale)}</span
+          >{/if}
+      </div>{/if}
+    <div class="actions">
+      <button class="btn" type="button" disabled={busy} onclick={onclose}
+        >{m.common_cancel({}, options)}</button
+      >
+      <button class="btn btn-primary" type="submit" disabled={busy || !directoryCurrent}>
+        {busy ? m.new_entry_creating({}, options) : m.new_entry_create({}, options)}
+      </button>
+    </div>
+  </form>
 </Modal>

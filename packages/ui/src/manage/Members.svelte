@@ -286,71 +286,99 @@ async function remove() {
 </main>
 
 {#if dialog === 'invite'}
-  <Modal labelledby="invite-h" initialFocus="#invite-email" returnTo={trigger} dismissible={!busy} onclose={close}>
-      <h2 id="invite-h">{m.members_invite_someone({}, options)}</h2>
-      <form onsubmit={invite}>
-        <div class="field">
-          <label for="invite-email">{m.account_email({}, options)}</label>
-          <input
-            class="input"
-            id="invite-email"
-            name="email"
-            type="email"
-            autocomplete="email"
-            required
-            aria-describedby="invite-email-hint"
-            bind:value={email}
-          />
-          <p class="hint" id="invite-email-hint">
-            {m.members_invite_hint({}, options)}
-          </p>
-        </div>
-        <fieldset>
-          <legend>{m.members_role({}, options)}</legend>
-          <label class="choice">
-            <input type="radio" name="invite-role" value="editor" bind:group={role} />
-            {m.members_editor({}, options)} <span class="desc">{m.members_editor_description({}, options)}</span>
-          </label>
-          <label class="choice">
-            <input type="radio" name="invite-role" value="owner" bind:group={role} />
-            {m.members_owner({}, options)} <span class="desc">{m.members_owner_description({}, options)}</span>
-          </label>
-        </fieldset>
-        {#if error}<p class="notice notice-danger" role="alert">{text(error)}{#if error.detail}<span class="technical-detail">{messageDetail(error, uiLocale)}</span>{/if}</p>{/if}
-        <div class="actions">
-          <button class="btn" type="button" disabled={busy} onclick={close}>{m.common_cancel({}, options)}</button>
-          <button class="btn btn-primary" type="submit" disabled={busy}>
-            {busy ? m.members_sending({}, options) : m.members_send_invite({}, options)}
-          </button>
-        </div>
-      </form>
+  <Modal
+    labelledby="invite-h"
+    initialFocus="#invite-email"
+    returnTo={trigger}
+    dismissible={!busy}
+    onclose={close}
+  >
+    <h2 id="invite-h">{m.members_invite_someone({}, options)}</h2>
+    <form onsubmit={invite}>
+      <div class="field">
+        <label for="invite-email">{m.account_email({}, options)}</label>
+        <input
+          class="input"
+          id="invite-email"
+          name="email"
+          type="email"
+          autocomplete="email"
+          required
+          aria-describedby="invite-email-hint"
+          bind:value={email}
+        />
+        <p class="hint" id="invite-email-hint">
+          {m.members_invite_hint({}, options)}
+        </p>
+      </div>
+      <fieldset>
+        <legend>{m.members_role({}, options)}</legend>
+        <label class="choice">
+          <input type="radio" name="invite-role" value="editor" bind:group={role} />
+          {m.members_editor({}, options)}
+          <span class="desc">{m.members_editor_description({}, options)}</span>
+        </label>
+        <label class="choice">
+          <input type="radio" name="invite-role" value="owner" bind:group={role} />
+          {m.members_owner({}, options)}
+          <span class="desc">{m.members_owner_description({}, options)}</span>
+        </label>
+      </fieldset>
+      {#if error}<p class="notice notice-danger" role="alert">
+          {text(error)}{#if error.detail}<span class="technical-detail"
+              >{messageDetail(error, uiLocale)}</span
+            >{/if}
+        </p>{/if}
+      <div class="actions">
+        <button class="btn" type="button" disabled={busy} onclick={close}
+          >{m.common_cancel({}, options)}</button
+        >
+        <button class="btn btn-primary" type="submit" disabled={busy}>
+          {busy ? m.members_sending({}, options) : m.members_send_invite({}, options)}
+        </button>
+      </div>
+    </form>
   </Modal>
 {:else if dialog === 'role'}
-  <Modal labelledby="role-h" panelClass="dialog is-slim" initialFocus="input" returnTo={trigger} dismissible={!busy} onclose={close}>
-      <h2 id="role-h">{m.members_change_role_for({ name: target?.name || target?.email || '' }, options)}</h2>
-      <form onsubmit={changeRole}>
-        <fieldset>
-          <legend class="visually-hidden">{m.members_role({}, options)}</legend>
-          <label class="choice">
-            <input
-              type="radio"
-              name="member-role"
-              value="editor"
-              bind:group={role}
-            />
-            {m.members_editor({}, options)} <span class="desc">{m.members_editor_description({}, options)}</span>
-          </label>
-          <label class="choice">
-            <input type="radio" name="member-role" value="owner" bind:group={role} />
-            {m.members_owner({}, options)} <span class="desc">{m.members_owner_description({}, options)}</span>
-          </label>
-        </fieldset>
-        {#if error}<p class="notice notice-danger" role="alert">{text(error)}{#if error.detail}<span class="technical-detail">{messageDetail(error, uiLocale)}</span>{/if}</p>{/if}
-        <div class="actions">
-          <button class="btn" type="button" disabled={busy} onclick={close}>{m.common_cancel({}, options)}</button>
-          <button class="btn btn-primary" type="submit" disabled={busy}>{m.members_save({}, options)}</button>
-        </div>
-      </form>
+  <Modal
+    labelledby="role-h"
+    panelClass="dialog is-slim"
+    initialFocus="input"
+    returnTo={trigger}
+    dismissible={!busy}
+    onclose={close}
+  >
+    <h2 id="role-h">
+      {m.members_change_role_for({ name: target?.name || target?.email || '' }, options)}
+    </h2>
+    <form onsubmit={changeRole}>
+      <fieldset>
+        <legend class="visually-hidden">{m.members_role({}, options)}</legend>
+        <label class="choice">
+          <input type="radio" name="member-role" value="editor" bind:group={role} />
+          {m.members_editor({}, options)}
+          <span class="desc">{m.members_editor_description({}, options)}</span>
+        </label>
+        <label class="choice">
+          <input type="radio" name="member-role" value="owner" bind:group={role} />
+          {m.members_owner({}, options)}
+          <span class="desc">{m.members_owner_description({}, options)}</span>
+        </label>
+      </fieldset>
+      {#if error}<p class="notice notice-danger" role="alert">
+          {text(error)}{#if error.detail}<span class="technical-detail"
+              >{messageDetail(error, uiLocale)}</span
+            >{/if}
+        </p>{/if}
+      <div class="actions">
+        <button class="btn" type="button" disabled={busy} onclick={close}
+          >{m.common_cancel({}, options)}</button
+        >
+        <button class="btn btn-primary" type="submit" disabled={busy}
+          >{m.members_save({}, options)}</button
+        >
+      </div>
+    </form>
   </Modal>
 {:else if dialog === 'remove'}
   <ConfirmDialog
@@ -374,7 +402,14 @@ async function remove() {
       {:else}
         {#if target?.editing.length}
           <p>
-            {m.members_editing_before({}, options)}{#each target.editing as name, i}{#if i > 0}{i === target.editing.length - 1 ? m.members_list_and({}, options) : ', '}{/if}<strong>{name}</strong>{/each}{target.editing.length === 1 ? m.members_editing_after_one({}, options) : m.members_editing_after_many({}, options)}
+            {m.members_editing_before(
+              {},
+              options,
+            )}{#each target.editing as name, i}{#if i > 0}{i === target.editing.length - 1
+                  ? m.members_list_and({}, options)
+                  : ', '}{/if}<strong>{name}</strong>{/each}{target.editing.length === 1
+              ? m.members_editing_after_one({}, options)
+              : m.members_editing_after_many({}, options)}
           </p>
         {/if}
         <p>

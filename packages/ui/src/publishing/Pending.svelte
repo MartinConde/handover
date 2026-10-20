@@ -558,163 +558,200 @@ function askDiscard(entry: PendingEntry) {
   bind:panel
   onclose={resolving ? closeResolver : onclose}
 >
-    <header class="drawer-head">
-      <div class="head-row">
-        <h2 id="pending-h">{m.pending_title({}, options)}</h2>
-        <button
-          class="btn btn-ghost btn-icon"
-          type="button"
-          aria-label={m.pending_close({}, options)}
-          disabled={busy || discarding}
-          onclick={resolving ? closeResolver : onclose}
-        >✕</button>
-      </div>
-      {#if entries.length}
-        <p class="drawer-meta">
-          <span class="count">{m.pending_change_count({ count: entries.length }, options)}</span>
-          <span class="sep" aria-hidden="true">·</span> {m.pending_selected_count({ count: selected.length }, options)}
-          {#if conflicts.length}
-            <span class="sep" aria-hidden="true">·</span> {m.pending_conflict_count({ count: conflicts.length }, options)}
-          {/if}
-          {#if held.length}
-            <span class="sep" aria-hidden="true">·</span>
-            {m.pending_hold_count({ count: held.filter((e) => !checked(e)).length }, options)}
-          {/if}
-        </p>
-        <p class="drawer-meta is-summary">{summary}</p>
-        <div class="drawer-tools">
-          <span>{m.pending_select({}, options)}</span>
-          <button class="btn-link" type="button" disabled={busy} aria-label={m.pending_select_all_label({}, options)} onclick={selectAll}>{m.pending_all({}, options)}</button>
-          <span class="sep" aria-hidden="true">·</span>
-          <button class="btn-link" type="button" disabled={busy} aria-label={m.pending_select_none_label({}, options)} onclick={selectNone}>{m.pending_none({}, options)}</button>
-        </div>
-      {:else}
-        <p class="drawer-meta">{m.pending_nothing_to_publish({}, options)}</p>
-      {/if}
-    </header>
-    <div class="drawer-body">
-      {#if resolving}
-        <!-- In place of the list, not over it: the rows behind it are not answers to anything. -->
-        <Resolve
-          entry={resolving.key}
-          title={named(resolving)}
-          updated={resolving.updated_at}
-          {uiLocale}
-          onclose={closeResolver}
-          onresolved={() => resolving && resolved(resolving)}
-        />
-      {:else if entries.length}
-        <!-- A hold left behind keeps the drawer open, so the commit is also named here. -->
-        {#if published}
-          <div class="publish-result">
-            <h3>{m.pending_published_count({ count: published }, options)}</h3>
-            <p>{m.pending_commit_on_way({}, options)}</p>
-            {@render result()}
-          </div>
-        {/if}
-        <ul class="change-list">
-          {#each ready as entry (entry.key)}{@render change(entry)}{/each}
-        </ul>
-        {#if checksFailed || groups.length || elsewhere.length}
-          <section class="checks" aria-labelledby="checks-h">
-            <h3 class="group-title" id="checks-h">{m.pending_checks({}, options)}</h3>
-            {#if checksFailed}
-              <p class="checks-sum" role="status">
-                {m.pending_checks_failed({}, options)}
-              </p>
-            {:else}
-              <p class="checks-sum">
-                {m.pending_checks_summary(
-                  { verdict: verdict(lines, uiLocale), count: selected.length },
-                  options,
-                )}
-              </p>
-              {#each groups as group (group.entry.key)}
-                <div class="check-group">
-                  <h4>{named(group.entry)} <span class="badge">{capitalise(collectionName(group.entry.collection, uiLocale))}</span></h4>
-                  <CheckLines lines={group.items} chips={group.entry.locales.length > 1} {uiLocale} {goTo} {onclose} />
-                </div>
-              {/each}
-              {#if elsewhere.length}
-                <div class="check-group">
-                  <h4>{m.pending_elsewhere({}, options)}</h4>
-                  {#each elsewhere as item (item.path + item.fieldPath + item.check)}
-                    <div class="notice notice-{TINT[item.severity]}">
-                      <span class="sev">{severityLabel(item.severity, uiLocale)}</span>
-                      <span class="msg">{checkText(item, uiLocale)}</span>
-                    </div>
-                  {/each}
-                </div>
-              {/if}
-            {/if}
-          </section>
-        {/if}
-        {#if held.length}
-          <div class="change-group">
-            <h3 class="group-title">{published ? m.pending_still_on_hold({}, options) : m.pending_on_hold({}, options)}</h3>
-            <ul class="change-list">
-              {#each held as entry (entry.key)}{@render change(entry)}{/each}
-            </ul>
-            {#if held.some(checked)}
-              <div class="notice notice-warn">
-                {m.pending_hold_release_warning({}, options)}
-              </div>
-            {:else}
-              <p class="foot-note">
-                {m.pending_hold_guidance({}, options)}
-              </p>
-            {/if}
-          </div>
-        {/if}
-      {:else}
-        <div class="empty">
-          <div>
-            <h2>{published ? m.pending_published_count({ count: published }, options) : m.pending_everything_published({}, options)}</h2>
-            <p>
-              {published
-                ? m.pending_commit_on_way({}, options)
-                : m.pending_every_edit_published({}, options)}
-            </p>
-            {#if published}{@render result()}{/if}
-          </div>
-        </div>
-      {/if}
+  <header class="drawer-head">
+    <div class="head-row">
+      <h2 id="pending-h">{m.pending_title({}, options)}</h2>
+      <button
+        class="btn btn-ghost btn-icon"
+        type="button"
+        aria-label={m.pending_close({}, options)}
+        disabled={busy || discarding}
+        onclick={resolving ? closeResolver : onclose}>✕</button
+      >
     </div>
     {#if entries.length}
-      <footer class="drawer-foot">
-        {#if error}<div class="notice notice-danger" role="alert">{errorText}</div>{/if}
-        {#if busy}<div class="notice notice-info" role="status">{m.pending_publishing_count({ count: selected.length }, options)}</div>{/if}
-        <div class="foot-row">
-          <button
-            class="btn btn-primary"
-            type="button"
-            disabled={busy || discarding || Boolean(resolving) || !selected.length || errors.length > 0}
-            onclick={publish}
-          >
-            {#if busy}{m.pending_publishing({}, options)}
-            {:else if errors.length}{m.pending_fix_errors({ count: errors.length }, options)}
-            {:else if !selected.length}{m.pending_publish({}, options)}
-            {:else if warnings.length}{m.pending_publish_anyway({ count: warnings.length }, options)}
-            {:else}{m.pending_publish_count({ count: selected.length }, options)}{/if}
-          </button>
-        </div>
-        <p class="foot-note">
-          {#if resolving}
-            {m.pending_waits_for_conflict({}, options)}
-          {:else if !ready.length}
-            {m.pending_everything_on_hold({}, options)}
-          {:else if !selected.length && ready.every((e) => blocked.includes(e.key))}
-            {m.pending_everything_blocked({}, options)}
-          {:else if !selected.length}
-            {m.pending_nothing_selected({}, options)}
-          {:else if blocked.length}
-            {m.pending_some_blocked({}, options)}
-          {:else}
-            {m.pending_publish_explanation({}, options)}
-          {/if}
-        </p>
-      </footer>
+      <p class="drawer-meta">
+        <span class="count">{m.pending_change_count({ count: entries.length }, options)}</span>
+        <span class="sep" aria-hidden="true">·</span>
+        {m.pending_selected_count({ count: selected.length }, options)}
+        {#if conflicts.length}
+          <span class="sep" aria-hidden="true">·</span>
+          {m.pending_conflict_count({ count: conflicts.length }, options)}
+        {/if}
+        {#if held.length}
+          <span class="sep" aria-hidden="true">·</span>
+          {m.pending_hold_count({ count: held.filter((e) => !checked(e)).length }, options)}
+        {/if}
+      </p>
+      <p class="drawer-meta is-summary">{summary}</p>
+      <div class="drawer-tools">
+        <span>{m.pending_select({}, options)}</span>
+        <button
+          class="btn-link"
+          type="button"
+          disabled={busy}
+          aria-label={m.pending_select_all_label({}, options)}
+          onclick={selectAll}>{m.pending_all({}, options)}</button
+        >
+        <span class="sep" aria-hidden="true">·</span>
+        <button
+          class="btn-link"
+          type="button"
+          disabled={busy}
+          aria-label={m.pending_select_none_label({}, options)}
+          onclick={selectNone}>{m.pending_none({}, options)}</button
+        >
+      </div>
+    {:else}
+      <p class="drawer-meta">{m.pending_nothing_to_publish({}, options)}</p>
     {/if}
+  </header>
+  <div class="drawer-body">
+    {#if resolving}
+      <!-- In place of the list, not over it: the rows behind it are not answers to anything. -->
+      <Resolve
+        entry={resolving.key}
+        title={named(resolving)}
+        updated={resolving.updated_at}
+        {uiLocale}
+        onclose={closeResolver}
+        onresolved={() => resolving && resolved(resolving)}
+      />
+    {:else if entries.length}
+      <!-- A hold left behind keeps the drawer open, so the commit is also named here. -->
+      {#if published}
+        <div class="publish-result">
+          <h3>{m.pending_published_count({ count: published }, options)}</h3>
+          <p>{m.pending_commit_on_way({}, options)}</p>
+          {@render result()}
+        </div>
+      {/if}
+      <ul class="change-list">
+        {#each ready as entry (entry.key)}{@render change(entry)}{/each}
+      </ul>
+      {#if checksFailed || groups.length || elsewhere.length}
+        <section class="checks" aria-labelledby="checks-h">
+          <h3 class="group-title" id="checks-h">{m.pending_checks({}, options)}</h3>
+          {#if checksFailed}
+            <p class="checks-sum" role="status">
+              {m.pending_checks_failed({}, options)}
+            </p>
+          {:else}
+            <p class="checks-sum">
+              {m.pending_checks_summary(
+                { verdict: verdict(lines, uiLocale), count: selected.length },
+                options,
+              )}
+            </p>
+            {#each groups as group (group.entry.key)}
+              <div class="check-group">
+                <h4>
+                  {named(group.entry)}
+                  <span class="badge"
+                    >{capitalise(collectionName(group.entry.collection, uiLocale))}</span
+                  >
+                </h4>
+                <CheckLines
+                  lines={group.items}
+                  chips={group.entry.locales.length > 1}
+                  {uiLocale}
+                  {goTo}
+                  {onclose}
+                />
+              </div>
+            {/each}
+            {#if elsewhere.length}
+              <div class="check-group">
+                <h4>{m.pending_elsewhere({}, options)}</h4>
+                {#each elsewhere as item (item.path + item.fieldPath + item.check)}
+                  <div class="notice notice-{TINT[item.severity]}">
+                    <span class="sev">{severityLabel(item.severity, uiLocale)}</span>
+                    <span class="msg">{checkText(item, uiLocale)}</span>
+                  </div>
+                {/each}
+              </div>
+            {/if}
+          {/if}
+        </section>
+      {/if}
+      {#if held.length}
+        <div class="change-group">
+          <h3 class="group-title">
+            {published ? m.pending_still_on_hold({}, options) : m.pending_on_hold({}, options)}
+          </h3>
+          <ul class="change-list">
+            {#each held as entry (entry.key)}{@render change(entry)}{/each}
+          </ul>
+          {#if held.some(checked)}
+            <div class="notice notice-warn">
+              {m.pending_hold_release_warning({}, options)}
+            </div>
+          {:else}
+            <p class="foot-note">
+              {m.pending_hold_guidance({}, options)}
+            </p>
+          {/if}
+        </div>
+      {/if}
+    {:else}
+      <div class="empty">
+        <div>
+          <h2>
+            {published
+              ? m.pending_published_count({ count: published }, options)
+              : m.pending_everything_published({}, options)}
+          </h2>
+          <p>
+            {published
+              ? m.pending_commit_on_way({}, options)
+              : m.pending_every_edit_published({}, options)}
+          </p>
+          {#if published}{@render result()}{/if}
+        </div>
+      </div>
+    {/if}
+  </div>
+  {#if entries.length}
+    <footer class="drawer-foot">
+      {#if error}<div class="notice notice-danger" role="alert">{errorText}</div>{/if}
+      {#if busy}<div class="notice notice-info" role="status">
+          {m.pending_publishing_count({ count: selected.length }, options)}
+        </div>{/if}
+      <div class="foot-row">
+        <button
+          class="btn btn-primary"
+          type="button"
+          disabled={busy ||
+            discarding ||
+            Boolean(resolving) ||
+            !selected.length ||
+            errors.length > 0}
+          onclick={publish}
+        >
+          {#if busy}{m.pending_publishing({}, options)}
+          {:else if errors.length}{m.pending_fix_errors({ count: errors.length }, options)}
+          {:else if !selected.length}{m.pending_publish({}, options)}
+          {:else if warnings.length}{m.pending_publish_anyway({ count: warnings.length }, options)}
+          {:else}{m.pending_publish_count({ count: selected.length }, options)}{/if}
+        </button>
+      </div>
+      <p class="foot-note">
+        {#if resolving}
+          {m.pending_waits_for_conflict({}, options)}
+        {:else if !ready.length}
+          {m.pending_everything_on_hold({}, options)}
+        {:else if !selected.length && ready.every((e) => blocked.includes(e.key))}
+          {m.pending_everything_blocked({}, options)}
+        {:else if !selected.length}
+          {m.pending_nothing_selected({}, options)}
+        {:else if blocked.length}
+          {m.pending_some_blocked({}, options)}
+        {:else}
+          {m.pending_publish_explanation({}, options)}
+        {/if}
+      </p>
+    </footer>
+  {/if}
 </Modal>
 
 {#if confirming}
@@ -724,17 +761,22 @@ function askDiscard(entry: PendingEntry) {
     dismissible={!discarding}
     onclose={() => (confirming = undefined)}
   >
-      <h2 id="discard-h">{m.pending_discard_question({ title: named(confirming) }, options)}</h2>
-      <p>
-        {confirming.created
-          ? m.pending_discard_created({}, options)
-          : m.pending_discard_explanation({}, options)}
-      </p>
-      <div class="actions">
-        <button class="btn" type="button" disabled={discarding} onclick={() => (confirming = undefined)}>{m.common_cancel({}, options)}</button>
-        <button class="btn btn-danger" type="button" disabled={discarding} onclick={discard}>
-          {discarding ? m.pending_discarding({}, options) : m.pending_discard_changes({}, options)}
-        </button>
-      </div>
+    <h2 id="discard-h">{m.pending_discard_question({ title: named(confirming) }, options)}</h2>
+    <p>
+      {confirming.created
+        ? m.pending_discard_created({}, options)
+        : m.pending_discard_explanation({}, options)}
+    </p>
+    <div class="actions">
+      <button
+        class="btn"
+        type="button"
+        disabled={discarding}
+        onclick={() => (confirming = undefined)}>{m.common_cancel({}, options)}</button
+      >
+      <button class="btn btn-danger" type="button" disabled={discarding} onclick={discard}>
+        {discarding ? m.pending_discarding({}, options) : m.pending_discard_changes({}, options)}
+      </button>
+    </div>
   </Modal>
 {/if}

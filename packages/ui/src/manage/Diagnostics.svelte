@@ -707,38 +707,54 @@ const mailerName = (provider: string) => {
         dismissible={!saving}
         onclose={close}
       >
-          <h2 id="key-h">{typing.hint ? m.diagnostics_replace_key_title({ name }, options) : m.diagnostics_add_key_title({ name }, options)}</h2>
-          <form onsubmit={saveKey}>
-            <p>
-              {m.diagnostics_key_secret({}, options)}
-              {#if typing.hint}
-                {m.diagnostics_key_replaced({ hint: typing.hint }, options)}
-              {/if}
-            </p>
-            <div class="field">
-              <div class="label-row">
-                <label for="key-value">{typing.hint ? m.diagnostics_new_key_label({ name }, options) : m.diagnostics_key_label({ name }, options)}</label>
-              </div>
-              <input
-                class="input"
-                id="key-value"
-                type="password"
-                autocomplete="off"
-                bind:value={typed}
-                aria-describedby={tried ? 'key-tried' : undefined}
-              />
-              {#if tried}
-                <p class="hint" id="key-tried">{m.diagnostics_deepl_test_hint({}, options)}</p>
-              {/if}
+        <h2 id="key-h">
+          {typing.hint
+            ? m.diagnostics_replace_key_title({ name }, options)
+            : m.diagnostics_add_key_title({ name }, options)}
+        </h2>
+        <form onsubmit={saveKey}>
+          <p>
+            {m.diagnostics_key_secret({}, options)}
+            {#if typing.hint}
+              {m.diagnostics_key_replaced({ hint: typing.hint }, options)}
+            {/if}
+          </p>
+          <div class="field">
+            <div class="label-row">
+              <label for="key-value"
+                >{typing.hint
+                  ? m.diagnostics_new_key_label({ name }, options)
+                  : m.diagnostics_key_label({ name }, options)}</label
+              >
             </div>
-            {#if keyError}<div class="notice notice-danger" role="alert">{messageText(keyError)}</div>{/if}
-            <div class="actions">
-              <button class="btn" type="button" disabled={saving} onclick={close}>{m.common_cancel({}, options)}</button>
-              <button class="btn btn-primary" type="submit" disabled={saving}>
-                {saving ? m.diagnostics_saving({}, options) : tried ? m.diagnostics_save_test({}, options) : m.diagnostics_save({}, options)}
-              </button>
-            </div>
-          </form>
+            <input
+              class="input"
+              id="key-value"
+              type="password"
+              autocomplete="off"
+              bind:value={typed}
+              aria-describedby={tried ? 'key-tried' : undefined}
+            />
+            {#if tried}
+              <p class="hint" id="key-tried">{m.diagnostics_deepl_test_hint({}, options)}</p>
+            {/if}
+          </div>
+          {#if keyError}<div class="notice notice-danger" role="alert">
+              {messageText(keyError)}
+            </div>{/if}
+          <div class="actions">
+            <button class="btn" type="button" disabled={saving} onclick={close}
+              >{m.common_cancel({}, options)}</button
+            >
+            <button class="btn btn-primary" type="submit" disabled={saving}>
+              {saving
+                ? m.diagnostics_saving({}, options)
+                : tried
+                  ? m.diagnostics_save_test({}, options)
+                  : m.diagnostics_save({}, options)}
+            </button>
+          </div>
+        </form>
       </Modal>
     {/if}
   {:catch error}

@@ -471,26 +471,74 @@ const queueText = (state: QueueState) => {
   <div class="list-toolbar">
     <h1>{m.media_library_title({}, options)} <span class="count">{heading}</span></h1>
     <span class="spacer"></span>
-    <button class="btn btn-primary" type="button" onclick={() => chooser?.click()}>{m.media_library_upload({}, options)}</button>
-    <label class="visually-hidden" for="lib-file">{m.media_library_files_to_upload({}, options)}</label>
-    <input class="visually-hidden" type="file" id="lib-file" multiple accept={kind === 'images' ? 'image/*' : 'application/pdf'} bind:this={chooser} onchange={(e) => { take(Array.from(e.currentTarget.files ?? [])); e.currentTarget.value = ''; }} />
+    <button class="btn btn-primary" type="button" onclick={() => chooser?.click()}
+      >{m.media_library_upload({}, options)}</button
+    >
+    <label class="visually-hidden" for="lib-file"
+      >{m.media_library_files_to_upload({}, options)}</label
+    >
+    <input
+      class="visually-hidden"
+      type="file"
+      id="lib-file"
+      multiple
+      accept={kind === 'images' ? 'image/*' : 'application/pdf'}
+      bind:this={chooser}
+      onchange={(e) => {
+        take(Array.from(e.currentTarget.files ?? []));
+        e.currentTarget.value = '';
+      }}
+    />
   </div>
   <div class="media-controls">
-  <!-- Buttons rather than links: the kind is not an address of its own. -->
-  <div class="tabs lib-tabs" role="tablist" aria-label={m.media_library_kind({}, options)}>
-    <button type="button" role="tab" aria-selected={kind === 'images'} onclick={() => show('images')}>{m.media_library_images({}, options)}</button>
-    <button type="button" role="tab" aria-selected={kind === 'files'} onclick={() => show('files')}>{m.media_library_files({}, options)}</button>
-  </div>
+    <!-- Buttons rather than links: the kind is not an address of its own. -->
+    <div class="tabs lib-tabs" role="tablist" aria-label={m.media_library_kind({}, options)}>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={kind === 'images'}
+        onclick={() => show('images')}>{m.media_library_images({}, options)}</button
+      >
+      <button
+        type="button"
+        role="tab"
+        aria-selected={kind === 'files'}
+        onclick={() => show('files')}>{m.media_library_files({}, options)}</button
+      >
+    </div>
     <div class="filters">
-      <button class={['filter is-toggle', { 'is-on': only.archived }]} type="button" aria-pressed={only.archived} onclick={() => (only.archived = !only.archived)}>{m.media_library_archived({}, options)}</button>
+      <button
+        class={['filter is-toggle', { 'is-on': only.archived }]}
+        type="button"
+        aria-pressed={only.archived}
+        onclick={() => (only.archived = !only.archived)}
+        >{m.media_library_archived({}, options)}</button
+      >
       {#if kind === 'images'}
-        <button class={['filter is-toggle', { 'is-on': only.recovered }]} type="button" aria-pressed={only.recovered} onclick={() => (only.recovered = !only.recovered)}>{m.media_library_recovered({}, options)}</button>
+        <button
+          class={['filter is-toggle', { 'is-on': only.recovered }]}
+          type="button"
+          aria-pressed={only.recovered}
+          onclick={() => (only.recovered = !only.recovered)}
+          >{m.media_library_recovered({}, options)}</button
+        >
       {/if}
-      <button class={['filter is-toggle', { 'is-on': only.unused }]} type="button" aria-pressed={only.unused} onclick={() => (only.unused = !only.unused)}>{m.media_library_unused({}, options)}</button>
+      <button
+        class={['filter is-toggle', { 'is-on': only.unused }]}
+        type="button"
+        aria-pressed={only.unused}
+        onclick={() => (only.unused = !only.unused)}>{m.media_library_unused({}, options)}</button
+      >
     </div>
     <div class="field search">
       <label class="visually-hidden" for="lib-q">{m.media_library_search({}, options)}</label>
-      <input class="input" id="lib-q" type="search" placeholder={m.media_library_search_placeholder({}, options)} bind:value={query} />
+      <input
+        class="input"
+        id="lib-q"
+        type="search"
+        placeholder={m.media_library_search_placeholder({}, options)}
+        bind:value={query}
+      />
     </div>
   </div>
   {#if failure}
@@ -518,16 +566,50 @@ const queueText = (state: QueueState) => {
   <div class={['lib-body', { 'has-selection': !!chosen }]}>
     <div class="lib-main">
       <!-- svelte-ignore a11y_no_static_element_interactions -- the child button is the control -->
-      <div class={['dropzone', { 'is-big': !items.length, 'is-over': over }]} ondragover={(e) => { e.preventDefault(); over = true; }} ondragleave={() => (over = false)} ondrop={drop}>
-        <svg class="dz-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4m0 0-4 4m4-4 4 4"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>
+      <div
+        class={['dropzone', { 'is-big': !items.length, 'is-over': over }]}
+        ondragover={(e) => {
+          e.preventDefault();
+          over = true;
+        }}
+        ondragleave={() => (over = false)}
+        ondrop={drop}
+      >
+        <svg
+          class="dz-icon"
+          aria-hidden="true"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.75"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          ><path d="M12 16V4m0 0-4 4m4-4 4 4" /><path
+            d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"
+          /></svg
+        >
         <span class="dz-text">
           <span>
-            <ParaglideMessage message={kind === 'images' ? m.media_library_drop_choose_images : m.media_library_drop_choose_files} inputs={{}} {options}>
+            <ParaglideMessage
+              message={kind === 'images'
+                ? m.media_library_drop_choose_images
+                : m.media_library_drop_choose_files}
+              inputs={{}}
+              {options}
+            >
               {#snippet drop({ children })}<b>{@render children?.()}</b>{/snippet}
-              {#snippet choose({ children })}<button class="btn-link" type="button" onclick={() => chooser?.click()}>{@render children?.()}</button>{/snippet}
+              {#snippet choose({ children })}<button
+                  class="btn-link"
+                  type="button"
+                  onclick={() => chooser?.click()}>{@render children?.()}</button
+                >{/snippet}
             </ParaglideMessage>
           </span>
-          <span class="hint">{kind === 'images' ? m.media_library_image_hint({}, options) : m.media_library_file_hint({}, options)}</span>
+          <span class="hint"
+            >{kind === 'images'
+              ? m.media_library_image_hint({}, options)
+              : m.media_library_file_hint({}, options)}</span
+          >
         </span>
       </div>
       {#if queue.length}
@@ -546,25 +628,52 @@ const queueText = (state: QueueState) => {
       {:else if kind === 'images'}
         <div class="media-grid">
           {#each shown as item (item.id)}
-            <article class={['tile', { 'is-archived': item.archived, 'is-selected': chosen?.id === item.id }]}>
+            <article
+              class={[
+                'tile',
+                { 'is-archived': item.archived, 'is-selected': chosen?.id === item.id },
+              ]}
+            >
               <span class="thumb">
                 <MediaImage src={item.url} alt="" {uiLocale} />
-                {#if item.archived}<span class="badge flag">{m.media_library_archived({}, options)}</span>
-                {:else if recovered(item)}<span class="badge badge-warn flag">{m.media_library_recovered({}, options)}</span>{/if}
+                {#if item.archived}<span class="badge flag"
+                    >{m.media_library_archived({}, options)}</span
+                  >
+                {:else if recovered(item)}<span class="badge badge-warn flag"
+                    >{m.media_library_recovered({}, options)}</span
+                  >{/if}
               </span>
               <!-- The whole card opens the panel; the link is what a keyboard reaches. -->
-              <button class="tile-link name" type="button" onclick={() => pick(item)}>{name(item)}</button>
+              <button class="tile-link name" type="button" onclick={() => pick(item)}
+                >{name(item)}</button
+              >
               <span class="sub">
-                <span>{item.width ? `${item.width} × ${item.height}` : fileSize(item.bytes, uiLocale)}</span>
+                <span
+                  >{item.width
+                    ? `${item.width} × ${item.height}`
+                    : fileSize(item.bytes, uiLocale)}</span
+                >
                 <span class={['badge', { 'is-used': !!item.uses?.length }]}>{count(item)}</span>
               </span>
               <!-- Above the stretched link, so both are reachable. -->
               {#if item.archived}
-                <span class="tile-actions"><button class="btn btn-sm" type="button" aria-label={m.media_library_unarchive_named({ filename: name(item) }, options)} onclick={() => describe({ archived: false }, item)}>{m.media_library_unarchive({}, options)}</button></span>
+                <span class="tile-actions"
+                  ><button
+                    class="btn btn-sm"
+                    type="button"
+                    aria-label={m.media_library_unarchive_named({ filename: name(item) }, options)}
+                    onclick={() => describe({ archived: false }, item)}
+                    >{m.media_library_unarchive({}, options)}</button
+                  ></span
+                >
               {/if}
             </article>
           {:else}
-            <p class="hint">{query || filtering ? m.media_library_no_matches({}, options) : m.media_library_empty_images({}, options)}</p>
+            <p class="hint">
+              {query || filtering
+                ? m.media_library_no_matches({}, options)
+                : m.media_library_empty_images({}, options)}
+            </p>
           {/each}
         </div>
       {:else}
@@ -585,26 +694,66 @@ const queueText = (state: QueueState) => {
       {/if}
     </div>
     {#if chosen}
-      <aside class={['lib-side', { 'is-recovered': recovered(chosen) }]} tabindex="-1" bind:this={detailsPanel} aria-labelledby="lib-side-h">
+      <aside
+        class={['lib-side', { 'is-recovered': recovered(chosen) }]}
+        tabindex="-1"
+        bind:this={detailsPanel}
+        aria-labelledby="lib-side-h"
+      >
         <div class="side-head">
-          <button class="btn btn-ghost btn-icon inspector-close" type="button" aria-label={m.media_library_close_details({}, options)} onclick={closeDetails}>×</button>
+          <button
+            class="btn btn-ghost btn-icon inspector-close"
+            type="button"
+            aria-label={m.media_library_close_details({}, options)}
+            onclick={closeDetails}>×</button
+          >
           <p class="side-title" id="lib-side-h">{name(chosen)}</p>
-          <p class="side-meta">{[chosen.width ? `${chosen.width} × ${chosen.height}` : '', fileSize(chosen.bytes, uiLocale), extension(chosen), chosen.createdAt ? m.media_library_uploaded({ date: when(chosen.createdAt) }, options) : ''].filter(Boolean).join(' · ')}</p>
+          <p class="side-meta">
+            {[
+              chosen.width ? `${chosen.width} × ${chosen.height}` : '',
+              fileSize(chosen.bytes, uiLocale),
+              extension(chosen),
+              chosen.createdAt
+                ? m.media_library_uploaded({ date: when(chosen.createdAt) }, options)
+                : '',
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+          </p>
         </div>
         {#if kind === 'images'}
           <div class="preview">
             <MediaImage src={chosen.url} alt="" {uiLocale} />
-            <span class="focal" style="left: {dot(chosen)[0]}%; top: {dot(chosen)[1]}%" aria-hidden="true"></span>
+            <span
+              class="focal"
+              style="left: {dot(chosen)[0]}%; top: {dot(chosen)[1]}%"
+              aria-hidden="true"
+            ></span>
           </div>
           <p class="hint">{m.media_library_focal_hint({}, options)}</p>
           <div class="actions">
             <button class="action" type="button" onclick={() => (framing = true)}>
-              <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none" /></svg>
+              <svg aria-hidden="true" viewBox="0 0 24 24"
+                ><circle cx="12" cy="12" r="9" /><circle
+                  cx="12"
+                  cy="12"
+                  r="3"
+                  fill="currentColor"
+                  stroke="none"
+                /></svg
+              >
               {m.media_library_focal({}, options)}
             </button>
             <!-- A picture nobody measured cannot be cropped. -->
-            <button class="action" type="button" disabled={!(chosen.width && chosen.height)} onclick={() => (cropping = true)}>
-              <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 2v14a2 2 0 0 0 2 2h14" /><path d="M18 22V8a2 2 0 0 0-2-2H2" /></svg>
+            <button
+              class="action"
+              type="button"
+              disabled={!(chosen.width && chosen.height)}
+              onclick={() => (cropping = true)}
+            >
+              <svg aria-hidden="true" viewBox="0 0 24 24"
+                ><path d="M6 2v14a2 2 0 0 0 2 2h14" /><path d="M18 22V8a2 2 0 0 0-2-2H2" /></svg
+              >
               {m.media_library_crop({}, options)}
             </button>
             <button class="action" type="button" onclick={() => chosen && copyUrl(chosen)}>
@@ -612,7 +761,11 @@ const queueText = (state: QueueState) => {
                 <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5" /></svg>
                 {m.media_library_copied({}, options)}
               {:else}
-                <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" /><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" /></svg>
+                <svg aria-hidden="true" viewBox="0 0 24 24"
+                  ><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" /><path
+                    d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"
+                  /></svg
+                >
                 {m.media_library_copy_url({}, options)}
               {/if}
             </button>
@@ -625,7 +778,11 @@ const queueText = (state: QueueState) => {
                 <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5" /></svg>
                 {m.media_library_copied({}, options)}
               {:else}
-                <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" /><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" /></svg>
+                <svg aria-hidden="true" viewBox="0 0 24 24"
+                  ><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" /><path
+                    d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"
+                  /></svg
+                >
                 {m.media_library_copy_url({}, options)}
               {/if}
             </button>
@@ -658,31 +815,77 @@ const queueText = (state: QueueState) => {
           <label for="lib-tags">{m.media_library_tags({}, options)}</label>
           <div class="tag-row">
             {#each chosen.tags ?? [] as word (word)}
-              <span class="badge">{word} <button type="button" aria-label={m.media_library_remove_tag({ tag: word }, options)} onclick={() => describe({ tags: (chosen?.tags ?? []).filter((t) => t !== word) })}>×</button></span>
+              <span class="badge"
+                >{word}
+                <button
+                  type="button"
+                  aria-label={m.media_library_remove_tag({ tag: word }, options)}
+                  onclick={() => describe({ tags: (chosen?.tags ?? []).filter((t) => t !== word) })}
+                  >×</button
+                ></span
+              >
             {/each}
-            <input id="lib-tags" type="text" placeholder={m.media_library_add_tag({}, options)} bind:value={tag} onblur={addTag} onkeydown={(e) => { if (e.key !== 'Enter') return; e.preventDefault(); addTag(); }} />
+            <input
+              id="lib-tags"
+              type="text"
+              placeholder={m.media_library_add_tag({}, options)}
+              bind:value={tag}
+              onblur={addTag}
+              onkeydown={(e) => {
+                if (e.key !== 'Enter') return;
+                e.preventDefault();
+                addTag();
+              }}
+            />
           </div>
           <span class="hint">{m.media_library_tags_hint({}, options)}</span>
         </div>
         {#if kind === 'images'}
           <div class="field">
             <label for="lib-alt">{m.media_library_default_alt({}, options)}</label>
-            <textarea class="input textarea" id="lib-alt" value={chosen.alt ?? ''} onchange={(e) => describe({ alt: e.currentTarget.value })}></textarea>
+            <textarea
+              class="input textarea"
+              id="lib-alt"
+              value={chosen.alt ?? ''}
+              onchange={(e) => describe({ alt: e.currentTarget.value })}></textarea>
             <span class="hint">{m.media_library_alt_hint({}, options)}</span>
           </div>
         {/if}
         <div class="actions is-keep">
-          <button class="btn btn-sm btn-ghost archive" type="button" onclick={() => describe({ archived: !chosen?.archived })}>
+          <button
+            class="btn btn-sm btn-ghost archive"
+            type="button"
+            onclick={() => describe({ archived: !chosen?.archived })}
+          >
             {#if chosen.archived}
-              <svg aria-hidden="true" viewBox="0 0 24 24"><rect width="20" height="5" x="2" y="3" rx="1" /><path d="M4 8v11a2 2 0 0 0 2 2h2" /><path d="M20 8v11a2 2 0 0 1-2 2h-2" /><path d="m9 15 3-3 3 3" /><path d="M12 12v9" /></svg>
+              <svg aria-hidden="true" viewBox="0 0 24 24"
+                ><rect width="20" height="5" x="2" y="3" rx="1" /><path
+                  d="M4 8v11a2 2 0 0 0 2 2h2"
+                /><path d="M20 8v11a2 2 0 0 1-2 2h-2" /><path d="m9 15 3-3 3 3" /><path
+                  d="M12 12v9"
+                /></svg
+              >
               {m.media_library_unarchive({}, options)}
             {:else}
-              <svg aria-hidden="true" viewBox="0 0 24 24"><rect width="20" height="5" x="2" y="3" rx="1" /><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" /><path d="M10 12h4" /></svg>
+              <svg aria-hidden="true" viewBox="0 0 24 24"
+                ><rect width="20" height="5" x="2" y="3" rx="1" /><path
+                  d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"
+                /><path d="M10 12h4" /></svg
+              >
               {m.media_library_archive({}, options)}
             {/if}
           </button>
-          <button class="btn btn-sm btn-ghost btn-quiet-danger delete" type="button" disabled={!!chosen.uses?.length} onclick={ask}>
-            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 6h18" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" /><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /><path d="M10 11v6" /><path d="M14 11v6" /></svg>
+          <button
+            class="btn btn-sm btn-ghost btn-quiet-danger delete"
+            type="button"
+            disabled={!!chosen.uses?.length}
+            onclick={ask}
+          >
+            <svg aria-hidden="true" viewBox="0 0 24 24"
+              ><path d="M3 6h18" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" /><path
+                d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+              /><path d="M10 11v6" /><path d="M14 11v6" /></svg
+            >
             {m.media_library_delete({}, options)}
           </button>
         </div>

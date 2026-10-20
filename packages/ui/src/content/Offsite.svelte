@@ -70,109 +70,127 @@ const target = (): Target =>
 const ready = $derived(kind === 'entry' ? Boolean(picked) : kind !== 'url' || url.trim() !== '');
 </script>
 
-<Modal
-  labelledby="offsite-h"
-  panelClass="dialog is-wide"
-  {returnTo}
-  dismissible={!busy}
-  {onclose}
->
-    <h2 id="offsite-h">{m.offsite_title({}, options)}</h2>
-    <form onsubmit={(e) => { e.preventDefault(); onconfirm(target()); }}>
-      {#if action === 'delete' && onhide}
-        <p class="lead">
-          <strong>{m.offsite_hide_instead_question({}, options)}</strong>
-          {m.offsite_hide_instead_explanation({}, options)}
-        </p>
-      {/if}
-      <p>
-        {#if action === 'off'}
-          {m.offsite_turn_off_before({ language }, options)} <strong>{what}</strong>{#if served} — <code>{served}</code>{/if}
-          {m.offsite_turn_off_after({ language }, options)}
+<Modal labelledby="offsite-h" panelClass="dialog is-wide" {returnTo} dismissible={!busy} {onclose}>
+  <h2 id="offsite-h">{m.offsite_title({}, options)}</h2>
+  <form
+    onsubmit={(e) => {
+      e.preventDefault();
+      onconfirm(target());
+    }}
+  >
+    {#if action === 'delete' && onhide}
+      <p class="lead">
+        <strong>{m.offsite_hide_instead_question({}, options)}</strong>
+        {m.offsite_hide_instead_explanation({}, options)}
+      </p>
+    {/if}
+    <p>
+      {#if action === 'off'}
+        {m.offsite_turn_off_before({ language }, options)} <strong>{what}</strong>{#if served}
+          — <code>{served}</code>{/if}
+        {m.offsite_turn_off_after({ language }, options)}
+      {:else}
+        <strong>{what}</strong>
+        {#if action === 'delete'}
+          {m.offsite_delete_explanation({}, options)}
         {:else}
-          <strong>{what}</strong>
-          {#if action === 'delete'}
-            {m.offsite_delete_explanation({}, options)}
-          {:else}
-            {m.offsite_hide_explanation({ count: many ? 2 : 1 }, options)}
-          {/if}
+          {m.offsite_hide_explanation({ count: many ? 2 : 1 }, options)}
         {/if}
-        {m.offsite_old_links({}, options)}
-      </p>
-      <fieldset>
-        <legend class="visually-hidden">{m.offsite_send_to({}, options)}</legend>
-        {#if index}
-          <label class="choice">
-            <input type="radio" name="offsite-to" value="index" bind:group={kind} />
-            {m.offsite_collection_overview({ collection: collectionName(collection, uiLocale) }, options)} <span class="desc">{index}</span>
-          </label>
-        {/if}
+      {/if}
+      {m.offsite_old_links({}, options)}
+    </p>
+    <fieldset>
+      <legend class="visually-hidden">{m.offsite_send_to({}, options)}</legend>
+      {#if index}
         <label class="choice">
-          <input type="radio" name="offsite-to" value="entry" bind:group={kind} />
-          {m.offsite_another_page({}, options)}
+          <input type="radio" name="offsite-to" value="index" bind:group={kind} />
+          {m.offsite_collection_overview(
+            { collection: collectionName(collection, uiLocale) },
+            options,
+          )} <span class="desc">{index}</span>
         </label>
-        {#if kind === 'entry'}
-          <PagePicker
-            id="offsite-pick"
-            label="pages and entries"
-            labelKind="pages-and-entries"
-            labelId="offsite-h"
-            {uiLocale}
-            chosen={picked?.path}
-            onpick={(entry) => (picked = entry)}
-            onclose={() => (kind = index ? 'index' : 'none')}
-          />
-        {/if}
-        <label class="choice">
-          <input type="radio" name="offsite-to" value="url" bind:group={kind} />
-          {m.offsite_web_address_choice({}, options)}
-        </label>
-        {#if kind === 'url'}
-          <div class="field">
-            <div class="label-row"><label for="offsite-url">{m.redirect_web_address({}, options)}</label></div>
-            <input class="input" id="offsite-url" type="url" placeholder="https://example.com" bind:value={url} />
+      {/if}
+      <label class="choice">
+        <input type="radio" name="offsite-to" value="entry" bind:group={kind} />
+        {m.offsite_another_page({}, options)}
+      </label>
+      {#if kind === 'entry'}
+        <PagePicker
+          id="offsite-pick"
+          label="pages and entries"
+          labelKind="pages-and-entries"
+          labelId="offsite-h"
+          {uiLocale}
+          chosen={picked?.path}
+          onpick={(entry) => (picked = entry)}
+          onclose={() => (kind = index ? 'index' : 'none')}
+        />
+      {/if}
+      <label class="choice">
+        <input type="radio" name="offsite-to" value="url" bind:group={kind} />
+        {m.offsite_web_address_choice({}, options)}
+      </label>
+      {#if kind === 'url'}
+        <div class="field">
+          <div class="label-row">
+            <label for="offsite-url">{m.redirect_web_address({}, options)}</label>
           </div>
-        {/if}
-        <label class="choice">
-          <input type="radio" name="offsite-to" value="none" bind:group={kind} />
-          {m.offsite_nowhere({}, options)} <span class="desc">404</span>
-        </label>
-      </fieldset>
-      <!-- The server writes a rule per language, so the dialog asks once. -->
-      <p class="hint">
-        {action === 'hide'
-          ? m.offsite_rule_on_publish({}, options)
-          : m.offsite_rule_same_commit({}, options)}{#if action !== 'off'}{m.offsite_rule_each_language({}, options)}{/if}
-      </p>
-      {#if errorText}<div class="notice notice-danger" role="alert">{errorText}</div>{/if}
-      <div class="actions">
-        <button class="btn" type="button" disabled={busy} onclick={onclose}>{m.common_cancel({}, options)}</button>
-        {#if action === 'delete' && onhide}
-          <button class="btn btn-primary" type="button" disabled={busy} onclick={onhide}>{m.offsite_hide_instead({}, options)}</button>
-        {/if}
-        <button
-          class="btn {action === 'hide' ? 'btn-primary' : 'btn-danger'}"
-          type="submit"
-          disabled={busy || !ready}
+          <input
+            class="input"
+            id="offsite-url"
+            type="url"
+            placeholder="https://example.com"
+            bind:value={url}
+          />
+        </div>
+      {/if}
+      <label class="choice">
+        <input type="radio" name="offsite-to" value="none" bind:group={kind} />
+        {m.offsite_nowhere({}, options)} <span class="desc">404</span>
+      </label>
+    </fieldset>
+    <!-- The server writes a rule per language, so the dialog asks once. -->
+    <p class="hint">
+      {action === 'hide'
+        ? m.offsite_rule_on_publish({}, options)
+        : m.offsite_rule_same_commit(
+            {},
+            options,
+          )}{#if action !== 'off'}{m.offsite_rule_each_language({}, options)}{/if}
+    </p>
+    {#if errorText}<div class="notice notice-danger" role="alert">{errorText}</div>{/if}
+    <div class="actions">
+      <button class="btn" type="button" disabled={busy} onclick={onclose}
+        >{m.common_cancel({}, options)}</button
+      >
+      {#if action === 'delete' && onhide}
+        <button class="btn btn-primary" type="button" disabled={busy} onclick={onhide}
+          >{m.offsite_hide_instead({}, options)}</button
         >
-          {#if busy}
-            {action === 'delete'
-              ? m.offsite_deleting({}, options)
-              : action === 'off'
-                ? m.offsite_turning_off({}, options)
-                : m.offsite_hiding({}, options)}
-          {:else if action === 'off'}
-            {m.offsite_turn_off({ language }, options)}
-          {:else if action === 'delete' && many}
-            {m.offsite_delete_many({ what }, options)}
-          {:else if action === 'delete'}
-            {m.offsite_delete_one({ kind: singular }, options)}
-          {:else if many}
-            {m.offsite_hide_many({ what }, options)}
-          {:else}
-            {m.offsite_hide_one({ kind: singular }, options)}
-          {/if}
-        </button>
-      </div>
-    </form>
+      {/if}
+      <button
+        class="btn {action === 'hide' ? 'btn-primary' : 'btn-danger'}"
+        type="submit"
+        disabled={busy || !ready}
+      >
+        {#if busy}
+          {action === 'delete'
+            ? m.offsite_deleting({}, options)
+            : action === 'off'
+              ? m.offsite_turning_off({}, options)
+              : m.offsite_hiding({}, options)}
+        {:else if action === 'off'}
+          {m.offsite_turn_off({ language }, options)}
+        {:else if action === 'delete' && many}
+          {m.offsite_delete_many({ what }, options)}
+        {:else if action === 'delete'}
+          {m.offsite_delete_one({ kind: singular }, options)}
+        {:else if many}
+          {m.offsite_hide_many({ what }, options)}
+        {:else}
+          {m.offsite_hide_one({ kind: singular }, options)}
+        {/if}
+      </button>
+    </div>
+  </form>
 </Modal>

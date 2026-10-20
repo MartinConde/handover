@@ -288,6 +288,11 @@ function relink(item: MenuItem, link: NonNullable<MenuItem['link']>) {
   changing = false;
 }
 
+function setOption(item: MenuItem, key: 'entries' | 'newTab', on: boolean) {
+  if (on) item[key] = true;
+  else delete item[key];
+}
+
 function edit(item: MenuItem) {
   before = $state.snapshot(item) as MenuItem;
   editing = item._id;
@@ -468,14 +473,17 @@ const sortable = (key: () => string, index: () => number) =>
     },
   });
 
+function showTab(i: number) {
+  tab = i;
+  editing = '';
+  addedFeedback = undefined;
+}
 // Roving tabindex, as tabs are: the strip is one stop and the arrows walk it.
 function walkTabs(event: KeyboardEvent) {
   const by = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
   if (!by) return;
   event.preventDefault();
-  tab = (tab + by + menus.length) % menus.length;
-  editing = '';
-  addedFeedback = undefined;
+  showTab((tab + by + menus.length) % menus.length);
   (event.currentTarget as HTMLElement).parentElement?.querySelectorAll('button')[tab]?.focus();
 }
 </script>
@@ -488,31 +496,104 @@ function walkTabs(event: KeyboardEvent) {
       {@const says = flag(item)}
       {@const auto = listed(item)}
       {@const open = editing === item._id}
-      {@const s = sortable(() => item._id, () => i)}
+      {@const s = sortable(
+        () => item._id,
+        () => i,
+      )}
       <li>
-        <div class={['menu-item', { 'is-lifted': s.isDragging, 'is-open': open, 'is-added': lastAdded === item._id }]} {@attach s.attach}>
-          <button class="grip" type="button" aria-label={m.menus_reorder({ item: name(item) }, options)} {@attach s.attachHandle}>⠿</button>
-          <button class="row-open" id="{id}-row-{item._id}" type="button" aria-expanded={open} onclick={() => (open ? (editing = '') : edit(item))}>
+        <div
+          class={[
+            'menu-item',
+            { 'is-lifted': s.isDragging, 'is-open': open, 'is-added': lastAdded === item._id },
+          ]}
+          {@attach s.attach}
+        >
+          <button
+            class="grip"
+            type="button"
+            aria-label={m.menus_reorder({ item: name(item) }, options)}
+            {@attach s.attachHandle}>⠿</button
+          >
+          <button
+            class="row-open"
+            id="{id}-row-{item._id}"
+            type="button"
+            aria-expanded={open}
+            onclick={() => (open ? (editing = '') : edit(item))}
+          >
             <span class="row-copy">
               <span class={['lbl', { 'is-default': !item.label }]}>{name(item)}</span>
-              <span class="row-detail"><span class="kind">{kind(item)}</span><span class="row-path">{target(item)}</span></span>
+              <span class="row-detail"
+                ><span class="kind">{kind(item)}</span><span class="row-path">{target(item)}</span
+                ></span
+              >
             </span>
             <span class="row-status">
-            {#if item._locales?.length === 1}<span class="badge badge-info">{m.menus_language_only({ language: (item._locales[0] ?? '').toUpperCase() }, options)}</span>{/if}
-            {#if says}<span class="badge badge-warn" title={says.why}>{says.chip}</span>{/if}
+              {#if item._locales?.length === 1}<span class="badge badge-info"
+                  >{m.menus_language_only(
+                    { language: (item._locales[0] ?? '').toUpperCase() },
+                    options,
+                  )}</span
+                >{/if}
+              {#if says}<span class="badge badge-warn" title={says.why}>{says.chip}</span>{/if}
             </span>
-            <span class="row-edit" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d={open ? 'm6 15 6-6 6 6' : 'm6 9 6 6 6-6'} /></svg></span>
+            <span class="row-edit" aria-hidden="true"
+              ><svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.6"><path d={open ? 'm6 15 6-6 6 6' : 'm6 9 6 6 6-6'} /></svg
+              ></span
+            >
           </button>
           <div class="item-actions row-menu">
-            <button class="btn btn-ghost btn-icon btn-sm" id="{id}-more-{item._id}" type="button" aria-expanded={menuFor === item._id} aria-label={m.menus_actions_for({ item: name(item) }, options)} onclick={() => (menuFor = menuFor === item._id ? '' : item._id)}>⋯</button>
+            <button
+              class="btn btn-ghost btn-icon btn-sm"
+              id="{id}-more-{item._id}"
+              type="button"
+              aria-expanded={menuFor === item._id}
+              aria-label={m.menus_actions_for({ item: name(item) }, options)}
+              onclick={() => (menuFor = menuFor === item._id ? '' : item._id)}>⋯</button
+            >
             {#if menuFor === item._id}
               <div class="menu">
-                <button type="button" disabled={i === 0} aria-label={m.menus_move_up_label({ item: name(item) }, options)} onclick={() => act(item, () => step(here, -1))}>{m.menus_move_up({}, options)}</button>
-                <button type="button" disabled={i === list.length - 1} aria-label={m.menus_move_down_label({ item: name(item) }, options)} onclick={() => act(item, () => step(here, 1))}>{m.menus_move_down({}, options)}</button>
-                <button type="button" disabled={!canIndent(item, here)} aria-label={m.menus_indent_label({ item: name(item) }, options)} onclick={() => act(item, () => indent(item, here))}>{m.menus_make_subitem({}, options)}</button>
-                <button type="button" disabled={path.length === 0} aria-label={m.menus_outdent_label({ item: name(item) }, options)} onclick={() => act(item, () => outdent(here))}>{m.menus_move_out({}, options)}</button>
+                <button
+                  type="button"
+                  disabled={i === 0}
+                  aria-label={m.menus_move_up_label({ item: name(item) }, options)}
+                  onclick={() => act(item, () => step(here, -1))}
+                  >{m.menus_move_up({}, options)}</button
+                >
+                <button
+                  type="button"
+                  disabled={i === list.length - 1}
+                  aria-label={m.menus_move_down_label({ item: name(item) }, options)}
+                  onclick={() => act(item, () => step(here, 1))}
+                  >{m.menus_move_down({}, options)}</button
+                >
+                <button
+                  type="button"
+                  disabled={!canIndent(item, here)}
+                  aria-label={m.menus_indent_label({ item: name(item) }, options)}
+                  onclick={() => act(item, () => indent(item, here))}
+                  >{m.menus_make_subitem({}, options)}</button
+                >
+                <button
+                  type="button"
+                  disabled={path.length === 0}
+                  aria-label={m.menus_outdent_label({ item: name(item) }, options)}
+                  onclick={() => act(item, () => outdent(here))}
+                  >{m.menus_move_out({}, options)}</button
+                >
                 <hr />
-                <button type="button" aria-label={m.menus_remove_label({ item: name(item) }, options)} onclick={() => act(item, () => remove(item, here))}>{m.menus_remove({}, options)}</button>
+                <button
+                  type="button"
+                  aria-label={m.menus_remove_label({ item: name(item) }, options)}
+                  onclick={() => act(item, () => remove(item, here))}
+                  >{m.menus_remove({}, options)}</button
+                >
               </div>
             {/if}
           </div>
@@ -535,58 +616,136 @@ function walkTabs(event: KeyboardEvent) {
 
 <!-- Under its row rather than over the tree, so the rows around it stay in sight. -->
 {#snippet editor(row: MenuItem, says: { chip: string; why: string } | undefined)}
-  <div class="item-editor" role="group" aria-label={m.menus_edit_label({ item: name(row) }, options)}>
+  <div
+    class="item-editor"
+    role="group"
+    aria-label={m.menus_edit_label({ item: name(row) }, options)}
+  >
     {#if says}<p class="notice notice-warn">{says.why}</p>{/if}
     <div class="editor-grid">
       <div class="field">
-        <div class="label-row"><label for="{id}-ed-label">{m.menus_label({}, options)}</label><span class="mode">{m.field_per_language({}, options)}</span></div>
-        <input class="input" id="{id}-ed-label" type="text" value={row.label} oninput={(e) => (row.label = e.currentTarget.value)} placeholder={fallback(row)} />
+        <div class="label-row">
+          <label for="{id}-ed-label">{m.menus_label({}, options)}</label><span class="mode"
+            >{m.field_per_language({}, options)}</span
+          >
+        </div>
+        <input
+          class="input"
+          id="{id}-ed-label"
+          type="text"
+          value={row.label}
+          oninput={(e) => (row.label = e.currentTarget.value)}
+          placeholder={fallback(row)}
+        />
       </div>
       <div class="field">
-        <div class="label-row"><span id="{id}-ed-link-l">{m.menus_links_to({}, options)}</span><span class="mode">{m.field_same_every_language({}, options)}</span></div>
+        <div class="label-row">
+          <span id="{id}-ed-link-l">{m.menus_links_to({}, options)}</span><span class="mode"
+            >{m.field_same_every_language({}, options)}</span
+          >
+        </div>
         {#if changing}
-          <PagePicker id="{id}-ed-link" label="a page or entry" labelKind="page-or-entry" labelId="{id}-ed-link-l" indexes {uiLocale} chosen={keyOf(row.link)} onpick={(e) => relink(row, linkTo(e))} onurl={(href) => relink(row, { type: 'url', href })} onclose={() => (changing = false)} />
+          <PagePicker
+            id="{id}-ed-link"
+            label="a page or entry"
+            labelKind="page-or-entry"
+            labelId="{id}-ed-link-l"
+            indexes
+            {uiLocale}
+            chosen={keyOf(row.link)}
+            onpick={(e) => relink(row, linkTo(e))}
+            onurl={(href) => relink(row, { type: 'url', href })}
+            onclose={() => (changing = false)}
+          />
         {:else}
           <div class="link-summary" role="group" aria-labelledby="{id}-ed-link-l">
             {#if row.link}
               <span class="name">{fallback(row)}</span>
-              <span class="sub">{row.link.type === 'url' ? m.menus_link({}, options) : m.menus_page({}, options)} <code>{target(row)}</code></span>
-              <button class="btn btn-sm" type="button" onclick={() => (changing = true)}>{m.field_change({}, options)}</button>
-              <button class="btn btn-sm remove-link" type="button" onclick={() => unlink(row)}>{m.menus_remove_link({}, options)}</button>
+              <span class="sub"
+                >{row.link.type === 'url' ? m.menus_link({}, options) : m.menus_page({}, options)}
+                <code>{target(row)}</code></span
+              >
+              <button class="btn btn-sm" type="button" onclick={() => (changing = true)}
+                >{m.field_change({}, options)}</button
+              >
+              <button class="btn btn-sm remove-link" type="button" onclick={() => unlink(row)}
+                >{m.menus_remove_link({}, options)}</button
+              >
             {:else}
               <span class="name">{m.menus_no_link({}, options)}</span>
               <span class="sub">{m.menus_no_link_summary({}, options)}</span>
-              <button class="btn btn-sm" type="button" onclick={() => (changing = true)}>{m.menus_add_link({}, options)}</button>
+              <button class="btn btn-sm" type="button" onclick={() => (changing = true)}
+                >{m.menus_add_link({}, options)}</button
+              >
             {/if}
           </div>
         {/if}
       </div>
     </div>
     <div class="editor-foot">
-      {#if row.link?.type === 'index'}<label class="editor-option" for="{id}-ed-entries"><input type="checkbox" id="{id}-ed-entries" checked={row.entries === true} onchange={(e) => { if (e.currentTarget.checked) row.entries = true; else delete row.entries; }} /><span>{m.menus_list_entries({}, options)}</span></label>{/if}
-      {#if row.link}<label class="editor-option" for="{id}-ed-tab"><input type="checkbox" id="{id}-ed-tab" checked={row.newTab === true} onchange={(e) => { if (e.currentTarget.checked) row.newTab = true; else delete row.newTab; }} /><span>{m.menus_new_tab({}, options)}</span></label>{/if}
+      {#if row.link?.type === 'index'}<label class="editor-option" for="{id}-ed-entries"
+          ><input
+            type="checkbox"
+            id="{id}-ed-entries"
+            checked={row.entries === true}
+            onchange={(e) => setOption(row, 'entries', e.currentTarget.checked)}
+          /><span>{m.menus_list_entries({}, options)}</span></label
+        >{/if}
+      {#if row.link}<label class="editor-option" for="{id}-ed-tab"
+          ><input
+            type="checkbox"
+            id="{id}-ed-tab"
+            checked={row.newTab === true}
+            onchange={(e) => setOption(row, 'newTab', e.currentTarget.checked)}
+          /><span>{m.menus_new_tab({}, options)}</span></label
+        >{/if}
       {#if Object.keys(variants).length}
-        <label class="editor-option" for="{id}-ed-variant"><span>{m.menus_style({}, options)}</span>
-          <select class="filter" id="{id}-ed-variant" value={row.variant ?? ''} onchange={(e) => restyle(row, e.currentTarget.value)}>
+        <label class="editor-option" for="{id}-ed-variant"
+          ><span>{m.menus_style({}, options)}</span>
+          <select
+            class="filter"
+            id="{id}-ed-variant"
+            value={row.variant ?? ''}
+            onchange={(e) => restyle(row, e.currentTarget.value)}
+          >
             <option value="">{m.menus_style_standard({}, options)}</option>
-            {#each Object.entries(variants) as [key, label] (key)}<option value={key}>{labelIn(label, uiLocale) ?? key}</option>{/each}
+            {#each Object.entries(variants) as [key, label] (key)}<option value={key}
+                >{labelIn(label, uiLocale) ?? key}</option
+              >{/each}
           </select>
         </label>
       {/if}
       {#if known.locales.length > 1}
-        <label class="editor-option" for="{id}-ed-loc"><span>{m.menus_shown_in({}, options)}</span>
-          <select class="filter" id="{id}-ed-loc" value={shownIn(row)} onchange={(e) => showIn(row, e.currentTarget.value)} aria-describedby={shownIn(row) ? `${id}-ed-loc-hint` : undefined}>
+        <label class="editor-option" for="{id}-ed-loc"
+          ><span>{m.menus_shown_in({}, options)}</span>
+          <select
+            class="filter"
+            id="{id}-ed-loc"
+            value={shownIn(row)}
+            onchange={(e) => showIn(row, e.currentTarget.value)}
+            aria-describedby={shownIn(row) ? `${id}-ed-loc-hint` : undefined}
+          >
             <option value="">{m.menus_all_languages({}, options)}</option>
-            {#each known.locales as of (of)}<option value={of}>{m.menus_language_only({ language: languageName(of) }, options)}</option>{/each}
+            {#each known.locales as of (of)}<option value={of}
+                >{m.menus_language_only({ language: languageName(of) }, options)}</option
+              >{/each}
           </select>
         </label>
       {/if}
       <div class="actions">
-        <button class="btn btn-sm btn-primary" type="button" onclick={closeEditor}>{m.menus_done({}, options)}</button>
-        <button class="btn btn-sm" type="button" onclick={() => cancelEdit(row)}>{m.common_cancel({}, options)}</button>
+        <button class="btn btn-sm btn-primary" type="button" onclick={closeEditor}
+          >{m.menus_done({}, options)}</button
+        >
+        <button class="btn btn-sm" type="button" onclick={() => cancelEdit(row)}
+          >{m.common_cancel({}, options)}</button
+        >
       </div>
     </div>
-    {#if shownIn(row)}<p class="hint" id="{id}-ed-loc-hint">{m.menus_visibility_hint({}, options)}{row.link && row.link.type !== 'url' ? ` ${m.menus_visibility_page_hint({}, options)}` : ''}</p>{/if}
+    {#if shownIn(row)}<p class="hint" id="{id}-ed-loc-hint">
+        {m.menus_visibility_hint({}, options)}{row.link && row.link.type !== 'url'
+          ? ` ${m.menus_visibility_page_hint({}, options)}`
+          : ''}
+      </p>{/if}
   </div>
 {/snippet}
 
@@ -594,9 +753,22 @@ function walkTabs(event: KeyboardEvent) {
   {#if mark?.kind === 'line'}
     <li aria-hidden="true"><div class="drop-line"></div></li>
   {:else if mark?.kind === 'into' && mark.parent}
-    <li aria-hidden="true"><div class={['drop-into', { 'is-deeper': mark.deeper }]}>{mark.sib ? m.menus_drop_inside_after({ parent: name(mark.parent), sibling: name(mark.sib) }, options) : m.menus_drop_inside({ parent: name(mark.parent) }, options)}</div></li>
+    <li aria-hidden="true">
+      <div class={['drop-into', { 'is-deeper': mark.deeper }]}>
+        {mark.sib
+          ? m.menus_drop_inside_after(
+              { parent: name(mark.parent), sibling: name(mark.sib) },
+              options,
+            )
+          : m.menus_drop_inside({ parent: name(mark.parent) }, options)}
+      </div>
+    </li>
   {:else if mark}
-    <li aria-hidden="true"><div class={['drop-blocked', { 'is-deeper': mark.deeper }]}>{m.menus_drop_blocked({}, options)}</div></li>
+    <li aria-hidden="true">
+      <div class={['drop-blocked', { 'is-deeper': mark.deeper }]}>
+        {m.menus_drop_blocked({}, options)}
+      </div>
+    </li>
   {/if}
 {/snippet}
 
@@ -606,8 +778,18 @@ function walkTabs(event: KeyboardEvent) {
       {@const says = flag(item)}
       <li>
         <div class="menu-item is-label">
-          <label class="lbl" for="{id}-lbl-{item._id}">{fallback(item) || m.menus_no_link({}, options)}</label>
-          <input class="input" id="{id}-lbl-{item._id}" type="text" value={item.label} oninput={(e) => (item.label = e.currentTarget.value)} placeholder={fallback(item)} aria-describedby="{id}-tgt-{item._id}" />
+          <label class="lbl" for="{id}-lbl-{item._id}"
+            >{fallback(item) || m.menus_no_link({}, options)}</label
+          >
+          <input
+            class="input"
+            id="{id}-lbl-{item._id}"
+            type="text"
+            value={item.label}
+            oninput={(e) => (item.label = e.currentTarget.value)}
+            placeholder={fallback(item)}
+            aria-describedby="{id}-tgt-{item._id}"
+          />
           <span class="kind" id="{id}-tgt-{item._id}">
             {kind(item)}
             {#if says}<span class="badge badge-warn" title={says.why}>{says.chip}</span>{/if}
@@ -647,60 +829,119 @@ function walkTabs(event: KeyboardEvent) {
     {#if menus.length > 1}
       <div class="tabs is-menus" role="tablist" aria-label={m.menus_tabs({}, options)}>
         {#each menus as one, i (one._id)}
-          <button type="button" role="tab" id="{id}-tab-{i}" aria-selected={i === tab} aria-controls="{id}-menu" tabindex={i === tab ? 0 : -1} onkeydown={walkTabs} onclick={() => { tab = i; editing = ''; addedFeedback = undefined; }}>{capitalise(one.key)}</button>
+          <button
+            type="button"
+            role="tab"
+            id="{id}-tab-{i}"
+            aria-selected={i === tab}
+            aria-controls="{id}-menu"
+            tabindex={i === tab ? 0 : -1}
+            onkeydown={walkTabs}
+            onclick={() => showTab(i)}>{capitalise(one.key)}</button
+          >
         {/each}
       </div>
     {/if}
-    <div class="nav-main" id="{id}-menu" role={menus.length > 1 ? 'tabpanel' : undefined} aria-labelledby={menus.length > 1 ? `${id}-tab-${tab}` : undefined}>
+    <div
+      class="nav-main"
+      id="{id}-menu"
+      role={menus.length > 1 ? 'tabpanel' : undefined}
+      aria-labelledby={menus.length > 1 ? `${id}-tab-${tab}` : undefined}
+    >
       {#if !translating}
         <section class="nav-library" aria-labelledby="{id}-add-h">
           <header class="nav-panel-heading">
             <h2 id="{id}-add-h">{m.menus_add({}, options)}</h2>
-            <a class="nav-jump" href="#{id}-structure-h">{m.menus_go_to_structure({}, options)} ↓</a>
+            <a class="nav-jump" href="#{id}-structure-h">{m.menus_go_to_structure({}, options)} ↓</a
+            >
           </header>
-          <PagePicker id="{id}-pick" label="pages and entries" labelKind="pages-and-entries" labelId="{id}-add-h" indexes library {included} {uiLocale} onpick={addEntry} onurl={addUrl} />
-          <button class="btn btn-sm add-label" type="button" onclick={addLabel}>{m.menus_add_label_only({}, options)}</button>
-          <p class="nav-feedback" role="status">{addedFeedback?.kind === 'entry'
-            ? m.menus_entry_added({ title: addedFeedback.title, menu: addedFeedback.menu }, options)
-            : addedFeedback?.kind === 'url'
-              ? m.menus_url_added({}, options)
-              : addedFeedback?.kind === 'label'
-                ? m.menus_label_added({}, options)
-                : ''}</p>
+          <PagePicker
+            id="{id}-pick"
+            label="pages and entries"
+            labelKind="pages-and-entries"
+            labelId="{id}-add-h"
+            indexes
+            library
+            {included}
+            {uiLocale}
+            onpick={addEntry}
+            onurl={addUrl}
+          />
+          <button class="btn btn-sm add-label" type="button" onclick={addLabel}
+            >{m.menus_add_label_only({}, options)}</button
+          >
+          <p class="nav-feedback" role="status">
+            {addedFeedback?.kind === 'entry'
+              ? m.menus_entry_added(
+                  { title: addedFeedback.title, menu: addedFeedback.menu },
+                  options,
+                )
+              : addedFeedback?.kind === 'url'
+                ? m.menus_url_added({}, options)
+                : addedFeedback?.kind === 'label'
+                  ? m.menus_label_added({}, options)
+                  : ''}
+          </p>
         </section>
       {/if}
       <section class="nav-workspace" aria-labelledby="{id}-structure-h">
         <header class="nav-structure-heading">
-          <div><h2 id="{id}-structure-h" tabindex="-1">{translating ? m.menus_language_labels({ language: languageName(language) }, options) : m.menus_structure({}, options)}</h2><p>{translating ? m.menus_translate_labels({}, options) : m.menus_structure_intro({}, options)}</p></div>
+          <div>
+            <h2 id="{id}-structure-h" tabindex="-1">
+              {translating
+                ? m.menus_language_labels({ language: languageName(language) }, options)
+                : m.menus_structure({}, options)}
+            </h2
+            ><p>
+              {translating
+                ? m.menus_translate_labels({}, options)
+                : m.menus_structure_intro({}, options)}
+            </p>
+          </div>
           <span class="nav-count">{m.menus_item_count({ count: flatItems.length }, options)}</span>
         </header>
-      {#if translating}
-        <!-- One tree for the whole site: a translation saves only the words this language owns. -->
-        <div class="menu-tree">
-          <p class="notice notice-info">{m.menus_translation_guidance({ language: sourceLabel || m.menus_source_language({}, options) }, options)}</p>
-          {@render labelled(menu.items)}
-        </div>
-        <p class="tree-note">{m.menus_empty_box({}, options)}</p>
-      {:else if menu.items.length}
-        <DragDropProvider onDragStart={begun} onDragMove={moved} onDragOver={(_, m) => place(m)} onDragEnd={ended}>
+        {#if translating}
+          <!-- One tree for the whole site: a translation saves only the words this language owns. -->
           <div class="menu-tree">
-            {@render branch(menu.items, [])}
+            <p class="notice notice-info">
+              {m.menus_translation_guidance(
+                { language: sourceLabel || m.menus_source_language({}, options) },
+                options,
+              )}
+            </p>
+            {@render labelled(menu.items)}
           </div>
-          <DragOverlay>
-            {#snippet children(source)}
-              {@const carried = find(menu.items, String(source.id))}
-              {#if carried}<div class="drag-proxy">⠿ {name(carried)}</div>{/if}
-            {/snippet}
-          </DragOverlay>
-        </DragDropProvider>
-      {:else}
-        <div class="empty tree-empty">
-          <div>
-            <h2>{m.menus_nothing_here({}, options)}</h2>
-            <p>{m.menus_nothing_here_intro({}, options)}<br />{m.menus_nothing_here_after({}, options)}</p>
+          <p class="tree-note">{m.menus_empty_box({}, options)}</p>
+        {:else if menu.items.length}
+          <DragDropProvider
+            onDragStart={begun}
+            onDragMove={moved}
+            onDragOver={(_, m) => place(m)}
+            onDragEnd={ended}
+          >
+            <div class="menu-tree">
+              {@render branch(menu.items, [])}
+            </div>
+            <DragOverlay>
+              {#snippet children(source)}
+                {@const carried = find(menu.items, String(source.id))}
+                {#if carried}<div class="drag-proxy">⠿ {name(carried)}</div>{/if}
+              {/snippet}
+            </DragOverlay>
+          </DragDropProvider>
+        {:else}
+          <div class="empty tree-empty">
+            <div>
+              <h2>{m.menus_nothing_here({}, options)}</h2>
+              <p>
+                {m.menus_nothing_here_intro({}, options)}<br />{m.menus_nothing_here_after(
+                  {},
+                  options,
+                )}
+              </p>
+            </div>
           </div>
-        </div>
-      {/if}
+        {/if}
       </section>
     </div>
   {/if}

@@ -526,371 +526,481 @@ const initial = $derived(
 {:else if !session}
   <Login {methods} {path} {query} {uiLocale} onlocale={useDeviceLocale} onlogin={loadSession} />
 {:else}
-<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -- nested links handle keyboard input -->
-<div class={['shell', { 'is-canvas': Boolean(editing) && editorMode === 'canvas', 'is-collapsed': collapsed }]} onclick={follow}>
-  <a class="skip-link" href="#workspace" onclick={(event) => { event.preventDefault(); document.getElementById('workspace')?.focus(); }}>{m.shell_skip_to_content({}, options)}</a>
-  <!-- A banner, not a toast, since it outlives a page load; the pill is the live region. -->
-  {#if status.building}
-    <div class="banner banner-info">
-      {m.build_publishing_banner({}, options)}
-    </div>
-  {/if}
-  {#if revertError}
-    <div class="banner banner-warn" role="alert">{text(revertError)}{#if revertError.detail}<span class="technical-detail">{messageDetail(revertError, uiLocale)}</span>{/if}</div>
-  {/if}
-  <aside class={['sidebar', { 'is-open': menu }]} aria-label={m.shell_main_navigation({}, options)} inert={drawer}>
-    <!-- Site-wide state heads the site's navigation rather than sitting among one entry's controls. -->
-    <div class="sidebar-status">
-      <!-- Always in the DOM so the first state is announced; the ticking clock stays out of it. -->
-      <span class="build-status" role="status">
-        {#if status.build}
-          <BuildPill build={status.build} {uiLocale}>
-            <!-- Only over the admin's own commit; otherwise the pill is the developer's deploy. -->
-            {#if status.build.state === 'failed' && status.build.commit_sha}
-              <span class="sep" aria-hidden="true">·</span>
-              <button class="btn-link" type="button" onclick={() => askRevert(status.build?.commit_sha ?? '')}>
-                {m.build_revert_last({}, options)}
-              </button>
-            {/if}
-          </BuildPill>
-        {/if}
-      </span>
-      {#if status.buildStatus === 'error'}
-        <span class="build-read-error" role="alert">
-          {status.build ? m.build_status_stale({}, options) : m.build_status_unavailable({}, options)}
-          <button class="btn-link" type="button" onclick={status.loadBuild}>{m.common_retry({}, options)}</button>
+  <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -- nested links handle keyboard input -->
+  <div
+    class={[
+      'shell',
+      { 'is-canvas': Boolean(editing) && editorMode === 'canvas', 'is-collapsed': collapsed },
+    ]}
+    onclick={follow}
+  >
+    <a
+      class="skip-link"
+      href="#workspace"
+      onclick={(event) => {
+        event.preventDefault();
+        document.getElementById('workspace')?.focus();
+      }}>{m.shell_skip_to_content({}, options)}</a
+    >
+    <!-- A banner, not a toast, since it outlives a page load; the pill is the live region. -->
+    {#if status.building}
+      <div class="banner banner-info">
+        {m.build_publishing_banner({}, options)}
+      </div>
+    {/if}
+    {#if revertError}
+      <div class="banner banner-warn" role="alert">
+        {text(revertError)}{#if revertError.detail}<span class="technical-detail"
+            >{messageDetail(revertError, uiLocale)}</span
+          >{/if}
+      </div>
+    {/if}
+    <aside
+      class={['sidebar', { 'is-open': menu }]}
+      aria-label={m.shell_main_navigation({}, options)}
+      inert={drawer}
+    >
+      <!-- Site-wide state heads the site's navigation rather than sitting among one entry's controls. -->
+      <div class="sidebar-status">
+        <!-- Always in the DOM so the first state is announced; the ticking clock stays out of it. -->
+        <span class="build-status" role="status">
+          {#if status.build}
+            <BuildPill build={status.build} {uiLocale}>
+              <!-- Only over the admin's own commit; otherwise the pill is the developer's deploy. -->
+              {#if status.build.state === 'failed' && status.build.commit_sha}
+                <span class="sep" aria-hidden="true">·</span>
+                <button
+                  class="btn-link"
+                  type="button"
+                  onclick={() => askRevert(status.build?.commit_sha ?? '')}
+                >
+                  {m.build_revert_last({}, options)}
+                </button>
+              {/if}
+            </BuildPill>
+          {/if}
         </span>
-      {/if}
-      <button
-        class={['indicator', { 'is-lit': status.pending.length && status.pendingKnown }]}
-        type="button"
-        aria-haspopup="dialog"
-        aria-expanded={drawer}
-        disabled={status.pendingStatus !== 'ready'}
-        onclick={() => (drawer = true)}
-        title={status.pendingStatus === 'loading' && !status.pendingKnown ? m.shell_pending_checking({}, options) : status.pendingStatus === 'error' && !status.pendingKnown ? m.shell_pending_unavailable({}, options) : status.pending.length ? m.shell_pending_count({ count: status.pending.length }, options) : m.shell_no_pending({}, options)}
-        bind:this={indicator}
-      >
-        <span class="dot" aria-hidden="true"></span>
-        {#if status.pendingStatus === 'loading' && !status.pendingKnown}
-          {m.shell_pending_checking({}, options)}
-        {:else if status.pendingStatus === 'error' && !status.pending.length}
-          {m.shell_pending_unavailable({}, options)}
-        {:else}
-          <!-- Collapsed, the sidebar clips the words and shows the count alone. -->
-          <span class="count" aria-hidden="true">{status.pendingKnown ? status.pending.length : '…'}</span>
-          <span class="nav-text">{status.pending.length ? m.shell_pending_count({ count: status.pending.length }, options) : m.shell_no_pending({}, options)}</span>
-        {/if}
-        {#if status.pending.length && status.pendingKnown}
-          <span class="detail">
-            <span class="sep" aria-hidden="true">·</span>
-            {m.shell_oldest({ when: formatRelativeTime(oldest, uiLocale) }, options)}
-            {#if held}<span class="sep" aria-hidden="true">·</span> {m.shell_on_hold({ count: held }, options)}{/if}
-          </span>
-        {/if}
-        <svg class="indicator-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="m8 5 5 5-5 5" /></svg>
-      </button>
-      {#if status.pendingStatus === 'error'}
-        <span class="pending-read-error" role="alert">
-          {status.pendingKnown ? m.shell_pending_stale({}, options) : m.shell_pending_failed({}, options)}
-          <button class="btn-link" type="button" onclick={status.loadPending}>{m.common_retry({}, options)}</button>
-        </span>
-      {/if}
-    </div>
-    <nav class="nav">
-      <div class="nav-group">
-        <a href={sitePath(`/admin`)} data-icon="dashboard" aria-current={path === '/admin' ? 'page' : undefined}><span class="nav-text">{m.dashboard_title({}, options)}</span></a>
-      </div>
-    </nav>
-    <!-- Always there, even with no globals: every site has redirects, listed on that screen. -->
-    <nav class="nav" aria-labelledby="nav-site">
-      <div class="nav-label" id="nav-site">{m.shell_site({}, options)}</div>
-      <div class="nav-group">
-        <a
-          href={sitePath(`/admin/site`)}
-          data-icon="site"
-          aria-current={path.startsWith('/admin/site') ? 'page' : undefined}
-        ><span class="nav-text">{m.shell_site_settings({}, options)}</span></a>
-        {#each siteScreens as screen (screen.key)}
-          <a
-            href={sitePath(`/admin/x/${screen.key}`)}
-            data-icon="screen"
-            aria-current={path === `/admin/x/${screen.key}` ? 'page' : undefined}
-          ><span class="nav-text">{screenLabel(screen)}</span></a>
-        {/each}
-      </div>
-    </nav>
-    <nav class="nav" aria-labelledby="nav-content">
-      <div class="nav-label" id="nav-content">{m.shell_content({}, options)}</div>
-      <div class="nav-group">
-        {#each collections as name (name)}
-          <a
-            href={sitePath(`/admin/c/${name}`)}
-            data-icon={['listings', 'pages', 'team', 'blog'].includes(name) ? name : 'collection'}
-            aria-current={(listRoute ?? entryRoute)?.[1] === name ? 'page' : undefined}
-          ><span class="nav-text">{capitalise(collectionName(name, uiLocale))}</span></a>
-        {/each}
-      </div>
-    </nav>
-    <nav class="nav" aria-labelledby="nav-manage">
-      <div class="nav-label" id="nav-manage">{m.shell_manage({}, options)}</div>
-      <div class="nav-group">
-        {#each manage as item (item.path)}
-          <a
-            href={sitePath(item.path)}
-            data-icon={item.icon}
-            aria-current={path === item.path ? 'page' : undefined}
-          ><span class="nav-text">{manageLabel(item.label)}</span></a>
-        {/each}
-      </div>
-    </nav>
-    <div class="sidebar-footer">
-      {#if session.site}<a class="site-link" href={session.site} target="_blank" rel="noreferrer"><span class="nav-text">{m.shell_view_website({}, options)}</span> <span aria-hidden="true">↗</span></a>{/if}
-      <div class="user-menu">
-        <button
-          class="btn"
-          type="button"
-          aria-expanded={account}
-          aria-label={m.shell_account_menu({ name: session.user.name || session.user.email, role: session.role === 'owner' ? m.account_role_owner({}, options) : m.account_role_editor({}, options) }, options)}
-          onclick={() => (account = !account)}
-        >
-          <span class="avatar" aria-hidden="true">{initial}</span>
-          <span class="label">
-            <span class="name">{session.user.name || session.user.email}</span>
-            <span class="role">{session.role === 'owner' ? m.account_role_owner({}, options) : m.account_role_editor({}, options)}</span>
-          </span>
-        </button>
-        {#if account}
-          <div class="menu">
-            <!-- Context, not actions: the role is changed on the members screen, never here. -->
-            <div class="who">
-              <span class="name">
-                {session.user.name || session.user.email}
-                <span class="badge">{session.role === 'owner' ? m.account_role_owner({}, options) : m.account_role_editor({}, options)}</span>
-              </span>
-              <span class="email">{session.user.email}</span>
-            </div>
-            <a href={sitePath(`/admin/account`)} aria-current={path === '/admin/account' ? 'page' : undefined}
-              >{m.account_title({}, options)}</a
+        {#if status.buildStatus === 'error'}
+          <span class="build-read-error" role="alert">
+            {status.build
+              ? m.build_status_stale({}, options)
+              : m.build_status_unavailable({}, options)}
+            <button class="btn-link" type="button" onclick={status.loadBuild}
+              >{m.common_retry({}, options)}</button
             >
-            <button type="button" onclick={signOut}>{m.shell_sign_out({}, options)}</button>
+          </span>
+        {/if}
+        <button
+          class={['indicator', { 'is-lit': status.pending.length && status.pendingKnown }]}
+          type="button"
+          aria-haspopup="dialog"
+          aria-expanded={drawer}
+          disabled={status.pendingStatus !== 'ready'}
+          onclick={() => (drawer = true)}
+          title={status.pendingStatus === 'loading' && !status.pendingKnown
+            ? m.shell_pending_checking({}, options)
+            : status.pendingStatus === 'error' && !status.pendingKnown
+              ? m.shell_pending_unavailable({}, options)
+              : status.pending.length
+                ? m.shell_pending_count({ count: status.pending.length }, options)
+                : m.shell_no_pending({}, options)}
+          bind:this={indicator}
+        >
+          <span class="dot" aria-hidden="true"></span>
+          {#if status.pendingStatus === 'loading' && !status.pendingKnown}
+            {m.shell_pending_checking({}, options)}
+          {:else if status.pendingStatus === 'error' && !status.pending.length}
+            {m.shell_pending_unavailable({}, options)}
+          {:else}
+            <!-- Collapsed, the sidebar clips the words and shows the count alone. -->
+            <span class="count" aria-hidden="true"
+              >{status.pendingKnown ? status.pending.length : '…'}</span
+            >
+            <span class="nav-text"
+              >{status.pending.length
+                ? m.shell_pending_count({ count: status.pending.length }, options)
+                : m.shell_no_pending({}, options)}</span
+            >
+          {/if}
+          {#if status.pending.length && status.pendingKnown}
+            <span class="detail">
+              <span class="sep" aria-hidden="true">·</span>
+              {m.shell_oldest({ when: formatRelativeTime(oldest, uiLocale) }, options)}
+              {#if held}<span class="sep" aria-hidden="true">·</span>
+                {m.shell_on_hold({ count: held }, options)}{/if}
+            </span>
+          {/if}
+          <svg
+            class="indicator-chevron"
+            viewBox="0 0 20 20"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.6"
+            aria-hidden="true"><path d="m8 5 5 5-5 5" /></svg
+          >
+        </button>
+        {#if status.pendingStatus === 'error'}
+          <span class="pending-read-error" role="alert">
+            {status.pendingKnown
+              ? m.shell_pending_stale({}, options)
+              : m.shell_pending_failed({}, options)}
+            <button class="btn-link" type="button" onclick={status.loadPending}
+              >{m.common_retry({}, options)}</button
+            >
+          </span>
+        {/if}
+      </div>
+      <nav class="nav">
+        <div class="nav-group">
+          <a
+            href={sitePath(`/admin`)}
+            data-icon="dashboard"
+            aria-current={path === '/admin' ? 'page' : undefined}
+            ><span class="nav-text">{m.dashboard_title({}, options)}</span></a
+          >
+        </div>
+      </nav>
+      <!-- Always there, even with no globals: every site has redirects, listed on that screen. -->
+      <nav class="nav" aria-labelledby="nav-site">
+        <div class="nav-label" id="nav-site">{m.shell_site({}, options)}</div>
+        <div class="nav-group">
+          <a
+            href={sitePath(`/admin/site`)}
+            data-icon="site"
+            aria-current={path.startsWith('/admin/site') ? 'page' : undefined}
+            ><span class="nav-text">{m.shell_site_settings({}, options)}</span></a
+          >
+          {#each siteScreens as screen (screen.key)}
+            <a
+              href={sitePath(`/admin/x/${screen.key}`)}
+              data-icon="screen"
+              aria-current={path === `/admin/x/${screen.key}` ? 'page' : undefined}
+              ><span class="nav-text">{screenLabel(screen)}</span></a
+            >
+          {/each}
+        </div>
+      </nav>
+      <nav class="nav" aria-labelledby="nav-content">
+        <div class="nav-label" id="nav-content">{m.shell_content({}, options)}</div>
+        <div class="nav-group">
+          {#each collections as name (name)}
+            <a
+              href={sitePath(`/admin/c/${name}`)}
+              data-icon={['listings', 'pages', 'team', 'blog'].includes(name) ? name : 'collection'}
+              aria-current={(listRoute ?? entryRoute)?.[1] === name ? 'page' : undefined}
+              ><span class="nav-text">{capitalise(collectionName(name, uiLocale))}</span></a
+            >
+          {/each}
+        </div>
+      </nav>
+      <nav class="nav" aria-labelledby="nav-manage">
+        <div class="nav-label" id="nav-manage">{m.shell_manage({}, options)}</div>
+        <div class="nav-group">
+          {#each manage as item (item.path)}
+            <a
+              href={sitePath(item.path)}
+              data-icon={item.icon}
+              aria-current={path === item.path ? 'page' : undefined}
+              ><span class="nav-text">{manageLabel(item.label)}</span></a
+            >
+          {/each}
+        </div>
+      </nav>
+      <div class="sidebar-footer">
+        {#if session.site}<a class="site-link" href={session.site} target="_blank" rel="noreferrer"
+            ><span class="nav-text">{m.shell_view_website({}, options)}</span>
+            <span aria-hidden="true">↗</span></a
+          >{/if}
+        <div class="user-menu">
+          <button
+            class="btn"
+            type="button"
+            aria-expanded={account}
+            aria-label={m.shell_account_menu(
+              {
+                name: session.user.name || session.user.email,
+                role:
+                  session.role === 'owner'
+                    ? m.account_role_owner({}, options)
+                    : m.account_role_editor({}, options),
+              },
+              options,
+            )}
+            onclick={() => (account = !account)}
+          >
+            <span class="avatar" aria-hidden="true">{initial}</span>
+            <span class="label">
+              <span class="name">{session.user.name || session.user.email}</span>
+              <span class="role"
+                >{session.role === 'owner'
+                  ? m.account_role_owner({}, options)
+                  : m.account_role_editor({}, options)}</span
+              >
+            </span>
+          </button>
+          {#if account}
+            <div class="menu">
+              <!-- Context, not actions: the role is changed on the members screen, never here. -->
+              <div class="who">
+                <span class="name">
+                  {session.user.name || session.user.email}
+                  <span class="badge"
+                    >{session.role === 'owner'
+                      ? m.account_role_owner({}, options)
+                      : m.account_role_editor({}, options)}</span
+                  >
+                </span>
+                <span class="email">{session.user.email}</span>
+              </div>
+              <a
+                href={sitePath(`/admin/account`)}
+                aria-current={path === '/admin/account' ? 'page' : undefined}
+                >{m.account_title({}, options)}</a
+              >
+              <button type="button" onclick={signOut}>{m.shell_sign_out({}, options)}</button>
+            </div>
+          {/if}
+        </div>
+      </div>
+    </aside>
+    <div
+      class="shell-body"
+      id="workspace"
+      tabindex="-1"
+      inert={drawer}
+      style:--topbar-stuck={bar ? `${topbarHeight}px` : undefined}
+    >
+      <header class={['topbar', { 'is-entry': bar }]} bind:offsetHeight={topbarHeight}>
+        <!-- Only on a phone, where the narrow rule has taken the sidebar away. -->
+        <button
+          class="btn btn-ghost menu-button"
+          type="button"
+          aria-label={m.shell_open_menu({}, options)}
+          aria-expanded={menu}
+          onclick={() => (menu = !menu)}>☰</button
+        >
+        <!-- Only beside the sidebar; on a phone the menu button above stands in for it. -->
+        <button
+          class="btn btn-ghost sidebar-toggle"
+          type="button"
+          aria-label={collapsed
+            ? m.shell_expand_sidebar({}, options)
+            : m.shell_collapse_sidebar({}, options)}
+          aria-expanded={!collapsed}
+          onclick={toggleSidebar}
+          ><svg viewBox="0 0 24 24" aria-hidden="true"
+            ><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16" /></svg
+          ></button
+        >
+        {#if crumb}
+          <div class="crumbs">
+            <a href={sitePath(crumb.href)}>{crumb.parent}</a>{#if crumb.current}<span
+                class="sep"
+                aria-hidden="true">/</span
+              ><span class="current">{crumb.current}</span>{/if}
           </div>
         {/if}
-      </div>
-    </div>
-  </aside>
-  <div class="shell-body" id="workspace" tabindex="-1" inert={drawer} style:--topbar-stuck={bar ? `${topbarHeight}px` : undefined}>
-    <header class={['topbar', { 'is-entry': bar }]} bind:offsetHeight={topbarHeight}>
-      <!-- Only on a phone, where the narrow rule has taken the sidebar away. -->
-      <button
-        class="btn btn-ghost menu-button"
-        type="button"
-        aria-label={m.shell_open_menu({}, options)}
-        aria-expanded={menu}
-        onclick={() => (menu = !menu)}>☰</button
-      >
-      <!-- Only beside the sidebar; on a phone the menu button above stands in for it. -->
-      <button
-        class="btn btn-ghost sidebar-toggle"
-        type="button"
-        aria-label={collapsed ? m.shell_expand_sidebar({}, options) : m.shell_collapse_sidebar({}, options)}
-        aria-expanded={!collapsed}
-        onclick={toggleSidebar}
-        ><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16" /></svg></button
-      >
-      {#if crumb}
-        <div class="crumbs">
-          <a href={sitePath(crumb.href)}>{crumb.parent}</a>{#if crumb.current}<span class="sep" aria-hidden="true">/</span><span class="current">{crumb.current}</span>{/if}
-        </div>
-      {/if}
-      {#if bar}<div class="entry-lead">{@render bar.lead()}</div>{/if}
-      <span class="spacer"></span>
-      {#if bar}<div class="entry-actions">{@render bar.actions()}</div>{/if}
-    </header>
-    <!-- Keyed on the entry rather than on the address, for the reason `editingAt` gives. -->
-    {#key `${editingAt || path}#${reload}`}
-    {#if editing}
-      {#await Promise.all([openEntry, import('./editor/Editor.svelte')])}
-        <main class="main"><Skeleton label={m.common_loading({}, options)} shape="form" /></main>
-      {:then [entry, { default: Editor }]}
-        <Editor
-          collection={editing.collection}
-          slug={editing.slug}
-          section={editing.section ?? ''}
-          entry={entry as EditorEntry}
-          mediaBase={session?.mediaBase ?? ''}
-          preview={session?.preview ?? false}
-          site={session?.site}
-          {uiLocale}
-          userId={session?.user.id}
-          onchanged={async () => {
-            invalidateEntryDirectory();
-            await status.loadPending();
-            if (await flushNavigation()) reload += 1;
-          }}
-          onreload={async () => {
-            // Restore/reconciliation already closed the old session. The read happens before
-            // remounting so a failure leaves that session's reload-only recovery control visible.
-            await reloadEntry();
-          }}
-          onpending={status.loadPending}
-          onconflict={() => (status.conflicted = [...new Set([...status.conflicted, editingAt])])}
-          oncommitted={commitChanged}
-          onpublished={async (title) => {
-            notify({ code: 'PUBLISHED_ENTRY', name: title });
-            await commitChanged();
-          }}
-          onrestored={(date) => (restored = { entry: editingAt, date })}
-          restored={restored?.entry === editingAt ? restored.date : undefined}
-          onsourcechanged={(locale) => (sourceChanged = { entry: editingAt, locale })}
-          sourceChanged={sourceChanged?.entry === editingAt ? sourceChanged.locale : undefined}
-          oncreatedall={(report) => (createdAll = report && { entry: editingAt, report })}
-          createdAll={createdAll?.entry === editingAt ? createdAll.report : undefined}
-          onmode={(mode) => (editorMode = mode)}
-          ontitle={(read) => (titled = { entry: editingAt, read })}
-          ontopbar={(parts) => {
-            entryBar = { entry: editingAt, ...parts };
-            return () => (entryBar = undefined);
-          }}
-        />
-      {:catch error}
-        {#if error && typeof error === 'object' && 'source' in error}
-          <main class="main main-editor">
-            <SourceRecovery
-              problem={error.source as SourceProblem}
+        {#if bar}<div class="entry-lead">{@render bar.lead()}</div>{/if}
+        <span class="spacer"></span>
+        {#if bar}<div class="entry-actions">{@render bar.actions()}</div>{/if}
+      </header>
+      <!-- Keyed on the entry rather than on the address, for the reason `editingAt` gives. -->
+      {#key `${editingAt || path}#${reload}`}
+        {#if editing}
+          {#await Promise.all([openEntry, import('./editor/Editor.svelte')])}
+            <main class="main">
+              <Skeleton label={m.common_loading({}, options)} shape="form" />
+            </main>
+          {:then [entry, { default: Editor }]}
+            <Editor
               collection={editing.collection}
               slug={editing.slug}
+              section={editing.section ?? ''}
+              entry={entry as EditorEntry}
+              mediaBase={session?.mediaBase ?? ''}
+              preview={session?.preview ?? false}
+              site={session?.site}
               {uiLocale}
-              onchosen={async (locale) => {
-                sourceChanged = { entry: editingAt, locale };
+              userId={session?.user.id}
+              onchanged={async () => {
                 invalidateEntryDirectory();
                 await status.loadPending();
-                reload += 1;
+                if (await flushNavigation()) reload += 1;
               }}
-              onreload={() => (reload += 1)}
+              onreload={async () => {
+                // Restore/reconciliation already closed the old session. The read happens before
+                // remounting so a failure leaves that session's reload-only recovery control visible.
+                await reloadEntry();
+              }}
+              onpending={status.loadPending}
+              onconflict={() =>
+                (status.conflicted = [...new Set([...status.conflicted, editingAt])])}
+              oncommitted={commitChanged}
+              onpublished={async (title) => {
+                notify({ code: 'PUBLISHED_ENTRY', name: title });
+                await commitChanged();
+              }}
+              onrestored={(date) => (restored = { entry: editingAt, date })}
+              restored={restored?.entry === editingAt ? restored.date : undefined}
+              onsourcechanged={(locale) => (sourceChanged = { entry: editingAt, locale })}
+              sourceChanged={sourceChanged?.entry === editingAt ? sourceChanged.locale : undefined}
+              oncreatedall={(report) => (createdAll = report && { entry: editingAt, report })}
+              createdAll={createdAll?.entry === editingAt ? createdAll.report : undefined}
+              onmode={(mode) => (editorMode = mode)}
+              ontitle={(read) => (titled = { entry: editingAt, read })}
+              ontopbar={(parts) => {
+                entryBar = { entry: editingAt, ...parts };
+                return () => (entryBar = undefined);
+              }}
             />
+          {:catch error}
+            {#if error && typeof error === 'object' && 'source' in error}
+              <main class="main main-editor">
+                <SourceRecovery
+                  problem={error.source as SourceProblem}
+                  collection={editing.collection}
+                  slug={editing.slug}
+                  {uiLocale}
+                  onchosen={async (locale) => {
+                    sourceChanged = { entry: editingAt, locale };
+                    invalidateEntryDirectory();
+                    await status.loadPending();
+                    reload += 1;
+                  }}
+                  onreload={() => (reload += 1)}
+                />
+              </main>
+            {:else}
+              {@const failure = entryFailure(error)}
+              <!-- A missing entry stays missing, so only a failed read is worth another go. -->
+              <main class="main">
+                <p class="notice notice-danger" role="alert">
+                  {text(failure)}{#if failure.detail}<span class="technical-detail"
+                      >{messageDetail(failure, uiLocale)}</span
+                    >{/if}{#if failure.code === 'ENTRY_LOAD_FAILED'}{' '}<button
+                      class="btn-link"
+                      type="button"
+                      onclick={() => (reload += 1)}>{m.common_retry({}, options)}</button
+                    >{/if}
+                </p>
+              </main>
+            {/if}
+          {/await}
+        {:else if listRoute}
+          <EntryList
+            collection={listRoute[1] ?? ''}
+            role={session.role}
+            {uiLocale}
+            onchanged={() => {
+              invalidateEntryDirectory();
+              return status.loadPending();
+            }}
+            oncommitted={commitChanged}
+            onsaved={(name) => notify({ code: 'SAVED_TEMPLATE', name })}
+          />
+        {:else if redirectRoute}
+          <Redirects {uiLocale} oncommitted={commitChanged} />
+        {:else if openScreen}
+          {@const Screen = openScreen.component}
+          <!-- The shell owns the landmark, so a site's screen is only its own content. -->
+          <main class="main">
+            <Screen session={openScreen.session} request={fetch} {navigate} {uiLocale} />
           </main>
+        {:else if path === '/admin/site'}
+          <Globals {uiLocale} />
+        {:else if path === '/admin/media'}
+          <Library base={session?.mediaBase ?? ''} presets={session?.presets ?? []} {uiLocale} />
+        {:else if path === '/admin/account'}
+          <Account
+            user={session.user}
+            role={session.role}
+            {query}
+            {uiLocale}
+            {localeBusy}
+            {localeError}
+            onlocale={saveLocale}
+            onname={loadSession}
+          />
+        {:else if path === '/admin/members' && session.role === 'owner'}
+          <Members user={session.user} {uiLocale} />
+        {:else if path === '/admin/activity'}
+          <!-- No role condition: which events an editor sees is the server's filter. -->
+          <Activity
+            role={session.role}
+            mediaBase={session.mediaBase ?? ''}
+            {uiLocale}
+            oncommitted={commitChanged}
+          />
+        {:else if path === '/admin/settings' && session.role === 'owner'}
+          <Diagnostics {uiLocale} oncommitted={commitChanged} />
         {:else}
-          {@const failure = entryFailure(error)}
-          <!-- A missing entry stays missing, so only a failed read is worth another go. -->
-          <main class="main"><p class="notice notice-danger" role="alert">{text(failure)}{#if failure.detail}<span class="technical-detail">{messageDetail(failure, uiLocale)}</span>{/if}{#if failure.code === 'ENTRY_LOAD_FAILED'}{' '}<button class="btn-link" type="button" onclick={() => (reload += 1)}>{m.common_retry({}, options)}</button>{/if}</p></main>
+          <Dashboard
+            pending={status.pending}
+            pendingStatus={status.pendingStatus}
+            build={status.build}
+            buildStatus={status.buildStatus}
+            {collections}
+            {uiLocale}
+            role={session.role}
+            onreview={() => (drawer = true)}
+            onrevert={askRevert}
+            onretryPending={status.loadPending}
+            onretryBuild={status.loadBuild}
+            oncommitted={commitChanged}
+          />
         {/if}
-      {/await}
-    {:else if listRoute}
-      <EntryList
-        collection={listRoute[1] ?? ''}
-        role={session.role}
-        {uiLocale}
-        onchanged={() => {
-          invalidateEntryDirectory();
-          return status.loadPending();
-        }}
-        oncommitted={commitChanged}
-        onsaved={(name) => notify({ code: 'SAVED_TEMPLATE', name })}
-      />
-    {:else if redirectRoute}
-      <Redirects {uiLocale} oncommitted={commitChanged} />
-    {:else if openScreen}
-      {@const Screen = openScreen.component}
-      <!-- The shell owns the landmark, so a site's screen is only its own content. -->
-      <main class="main">
-        <Screen
-          session={openScreen.session}
-          request={fetch}
-          {navigate}
+      {/key}
+    </div>
+    {#if drawer}
+      {#key drawerKey}
+        <Pending
+          entries={status.pending}
+          defaultLocale={status.defaultLocale}
           {uiLocale}
+          mediaBase={session?.mediaBase ?? ''}
+          build={status.build}
+          conflicted={status.conflicted}
+          onrevert={askRevert}
+          onclose={() => {
+            drawer = false;
+            indicator?.focus();
+          }}
+          onpublished={async (count) => {
+            notify({ code: 'PUBLISHED_CHANGES', count });
+            await commitChanged();
+          }}
+          onrefused={(keys) => (status.conflicted = [...new Set([...status.conflicted, ...keys])])}
+          ondiscarded={async (key) => {
+            status.conflicted = status.conflicted.filter((k) => k !== key);
+            invalidateEntryDirectory();
+            await status.loadPending();
+          }}
         />
-      </main>
-    {:else if path === '/admin/site'}
-      <Globals {uiLocale} />
-    {:else if path === '/admin/media'}
-      <Library base={session?.mediaBase ?? ''} presets={session?.presets ?? []} {uiLocale} />
-    {:else if path === '/admin/account'}
-      <Account
-        user={session.user}
-        role={session.role}
-        {query}
-        {uiLocale}
-        {localeBusy}
-        {localeError}
-        onlocale={saveLocale}
-        onname={loadSession}
-      />
-    {:else if path === '/admin/members' && session.role === 'owner'}
-      <Members user={session.user} {uiLocale} />
-    {:else if path === '/admin/activity'}
-      <!-- No role condition: which events an editor sees is the server's filter. -->
-      <Activity
-        role={session.role}
-        mediaBase={session.mediaBase ?? ''}
-        {uiLocale}
-        oncommitted={commitChanged}
-      />
-    {:else if path === '/admin/settings' && session.role === 'owner'}
-      <Diagnostics {uiLocale} oncommitted={commitChanged} />
-    {:else}
-      <Dashboard
-        pending={status.pending}
-        pendingStatus={status.pendingStatus}
-        build={status.build}
-        buildStatus={status.buildStatus}
-        {collections}
-        {uiLocale}
-        role={session.role}
-        onreview={() => (drawer = true)}
-        onrevert={askRevert}
-        onretryPending={status.loadPending}
-        onretryBuild={status.loadBuild}
-        oncommitted={commitChanged}
-      />
+      {/key}
     {/if}
-    {/key}
-  </div>
-  {#if drawer}
-    {#key drawerKey}
-    <Pending
-      entries={status.pending}
-      defaultLocale={status.defaultLocale}
+    <div class="toasts" aria-live="polite">
+      {#each notices as notice (notice.id)}
+        <div class="toast">
+          <div class="body">{text(notice.message)}</div>
+          <button
+            class="close"
+            type="button"
+            aria-label={m.shell_dismiss({}, options)}
+            onclick={() => dismiss(notice.id)}>×</button
+          >
+        </div>
+      {/each}
+    </div>
+    <RevertDialog
+      bind:sha={confirmRevert}
       {uiLocale}
-      mediaBase={session?.mediaBase ?? ''}
-      build={status.build}
-      conflicted={status.conflicted}
-      onrevert={askRevert}
-      onclose={() => {
-        drawer = false;
-        indicator?.focus();
-      }}
-      onpublished={async (count) => {
-        notify({ code: 'PUBLISHED_CHANGES', count });
+      onfailed={(failure) => (revertError = failure)}
+      onreverted={async () => {
         await commitChanged();
-      }}
-      onrefused={(keys) => (status.conflicted = [...new Set([...status.conflicted, ...keys])])}
-      ondiscarded={async (key) => {
-        status.conflicted = status.conflicted.filter((k) => k !== key);
-        invalidateEntryDirectory();
-        await status.loadPending();
+        notify({ code: 'REVERTED_PUBLISH' });
+        // The drawer describes a commit just undone, so it goes with the publish it was about.
+        drawerKey += 1;
       }}
     />
-    {/key}
-  {/if}
-  <div class="toasts" aria-live="polite">
-    {#each notices as notice (notice.id)}
-      <div class="toast">
-        <div class="body">{text(notice.message)}</div>
-        <button class="close" type="button" aria-label={m.shell_dismiss({}, options)} onclick={() => dismiss(notice.id)}>×</button>
-      </div>
-    {/each}
   </div>
-  <RevertDialog
-    bind:sha={confirmRevert}
-    {uiLocale}
-    onfailed={(failure) => (revertError = failure)}
-    onreverted={async () => {
-      await commitChanged();
-      notify({ code: 'REVERTED_PUBLISH' });
-      // The drawer describes a commit just undone, so it goes with the publish it was about.
-      drawerKey += 1;
-    }}
-  />
-</div>
 {/if}
