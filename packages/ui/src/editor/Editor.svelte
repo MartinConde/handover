@@ -139,6 +139,8 @@ let {
 } = $props();
 const options = $derived(messageOptions(uiLocale));
 const feedbackText = (message: UiMessage) => messageText(message, uiLocale);
+const postJson = (url: string, body: unknown, method = 'POST') =>
+  fetch(url, { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
 function reload() {
   return onreload ? onreload() : onchanged();
 }
@@ -197,14 +199,22 @@ const BESIDE: Beside[] = ['page', 'language', 'none'];
 // svelte-ignore state_referenced_locally -- one authenticated editor instance owns one preference key
 // v3: Form and Split became one view, so earlier saved values mean nothing here.
 const viewKey = `handover:editor-view:v3:${siteBase() || '/'}:${userId}`;
-const readView = () => {
+// A blocked browser preference must never block editing.
+function readPreference(key: string) {
   try {
-    return localStorage.getItem(viewKey);
+    return localStorage.getItem(key);
   } catch {
     return null;
   }
-};
-const saved = readView();
+}
+function savePreference(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // Kept for this visit only.
+  }
+}
+const saved = readPreference(viewKey);
 let chosen = $state<Beside | undefined>(
   BESIDE.includes(saved as Beside) ? (saved as Beside) : undefined,
 );
@@ -227,32 +237,25 @@ let canvasVisited = $state(false);
 let mobilePane = $state<'form' | 'page'>('form');
 const canvasEpoch = crypto.randomUUID();
 
-function remember(value: string) {
-  try {
-    localStorage.setItem(viewKey, value);
-  } catch {
-    // A blocked browser preference must never block editing.
-  }
-}
 // A link that opens a language is for this visit; only the person's own choice is saved.
 function setBeside(next: Beside, save = true) {
   if (next === 'none' && pageShown) next = 'page';
   chosen = next;
   collapsed = false;
   canvasOpen = false;
-  if (save) remember(next);
+  if (save) savePreference(viewKey, next);
 }
 function collapse() {
   chosen = undefined;
   collapsed = true;
   canvasOpen = false;
-  remember('form');
+  savePreference(viewKey, 'form');
 }
 function setCanvas(open: boolean) {
   if (open && !canvasSupported) return;
   canvasOpen = open;
   if (open) mobilePane = 'page';
-  remember(open ? 'canvas' : collapsed && pageShown ? 'form' : beside);
+  savePreference(viewKey, open ? 'canvas' : collapsed && pageShown ? 'form' : beside);
   if (open && section !== '') navigate(`/admin/c/${collection}/${slug}${queueTail}`);
 }
 
@@ -301,22 +304,10 @@ const partial = (of: string) => {
 // The language read under each field of the pane; stored as chosen, drawn only while it is valid.
 // svelte-ignore state_referenced_locally -- one authenticated editor instance owns one preference key
 const referenceKey = `handover:editor-reference:v1:${siteBase() || '/'}:${userId}`;
-let referenceChoice = $state(
-  (() => {
-    try {
-      return localStorage.getItem(referenceKey) ?? '';
-    } catch {
-      return '';
-    }
-  })(),
-);
+let referenceChoice = $state(readPreference(referenceKey) ?? '');
 function chooseReference(of: string | undefined) {
   referenceChoice = of ?? '';
-  try {
-    localStorage.setItem(referenceKey, referenceChoice);
-  } catch {
-    // A blocked browser preference must never block editing.
-  }
+  savePreference(referenceKey, referenceChoice);
 }
 // `snapshot()` throws without a file, so only languages the session holds are offered.
 const references = $derived(
@@ -327,8 +318,7 @@ const references = $derived(
 const reference = $derived.by(() => {
   const of = referenceChoice;
   if (!references.includes(of)) return undefined;
-  const form = { fields: [...entry.fields], blocks: entry.blocks };
-  const text = referenceText('default', form, entrySession.snapshot(of), of);
+  const text = referenceText('default', wholeForm, entrySession.snapshot(of), of);
   return { locale: of, label: language(of), ...text };
 });
 
@@ -370,10 +360,10 @@ let busy = $state(false);
 const actionBusy = $derived(busy || entrySession.persistedActionPending());
 
 // Both change which files the entry has, so the screen is read again rather than patched.
-async function ask(url: string, init: RequestInit = {}) {
+async function ask(url: string, body: unknown) {
   if (!(await flush())) return false;
   busy = true;
-  const res = await fetch(url, { method: 'POST', ...init });
+  const res = await postJson(url, body);
   busy = false;
   if (res.ok) {
     await announceCommit(res);
@@ -447,11 +437,7 @@ async function createFilled(of: string) {
   const made = await fetch(`/admin/api/drafts/${collection}/${slug}/${of}`, { method: 'POST' });
   let filled: Response | undefined;
   if (made.ok)
-    filled = await fetch(`/admin/api/translate/${collection}/${slug}/${of}`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({}),
-    });
+    filled = await postJson(`/admin/api/translate/${collection}/${slug}/${of}`, {});
   busy = false;
   if (!made.ok) {
     localeFailure = {
@@ -500,11 +486,7 @@ async function createAll(fill: boolean) {
         }
         report.done[of] = 'created';
         if (!fill) continue;
-        const filled = await fetch(`/admin/api/translate/${collection}/${slug}/${of}`, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({}),
-        });
+        const filled = await postJson(`/admin/api/translate/${collection}/${slug}/${of}`, {});
         if (!filled.ok) {
           report.failed = await failure(filled, of, 'fill');
           break;
@@ -545,14 +527,10 @@ function createdLine(of: string, report: CreatedAll) {
 // Through `act`: a refused turn-off answers with a sentence the screen shows.
 async function offer(of: string, on: boolean, redirect?: Target) {
   const res = await act(`/admin/api/entries/${collection}/${slug}/locales`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      locales: on
-        ? entry.locales.filter((l) => l === of || !off(l))
-        : entry.offered.filter((l) => l !== of),
-      ...(redirect ? { redirect } : {}),
-    }),
+    locales: on
+      ? entry.locales.filter((l) => l === of || !off(l))
+      : entry.offered.filter((l) => l !== of),
+    ...(redirect ? { redirect } : {}),
   });
   if (res) {
     await announceCommit(res);
@@ -575,10 +553,7 @@ const seoField = $derived(!entry.singleton && entry.fields.some((f) => f.type ==
 const seoAt = $derived(entry.fields.find((f) => f.type === 'seo')?.path[0]);
 // Named again when the interface language changes, without reading the entry again.
 const shownForm = $derived(
-  formIn(
-    { fields: [...entry.fields], blocks: entry.blocks, blockLabels: entry.blockLabels },
-    uiLocale,
-  ),
+  formIn({ ...wholeForm, blockLabels: entry.blockLabels }, uiLocale),
 );
 const fields = $derived(
   !seoField
@@ -655,16 +630,12 @@ async function writeSourceSave(
 ): Promise<boolean> {
   saveError = undefined;
   try {
-    const res = await fetch(`/admin/api/drafts/${collection}/${slug}`, {
-      method: 'PUT',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        data: JSON.parse(sent),
-        tab,
-        revision,
-        ...(structure ? { structure } : {}),
-      }),
-    });
+    const res = await postJson(`/admin/api/drafts/${collection}/${slug}`, {
+      data: JSON.parse(sent),
+      tab,
+      revision,
+      ...(structure ? { structure } : {}),
+    }, 'PUT');
     if (!res.ok) {
       saveError = await retainedFailure(res, 'EDITOR_SAVE_REFUSED');
       const refusal = await classifyDraftSaveRefusal(res.clone());
@@ -703,11 +674,7 @@ async function writeTranslationSave(
   contentVersion: number,
 ): Promise<boolean> {
   try {
-    const res = await fetch(`/admin/api/drafts/${collection}/${slug}/${of}`, {
-      method: 'PUT',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ data: JSON.parse(sent), tab, revision }),
-    });
+    const res = await postJson(`/admin/api/drafts/${collection}/${slug}/${of}`, { data: JSON.parse(sent), tab, revision }, 'PUT');
     if (!res.ok) {
       const refusal = await classifyDraftSaveRefusal(res);
       if (refusal.kind === 'lock') loseLock(refusal.lock);
@@ -770,11 +737,7 @@ async function setStatus(next: boolean, redirect?: Target) {
     busy = false;
     return;
   }
-  const res = await fetch(`/admin/api/status/${collection}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ entries: [slug], hidden: next, redirect }),
-  });
+  const res = await postJson(`/admin/api/status/${collection}`, { entries: [slug], hidden: next, redirect });
   busy = false;
   if (!res.ok) {
     statusFailed = await retainedFailure(res, 'ENTRY_ACTION_FAILED');
@@ -886,11 +849,7 @@ async function changeSourceTo(to: string) {
           return revision ? [[of, revision]] : [];
         }),
       );
-      res = await fetch(`/admin/api/entries/${collection}/${slug}/source`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ locale: to, tab, revisions }),
-      });
+      res = await postJson(`/admin/api/entries/${collection}/${slug}/source`, { locale: to, tab, revisions });
       if (uncertainResponse(res))
         throw new TypeError('The source change response was not confirmed.');
       return res.ok;
@@ -917,11 +876,11 @@ async function changeSourceTo(to: string) {
 }
 
 // A 409 body is the server's own sentence, which reads better than a generic one.
-async function act(url: string, init: RequestInit) {
+async function act(url: string, body: unknown, method = 'POST') {
   if (!(await flush())) return undefined;
   busy = true;
   actionFailed = undefined;
-  const res = await fetch(url, init);
+  const res = await postJson(url, body, method);
   busy = false;
   if (res.ok) return res;
   actionFailed = await retainedFailure(res, 'ENTRY_ACTION_FAILED');
@@ -930,11 +889,7 @@ async function act(url: string, init: RequestInit) {
 
 async function rename(event: Event) {
   event.preventDefault();
-  const res = await act(`/admin/api/entries/${collection}/${slug}/rename`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ to: newName }),
-  });
+  const res = await act(`/admin/api/entries/${collection}/${slug}/rename`, { to: newName });
   if (!res) return;
   await announceCommit(res);
   const { slug: to } = (await res.json()) as { slug: string };
@@ -943,11 +898,7 @@ async function rename(event: Event) {
 }
 
 async function remove(redirect: Target) {
-  const res = await act(`/admin/api/entries/${collection}/${slug}`, {
-    method: 'DELETE',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ redirect }),
-  });
+  const res = await act(`/admin/api/entries/${collection}/${slug}`, { redirect }, 'DELETE');
   if (res) {
     await announceCommit(res);
     invalidateEntryDirectory();
@@ -964,11 +915,7 @@ async function toggleHold() {
     busy = false;
     return;
   }
-  const res = await fetch(`/admin/api/hold/${collection}/${slug}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ hold: next }),
-  });
+  const res = await postJson(`/admin/api/hold/${collection}/${slug}`, { hold: next });
   busy = false;
   if (res.ok) held = ((await res.json()) as { held: unknown }).held === true;
   else holdFailed = await retainedFailure(res, 'EDITOR_HOLD_FAILED');
@@ -1174,11 +1121,9 @@ let publishPanel = $state<HTMLElement>();
 const leftOut = $derived(publishChoice.leftOut);
 const unready = $derived(publishChoice.unready);
 const selection = (key: string, without: string[]) =>
-  JSON.stringify(
-    without.length
-      ? { entries: [key], without: without.map((of) => `${key}:${of}`) }
-      : { entries: [key] },
-  );
+  without.length
+    ? { entries: [key], without: without.map((of) => `${key}:${of}`) }
+    : { entries: [key] };
 
 async function askToPublish() {
   if (!(await flush())) return;
@@ -1198,11 +1143,7 @@ async function lint() {
   const key = `${collection}/${slug}`;
   const mine = ++pass;
   const sent = leftOut;
-  const res = await fetch('/admin/api/publish/checks', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: selection(key, sent),
-  }).catch(() => undefined);
+  const res = await postJson('/admin/api/publish/checks', selection(key, sent)).catch(() => undefined);
   const body = res?.ok
     ? ((await res.json()) as {
         results?: CheckItem[];
@@ -1239,11 +1180,7 @@ async function publishEntry() {
         checksBlocked = true;
         return false;
       }
-      res = await fetch('/admin/api/publish', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: selection(`${collection}/${slug}`, leftOut),
-      });
+      res = await postJson('/admin/api/publish', selection(`${collection}/${slug}`, leftOut));
       if (uncertainResponse(res)) throw new TypeError('The publish response was not confirmed.');
       if (res.ok) await onpublished?.(title);
       return res.ok;
@@ -1441,11 +1378,7 @@ async function saveAddress() {
     busy = false;
     return;
   }
-  const res = await fetch(`/admin/api/entries/${collection}/${slug}/address/${locale}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ address: typed.trim() }),
-  });
+  const res = await postJson(`/admin/api/entries/${collection}/${slug}/address/${locale}`, { address: typed.trim() });
   busy = false;
   if (!res.ok) {
     addressFailed = await retainedFailure(res, 'ENTRY_ACTION_FAILED');
@@ -1903,10 +1836,7 @@ async function saveAddress() {
                     type="button"
                     disabled={actionBusy || locked}
                     onclick={() =>
-                      ask('/admin/api/restore', {
-                        headers: { 'content-type': 'application/json' },
-                        body: JSON.stringify({ commit_sha: putBack?.commit_sha }),
-                      })}
+                      ask('/admin/api/restore', { commit_sha: putBack?.commit_sha })}
                   >
                     {m.editor_restore_words({ language: language(shown) }, options)}
                   </button>
