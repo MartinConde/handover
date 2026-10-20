@@ -312,11 +312,13 @@ export function wranglerConfig(env: Env): WranglerConfig | undefined {
 export function validateWranglerConfig(
   config: WranglerConfig,
   name: string,
-  bucket: string,
-  account?: string,
-  databaseId?: string,
-  jurisdiction?: string,
+  {
+    account,
+    databaseId,
+    jurisdiction,
+  }: { account?: string; databaseId?: string; jurisdiction?: string } = {},
 ): string[] {
+  const bucket = `${name}-media`;
   const uploads = (config.buckets ?? []).filter((item) => item.binding === 'MEDIA_UPLOADS');
   if (uploads.length > 1)
     throw new Error(`${config.file}: more than one R2 binding is named MEDIA_UPLOADS`);

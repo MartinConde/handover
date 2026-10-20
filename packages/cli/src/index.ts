@@ -1,11 +1,10 @@
 import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { init } from './init.js';
+import { init, JURISDICTIONS } from './init.js';
 import { dbGenerate, migrate } from './migrate.js';
 
-const USAGE =
-  'Usage: handover <init <owner-email> [--jurisdiction eu|fedramp] | migrate [--dry-run] | db generate [--check]>';
+const USAGE = `Usage: handover <init <owner-email> [--jurisdiction ${JURISDICTIONS.join('|')}] | migrate [--dry-run] | db generate [--check]>`;
 
 export interface Env {
   cwd: string;

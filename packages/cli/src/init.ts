@@ -47,7 +47,7 @@ interface InitRecord {
   jurisdiction?: string;
 }
 
-const JURISDICTIONS = ['eu', 'fedramp'];
+export const JURISDICTIONS = ['eu', 'fedramp'];
 const inJurisdiction = (jurisdiction?: string) =>
   jurisdiction ? ['--jurisdiction', jurisdiction] : [];
 
@@ -55,7 +55,7 @@ export function init(env: Env, email: string, flag?: string): number {
   if (!/^[^\s'"@]+@[^\s'"@]+\.[^\s'"@]+$/.test(email))
     throw new Error(`${email} is not an email address`);
   if (flag !== undefined && !JURISDICTIONS.includes(flag))
-    throw new Error(`--jurisdiction must be eu or fedramp, not ${flag}`);
+    throw new Error(`--jurisdiction must be ${JURISDICTIONS.join(' or ')}, not ${flag}`);
   const name = siteName(env.cwd);
   const saved = initRecord(env);
   validateInitRecord(saved, name, email);
@@ -84,9 +84,7 @@ export function init(env: Env, email: string, flag?: string): number {
     env.capture(['wrangler', '--version']);
     const config = wranglerConfig(env);
     validateDrizzleConfig(env);
-    const expectedBucket = `${name}-media`;
-    if (config)
-      validateWranglerConfig(config, name, expectedBucket, undefined, undefined, jurisdiction);
+    if (config) validateWranglerConfig(config, name, { jurisdiction });
 
     // Every local file comes before provisioning. Existing files are verified or left alone.
     scaffold(env);
@@ -108,13 +106,12 @@ export function init(env: Env, email: string, flag?: string): number {
       throw new Error(
         `Initialization belongs to Cloudflare account ${saved.accountId}, not ${account}. Restore that CLOUDFLARE_ACCOUNT_ID; no resources were changed.`,
       );
-    if (config)
-      validateWranglerConfig(config, name, expectedBucket, account, undefined, jurisdiction);
+    if (config) validateWranglerConfig(config, name, { account, jurisdiction });
     const record: InitRecord = saved ?? {
       version: 1,
       siteName: name,
       accountId: account,
-      bucketName: expectedBucket,
+      bucketName: `${name}-media`,
       bucketReady: false,
       ownerEmail: email,
       ownerId: randomUUID(),
@@ -145,14 +142,11 @@ export function init(env: Env, email: string, flag?: string): number {
       put(env, 'wrangler.jsonc', wranglerJsonc(name, account, record.databaseId, jurisdiction));
     const ready = wranglerConfig(env);
     if (!ready) throw new Error('wrangler.jsonc was not written');
-    const missing = validateWranglerConfig(
-      ready,
-      name,
-      expectedBucket,
+    const missing = validateWranglerConfig(ready, name, {
       account,
-      record.databaseId,
+      databaseId: record.databaseId,
       jurisdiction,
-    );
+    });
     if (missing.length) {
       throw new Error(
         `${ready.file} is yours; add or merge these values before migrations can run:\n${bindingSnippet(ready.file, name, account, record.databaseId, jurisdiction)}\nThen continue with:\n  npx handover init ${email}`,
