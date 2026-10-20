@@ -182,7 +182,7 @@ test('a block one side added and a block the other side edited are both merged',
   expect(report.questions).toEqual([]);
   expect(report.merged.map((m) => [m.label, m.side])).toEqual([
     ['Newsletter signup', 'ours'],
-    ['Pictures · Heading', 'theirs'],
+    ['Hero · Heading', 'theirs'],
   ]);
 });
 
@@ -198,7 +198,7 @@ test('the same heading rewritten on both sides is a question about that block', 
   });
 
   expect(report.questions.map((q) => [q.path, q.label, q.base])).toEqual([
-    ['blocks[_id=aaaa1111].heading', 'Seaview Cottage, Devon · Heading', 'Seaview Cottage'],
+    ['blocks[_id=aaaa1111].heading', 'Hero · Heading', 'Seaview Cottage'],
   ]);
 });
 

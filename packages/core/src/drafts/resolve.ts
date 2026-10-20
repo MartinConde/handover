@@ -126,7 +126,17 @@ function flatten(groups: DiffGroup[]): Map<string, Flat> {
       if (change.kind === 'row') {
         if (change.at !== 'same')
           found.set(keyOf(locale, change.path), { locale, path: change.path, ...named, change });
-        walk(change.changes, locale, named);
+        // Inside a block, its type names it: its text would repeat on every card.
+        walk(
+          change.changes,
+          locale,
+          change.type
+            ? joinedName(prefix, {
+                label: change.type,
+                ...(change.types ? { labels: change.types } : {}),
+              })
+            : named,
+        );
       } else found.set(keyOf(locale, change.path), { locale, path: change.path, ...named, change });
     }
   };

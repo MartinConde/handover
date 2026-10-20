@@ -61,7 +61,7 @@ const shown = $derived(groups.filter((g) => g.locale !== undefined || g.changes.
           {/if}
         </div>
       {/if}
-      {@render rows(change.changes, label)}
+      {@render rows(change.changes, change.type ? (prefix ? `${prefix} · ` : '') + (change.types?.[uiLocale] ?? change.type) : label)}
     {:else if change.kind === 'words'}
       <div class="row">
         <small>{label}</small>{#each change.parts as part}{#if part.mark === 'del'}<del

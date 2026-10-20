@@ -4,6 +4,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- A change inside a block is named by the block's type and the field (*Legal content · Intro*) in
+  History and in the conflict **Resolve** dialog, where it used to repeat the block's first text.
 - Opening an entry whose draft has no edits reads the file again if it changed in the
   repository since, rather than showing the older version without a warning.
 - Every row of the pending-changes drawer has **Discard**, and an entry's publish menu has

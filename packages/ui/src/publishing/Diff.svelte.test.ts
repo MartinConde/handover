@@ -149,3 +149,25 @@ test('a change and a block type labelled per language are named in the interface
   expect(body.querySelector('.is-block .sub')?.textContent).toContain('Bühne');
   expect(body.querySelector('.is-block')?.textContent).not.toContain('Hero');
 });
+
+test('a change inside a block is named by the block type, not by the block text', () => {
+  const body = show([
+    {
+      locale: 'en',
+      changes: [
+        {
+          path: 'blocks[_id=aaaa1111]',
+          label: 'Seaview Cottage',
+          kind: 'row',
+          type: 'Hero',
+          at: 'same',
+          changes: [
+            { path: 'blocks[_id=aaaa1111].heading', label: 'Heading', kind: 'value', after: 'x' },
+          ],
+        },
+      ],
+    },
+  ]);
+
+  expect(body.querySelector('.row small')?.textContent).toBe('Hero · Heading');
+});

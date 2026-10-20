@@ -139,7 +139,7 @@ test('a file the repository moved under a draft is one question and one merged c
 
   expect(conflict?.questions.map((q) => [q.path, q.base])).toEqual([['title', 'Home']]);
   expect(conflict?.merged.map((m) => [m.label, m.side])).toEqual([
-    ['Move to the sea · Heading', 'theirs'],
+    ['Hero · Heading', 'theirs'],
   ]);
   expect(Object.keys(conflict?.conflicted ?? {})).toEqual(['en']);
 });

@@ -19,7 +19,8 @@ one of them.
 - **Choosing a version** shows what it says that the live site does not, field by field, in the
   same per-field diff the [pending-changes drawer](pending-changes.md) uses — so what is marked
   is what restoring that version would change. **Ticking two** compares them with each other
-  instead; a third is not offered.
+  instead; a third is not offered. A change inside a block is named by the block's type and the
+  field, such as *Legal content · Intro*.
 - The list is paged at 30 versions; **Show older versions** reads the next page.
 - An entry that has never been published has no history, and the tab says so.
 
