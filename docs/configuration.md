@@ -179,7 +179,7 @@ media: { publicBase: 'https://media.your-site.example' },
 
 A content file stores `media/9f3a….webp` and never a URL, so changing this line moves every
 picture on the site at once. The four env values that let the admin sign an upload are in
-[Media](media.md#4-tell-the-site).
+[Media](media.md#2-bind-staging-and-configure-public-storage).
 
 ## `mailer`
 

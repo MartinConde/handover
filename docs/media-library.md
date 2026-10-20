@@ -121,5 +121,5 @@ is untouched** and stays wherever it is used — which is the whole reason cropp
 all.
 
 The crop is made in the browser, so it reads the original back out of the bucket: this is the one
-thing beyond the upload itself that needs `GET` in the bucket's [CORS rule](media.md#2-let-the-admins-origin-write-to-it).
+thing beyond the upload itself that needs `GET` in the bucket's [CORS rule](media.md#4-allow-public-media-reads-from-the-admin).
 Without it the crop refuses and says so. A legacy picture with no width and height cannot be cropped until its dimensions are available.
