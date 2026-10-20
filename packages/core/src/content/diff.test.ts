@@ -123,6 +123,27 @@ test('a rich text body says that it changed and nothing more', () => {
   expect(changes).toEqual([{ path: 'body', label: 'Body', kind: 'whole' }]);
 });
 
+test('a rich text change that only adds a line break shows the break', () => {
+  const changes = enChanges(
+    listing,
+    { body: 'First sentence. Second sentence.' },
+    { body: 'First sentence. \\\nSecond sentence.' },
+  );
+
+  expect(changes).toEqual([
+    {
+      path: 'body',
+      label: 'Body',
+      kind: 'words',
+      parts: [
+        { text: 'First sentence. ' },
+        { text: '↵ ', mark: 'ins' },
+        { text: 'Second sentence.' },
+      ],
+    },
+  ]);
+});
+
 // A picture is an immutable key: a replacement reads as two thumbnails, its size as no change.
 test('only the properties a translator retypes are per-language', () => {
   const before = { image: { src: 'media/a.webp', alt: 'The front', width: 2400, height: 1600 } };

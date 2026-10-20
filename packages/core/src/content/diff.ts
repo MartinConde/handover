@@ -147,9 +147,12 @@ function leafIn(
       before: linkTarget(before),
       after: linkTarget(after),
     });
-  else if (field.type === 'richtext' || field.type === 'unsupported')
-    found.push({ path, ...label, kind: 'whole' });
-  else found.push({ path, ...label, kind: 'value', before: show(before), after: show(after) });
+  else if (field.type === 'richtext' || field.type === 'unsupported') {
+    const parts = field.type === 'richtext' ? lineBreakChange(str(before), str(after)) : undefined;
+    found.push(
+      parts ? { path, ...label, kind: 'words', parts } : { path, ...label, kind: 'whole' },
+    );
+  } else found.push({ path, ...label, kind: 'value', before: show(before), after: show(after) });
 }
 
 function propsIn(
@@ -432,7 +435,17 @@ function wordDiff(before: string, after: string): WordPart[] | undefined {
   return parts;
 }
 
-const words = (text: string) => text.split(/([^\p{L}\p{N}]+)/u).filter((w) => w !== '');
+// The arrow is its own token so an added break is one insertion, not its neighbours replaced.
+const words = (text: string) => text.split(/(↵|[^\p{L}\p{N}↵]+)/u).filter((w) => w !== '');
+
+/** Rich text is not worded in general, but a change of nothing except hard breaks is shown. */
+function lineBreakChange(before: string, after: string): WordPart[] | undefined {
+  const marked = (text: string) => text.replace(/\\\n/g, '↵ ');
+  const letters = (text: string) => text.replace(/[^\p{L}\p{N}]+/gu, '');
+  if (letters(before) !== letters(after)) return undefined;
+  const parts = wordDiff(marked(before), marked(after));
+  return parts?.some((part) => part.mark && part.text.includes('↵')) ? parts : undefined;
+}
 
 // Only a plain-word array reaches here, and it reads as a sentence, not brackets.
 const str = (value: unknown): string =>
