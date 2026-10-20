@@ -155,6 +155,27 @@ test('Done stays off until every question is answered, and sends one answer each
   expect(resolved).toHaveBeenCalled();
 });
 
+test("a rewritten field shows each side's text, line breaks kept", async () => {
+  const whole = (after: string) => ({ path: 'body', label: 'Body', kind: 'whole', after });
+  answering([
+    {
+      path: 'body',
+      label: 'Body',
+      ours: whole('testing'),
+      theirs: whole('Stand: Oktober 2026.\n\nOffen.'),
+    },
+  ]);
+  const root = show();
+  await tick();
+  flushSync();
+
+  const quotes = all(root, '.choice .quote');
+  expect(quotes.map((n) => n.textContent?.trim())).toEqual([
+    'testing',
+    'Stand: Oktober 2026.\n\nOffen.',
+  ]);
+});
+
 test('Keep all mine answers every question at once and says what that costs', async () => {
   const fetchMock = answering();
   const root = show();

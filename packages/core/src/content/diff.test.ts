@@ -109,7 +109,7 @@ test('adversarial long text falls back to a whole-field change', () => {
   const after = Array.from({ length: 10_000 }, (_, i) => `after${i}`).join(' ');
 
   expect(enChanges(listing, { summary: before }, { summary: after })).toEqual([
-    { path: 'summary', label: 'Summary', kind: 'whole' },
+    { path: 'summary', label: 'Summary', kind: 'whole', after },
   ]);
 });
 
@@ -120,7 +120,9 @@ test('a rich text body says that it changed and nothing more', () => {
     { body: '# One\n\nA longer paragraph.' },
   );
 
-  expect(changes).toEqual([{ path: 'body', label: 'Body', kind: 'whole' }]);
+  expect(changes).toEqual([
+    { path: 'body', label: 'Body', kind: 'whole', after: '# One\n\nA longer paragraph.' },
+  ]);
 });
 
 test('a rich text change that only adds a line break shows the break', () => {
@@ -452,7 +454,7 @@ test('a field that arrived and one that went say so with one side missing', () =
       kind: 'words',
       parts: [{ text: 'A cottage', mark: 'del' }],
     },
-    { path: 'body', label: 'Body', kind: 'whole' },
+    { path: 'body', label: 'Body', kind: 'whole', after: '# One' },
   ]);
 });
 

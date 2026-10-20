@@ -22,7 +22,8 @@ export type Change = { path: string; label: string; labels?: Labels } & (
   | { kind: 'value'; before?: string; after?: string }
   /** Two keys into storage, never a value that moved. */
   | { kind: 'picture'; before?: string; after?: string }
-  | { kind: 'whole' }
+  /** `after` is the new text, for the one who must choose between two rewrites. */
+  | { kind: 'whole'; after?: string }
   | {
       kind: 'row';
       type?: string;
@@ -137,7 +138,9 @@ function leafIn(
   if (field.type === 'text' || field.type === 'array') {
     const parts = wordDiff(str(before), str(after));
     found.push(
-      parts ? { path, ...label, kind: 'words', parts } : { path, ...label, kind: 'whole' },
+      parts
+        ? { path, ...label, kind: 'words', parts }
+        : { path, ...label, kind: 'whole', after: str(after) },
     );
   } else if (field.type === 'unsupported' && (linkTarget(before) || linkTarget(after)))
     found.push({
@@ -150,7 +153,14 @@ function leafIn(
   else if (field.type === 'richtext' || field.type === 'unsupported') {
     const parts = field.type === 'richtext' ? lineBreakChange(str(before), str(after)) : undefined;
     found.push(
-      parts ? { path, ...label, kind: 'words', parts } : { path, ...label, kind: 'whole' },
+      parts
+        ? { path, ...label, kind: 'words', parts }
+        : {
+            path,
+            ...label,
+            kind: 'whole',
+            after: field.type === 'richtext' ? str(after) : undefined,
+          },
     );
   } else found.push({ path, ...label, kind: 'value', before: show(before), after: show(after) });
 }

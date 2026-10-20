@@ -581,3 +581,18 @@ test('nested conflict and merged labels preserve localized row and group prefixe
     ),
   ).toEqual({ en: data(3, 2) });
 });
+
+test("a rewritten rich text body carries each side's text to the question", () => {
+  const base = { body: 'A mill.\n\nOpen daily.' };
+
+  const report = conflictReport('default', listing, {
+    en: { base, ours: { body: 'testing' }, theirs: { body: 'Stand: Oktober 2026.' } },
+  });
+
+  expect(report.questions.map((q) => [q.ours, q.theirs])).toEqual([
+    [
+      { path: 'body', label: 'Body', kind: 'whole', after: 'testing' },
+      { path: 'body', label: 'Body', kind: 'whole', after: 'Stand: Oktober 2026.' },
+    ],
+  ]);
+});

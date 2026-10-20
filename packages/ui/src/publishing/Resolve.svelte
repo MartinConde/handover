@@ -148,6 +148,7 @@ const said = (change: Change): string => {
   {:else if change.kind === 'words'}{#each change.parts.filter((p) => p.mark !== 'del') as part}{#if part.mark === 'ins'}<ins
         >{part.text}</ins
       >{:else}{part.text}{/if}{/each}
+  {:else if change.kind === 'whole' && change.after}{change.after}
   {:else}{m.conflict_rewritten({}, options)}{/if}
 {/snippet}
 

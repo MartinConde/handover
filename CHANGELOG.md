@@ -4,6 +4,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- The conflict **Resolve** dialog shows the text of each side of a rich-text field, where it
+  used to say *rewritten* for both.
 - History and Pending show a rich-text change that only adds or removes a line break as a
   marked ↵, where it used to say only "changed".
 - A change inside a block is named by the block's type and the field (*Legal content · Intro*) in
