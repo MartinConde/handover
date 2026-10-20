@@ -194,8 +194,8 @@ function drop(e: DragEvent) {
       </div>
       <div class="picker-tools">
         <div class="field search">
-          <label class="visually-hidden" for="picker-q">{m.media_picker_search({}, options)}</label>
-          <input class="input" id="picker-q" type="search" placeholder={m.media_picker_search_placeholder({}, options)} bind:value={query} />
+          <label class="visually-hidden" for="picker-q">{m.media_library_search({}, options)}</label>
+          <input class="input" id="picker-q" type="search" placeholder={m.media_library_search_placeholder({}, options)} bind:value={query} />
         </div>
       </div>
     </div>
@@ -229,7 +229,7 @@ function drop(e: DragEvent) {
           <legend>{kind === 'images' ? m.media_picker_all_images({}, options) : m.media_picker_all_files({}, options)}</legend>
           {#if readError}
             <div class="notice notice-danger media-read-error" role="alert">
-              {readKnown ? m.media_picker_read_failed_stale({}, options) : m.media_picker_read_failed({}, options)}
+              {readKnown ? m.media_picker_read_failed_stale({}, options) : m.media_library_read_failed({}, options)}
               <button class="btn-link" type="button" onclick={retryRead}>{m.common_retry({}, options)}</button>
             </div>
           {/if}
@@ -252,7 +252,7 @@ function drop(e: DragEvent) {
                 {#if refused}<span class="why" id="why-{item.id}">{refused}</span>{/if}
               </label>
             {:else}
-              {#if !readError}<p class="hint">{query ? m.media_picker_no_matches({}, options) : kind === 'images' ? m.media_picker_empty_images({}, options) : m.media_picker_empty_files({}, options)}</p>{/if}
+              {#if !readError}<p class="hint">{query ? m.media_library_no_matches({}, options) : kind === 'images' ? m.media_library_empty_images({}, options) : m.media_library_empty_files({}, options)}</p>{/if}
             {/each}
             {/if}
           </div>

@@ -741,7 +741,7 @@ const queueText = (state: QueueState) => {
         <p>{kind === 'images' ? m.media_library_delete_archive_image({}, options) : m.media_library_delete_archive_file({}, options)}</p>
       </div>
       <div class="actions">
-        <button class="btn" type="button" disabled={deleting} onclick={closeDialog}>{m.media_library_cancel({}, options)}</button>
+        <button class="btn" type="button" disabled={deleting} onclick={closeDialog}>{m.common_cancel({}, options)}</button>
         <button class="btn btn-danger" type="button" disabled={deleting} onclick={remove}>
           {deleting ? m.media_library_deleting({}, options) : m.media_library_delete_permanently({}, options)}
         </button>
