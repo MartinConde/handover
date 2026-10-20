@@ -6,6 +6,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Internal: the editor's field form is split into one component per widget family (image, file,
   embed, SEO, link, lists) on a shared field level; the image card and the nested form are
+  written once. The editor's field reveal, publish flow and entry lock sit in their own modules,
+  its banners in their own component, and its repeated reload, feedback and request code is
   written once.
 - Internal: the admin's menus close on a click outside or Escape through one shared attachment, and
   its confirm dialogs and autosave status share one component each, and the new-entry label takes its
