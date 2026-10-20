@@ -278,7 +278,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Internal: the entry helpers the admin API routes share live in `routes/api/content.ts`.
 - Internal: the admin API's `codedError`, not-found and owner-only responses live in
   `routes/api/respond.ts` and every coded refusal goes through `codedError`; core's `siteBase`
-  builds the base path in one place.
+  builds the base path in one place; locale negotiation sits in `locale.ts` apart from the mail
+  text, the Canvas error answer is shared by the preview route and middleware, and the route test
+  harness moved to `test/`.
 - Internal: the integration's template and media-use wrappers are inlined, and its tests drop
   checks core already makes and the form-descriptor snapshot.
 - Internal: the cli tests share one fake Cloudflare.

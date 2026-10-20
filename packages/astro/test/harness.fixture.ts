@@ -1,7 +1,7 @@
 import type { EmailSender, Mailer } from '@handover/core';
 import type { APIContext } from 'astro';
 import { afterEach, vi } from 'vitest';
-import type { HandoverConfig } from '../../index.js';
+import type { HandoverConfig } from '../src/index.js';
 
 // The row GET should overlay; `rows` is the same keyed by path when the languages differ in state.
 type Row = {
@@ -22,12 +22,7 @@ export type MemberRow = {
   invitedAt: number;
 };
 
-// The ~31 values a test reassigns wholesale (`x = ...`) between calling a route and asserting
-// on it. One shared, mutable instance per test *file* (Vitest gives every test file its own
-// fresh copy of this module): mock builders below close over `state` directly, and test bodies
-// read and write `state.<name>` the same way -- a static import and the `vi.hoisted` dynamic
-// import used for the mock builders resolve to the same module instance, so it's the same object
-// either way (proven in this session by breaking `resetState` and watching state leak).
+// Test-reassigned values live on one `state` object; each test file gets its own copy of this module.
 type State = {
   draft: Row | undefined;
   locales: string[];
@@ -189,7 +184,7 @@ const {
   confirmUpload,
 } = await vi.hoisted(async () => {
   const { z } = await import('astro/zod');
-  const { blocks, defineBlock, image, link, seo, seoDefaults } = await import('../../index.js');
+  const { blocks, defineBlock, image, link, seo, seoDefaults } = await import('../src/index.js');
   return {
     // A collection with blocks in it: what two languages of one entry can disagree about.
     page: z.object({

@@ -1,12 +1,18 @@
 import { texts } from 'virtual:handover/index';
 import { expect, test, vi } from 'vitest';
 import { z } from 'zod';
+import {
+  ctx,
+  heldDrafts,
+  overlayRows,
+  pendingDrafts,
+  state,
+} from '../../../test/harness.fixture.js';
 import { GET } from '../api.js';
 import { globalLabel } from './content.js';
-import { ctx, heldDrafts, overlayRows, pendingDrafts, state } from './harness.fixture.js';
 
 const { workerMailerMock, configMock, indexMock, cloudflareMock, authMock, coreMock } =
-  await vi.hoisted(async () => import('./harness.fixture.js'));
+  await vi.hoisted(async () => import('../../../test/harness.fixture.js'));
 
 vi.mock('worker-mailer', () => workerMailerMock());
 vi.mock('virtual:handover/config', () => configMock());

@@ -6,8 +6,6 @@ import {
   stringifyEntry,
 } from '@handover/core';
 import { expect, test, vi } from 'vitest';
-import { formSchema } from '../../index.js';
-import { GET, POST } from '../api.js';
 import {
   clearPublished,
   commitBuild,
@@ -24,10 +22,12 @@ import {
   publishDrafts,
   readyDrafts,
   state,
-} from './harness.fixture.js';
+} from '../../../test/harness.fixture.js';
+import { formSchema } from '../../index.js';
+import { GET, POST } from '../api.js';
 
 const { workerMailerMock, configMock, indexMock, cloudflareMock, authMock, coreMock } =
-  await vi.hoisted(async () => import('./harness.fixture.js'));
+  await vi.hoisted(async () => import('../../../test/harness.fixture.js'));
 
 vi.mock('worker-mailer', () => workerMailerMock());
 vi.mock('virtual:handover/config', () => configMock());

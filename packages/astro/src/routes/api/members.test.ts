@@ -1,6 +1,5 @@
 import type { APIContext } from 'astro';
 import { expect, test, vi } from 'vitest';
-import { DELETE, GET, POST } from '../api.js';
 import {
   calls,
   ctx,
@@ -13,10 +12,11 @@ import {
   released,
   sent,
   state,
-} from './harness.fixture.js';
+} from '../../../test/harness.fixture.js';
+import { DELETE, GET, POST } from '../api.js';
 
 const { workerMailerMock, configMock, indexMock, cloudflareMock, authMock, coreMock } =
-  await vi.hoisted(async () => import('./harness.fixture.js'));
+  await vi.hoisted(async () => import('../../../test/harness.fixture.js'));
 
 vi.mock('worker-mailer', () => workerMailerMock());
 vi.mock('virtual:handover/config', () => configMock());

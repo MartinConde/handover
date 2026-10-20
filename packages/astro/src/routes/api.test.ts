@@ -1,10 +1,10 @@
 import { createGitClient, openDb } from '@handover/core';
 import { expect, test, vi } from 'vitest';
-import { ctx, getFile, post, publish, put, state } from './api/harness.fixture.js';
+import { ctx, getFile, post, publish, put, state } from '../../test/harness.fixture.js';
 import { GET, POST, PUT } from './api.js';
 
 const { workerMailerMock, configMock, indexMock, cloudflareMock, authMock, coreMock } =
-  await vi.hoisted(async () => import('./api/harness.fixture.js'));
+  await vi.hoisted(async () => import('../../test/harness.fixture.js'));
 
 vi.mock('worker-mailer', () => workerMailerMock());
 vi.mock('virtual:handover/config', () => configMock());

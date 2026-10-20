@@ -1,6 +1,5 @@
 import { RepoUnreachableError } from '@handover/core';
 import { expect, test, vi } from 'vitest';
-import { GET } from '../../api.js';
 import {
   addressed,
   ctx,
@@ -14,10 +13,11 @@ import {
   rows,
   state,
   untranslated,
-} from '../harness.fixture.js';
+} from '../../../../test/harness.fixture.js';
+import { GET } from '../../api.js';
 
 const { workerMailerMock, configMock, indexMock, cloudflareMock, authMock, coreMock } =
-  await vi.hoisted(async () => import('../harness.fixture.js'));
+  await vi.hoisted(async () => import('../../../../test/harness.fixture.js'));
 
 vi.mock('worker-mailer', () => workerMailerMock());
 vi.mock('virtual:handover/config', () => configMock());

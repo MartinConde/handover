@@ -5,7 +5,6 @@ import {
   releaseResource,
 } from '@handover/core';
 import { expect, test, vi } from 'vitest';
-import { POST } from '../api.js';
 import {
   addressed,
   createDraft,
@@ -20,10 +19,11 @@ import {
   stored,
   translate,
   untranslated,
-} from './harness.fixture.js';
+} from '../../../test/harness.fixture.js';
+import { POST } from '../api.js';
 
 const { workerMailerMock, configMock, indexMock, cloudflareMock, authMock, coreMock } =
-  await vi.hoisted(async () => import('./harness.fixture.js'));
+  await vi.hoisted(async () => import('../../../test/harness.fixture.js'));
 
 vi.mock('worker-mailer', () => workerMailerMock());
 vi.mock('virtual:handover/config', () => configMock());

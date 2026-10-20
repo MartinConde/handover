@@ -1,10 +1,19 @@
 import { parseEntry } from '@handover/core';
 import { expect, test, vi } from 'vitest';
+import {
+  ctx,
+  files,
+  logged,
+  owner,
+  pendingDrafts,
+  post,
+  publish,
+  put,
+} from '../../../test/harness.fixture.js';
 import { DELETE, GET, POST, PUT } from '../api.js';
-import { ctx, files, logged, owner, pendingDrafts, post, publish, put } from './harness.fixture.js';
 
 const { workerMailerMock, configMock, indexMock, cloudflareMock, authMock, coreMock } =
-  await vi.hoisted(async () => import('./harness.fixture.js'));
+  await vi.hoisted(async () => import('../../../test/harness.fixture.js'));
 
 vi.mock('worker-mailer', () => workerMailerMock());
 vi.mock('virtual:handover/config', () => configMock());

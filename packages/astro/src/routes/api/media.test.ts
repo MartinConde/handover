@@ -1,7 +1,6 @@
 import { releaseUploadIntent } from '@handover/core';
 import type { APIContext } from 'astro';
 import { expect, test, vi } from 'vitest';
-import { DELETE, GET, PATCH, POST, PUT } from '../api.js';
 import {
   confirmUpload,
   contentFiles,
@@ -18,10 +17,11 @@ import {
   put,
   setMediaDetails,
   state,
-} from './harness.fixture.js';
+} from '../../../test/harness.fixture.js';
+import { DELETE, GET, PATCH, POST, PUT } from '../api.js';
 
 const { workerMailerMock, configMock, indexMock, cloudflareMock, authMock, coreMock } =
-  await vi.hoisted(async () => import('./harness.fixture.js'));
+  await vi.hoisted(async () => import('../../../test/harness.fixture.js'));
 
 vi.mock('worker-mailer', () => workerMailerMock());
 vi.mock('virtual:handover/config', () => configMock());

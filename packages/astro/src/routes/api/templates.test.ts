@@ -1,5 +1,4 @@
 import { expect, test, vi } from 'vitest';
-import { GET, POST } from '../api.js';
 import {
   createDraft,
   ctx,
@@ -13,10 +12,11 @@ import {
   publish,
   savedTemplates,
   state,
-} from './harness.fixture.js';
+} from '../../../test/harness.fixture.js';
+import { GET, POST } from '../api.js';
 
 const { workerMailerMock, configMock, indexMock, cloudflareMock, authMock, coreMock } =
-  await vi.hoisted(async () => import('./harness.fixture.js'));
+  await vi.hoisted(async () => import('../../../test/harness.fixture.js'));
 
 vi.mock('worker-mailer', () => workerMailerMock());
 vi.mock('virtual:handover/config', () => configMock());
