@@ -432,6 +432,9 @@ test('Canvas comes back updated after a language round trip through Form', async
   await openBlockControls(page);
   await page.getByRole('button', { name: /^(Form|Back to form)$/ }).click();
   await page.getByRole('button', { name: /^DE(?: —|$)/ }).click();
+  await page.locator('[id="t-blocks.1"] > header > button.fold').click();
+  await page.locator('[id="t-blocks.1.columns.0"] > header > button.fold').click();
+  await page.locator('[id="t-blocks.1.columns.0.blocks.0"] > header > button.fold').click();
   await expect
     .poll(() =>
       page

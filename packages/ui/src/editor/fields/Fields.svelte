@@ -832,12 +832,12 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
           {@const open = broken([...at, String(i)])}
           {@const shut = !open && folded[keyOf(items, i)] !== false}
           {#if scalar}
-          <div class={['row-card', { 'is-scalar': true, 'is-dragging': s.isDragging }]} {@attach s.attach}>
+          <div class={['row-card', { 'is-scalar': true, 'is-dragging': s.isDragging }]} {@attach !translating && s.attach}>
             <div class="row-fields"><Fields fields={field.item} bind:root {blocks} {blockLabels} {problems} path={[...at, String(i)]} rowLabel="{text} {i + 1}" {translating} {machine} {ontranslate} {sourceChanged} bind:dismissed {sourceLabel} {translatedAt} {onretranslate} {prefix} {mediaBase} {locale} {uiLocale} {site} {servedAt} {session} {oncommand} viewRoot={displayedRoot} inherited={mode} {structureLocked} {textOnly} {reference} /></div>
             {#if !translating}{@render controls(at, i, name, s.attachHandle)}{/if}
           </div>
           {:else}
-          <article class={['block-card section-card', { 'is-dragging': s.isDragging, 'is-folded': shut }]} id="{id}.{i}" aria-labelledby="{id}.{i}-h" {@attach s.attach}>
+          <article class={['block-card section-card', { 'is-dragging': s.isDragging, 'is-folded': shut }]} id="{id}.{i}" aria-labelledby="{id}.{i}-h" {@attach !translating && s.attach}>
             <header>
               <button class="btn btn-ghost fold section-toggle" type="button" disabled={open} aria-expanded={!shut} aria-controls="{id}.{i}-b" onclick={() => (folded[keyOf(items, i)] = !shut)}>
                 {@render icon('m9 6 6 6-6 6')}
@@ -881,7 +881,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
           {@const s = sortable(() => keyOf(items, i), () => i)}
           {@const open = broken([...at, String(i)])}
           {@const shut = !open && folded[keyOf(items, i)] !== false}
-          <article class={['block-card section-card', { 'is-dragging': s.isDragging, 'is-folded': shut }]} id="{id}.{i}" aria-labelledby="{id}.{i}-h" {@attach s.attach}>
+          <article class={['block-card section-card', { 'is-dragging': s.isDragging, 'is-folded': shut }]} id="{id}.{i}" aria-labelledby="{id}.{i}-h" {@attach !translating && s.attach}>
             <header>
               <button class="btn btn-ghost fold section-toggle" type="button" disabled={open} aria-expanded={!shut} aria-controls="{id}.{i}-b" onclick={() => (folded[keyOf(items, i)] = !shut)}>
                 {@render icon('m9 6 6 6-6 6')}

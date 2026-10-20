@@ -4,6 +4,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Translated blocks and list items keep their disclosure buttons and text fields enabled.
+
 - Existing blocks and object-list items open as compact, collapsed cards with content
   summaries. New items open for editing; validation and field navigation reveal nested
   fields automatically. Simple lists remain directly editable.

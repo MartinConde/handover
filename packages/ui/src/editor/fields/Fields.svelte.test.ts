@@ -1269,6 +1269,30 @@ test('blocks: duplicate copies only that subtree with fresh descendant ids', () 
   ).not.toEqual(after[1]?.columns?.flatMap((column) => column.blocks.map((block) => block._id)));
 });
 
+test.each([{ translating: true }, { structureLocked: true }])(
+  'locked structure keeps disclosures and prose enabled: %j',
+  async (mode) => {
+    show(
+      [...pageFields, rooms, tags],
+      { ...blocksData(), ...arrayData() },
+      registry,
+      {},
+      undefined,
+      { ...mode, initiallyCollapsed: true },
+    );
+    await settle();
+    for (const selector of ['#f-blocks\\.0', '#f-rooms\\.0', '#f-tags > .row-card']) {
+      const card = q(selector);
+      expect(card.closest('[aria-disabled="true"]')).toBeNull();
+      expect(card.getAttribute('role')).not.toBe('button');
+    }
+    click('#f-blocks\\.0 > header .fold');
+    click('#f-rooms\\.0 > header .fold');
+    expect(q<HTMLInputElement>('input#f-blocks\\.0\\.heading').disabled).toBe(false);
+    expect(q<HTMLInputElement>('input#f-rooms\\.0\\.name').disabled).toBe(false);
+  },
+);
+
 test('blocks: existing sections start collapsed with their first words', () => {
   show(pageFields, blocksData(), registry, {}, undefined, { initiallyCollapsed: true });
   expect(q('#f-blocks\\.0 > header .fold').getAttribute('aria-expanded')).toBe('false');
