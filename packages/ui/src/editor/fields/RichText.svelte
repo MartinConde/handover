@@ -277,6 +277,7 @@ $effect(() => {
 // Bumped on every transaction so `isActive` re-runs; the Editor itself is not reactive.
 let tick = $state(0);
 
+// The editor is not reactive, so these two counters are the only triggers and are read bare.
 $effect(() => {
   reconcileTick;
   tick;
