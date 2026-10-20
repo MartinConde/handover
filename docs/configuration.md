@@ -135,7 +135,7 @@ cms.config.ts › collections.listings.label: "ger" is not an interface language
 Globals, fields and block types take the same shape through `.meta({ label })`, and the options
 of a select through `.meta({ options: { value: { en, de } } })`. See
 [Field types](field-types.md#labels) for fields, options and block types, and `globals` below. A
-global's `description` takes the same shape (zod types it as a string, hence the `as never` in the example). A field's or block's description is not shown in the admin. Two places keep one name however the admin is set. The Canvas
+global's description is one string in `description`, or one per language in `.meta({ descriptions: { en, de } })`. A field's or block's description is not shown in the admin. Two places keep one name however the admin is set. The Canvas
 Structure list names a block by `_label` or its type, because the site renders it.
 
 ## `globals`
@@ -152,10 +152,10 @@ export const site = z
   .object({ name: z.string(), footerText: z.string() })
   .meta({
     label: { en: 'Site details', de: 'Website-Angaben' },
-    description: {
+    descriptions: {
       en: 'The name, contact details and footer line every page carries',
       de: 'Name, Kontaktdaten und Fußzeile jeder Seite',
-    } as never,
+    },
   });
 ```
 

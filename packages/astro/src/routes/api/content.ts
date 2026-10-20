@@ -167,14 +167,20 @@ export const schemaOf = (
 
 /** What the site settings list calls a global, and what it says it is for. */
 export const globalLabel = (key: string, schema: Parameters<typeof formSchema>[0]) => {
-  const root = formSchema(schema) as { label?: unknown; description?: unknown };
+  const root = formSchema(schema) as {
+    label?: unknown;
+    description?: unknown;
+    descriptions?: unknown;
+  };
   const labels = labelsOf(root.label);
-  const descriptions = labelsOf(root.description);
+  const descriptions = labelsOf(root.descriptions);
   return {
     key,
     label: labelIn(root.label, 'en') ?? key,
     ...(labels ? { labels } : {}),
-    description: labelIn(root.description, 'en'),
+    description:
+      labelIn(root.descriptions, 'en') ??
+      (typeof root.description === 'string' ? root.description : undefined),
     ...(descriptions ? { descriptions } : {}),
   };
 };

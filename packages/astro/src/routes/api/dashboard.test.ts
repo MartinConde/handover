@@ -1,6 +1,8 @@
 import { texts } from 'virtual:handover/index';
 import { expect, test, vi } from 'vitest';
+import { z } from 'zod';
 import { GET } from '../api.js';
+import { globalLabel } from './content.js';
 import { ctx, heldDrafts, overlayRows, pendingDrafts, state } from './harness.fixture.js';
 
 const { workerMailerMock, configMock, indexMock, cloudflareMock, authMock, coreMock } =
@@ -40,6 +42,19 @@ test('the globals list names each global and the languages it has a file in', as
     locales: ['en', 'de'],
   });
   state.locales = ['en'];
+});
+
+test('a global described per language carries each description, English as the default', () => {
+  const schema = z.object({}).meta({
+    descriptions: { en: 'The menus the site renders', de: 'Die Menüs der Website' },
+  });
+
+  expect(globalLabel('navigation', schema)).toEqual({
+    key: 'navigation',
+    label: 'navigation',
+    description: 'The menus the site renders',
+    descriptions: { en: 'The menus the site renders', de: 'Die Menüs der Website' },
+  });
 });
 
 test('a global with a draft ahead of the repository carries the pending dot', async () => {

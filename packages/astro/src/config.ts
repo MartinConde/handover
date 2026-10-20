@@ -101,8 +101,7 @@ export function defineNavigation({
       // Shown on the Site settings card; a global without a label is listed under its key.
       .meta({
         label: { en: 'Navigation', de: 'Navigation' },
-        // zod types `description` as a string; the admin reads the per-language form too.
-        description: { en: 'The menus the site renders', de: 'Die Menüs der Website' } as never,
+        descriptions: { en: 'The menus the site renders', de: 'Die Menüs der Website' },
       })
   );
 }
