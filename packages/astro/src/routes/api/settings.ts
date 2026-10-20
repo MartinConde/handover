@@ -23,11 +23,15 @@ import {
 import { mailer } from '../../auth.js';
 import type { RequestContext } from '../../environment.js';
 import { mediaStore, missingMailer, NO_BUCKET, workerBuilds } from '../../environment.js';
+import { mailText, requestLocale } from '../../mail-text.js';
 import { entryProblems } from '../../problems.js';
 import { readJson } from './body.js';
 import { deeplKey, entryPath, formFor, publishSources, takenNames } from './content.js';
 
-export async function testEmail(session: App.Locals['handover']): Promise<Response> {
+export async function testEmail(
+  request: Request,
+  session: App.Locals['handover'],
+): Promise<Response> {
   if (session?.role !== 'owner') return new Response('Forbidden', { status: 403 });
   const send = mailer();
   if (!send)
@@ -37,11 +41,8 @@ export async function testEmail(session: App.Locals['handover']): Promise<Respon
     );
   const to = session.user.email;
   try {
-    const { id } = await send({
-      to,
-      subject: 'Handover test email',
-      text: 'Your site can send email. Nothing else to do — this message was sent from the admin to check.',
-    });
+    const language = session.user.uiLocale ?? requestLocale(request);
+    const { id } = await send({ to, ...mailText(language).test() });
     return Response.json({ ok: true, code: 'DIAGNOSTIC_EMAIL_SENT', to, id });
   } catch (err) {
     // The provider's refusal names the broken rule, which is the whole use of the button.

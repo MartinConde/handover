@@ -18,7 +18,7 @@ import { beforeEach, expect, test, vi } from 'vitest';
 import { preview } from './preview.js';
 
 // What the session is worth is proven against a real D1 in core's auth.test.ts.
-let session: { user: { id: string; role?: string } } | null = null;
+let session: { user: { id: string; role?: string; uiLocale?: string } } | null = null;
 vi.mock('../auth.js', () => ({
   createAuth: () => ({ api: { getSession: async () => session } }),
 }));
@@ -145,14 +145,14 @@ const pageLoader = {
   },
 };
 
-const get = (path: string, search = '') => {
+const get = (path: string, search = '', headers: Record<string, string> = {}) => {
   const response = { headers: new Headers() };
   const locals: Record<string, unknown> = {};
   return Promise.resolve(
     preview(
       {
         params: { path },
-        request: new Request(`https://demo.example/_preview/${path}${search}`),
+        request: new Request(`https://demo.example/_preview/${path}${search}`, { headers }),
         url: new URL(`https://demo.example/_preview/${path}${search}`),
         response,
         locals,
@@ -417,6 +417,24 @@ test('a signed-out request never learns whether the page exists', async () => {
 test('a path the site serves no page at is not found', async () => {
   expect(((await get('listings/mill-house/gallery')).result as Response).status).toBe(404);
   expect(((await get('samples/everything')).result as Response).status).toBe(404);
+});
+
+test('the error page follows the signed-in account language, else the request hint, else English', async () => {
+  session = { user: { id: 'u1', uiLocale: 'de' } };
+  const saved = await ((await get('nope/nope/nope')).result as Response).text();
+  expect(saved).toContain('<h1>Vorschau fehlgeschlagen</h1>');
+  expect(saved).toContain('Diese Website liefert unter dieser Adresse keine Seite aus.');
+
+  session = null;
+  const hinted = await (
+    (await get('listings/mill-house', '', { 'accept-language': 'de-DE,de;q=0.9' }))
+      .result as Response
+  ).text();
+  expect(hinted).toContain('Melde dich im Admin an, um eine Vorschau zu sehen.');
+
+  const plain = await ((await get('listings/mill-house')).result as Response).text();
+  expect(plain).toContain('<h1>Preview failed</h1>');
+  expect(plain).toContain('Sign in to the admin to see a preview.');
 });
 
 // The gate is on the refusals too: a 401 that a CDN cached, or that a stranger's page could frame.

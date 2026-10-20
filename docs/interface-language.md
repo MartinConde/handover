@@ -22,8 +22,9 @@ open even though the catalog and interface checks pass.
 
 Every Handover-owned admin surface is bilingual. The sections below spell out the state that is
 preserved during live switching and the deliberate boundary around authored and technical text.
-Transactional email contents, command-line output, external OAuth pages, this documentation, and
-browser- or operating-system-owned controls are outside the interface-language setting.
+Command-line output, external OAuth pages, this documentation, and browser- or
+operating-system-owned controls are outside the interface-language setting. The emails Handover
+sends are phrased in English or German too: see [Email language](email.md#email-language).
 
 Language controls, sign-in, password-reset and expired-link flows, the complete Account screen,
 the signed-in shell, the dashboard, collection entry lists, entry creation, shared page/entry

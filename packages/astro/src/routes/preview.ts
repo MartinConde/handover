@@ -6,12 +6,14 @@ import {
   ContentError,
   type ContentFile,
   type ContentSource,
+  DEFAULT_UI_LOCALE,
   draftFiles,
   draftSource,
   entryAt,
   previewTarget,
   roleOf,
   staticSource,
+  type UiLocale,
 } from '@handover/core';
 import { createAuth } from '../auth.js';
 import {
@@ -25,6 +27,7 @@ import {
   successManifest,
 } from '../canvas.js';
 import { db } from '../environment.js';
+import { requestLocale } from '../mail-text.js';
 
 const escapeHtml = (value: string) =>
   value.replace(/[&<>"']/g, (character) => {
@@ -48,9 +51,38 @@ const previewIdentity = (url: URL) => ({
   version: url.searchParams.get('at') ?? '',
 });
 
-const answer = (url: URL, status: number, body: string) => {
+// Read inside the preview pane, where the admin shell cannot phrase it, so it is phrased here.
+const PREVIEW_TEXT = {
+  en: {
+    title: 'Preview failed',
+    signIn: 'Sign in to the admin to see a preview.',
+    noPage: 'This site serves no page at that address.',
+    unrenderable: 'This draft cannot be rendered:',
+  },
+  de: {
+    title: 'Vorschau fehlgeschlagen',
+    signIn: 'Melde dich im Admin an, um eine Vorschau zu sehen.',
+    noPage: 'Diese Website liefert unter dieser Adresse keine Seite aus.',
+    unrenderable: 'Dieser Entwurf lässt sich nicht darstellen:',
+  },
+};
+
+const answer = (
+  url: URL,
+  status: number,
+  body: string,
+  locale: UiLocale,
+  more?: { code?: string; detail?: string },
+) => {
   const identity = previewIdentity(url);
-  const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="robots" content="noindex"><title>Preview failed</title></head><body><main><h1>Preview failed</h1><p>${escapeText(body)}</p></main><span hidden data-handover-preview-result="error" data-handover-preview-url="${escapeHtml(identity.url)}" data-handover-preview-version="${escapeHtml(identity.version)}" data-handover-preview-code="${status}"></span></body></html>`;
+  const text = PREVIEW_TEXT[locale];
+  const line =
+    more?.code === 'CANVAS_NO_PAGE'
+      ? text.noPage
+      : more?.code === 'CANVAS_DRAFT_UNRENDERABLE'
+        ? `${text.unrenderable}\n${more.detail}`
+        : body;
+  const html = `<!doctype html><html lang="${locale}"><head><meta charset="utf-8"><meta name="robots" content="noindex"><title>${text.title}</title></head><body><main><h1>${text.title}</h1><p>${escapeText(line)}</p></main><span hidden data-handover-preview-result="error" data-handover-preview-url="${escapeHtml(identity.url)}" data-handover-preview-version="${escapeHtml(identity.version)}" data-handover-preview-code="${status}"></span></body></html>`;
   return new Response(html, {
     status,
     headers: { ...GATE, 'content-type': 'text/html; charset=utf-8' },
@@ -253,10 +285,14 @@ function validate(collection: string, data: unknown, path: string): unknown {
 export async function preview(ctx: Ctx, astro: AstroContent<string>): Promise<Response | Rendered> {
   if (ctx.locals) delete ctx.locals.handoverCanvas;
   const session = await createAuth(ctx.url).api.getSession({ headers: ctx.request.headers });
+  const locale =
+    (session?.user as { uiLocale?: UiLocale | null } | undefined)?.uiLocale ??
+    requestLocale(ctx.request) ??
+    DEFAULT_UI_LOCALE;
   if (!session)
     return ctx.request.method === 'POST'
       ? canvasAnswer(401, 'Sign in to the admin to see a preview.')
-      : answer(ctx.url, 401, 'Sign in to the admin to see a preview.');
+      : answer(ctx.url, 401, PREVIEW_TEXT[locale].signIn, locale);
   let snapshot: CanvasSnapshot | undefined;
   if (ctx.request.method === 'POST') {
     if (!new Set(['editor', 'owner']).has(roleOf('default', session.user)))
@@ -265,10 +301,12 @@ export async function preview(ctx: Ctx, astro: AstroContent<string>): Promise<Re
     if (parsed instanceof Response) return parsed;
     snapshot = parsed;
   } else if (ctx.request.method !== 'GET') {
-    return answer(ctx.url, 405, 'Preview supports GET and Canvas POST requests.');
+    return answer(ctx.url, 405, 'Preview supports GET and Canvas POST requests.', locale);
   }
   const fail = (status: number, message: string, more?: { code?: string; detail?: string }) =>
-    snapshot ? canvasAnswer(status, message, snapshot, more) : answer(ctx.url, status, message);
+    snapshot
+      ? canvasAnswer(status, message, snapshot, more)
+      : answer(ctx.url, status, message, locale, more);
   const path = `${(config.i18n.base ?? '').replace(/\/+$/, '')}/${ctx.params.path ?? ''}`;
   let target = previewTarget('default', config.i18n, config.collections, path);
   // An entry served where another collection has its index is still that entry's page in Canvas.

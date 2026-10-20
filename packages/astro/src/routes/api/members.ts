@@ -2,6 +2,7 @@ import config from 'virtual:handover/config';
 import type { Role } from '@handover/core';
 import {
   accountFacts,
+  accountLocale,
   activityPage,
   demoteOwner,
   dropEmailLinks,
@@ -14,6 +15,7 @@ import {
 import { createAuth, loginMethods, mailer } from '../../auth.js';
 import type { RequestContext } from '../../environment.js';
 import { missingMailer } from '../../environment.js';
+import { mailText, requestLocale } from '../../mail-text.js';
 import { readJson } from './body.js';
 import { entryTitle } from './content.js';
 
@@ -72,11 +74,8 @@ export async function setPassword(
     detail: { how: 'first' },
   });
   const email = current.user.email;
-  await mailer()?.({
-    to: email,
-    subject: 'A password was set for your account',
-    text: `A password was set for ${email} from the account page, and every other device was signed out.\n\nIf this was not you, ask the site's owner to remove the password and sign you out everywhere.`,
-  }).catch(() =>
+  const language = (await accountLocale(database, email)) ?? requestLocale(request);
+  await mailer()?.({ to: email, ...mailText(language).passwordSet(email) }).catch(() =>
     logActivity('default', database, { kind: 'mail-failed', detail: { message: 'password set' } }),
   );
   return Response.json({ ok: true });
@@ -151,7 +150,11 @@ export async function invite(
     );
   const send = mailer();
   if (!send) return Response.json({ error: missingMailer() }, { status: 503 });
-  const auth = createAuth(url, cfContext, { invite: true });
+  const auth = createAuth(url, cfContext, {
+    invite: true,
+    request,
+    locale: session.user.uiLocale ?? undefined,
+  });
   let email: string;
   try {
     // Three named values: a spread body could reach the `data` record that writes user columns.
@@ -206,7 +209,14 @@ export async function resendInvite(
   // Resending is how an owner takes back an invite sent to the wrong mailbox.
   await dropEmailLinks('default', ctx.db(), member.email);
   try {
-    await memberApi('default', createAuth(url, cfContext, { invite: true })).signInMagicLink({
+    await memberApi(
+      'default',
+      createAuth(url, cfContext, {
+        invite: true,
+        request,
+        locale: session.user.uiLocale ?? undefined,
+      }),
+    ).signInMagicLink({
       body: {
         email: member.email,
         callbackURL: `${(config.i18n.base ?? '').replace(/\/+$/, '')}/admin/account`,

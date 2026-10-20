@@ -772,6 +772,7 @@ export function coreMock(original: Record<string, unknown>) {
       state.read = _args.slice(2);
       return { events: [], cursor: null };
     },
+    accountLocale: async () => null,
     accountFacts: async (..._args: unknown[]) => {
       state.asked = _args.slice(2);
       return { hasPassword: true, sessions: [] };

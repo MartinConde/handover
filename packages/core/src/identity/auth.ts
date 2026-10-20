@@ -8,7 +8,7 @@ import { adminAc, defaultStatements, userAc } from 'better-auth/plugins/admin/ac
 import { magicLink } from 'better-auth/plugins/magic-link';
 import { and, desc, eq, exists, gt, isNotNull, max, ne, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
-import { UI_LOCALES } from '../content/ui-locale.js';
+import { isUiLocale, UI_LOCALES, type UiLocale } from '../content/ui-locale.js';
 import type { Db } from '../db.js';
 import { logActivity } from '../publishing/activity.js';
 import { activity } from '../tables.js';
@@ -354,6 +354,16 @@ export async function userExists(_siteId: string, db: Db, email: string): Promis
     .where(eq(authTables.user.email, email))
     .limit(1);
   return rows.length > 0;
+}
+
+/** Undefined when there is no account; null when the person never chose an interface language. */
+export async function accountLocale(db: Db, email: string): Promise<UiLocale | null | undefined> {
+  const [row] = await db
+    .select({ uiLocale: authTables.user.uiLocale })
+    .from(authTables.user)
+    .where(eq(authTables.user.email, email))
+    .limit(1);
+  return row && (isUiLocale(row.uiLocale) ? row.uiLocale : null);
 }
 
 export interface AccountFacts {

@@ -125,6 +125,21 @@ cannot be pointed at a stranger.
 | `503` | No mailer is configured, or the one you named has no credential. The message names which |
 | `502` | The provider refused, in the provider's own words — an unverified sending domain, a plan that may not write to that recipient, or a login the relay would not take, each reads as itself rather than as a number |
 
+## Email language
+
+Handover's own emails (password reset, email-change approval and confirmation, sign-in link,
+invitation, the notice that a password was set, and the test email) are sent in English or German.
+The language is the first of these that applies:
+
+1. The recipient's saved **Interface language** on **Account**.
+2. For an invitation, the interface language of the owner who sent it.
+3. For the test email, the interface language of the owner who pressed the button.
+4. The device's language: the signed-out picker's choice, else the request's `Accept-Language`
+   (German if it asks for `de`).
+5. English.
+
+A custom `mailer` function is handed the `subject` and `text` already in that language.
+
 ## When a send fails
 
 The links behave differently, and it is worth knowing which you are looking at.

@@ -4,6 +4,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Emails Handover sends (password reset, email-change approval and confirmation, sign-in link, invitation, password-set notice, test email) are written in English or German: the recipient's saved interface language, else the inviting or requesting owner's, else the request's device language or `Accept-Language`, else English. The preview error page follows the signed-in account's language the same way. Response bodies are unchanged.
 - Better Auth refusals on the Account screen (invalid email, unknown account, email not verified, email change unavailable, update failed, password already set, expired session) and its rate limiter's `429` now read in the interface language (en, de) instead of showing Better Auth's English sentence. The Settings checks show a localized sentence first when the provider refuses or a check is not set up, and the provider's own sentence follows as technical detail. The responses are unchanged.
 - Upload refusals (too large, size or type mismatch, empty, timed out, no upload bucket), the
   media-being-deleted refusal on save, creating a language that exists or is not offered, stale

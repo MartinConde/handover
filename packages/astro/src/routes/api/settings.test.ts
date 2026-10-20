@@ -54,6 +54,13 @@ test('a test email goes to the signed-in owner and answers with the id it was gi
   expect(sent[0]?.to).toBe('martin@example.com');
 });
 
+test("a test email is phrased in the owner's interface language", async () => {
+  state.siteMailer = fakeMailer;
+  const res = await testEmail({ ...owner, user: { ...owner.user, uiLocale: 'de' } });
+  expect(res.status).toBe(200);
+  expect(sent[0]?.subject).toBe('Handover-Test-E-Mail');
+});
+
 // The diagnostics screen's own endpoints.
 const check = (name: string, session?: unknown) =>
   POST(

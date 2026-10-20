@@ -126,7 +126,7 @@ const mounted = (pathname: string) =>
 export const GET: APIRoute = async ({ params, request, url, locals }) => {
   const session = locals.handover;
   const ctx = requestContext();
-  if (mounted(url.pathname)) return createAuth(url, locals.cfContext).handler(request);
+  if (mounted(url.pathname)) return createAuth(url, locals.cfContext, { request }).handler(request);
   if (params.path === 'account') return account(ctx, session);
   if (params.path === 'activity') return activityLog(ctx, url, session);
   if (params.path === 'activity/diff') return activityDiff(ctx, url, session);
@@ -321,7 +321,7 @@ export const POST: APIRoute = async ({ params, request, url, locals }) => {
   const session = locals.handover;
   if (mounted(url.pathname)) {
     const invalidBody = await bodyErrorResponse(request, true);
-    return invalidBody ?? createAuth(url, locals.cfContext).handler(request);
+    return invalidBody ?? createAuth(url, locals.cfContext, { request }).handler(request);
   }
   const invalidBody = await bodyErrorResponse(request);
   if (invalidBody) return invalidBody;
@@ -329,7 +329,7 @@ export const POST: APIRoute = async ({ params, request, url, locals }) => {
   const checked = groups(params.path, CHECK);
   if (checked) {
     const name = checked[1];
-    if (name === 'email') return testEmail(session);
+    if (name === 'email') return testEmail(request, session);
     if (name === 'conflict') return answering(() => simulateConflict(ctx, session));
     // Not `answering`: every branch catches for itself.
     return connection(ctx, name, session);

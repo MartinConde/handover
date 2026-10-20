@@ -2,6 +2,7 @@ import { env } from 'cloudflare:workers';
 import config from 'virtual:handover/config';
 import {
   type Auth,
+  accountLocale,
   cloudflareMailer,
   createAuth as create,
   type Db,
@@ -12,9 +13,9 @@ import {
   resendMailer,
   senderAddress,
   type UiLocale,
-  userExists,
 } from '@handover/core';
 import { db } from './environment.js';
+import { mailText, requestLocale } from './mail-text.js';
 
 /** Named here rather than from `workers-types`: `waitUntil` is all this package asks of it. */
 export interface CloudflareContext {
@@ -112,7 +113,12 @@ export function loginMethods(): { emailLink: boolean; github: boolean } {
 }
 
 /** Never a singleton: D1 bindings are per-request and the lock fight is the 33-second dev hang. */
-export function createAuth(url: URL, ctx?: CloudflareContext, options?: { invite?: true }): Auth {
+export function createAuth(
+  url: URL,
+  ctx?: CloudflareContext,
+  // `locale` is the inviting owner's; `request` carries the device hint of whoever triggers a mail.
+  options?: { invite?: true; locale?: UiLocale; request?: Request },
+): Auth {
   const secret = (env as { BETTER_AUTH_SECRET?: string }).BETTER_AUTH_SECRET;
   if (!secret) {
     throw new Error(
@@ -123,6 +129,9 @@ export function createAuth(url: URL, ctx?: CloudflareContext, options?: { invite
   const database = db();
   const base = baseUrl();
   const send = mailer();
+  // A saved interface language wins; otherwise the hint from the request that triggers the mail.
+  const hint = options?.locale ?? requestLocale(options?.request);
+  const languageOf = async (email: string) => (await accountLocale(database, email)) ?? hint;
   return create('default', database, {
     secret,
     baseURL: base,
@@ -135,31 +144,22 @@ export function createAuth(url: URL, ctx?: CloudflareContext, options?: { invite
     ...(send
       ? {
           sendMagicLink: options?.invite
-            ? inviteLink(database, send, base ?? url.origin)
-            : signInLink(database, send, ctx),
+            ? inviteLink(database, send, base ?? url.origin, hint)
+            : signInLink(database, send, hint, ctx),
           ...(options?.invite ? { magicLinkMinutes: INVITE_HOURS * 60 } : {}),
-          sendPasswordReset: ({ email, url: link }) =>
-            send({
-              to: email,
-              subject: 'Set a new password',
-              text: `Open this link to choose a new password for ${email}. It works once and expires in an hour.\n\n${link}\n\nIf you did not ask for this, ignore it — nothing has changed.`,
-            })
+          sendPasswordReset: async ({ email, url: link }) =>
+            send({ to: email, ...mailText(await languageOf(email)).reset(email, link) })
               .catch(mailFailed(database, 'password reset'))
               .then(() => undefined),
-          sendEmailChangeApproval: ({ email, newEmail, url: link }) =>
+          sendEmailChangeApproval: async ({ email, newEmail, url: link }) =>
             send({
               to: email,
-              subject: 'Approve your new email address',
-              text: `Somebody signed in as ${email} asked to change this account's email to ${newEmail}.\n\nOpen this link to approve it. We then send a link to ${newEmail}, and the change happens when that one is opened. It expires in an hour.\n\n${link}\n\nIf this was not you, do not open the link and change your password — somebody may be signed in as you.`,
+              ...mailText(await languageOf(email)).approve(email, link, newEmail),
             })
               .catch(mailFailed(database, 'email change approval'))
               .then(() => undefined),
-          sendEmailChangeLink: ({ email, url: link }) =>
-            send({
-              to: email,
-              subject: 'Confirm your new email address',
-              text: `Open this link to make ${email} the address you sign in with. It works once and expires in an hour.\n\n${link}\n\nIf you did not ask for this, ignore it — nothing has changed.`,
-            })
+          sendEmailChangeLink: async ({ email, url: link }) =>
+            send({ to: email, ...mailText(await languageOf(email)).confirm(email, link) })
               .catch(mailFailed(database, 'email change link'))
               .then(() => undefined),
         }
@@ -177,16 +177,15 @@ const mailFailed = (db: Db, what: string) => async (err: unknown) => {
 
 /** The endpoint mails regardless; sending only to a known address stops it mailing strangers. */
 const signInLink =
-  (db: Db, send: Mailer, ctx?: CloudflareContext) =>
+  (db: Db, send: Mailer, hint: UiLocale | undefined, ctx?: CloudflareContext) =>
   async ({ email, url }: { email: string; url: string }) => {
     // After the answer, lookup included: a member's address must answer like a stranger's.
     const task = (async () => {
-      if (!(await userExists('default', db, email))) return;
-      await send({
-        to: email,
-        subject: 'Your sign-in link',
-        text: `Open this link to sign in as ${email}. It works once and expires in 15 minutes.\n\n${url}\n\nIf you did not ask for it, ignore it — nobody can sign in without opening the link.`,
-      }).catch(mailFailed(db, 'sign-in link'));
+      const saved = await accountLocale(db, email);
+      if (saved === undefined) return;
+      await send({ to: email, ...mailText(saved ?? hint).signIn(email, url) }).catch(
+        mailFailed(db, 'sign-in link'),
+      );
     })().catch((err: unknown) => console.error(`Sign-in link not sent: ${(err as Error).message}`));
     if (ctx) ctx.waitUntil(task);
     else await task;
@@ -197,12 +196,11 @@ const INVITE_HOURS = 72;
 
 /** Said for somebody who has never heard of the site; it lands on the account page. */
 const inviteLink =
-  (db: Db, send: Mailer, site: string) =>
+  (db: Db, send: Mailer, site: string, hint: UiLocale | undefined) =>
   async ({ email, url }: { email: string; url: string }) => {
-    if (!(await userExists('default', db, email))) return;
-    await send({
-      to: email,
-      subject: 'You have been invited',
-      text: `You have been invited to help run ${site}.\n\nOpen this link to sign in as ${email}. It works once and expires in three days; once you are in, your account page offers you a password so the next time needs no link.\n\n${url}\n\nIf you were not expecting this, ignore it — nobody can sign in without opening the link.`,
-    }).catch(mailFailed(db, 'invite'));
+    const saved = await accountLocale(db, email);
+    if (saved === undefined) return;
+    await send({ to: email, ...mailText(saved ?? hint).invite(email, url, site) }).catch(
+      mailFailed(db, 'invite'),
+    );
   };

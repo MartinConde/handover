@@ -207,6 +207,7 @@ export type { AccountFacts, Auth, AuthConfig, Member, MemberApi, Role } from './
 export {
   AUTH_BASE_PATH,
   accountFacts,
+  accountLocale,
   createAuth,
   demoteOwner,
   dropEmailLinks,

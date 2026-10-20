@@ -129,19 +129,20 @@ function askForLink(
   host = 'https://demo.example',
   origin = 'https://demo.example',
   ctx?: { waitUntil(p: Promise<unknown>): void },
+  headers: Record<string, string> = {},
 ) {
   const url = new URL(`${host}${AUTH_BASE_PATH}/sign-in/magic-link`);
-  return createAuth(url, ctx).handler(
-    new Request(url, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        origin,
-        'cf-connecting-ip': '203.0.113.7',
-      },
-      body: JSON.stringify({ email, callbackURL: '/admin' }),
-    }),
-  );
+  const request = new Request(url, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      origin,
+      'cf-connecting-ip': '203.0.113.7',
+      ...headers,
+    },
+    body: JSON.stringify({ email, callbackURL: '/admin' }),
+  });
+  return createAuth(url, ctx, { request }).handler(request);
 }
 
 test('a mailer with no base URL offers no sign-in link at all', async () => {
@@ -242,6 +243,58 @@ test('an invite says it is an invite and lands the person on their account page'
   expect(sent[0]?.subject).toBe('You have been invited');
   expect(sent[0]?.text).toContain('You have been invited to help run https://demo.example');
   expect(linkIn(sent[0]?.text ?? '')).toContain('callbackURL=%2Fadmin%2Faccount');
+});
+
+// Which language an email is phrased in, branch by branch.
+const setLocale = (email: string, locale: string) =>
+  binding.prepare('UPDATE user SET ui_locale = ? WHERE email = ?').bind(locale, email).run();
+
+test("an account's saved interface language beats the request's device hint", async () => {
+  await seedUser('lea@example.com');
+  await setLocale('lea@example.com', 'de');
+
+  await askForLink('lea@example.com', undefined, undefined, undefined, {
+    'accept-language': 'en',
+  });
+
+  expect(sent[0]?.subject).toBe('Dein Anmeldelink');
+});
+
+test("an invite is phrased in the inviting owner's language", async () => {
+  await seedUser('lea@example.com');
+  const url = new URL(`https://demo.example${AUTH_BASE_PATH}/sign-in/magic-link`);
+
+  await memberApi(
+    'default',
+    createAuth(url, undefined, { invite: true, locale: 'de' }),
+  ).signInMagicLink({
+    body: { email: 'lea@example.com', callbackURL: '/admin/account' },
+    headers: new Headers({ origin: 'https://demo.example', 'cf-connecting-ip': '203.0.113.8' }),
+  });
+
+  expect(sent[0]?.subject).toBe('Du wurdest eingeladen');
+  expect(sent[0]?.text).toContain('Du wurdest eingeladen, https://demo.example mitzubetreuen.');
+});
+
+test('an account with no saved language is mailed in the Accept-Language of the request', async () => {
+  await seedUser('lea@example.com');
+
+  await askForLink('lea@example.com', undefined, undefined, undefined, {
+    'accept-language': 'de-DE,de;q=0.9,en;q=0.5',
+  });
+
+  expect(sent[0]?.subject).toBe('Dein Anmeldelink');
+});
+
+test("the device picker's cookie is the hint when the request has one", async () => {
+  await seedUser('lea@example.com');
+
+  await askForLink('lea@example.com', undefined, undefined, undefined, {
+    cookie: 'handover_ui_locale=de',
+    'accept-language': 'en',
+  });
+
+  expect(sent[0]?.subject).toBe('Dein Anmeldelink');
 });
 
 test("an invite's link lives three days, where a sign-in link lives fifteen minutes", async () => {
@@ -455,6 +508,39 @@ test('a first password ends every other session and is mailed to the account', a
   expect(sent.map((m) => [m.to, m.subject])).toEqual([
     ['lea@example.com', 'A password was set for your account'],
   ]);
+});
+
+test("the password-set notice is phrased in the account's saved language", async () => {
+  await seedUser('lea@example.com');
+  await setLocale('lea@example.com', 'de');
+  const here = await signInByLink('lea@example.com');
+
+  await setFirstPassword(here);
+
+  expect(sent.map((m) => m.subject)).toEqual(['Für dein Konto wurde ein Passwort festgelegt']);
+});
+
+test("a password reset is phrased in the account's saved language", async () => {
+  await seedCredentials('owner@example.com', 'correct-horse-battery');
+  await setLocale('owner@example.com', 'de');
+  const url = new URL(`https://demo.example${AUTH_BASE_PATH}/request-password-reset`);
+
+  await createAuth(url).handler(
+    new Request(url, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        origin: 'https://demo.example',
+        'cf-connecting-ip': '203.0.113.9',
+      },
+      body: JSON.stringify({
+        email: 'owner@example.com',
+        redirectTo: 'https://demo.example/admin/reset',
+      }),
+    }),
+  );
+
+  expect(sent[0]?.subject).toBe('Neues Passwort festlegen');
 });
 
 // Old invite links
