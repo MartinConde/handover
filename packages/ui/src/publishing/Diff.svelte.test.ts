@@ -171,3 +171,22 @@ test('a change inside a block is named by the block type, not by the block text'
 
   expect(body.querySelector('.row small')?.textContent).toBe('Hero · Heading');
 });
+
+test('a rich text change the words cannot show says what kind it was', () => {
+  const body = show([
+    {
+      locale: 'en',
+      changes: [
+        { path: 'a', label: 'Intro', kind: 'whole', what: 'link' },
+        { path: 'b', label: 'Outro', kind: 'whole', what: 'formatting' },
+        { path: 'c', label: 'Other', kind: 'whole' },
+      ],
+    },
+  ]);
+
+  expect(Array.from(body.querySelectorAll('.row')).map((r) => r.textContent)).toEqual([
+    'Introlink changed',
+    'Outroformatting changed',
+    'Otherchanged',
+  ]);
+});

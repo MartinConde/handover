@@ -113,15 +113,54 @@ test('adversarial long text falls back to a whole-field change', () => {
   ]);
 });
 
-test('a rich text body says that it changed and nothing more', () => {
+test('a rich text change reads as words with the Markdown syntax dropped', () => {
   const changes = enChanges(
     listing,
-    { body: '# One\n\nA paragraph.' },
-    { body: '# One\n\nA longer paragraph.' },
+    { body: '# Mill\n\nThe **old** price, see [the docs](https://a.example).\n\n- one' },
+    { body: '# Mill\n\nThe **new** price, see [the docs](https://a.example).\n\n- one' },
   );
 
   expect(changes).toEqual([
-    { path: 'body', label: 'Body', kind: 'whole', after: '# One\n\nA longer paragraph.' },
+    {
+      path: 'body',
+      label: 'Body',
+      kind: 'words',
+      parts: [
+        { text: 'Mill\nThe ' },
+        { text: 'old', mark: 'del' },
+        { text: 'new', mark: 'ins' },
+        { text: ' price, see the docs.\none' },
+      ],
+    },
+  ]);
+});
+
+test('a rich text change that only moves a link says that the link changed', () => {
+  const changes = enChanges(
+    listing,
+    { body: 'See [the docs](https://a.example).' },
+    { body: 'See [the docs](https://b.example).' },
+  );
+
+  expect(changes).toEqual([
+    { path: 'body', label: 'Body', kind: 'whole', after: 'See the docs.', what: 'link' },
+  ]);
+});
+
+test('a rich text change that only adds bold says that the formatting changed', () => {
+  const changes = enChanges(listing, { body: 'A mill.' }, { body: 'A **mill**.' });
+
+  expect(changes).toEqual([
+    { path: 'body', label: 'Body', kind: 'whole', after: 'A mill.', what: 'formatting' },
+  ]);
+});
+
+test('a rich text body too long to word-diff is whole, as its readable text', () => {
+  const words = (prefix: string) =>
+    Array.from({ length: 10_000 }, (_, i) => `${prefix}${i}`).join(' ');
+
+  expect(enChanges(listing, { body: `**${words('a')}**` }, { body: `**${words('b')}**` })).toEqual([
+    { path: 'body', label: 'Body', kind: 'whole', after: words('b') },
   ]);
 });
 
@@ -454,7 +493,12 @@ test('a field that arrived and one that went say so with one side missing', () =
       kind: 'words',
       parts: [{ text: 'A cottage', mark: 'del' }],
     },
-    { path: 'body', label: 'Body', kind: 'whole', after: '# One' },
+    {
+      path: 'body',
+      label: 'Body',
+      kind: 'words',
+      parts: [{ text: 'One', mark: 'ins' }],
+    },
   ]);
 });
 

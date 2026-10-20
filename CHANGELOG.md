@@ -4,6 +4,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- A rich-text change in History, Pending changes and the conflict resolver now shows the words
+  without Markdown symbols instead of "changed" or raw source. A change to only a link or only
+  the formatting says so.
 - A page with nothing to edit on the page itself now tells the client to use the form, where the
   Canvas Structure pane used to say the template has no editable annotations.
 - An optional switch the file never held is no longer written as `false` on save, even after it

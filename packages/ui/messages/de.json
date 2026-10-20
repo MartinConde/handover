@@ -2315,6 +2315,8 @@
   "diff_before": "Vorher",
   "diff_after": "Nachher",
   "diff_changed": "geändert",
+  "diff_link_changed": "Link geändert",
+  "diff_formatting_changed": "Formatierung geändert",
   "canvas_label": "Canvas",
   "canvas_back_to_form": "Zurück zum Formular",
   "canvas_editor_panels": "Editorbereiche",

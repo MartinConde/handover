@@ -203,10 +203,12 @@ test('the same heading rewritten on both sides is a question about that block', 
 });
 
 test('a body too long to read twice is asked about whole', () => {
-  const base = { body: 'A mill.' };
+  const words = (prefix: string) =>
+    Array.from({ length: 10_000 }, (_, i) => `${prefix}${i}`).join(' ');
+  const base = { body: words('a') };
 
   const report = conflictReport('default', listing, {
-    en: { base, ours: { body: 'A mill above the weir.' }, theirs: { body: 'A restored mill.' } },
+    en: { base, ours: { body: words('b') }, theirs: { body: words('c') } },
   });
 
   expect(report.questions.map((q) => [q.path, q.ours.kind, q.base])).toEqual([
@@ -586,13 +588,29 @@ test("a rewritten rich text body carries each side's text to the question", () =
   const base = { body: 'A mill.\n\nOpen daily.' };
 
   const report = conflictReport('default', listing, {
-    en: { base, ours: { body: 'testing' }, theirs: { body: 'Stand: Oktober 2026.' } },
+    en: { base, ours: { body: 'testing' }, theirs: { body: 'Closed' } },
   });
 
   expect(report.questions.map((q) => [q.ours, q.theirs])).toEqual([
     [
-      { path: 'body', label: 'Body', kind: 'whole', after: 'testing' },
-      { path: 'body', label: 'Body', kind: 'whole', after: 'Stand: Oktober 2026.' },
+      {
+        path: 'body',
+        label: 'Body',
+        kind: 'words',
+        parts: [
+          { text: 'A mill.\nOpen daily.', mark: 'del' },
+          { text: 'testing', mark: 'ins' },
+        ],
+      },
+      {
+        path: 'body',
+        label: 'Body',
+        kind: 'words',
+        parts: [
+          { text: 'A mill.\nOpen daily.', mark: 'del' },
+          { text: 'Closed', mark: 'ins' },
+        ],
+      },
     ],
   ]);
 });

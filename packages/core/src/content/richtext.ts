@@ -7,6 +7,27 @@ import { gfm } from 'micromark-extension-gfm';
 const textOf = (node: Nodes): string =>
   node.type === 'text' ? node.value : 'children' in node ? node.children.map(textOf).join('') : '';
 
+const BLOCK_NODES = new Set(['root', 'blockquote', 'list', 'listItem']);
+
+/** The words a reader sees: markup dropped, each block on its own line, a hard break as `hardBreak`. */
+export function readableText(markdown: string, hardBreak = '\n'): string {
+  const read = (node: Nodes): string =>
+    node.type === 'break'
+      ? hardBreak
+      : node.type === 'html'
+        ? ''
+        : 'children' in node
+          ? node.children.map(read).join(BLOCK_NODES.has(node.type) ? '\n' : '')
+          : node.type === 'image'
+            ? (node.alt ?? '')
+            : 'value' in node
+              ? node.value
+              : '';
+  return read(
+    fromMarkdown(markdown, { extensions: [gfm()], mdastExtensions: [gfmFromMarkdown()] }),
+  ).trim();
+}
+
 export type RichtextTier = 'basic' | 'full';
 
 /** Markup alone is no answer: the editor stores an emptied list as `- ` and a quote as `>`. */

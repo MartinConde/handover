@@ -2318,6 +2318,8 @@
   "diff_before": "Before",
   "diff_after": "After",
   "diff_changed": "changed",
+  "diff_link_changed": "link changed",
+  "diff_formatting_changed": "formatting changed",
   "canvas_label": "Canvas",
   "canvas_back_to_form": "Back to form",
   "canvas_editor_panels": "Editor panels",

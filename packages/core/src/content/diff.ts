@@ -1,5 +1,6 @@
 import { isObject, rowAddress, rowKey, TRANSLATED_PROPS } from './entry-format.js';
 import { translatedValues } from './field-text.js';
+import { readableText, richtextLinks } from './richtext.js';
 import {
   type Field,
   type FieldsOf,
@@ -23,7 +24,7 @@ export type Change = { path: string; label: string; labels?: Labels } & (
   /** Two keys into storage, never a value that moved. */
   | { kind: 'picture'; before?: string; after?: string }
   /** `after` is the new text, for the one who must choose between two rewrites. */
-  | { kind: 'whole'; after?: string }
+  | { kind: 'whole'; after?: string; what?: 'link' | 'formatting' }
   | {
       kind: 'row';
       type?: string;
@@ -150,8 +151,12 @@ function leafIn(
       before: linkTarget(before),
       after: linkTarget(after),
     });
-  else if (field.type === 'richtext' || field.type === 'unsupported') {
-    const parts = field.type === 'richtext' ? lineBreakChange(str(before), str(after)) : undefined;
+  else if (field.type === 'richtext') {
+    // The words are read as the page shows them, so markup alone is never the change.
+    const was = readableText(str(before), '↵ ');
+    const now = readableText(str(after), '↵ ');
+    const parts = was === now ? undefined : wordDiff(was, now);
+    const linked = richtextLinks('', str(before)).join() !== richtextLinks('', str(after)).join();
     found.push(
       parts
         ? { path, ...label, kind: 'words', parts }
@@ -159,10 +164,12 @@ function leafIn(
             path,
             ...label,
             kind: 'whole',
-            after: field.type === 'richtext' ? str(after) : undefined,
+            after: readableText(str(after)),
+            ...(was === now ? { what: linked ? 'link' : 'formatting' } : {}),
           },
     );
-  } else found.push({ path, ...label, kind: 'value', before: show(before), after: show(after) });
+  } else if (field.type === 'unsupported') found.push({ path, ...label, kind: 'whole' });
+  else found.push({ path, ...label, kind: 'value', before: show(before), after: show(after) });
 }
 
 function propsIn(
@@ -447,15 +454,6 @@ function wordDiff(before: string, after: string): WordPart[] | undefined {
 
 // The arrow is its own token so an added break is one insertion, not its neighbours replaced.
 const words = (text: string) => text.split(/(↵|[^\p{L}\p{N}↵]+)/u).filter((w) => w !== '');
-
-/** Rich text is not worded in general, but a change of nothing except hard breaks is shown. */
-function lineBreakChange(before: string, after: string): WordPart[] | undefined {
-  const marked = (text: string) => text.replace(/\\\n/g, '↵ ');
-  const letters = (text: string) => text.replace(/[^\p{L}\p{N}]+/gu, '');
-  if (letters(before) !== letters(after)) return undefined;
-  const parts = wordDiff(marked(before), marked(after));
-  return parts?.some((part) => part.mark && part.text.includes('↵')) ? parts : undefined;
-}
 
 // Only a plain-word array reaches here, and it reads as a sentence, not brackets.
 const str = (value: unknown): string =>

@@ -89,7 +89,7 @@ const shown = $derived(groups.filter((g) => g.locale !== undefined || g.changes.
           >{' → '}</span>{/if}{#if change.after !== undefined}<ins>{change.after}</ins>{/if}
       </div>
     {:else}
-      <div class="row"><small>{label}</small>{m.diff_changed({}, options)}</div>
+      <div class="row"><small>{label}</small>{change.kind === 'whole' && change.what === 'link' ? m.diff_link_changed({}, options) : change.kind === 'whole' && change.what === 'formatting' ? m.diff_formatting_changed({}, options) : m.diff_changed({}, options)}</div>
     {/if}
   {/each}
 {/snippet}
