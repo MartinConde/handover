@@ -11,6 +11,7 @@ import {
   FORMAT_VERSION,
   INTEGRATIONS,
   logActivity,
+  mailText,
   memberList,
   publishDrafts,
   removeSetting,
@@ -24,7 +25,7 @@ import { mailer } from '../../auth.js';
 import type { RequestContext } from '../../environment.js';
 import { mediaStore, missingMailer, NO_BUCKET, workerBuilds } from '../../environment.js';
 import { requestLocale } from '../../locale.js';
-import { mailText } from '../../mail-text.js';
+
 import { entryProblems } from '../../problems.js';
 import { readJson } from './body.js';
 import { deeplKey, entryPath, formFor, publishSources, takenNames } from './content.js';

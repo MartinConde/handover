@@ -9,7 +9,8 @@ import {
   rowFields,
   type Translation,
 } from './schema.js';
-import { type Labels, labelIn, labelsOf, UI_LOCALES } from './ui-locale.js';
+import { type Labels, labelIn, labelsOf, UI_LOCALES, type UiLocale } from './ui-locale.js';
+import { PROP_NAMES, PROP_NAMES_OF } from './ui-text.js';
 
 export interface WordPart {
   text: string;
@@ -258,33 +259,16 @@ function propsIn(
   }
 }
 
-// The package's own sub-fields, named as the admin names them; core cannot read the UI messages.
-const PROP_NAMES: Record<string, Labels> = {
-  alt: { en: 'Alt text', de: 'Alternativtext' },
-  focal: { en: 'Focal point', de: 'Fokuspunkt' },
-};
-const PROP_NAMES_OF: Partial<Record<Field['type'], Record<string, Labels>>> = {
-  seo: {
-    title: { en: 'Search title', de: 'Suchtitel' },
-    description: { en: 'Description', de: 'Beschreibung' },
-    image: { en: 'Social image', de: 'Social-Media-Bild' },
-    noindex: { en: 'Hide from search engines', de: 'Vor Suchmaschinen verbergen' },
-    canonical: { en: 'Canonical URL', de: 'Kanonische URL' },
-  },
-  embed: { title: { en: 'Title', de: 'Titel' }, start: { en: 'Start at', de: 'Startzeit' } },
-  link: {
-    label: { en: 'Label', de: 'Beschriftung' },
-    newTab: { en: 'Open in a new tab', de: 'In neuem Tab öffnen' },
-  },
-};
-
 /** Property names under a structured field, in each language where the package knows them. */
 function propName(field: Field, keys: string[]): Named {
   const known = keys.map((k) => PROP_NAMES_OF[field.type]?.[k] ?? PROP_NAMES[k]);
-  const label = (locale: 'en' | 'de' | undefined) =>
+  const label = (locale: UiLocale | undefined) =>
     keys.map((k, i) => (locale && known[i]?.[locale]) || humanise(k)).join(' · ');
   return known.some(Boolean)
-    ? { label: label('en'), labels: { en: label('en'), de: label('de') } }
+    ? {
+        label: label('en'),
+        labels: Object.fromEntries(UI_LOCALES.map((locale) => [locale, label(locale)])),
+      }
     : { label: label(undefined) };
 }
 

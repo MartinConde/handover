@@ -1,4 +1,29 @@
-import { DEFAULT_UI_LOCALE, type UiLocale } from '@handover/core';
+import type { Field } from './schema.js';
+import { DEFAULT_UI_LOCALE, type Labels, type UiLocale } from './ui-locale.js';
+
+// Text the package writes outside the admin screens, per interface language: a new language is added here.
+
+export const SOCIAL_IMAGE: Labels = { en: 'Social image', de: 'Social-Media-Bild' };
+
+// The package's own sub-fields, named as the admin names them; core cannot read the UI messages.
+export const PROP_NAMES: Record<string, Labels> = {
+  alt: { en: 'Alt text', de: 'Alternativtext' },
+  focal: { en: 'Focal point', de: 'Fokuspunkt' },
+};
+export const PROP_NAMES_OF: Partial<Record<Field['type'], Record<string, Labels>>> = {
+  seo: {
+    title: { en: 'Search title', de: 'Suchtitel' },
+    description: { en: 'Description', de: 'Beschreibung' },
+    image: SOCIAL_IMAGE,
+    noindex: { en: 'Hide from search engines', de: 'Vor Suchmaschinen verbergen' },
+    canonical: { en: 'Canonical URL', de: 'Kanonische URL' },
+  },
+  embed: { title: { en: 'Title', de: 'Titel' }, start: { en: 'Start at', de: 'Startzeit' } },
+  link: {
+    label: { en: 'Label', de: 'Beschriftung' },
+    newTab: { en: 'Open in a new tab', de: 'In neuem Tab öffnen' },
+  },
+};
 
 // Read by a person in the language they chose, so it is phrased here, where no admin screen shows it.
 const MAIL = {
@@ -68,3 +93,19 @@ const MAIL = {
 >;
 
 export const mailText = (locale: UiLocale | null | undefined) => MAIL[locale ?? DEFAULT_UI_LOCALE];
+
+// Read inside the preview pane, where the admin shell cannot phrase it, so it is phrased here.
+export const PREVIEW_TEXT = {
+  en: {
+    title: 'Preview failed',
+    signIn: 'Sign in to the admin to see a preview.',
+    noPage: 'This site serves no page at that address.',
+    unrenderable: 'This draft cannot be rendered:',
+  },
+  de: {
+    title: 'Vorschau fehlgeschlagen',
+    signIn: 'Melde dich im Admin an, um eine Vorschau zu sehen.',
+    noPage: 'Diese Website liefert unter dieser Adresse keine Seite aus.',
+    unrenderable: 'Dieser Entwurf lässt sich nicht darstellen:',
+  },
+} satisfies Record<UiLocale, Record<'title' | 'signIn' | 'noPage' | 'unrenderable', string>>;

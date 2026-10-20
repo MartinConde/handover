@@ -152,6 +152,7 @@ export {
   labelsOf,
   UI_LOCALES,
 } from './content/ui-locale.js';
+export { mailText, PREVIEW_TEXT } from './content/ui-text.js';
 export type { Db, Draft } from './db.js';
 export { openDb } from './db.js';
 export {

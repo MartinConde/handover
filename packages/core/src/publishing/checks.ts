@@ -14,6 +14,7 @@ import {
   type SeoValue,
 } from '../content/seo.js';
 import type { Labels } from '../content/ui-locale.js';
+import { SOCIAL_IMAGE } from '../content/ui-text.js';
 import { chunksOf, D1_MAX_BOUND_PARAMETERS, type Db } from '../db.js';
 import { MEDIA_KEY, objectExists, type R2Store } from '../media/media.js';
 import { media } from '../tables.js';
@@ -86,7 +87,7 @@ type Named = { label: string; labels?: Labels };
 const nameOf = (named: Named): string | Labels => named.labels ?? named.label;
 const SHARING_IMAGE: Named = {
   label: 'The sharing image',
-  labels: { en: 'Social image', de: 'Social-Media-Bild' },
+  labels: SOCIAL_IMAGE,
 };
 
 export interface CheckSite {

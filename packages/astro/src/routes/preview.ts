@@ -10,6 +10,7 @@ import {
   draftFiles,
   draftSource,
   entryAt,
+  PREVIEW_TEXT,
   previewTarget,
   roleOf,
   siteBase,
@@ -50,22 +51,6 @@ const previewIdentity = (url: URL) => ({
   url: url.pathname,
   version: url.searchParams.get('at') ?? '',
 });
-
-// Read inside the preview pane, where the admin shell cannot phrase it, so it is phrased here.
-const PREVIEW_TEXT = {
-  en: {
-    title: 'Preview failed',
-    signIn: 'Sign in to the admin to see a preview.',
-    noPage: 'This site serves no page at that address.',
-    unrenderable: 'This draft cannot be rendered:',
-  },
-  de: {
-    title: 'Vorschau fehlgeschlagen',
-    signIn: 'Melde dich im Admin an, um eine Vorschau zu sehen.',
-    noPage: 'Diese Website liefert unter dieser Adresse keine Seite aus.',
-    unrenderable: 'Dieser Entwurf lässt sich nicht darstellen:',
-  },
-};
 
 const answer = (
   url: URL,
