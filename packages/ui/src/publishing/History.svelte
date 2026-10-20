@@ -2,7 +2,7 @@
 import type { DiffGroup } from '@handover/core';
 import type {
   HistoricalRestoreResponse,
-  HistoricalRestoreResult,
+  ReplacementResult,
 } from '../editor/entry-session.svelte';
 import { messageText, responseMessage, type UiMessage } from '../errors.js';
 import {
@@ -57,7 +57,7 @@ let {
   onrestore: (
     request: () => Promise<HistoricalRestoreResponse>,
     reload: (outcome: 'restored' | 'uncertain') => void | Promise<void>,
-  ) => Promise<HistoricalRestoreResult>;
+  ) => Promise<ReplacementResult>;
 } = $props();
 
 let versions = $state<Version[]>([]);

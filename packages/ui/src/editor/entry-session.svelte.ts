@@ -102,38 +102,25 @@ type MachineTranslationResult =
   | { ok: false; reason: MachineTranslationFailure };
 
 export type HistoricalRestoreResponse = { ok: true } | { ok: false; error: UiMessage };
-type HistoricalRestoreFailure =
-  | 'busy'
-  | 'closed'
-  | 'refused'
-  | 'reload'
-  | 'save'
-  | 'stale'
-  | 'uncertain';
-export type HistoricalRestoreResult =
+type ReplacementFailure = 'busy' | 'closed' | 'refused' | 'reload' | 'save' | 'stale' | 'uncertain';
+export type ReplacementResult =
   | { ok: true }
-  | { ok: false; reason: HistoricalRestoreFailure; error?: UiMessage };
-
-type FinalPublishFailure =
-  | 'busy'
-  | 'closed'
-  | 'drift'
-  | 'refused'
-  | 'reload'
-  | 'save'
-  | 'stale'
-  | 'uncertain';
-type FinalPublishResult = { ok: true } | { ok: false; reason: FinalPublishFailure };
-
-type AuthoritativeChangeFailure =
-  | 'busy'
-  | 'closed'
-  | 'refused'
-  | 'reload'
-  | 'save'
-  | 'stale'
-  | 'uncertain';
-type AuthoritativeChangeResult = { ok: true } | { ok: false; reason: AuthoritativeChangeFailure };
+  | { ok: false; reason: ReplacementFailure; error?: UiMessage };
+type ReplacementKind = 'final-publish' | 'authoritative-change' | 'historical-restore';
+type PersistedAction =
+  | {
+      id: number;
+      kind: 'machine-translation';
+      locale: string;
+      phase: 'preflush' | 'running';
+      epoch: number;
+    }
+  | {
+      id: number;
+      kind: ReplacementKind;
+      phase: 'preflush' | 'running' | 'reloading';
+      epoch: number;
+    };
 
 type PendingStructure = {
   container: string;
@@ -171,8 +158,7 @@ const validInsertedRow = (field: Field, value: unknown) => {
   if (field.type === 'blocks') {
     if (!object(value) || typeof value._id !== 'string' || typeof value._type !== 'string')
       return false;
-    if (!field.types.includes(value._type)) return false;
-    return true;
+    return field.types.includes(value._type);
   }
   return field.type === 'array';
 };
@@ -185,6 +171,60 @@ const duplicateRowId = (rows: readonly unknown[]) => {
     seen.add(row._id);
   }
   return false;
+};
+
+// Each list operation edits `rows` in place and returns its refusal, if any.
+const insertRow = (
+  current: EntryData,
+  context: FieldContext,
+  held: unknown,
+  rows: unknown[],
+  operation: Extract<ListOperation, { type: 'insert' }>,
+): FieldCommandFailure | undefined => {
+  const insertedId = object(operation.value) ? operation.value._id : undefined;
+  if (typeof insertedId === 'string' && rows.some((row) => object(row) && row._id === insertedId))
+    return 'ambiguous';
+  if (
+    !validListIndex(operation.index, rows.length, true) ||
+    !validInsertedRow(context.field, operation.value)
+  )
+    return 'schema';
+  if (held === undefined) write(current, context.path, [operation.value]);
+  else rows.splice(operation.index, 0, operation.value);
+};
+
+const replaceRow = (
+  field: Field,
+  rows: unknown[],
+  operation: Extract<ListOperation, { type: 'replace' }>,
+): FieldCommandFailure | undefined => {
+  if (!validListIndex(operation.index, rows.length) || !validInsertedRow(field, operation.value))
+    return 'schema';
+  const replacementId = object(operation.value) ? operation.value._id : undefined;
+  if (
+    typeof replacementId === 'string' &&
+    rows.some((row, index) => index !== operation.index && object(row) && row._id === replacementId)
+  )
+    return 'ambiguous';
+  rows.splice(operation.index, 1, operation.value);
+};
+
+const removeRow = (
+  rows: unknown[],
+  operation: Extract<ListOperation, { type: 'remove' }>,
+): FieldCommandFailure | undefined => {
+  if (!validListIndex(operation.index, rows.length)) return 'deleted';
+  rows.splice(operation.index, 1);
+};
+
+const moveRow = (
+  rows: unknown[],
+  operation: Extract<ListOperation, { type: 'move' }>,
+): FieldCommandFailure | undefined => {
+  if (!validListIndex(operation.from, rows.length) || !validListIndex(operation.to, rows.length))
+    return 'deleted';
+  if (operation.from !== operation.to)
+    rows.splice(operation.to, 0, ...rows.splice(operation.from, 1));
 };
 
 const sourceTextChange = (context: FieldContext, changes: readonly { path: readonly string[] }[]) =>
@@ -273,34 +313,7 @@ export function createEntrySession({
   let lane: ReturnType<typeof saveLane> | undefined;
   let mutationOpen = true;
   let epoch = 0;
-  let persistedAction = $state<
-    | {
-        id: number;
-        kind: 'machine-translation';
-        locale: string;
-        phase: 'preflush' | 'running';
-        epoch: number;
-      }
-    | {
-        id: number;
-        kind: 'historical-restore';
-        phase: 'preflush' | 'running' | 'reloading';
-        epoch: number;
-      }
-    | {
-        id: number;
-        kind: 'final-publish';
-        phase: 'preflush' | 'running' | 'reloading';
-        epoch: number;
-      }
-    | {
-        id: number;
-        kind: 'authoritative-change';
-        phase: 'preflush' | 'running' | 'reloading';
-        epoch: number;
-      }
-    | undefined
-  >();
+  let persistedAction = $state<PersistedAction>();
   let nextActionId = 0;
   const history = createEntryHistory({
     document,
@@ -365,7 +378,7 @@ export function createEntrySession({
     } while (locales().some(dirty));
     return true;
   };
-  const retire = (reloading?: NonNullable<typeof persistedAction>) => {
+  const retire = (reloading?: PersistedAction) => {
     mutationOpen = false;
     history.freeze();
     epoch += 1;
@@ -373,14 +386,6 @@ export function createEntrySession({
     for (const saves of coordinators.values()) saves.close();
   };
 
-  type ReplacementKind = 'final-publish' | 'authoritative-change' | 'historical-restore';
-  type ReplacementResult =
-    | { ok: true }
-    | {
-        ok: false;
-        reason: 'busy' | 'closed' | 'refused' | 'reload' | 'save' | 'stale' | 'uncertain';
-        error?: UiMessage;
-      };
   async function replaceAuthoritatively<Outcome extends 'published' | 'changed' | 'restored'>(
     kind: ReplacementKind,
     request: () => Promise<{ ok: boolean; error?: UiMessage }>,
@@ -576,8 +581,7 @@ export function createEntrySession({
 
     const beforeSource = clone(current);
     const beforeRows = clone(target.rows);
-    if (destination === undefined) write(current, target.context.path, undefined);
-    else write(current, target.context.path, clone(destination));
+    write(current, target.context.path, clone(destination));
     const afterRows = destination ?? [];
     updateRemovedMachinePaths(current, transaction.address, beforeRows, afterRows);
     addInsertedMachinePaths(current, beforeRows, afterRows, seeds[sourceLocale] ?? []);
@@ -585,6 +589,46 @@ export function createEntrySession({
     projectLocales(beforeSource, current, seeds);
     queueStructure(transaction.address, beforeRows, afterRows, seeds);
     return { ok: true, contentVersion: nextVersion };
+  };
+
+  // Also fills `seeds` with each locale's copy of the duplicated row.
+  const duplicateRow = (
+    current: EntryData,
+    address: string,
+    rows: unknown[],
+    beforeRows: readonly unknown[],
+    operation: Extract<ListOperation, { type: 'duplicate' }>,
+    seeds: Record<string, LocaleSeed[]>,
+  ): FieldCommandFailure | undefined => {
+    if (!validListIndex(operation.index, rows.length)) return 'deleted';
+    const original = rows[operation.index];
+    const originalId = rowId(original);
+    if (!originalId || !object(original)) return 'schema';
+    const ids = new Map<string, string>();
+    const copy = regenerateIds('default', original, ids);
+    const copyId = rowId(copy);
+    if (!copyId || copyId === originalId) return 'ambiguous';
+    rows.splice(operation.index + 1, 0, copy);
+
+    for (const locale of locales()) {
+      const snapshot = snapshots[locale];
+      const target = snapshot && listTarget(snapshot, address);
+      const localeRow = target?.rows.find((row) => rowId(row) === originalId);
+      if (!snapshot || !localeRow || !object(localeRow)) continue;
+      const localeCopy = regenerateIds('default', localeRow, ids);
+      const localeCopyId = rowId(localeCopy);
+      if (!localeCopyId) continue;
+      const from = rowAddress(address, originalId);
+      const machine = scopedMachine(snapshot, from).map((path) => remapMachinePath(path, ids));
+      seeds[locale] = [
+        {
+          address: rowAddress(address, localeCopyId),
+          value: localeCopy,
+          ...(machine.length ? { machine } : {}),
+        },
+      ];
+    }
+    addInsertedMachinePaths(current, beforeRows, rows, seeds[sourceLocale] ?? []);
   };
 
   const structuralEnvelope = (contentVersion: number): StructuralSaveEnvelope | undefined => {
@@ -899,78 +943,25 @@ export function createEntrySession({
       const beforeSource = clone(current);
       const beforeRows = clone(rows);
       const beforeSeeds = captureSeeds(command.address);
-      let duplicateSeeds: Record<string, LocaleSeed[]> = {};
-      if (operation.type === 'insert') {
-        const insertedId = object(operation.value) ? operation.value._id : undefined;
-        if (
-          typeof insertedId === 'string' &&
-          rows.some((row) => object(row) && row._id === insertedId)
-        )
-          return { ok: false, reason: 'ambiguous' };
-        if (
-          !validListIndex(operation.index, rows.length, true) ||
-          !validInsertedRow(context.field, operation.value)
-        )
-          return { ok: false, reason: 'schema' };
-        if (held === undefined) write(current, context.path, [operation.value]);
-        else rows.splice(operation.index, 0, operation.value);
-      } else if (operation.type === 'replace') {
-        if (
-          !validListIndex(operation.index, rows.length) ||
-          !validInsertedRow(context.field, operation.value)
-        )
-          return { ok: false, reason: 'schema' };
-        const replacementId = object(operation.value) ? operation.value._id : undefined;
-        if (
-          typeof replacementId === 'string' &&
-          rows.some(
-            (row, index) => index !== operation.index && object(row) && row._id === replacementId,
-          )
-        )
-          return { ok: false, reason: 'ambiguous' };
-        rows.splice(operation.index, 1, operation.value);
-      } else if (operation.type === 'remove') {
-        if (!validListIndex(operation.index, rows.length)) return { ok: false, reason: 'deleted' };
-        rows.splice(operation.index, 1);
-      } else if (operation.type === 'move') {
-        if (
-          !validListIndex(operation.from, rows.length) ||
-          !validListIndex(operation.to, rows.length)
-        )
-          return { ok: false, reason: 'deleted' };
-        if (operation.from !== operation.to)
-          rows.splice(operation.to, 0, ...rows.splice(operation.from, 1));
-      } else {
-        if (!validListIndex(operation.index, rows.length)) return { ok: false, reason: 'deleted' };
-        const original = rows[operation.index];
-        const originalId = rowId(original);
-        if (!originalId || !object(original)) return { ok: false, reason: 'schema' };
-        const ids = new Map<string, string>();
-        const copy = regenerateIds('default', original, ids);
-        const copyId = rowId(copy);
-        if (!copyId || copyId === originalId) return { ok: false, reason: 'ambiguous' };
-        rows.splice(operation.index + 1, 0, copy);
-
-        for (const locale of locales()) {
-          const snapshot = snapshots[locale];
-          const target = snapshot && listTarget(snapshot, command.address);
-          const localeRow = target?.rows.find((row) => rowId(row) === originalId);
-          if (!snapshot || !localeRow || !object(localeRow)) continue;
-          const localeCopy = regenerateIds('default', localeRow, ids);
-          const localeCopyId = rowId(localeCopy);
-          if (!localeCopyId) continue;
-          const from = rowAddress(command.address, originalId);
-          const machine = scopedMachine(snapshot, from).map((path) => remapMachinePath(path, ids));
-          duplicateSeeds[locale] = [
-            {
-              address: rowAddress(command.address, localeCopyId),
-              value: localeCopy,
-              ...(machine.length ? { machine } : {}),
-            },
-          ];
-        }
-        addInsertedMachinePaths(current, beforeRows, rows, duplicateSeeds[sourceLocale] ?? []);
-      }
+      const duplicateSeeds: Record<string, LocaleSeed[]> = {};
+      const refused =
+        operation.type === 'insert'
+          ? insertRow(current, context, held, rows, operation)
+          : operation.type === 'replace'
+            ? replaceRow(context.field, rows, operation)
+            : operation.type === 'remove'
+              ? removeRow(rows, operation)
+              : operation.type === 'move'
+                ? moveRow(rows, operation)
+                : duplicateRow(
+                    current,
+                    command.address,
+                    rows,
+                    beforeRows,
+                    operation,
+                    duplicateSeeds,
+                  );
+      if (refused) return { ok: false, reason: refused };
       const afterRows = clone(listTarget(current, command.address)?.rows ?? []);
       if (equal(beforeRows, afterRows)) return { ok: true, contentVersion: command.contentVersion };
       updateRemovedMachinePaths(current, command.address, beforeRows, afterRows);
@@ -1078,7 +1069,7 @@ export function createEntrySession({
     async finalPublish(
       request: () => Promise<boolean>,
       reload: (outcome: 'published' | 'uncertain') => void | Promise<void>,
-    ): Promise<FinalPublishResult> {
+    ): Promise<ReplacementResult | { ok: false; reason: 'drift' }> {
       if (!mutationOpen) return { ok: false, reason: 'closed' };
       if (drifted) return { ok: false, reason: 'drift' };
       return replaceAuthoritatively(
@@ -1092,7 +1083,7 @@ export function createEntrySession({
     async authoritativeChange(
       request: () => Promise<boolean>,
       reload: (outcome: 'changed' | 'uncertain') => void | Promise<void>,
-    ): Promise<AuthoritativeChangeResult> {
+    ): Promise<ReplacementResult> {
       return replaceAuthoritatively(
         'authoritative-change',
         async () => ({ ok: await request() }),
@@ -1173,7 +1164,7 @@ export function createEntrySession({
     async historicalRestore(
       request: () => Promise<HistoricalRestoreResponse>,
       reload: (outcome: 'restored' | 'uncertain') => void | Promise<void>,
-    ): Promise<HistoricalRestoreResult> {
+    ): Promise<ReplacementResult> {
       return replaceAuthoritatively('historical-restore', request, reload, 'restored');
     },
     /** Keep the gate closed until the parent replaces this session with one fresh entry read. */
