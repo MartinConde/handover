@@ -202,7 +202,6 @@ export const seoDefaults = z
       .meta({ i18n: 'duplicate', label: { en: 'X (Twitter) handle', de: 'X-(Twitter-)Name' } }),
   })
   .meta({ label: { en: 'Search and sharing', de: 'Suche und Teilen' } });
-export type SeoDefaults = z.infer<typeof seoDefaults>;
 
 // Stored as `collection/slug`; the collection name lets the picker list the right entries.
 export const reference = (collection: string) =>

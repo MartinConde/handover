@@ -347,15 +347,6 @@ export async function dropEmailLinks(_siteId: string, db: Db, email: string): Pr
     );
 }
 
-export async function userExists(_siteId: string, db: Db, email: string): Promise<boolean> {
-  const rows = await db
-    .select({ id: authTables.user.id })
-    .from(authTables.user)
-    .where(eq(authTables.user.email, email))
-    .limit(1);
-  return rows.length > 0;
-}
-
 /** Undefined when there is no account; null when the person never chose an interface language. */
 export async function accountLocale(db: Db, email: string): Promise<UiLocale | null | undefined> {
   const [row] = await db

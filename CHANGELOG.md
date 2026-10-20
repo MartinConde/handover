@@ -283,7 +283,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   harness moved to `test/`.
 - Internal: core's publish checks type their `code` and take one object, the package's own en/de
   text (mail, preview error page, sub-field names) lives in `content/ui-text.ts`, and
-  `pageOf` in `names.ts` finds an entry's address and title for menus and locale links.
+  `pageOf` in `names.ts` finds an entry's address and title for menus and locale links; the
+  unused `userExists` and `SeoDefaults` are removed.
 - Internal: the integration's template and media-use wrappers are inlined, and its tests drop
   checks core already makes and the form-descriptor snapshot.
 - Internal: the cli tests share one fake Cloudflare.

@@ -216,7 +216,6 @@ export {
   memberApi,
   memberList,
   roleOf,
-  userExists,
 } from './identity/auth.js';
 export type { EmailSender, Mailer } from './identity/mailer.js';
 export { cloudflareMailer, resendMailer, senderAddress } from './identity/mailer.js';
