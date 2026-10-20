@@ -144,7 +144,8 @@ Rich text is a TipTap editor whose toolbar has exactly the tier's
 constructs; its link button opens the same search box, and points at the address the
 language being written serves. A value that already contains something outside the tier
 (edited in code) is shown read-only rather than rewritten. Leaving an optional field empty
-removes the key from the file.
+removes the key from the file. An optional switch nobody turned on stays out of the file too; one that is
+switched off after it was on, or already `false` in the file, is written as `false`.
 
 A `z.date()` is edited as a date and a transform by its input type. A `z.custom()` gets a
 widget when you name one: `.meta({ handover: 'text' })` (`number`, `boolean` or `date`

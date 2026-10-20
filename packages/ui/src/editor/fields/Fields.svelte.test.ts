@@ -265,6 +265,27 @@ test('boolean: a switch with the label as its text writes true / false', () => {
   expect(roundTrip()).toEqual({ _version: 1, featured: false });
 });
 
+test('boolean: unchecking a switch that was never set leaves the key absent', () => {
+  show([{ path: ['featured'], label: 'Featured', type: 'boolean', required: false }], {
+    _version: 1,
+  });
+  fire('input#f-featured', 'change', (el) => {
+    el.checked = false;
+  });
+  expect(roundTrip()).toEqual({ _version: 1 });
+});
+
+test('boolean: a stored false stays when the switch is unchecked again', () => {
+  show([{ path: ['featured'], label: 'Featured', type: 'boolean', required: false }], {
+    _version: 1,
+    featured: false,
+  });
+  fire('input#f-featured', 'change', (el) => {
+    el.checked = false;
+  });
+  expect(roundTrip()).toEqual({ _version: 1, featured: false });
+});
+
 const withAdvanced: Field[] = [
   { path: ['padded'], label: 'Space below', type: 'boolean', required: false, advanced: true },
   { path: ['title'], label: 'Title', type: 'text', required: true },

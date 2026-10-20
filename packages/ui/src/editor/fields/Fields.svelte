@@ -739,7 +739,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
       {@render labelRow(id, field, text, at)}
       <input class="input" {id} type="number" step="any" aria-invalid={bad} aria-describedby={says} aria-required={field.required ? 'true' : undefined} value={num(at)} oninput={(e) => write(at, e.currentTarget.value === '' ? undefined : e.currentTarget.valueAsNumber)} />
     {:else if field.type === 'boolean'}
-      <label class="switch" for={id}><input type="checkbox" role="switch" {id} aria-invalid={bad} aria-describedby={says} aria-required={field.required ? 'true' : undefined} checked={read(at) === true} onchange={(e) => write(at, e.currentTarget.checked)} /><span>{text}</span></label>
+      <label class="switch" for={id}><input type="checkbox" role="switch" {id} aria-invalid={bad} aria-describedby={says} aria-required={field.required ? 'true' : undefined} checked={read(at) === true} onchange={(e) => write(at, e.currentTarget.checked || field.required || read(at) !== undefined ? e.currentTarget.checked : undefined)} /><span>{text}</span></label>
     {:else if field.type === 'date'}
       {@render labelRow(id, field, text, at)}
       <input class="input" {id} type="date" aria-invalid={bad} aria-describedby={says} aria-required={field.required ? 'true' : undefined} value={str(at)} oninput={(e) => write(at, e.currentTarget.value || undefined)} />

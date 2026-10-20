@@ -4,6 +4,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- An optional switch nobody turned on is no longer written as `false` on save; one switched off
+  after it was on, or already `false`, keeps `false`.
 - The menu editor shows the entries a **List its pages under it** item lists as read-only rows
   under the item, with a line saying they are added automatically.
 - The conflict **Resolve** dialog shows the text of each side of a rich-text field, where it
