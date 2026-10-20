@@ -155,7 +155,7 @@ const flag = (item: MenuItem): { chip: string; why: string } | undefined => {
   return undefined;
 };
 
-/** What the site draws under an index item that lists its entries: this language's visible ones. */
+/** What the site draws under an index item that lists its entries: this language's built, visible ones. */
 const listed = (item: MenuItem): PickEntry[] => {
   const link = item.link;
   if (item.entries !== true || link?.type !== 'index') return [];
@@ -164,6 +164,8 @@ const listed = (item: MenuItem): PickEntry[] => {
     (e) =>
       e.collection === link.collection &&
       e.path !== `${link.collection}/index` &&
+      // The site lists built entries only; a draft-only one appears once it is published.
+      !e.created &&
       e.locales.includes(language) &&
       !e.hiddenLocales?.includes(language),
   );

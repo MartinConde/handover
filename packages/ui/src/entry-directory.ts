@@ -17,6 +17,8 @@ export interface PickEntry {
   urls: Record<string, string>;
   /** Off the site: still an answer, but a poor one, and the list says why. */
   hidden?: boolean;
+  /** A draft with no published version yet: the site does not draw it. */
+  created?: true;
   /** A collection's index page rather than an entry; `path` is then the collection alone. */
   index?: true;
   /** An index page's name in each interface language, from the collection's label. */

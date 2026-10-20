@@ -20,7 +20,7 @@ import {
 } from '@handover/core';
 import type { RequestContext } from '../../environment.js';
 import { entryForm } from '../../index.js';
-import { ENTRY_FILE, entryHref, globalLabel, pickable } from './content.js';
+import { ENTRY_FILE, entryHref, globalLabel, neverPublished, pickable } from './content.js';
 import { templateNames } from './templates.js';
 
 // Nothing here touches GitHub: listing through the contents API is one request per file.
@@ -378,18 +378,7 @@ export async function pendingList(ctx: RequestContext): Promise<Response> {
     entry.locales = config.i18n.locales.filter((l) => entry.locales.includes(l));
   // Discarding these removes the entry, which the confirmation has to say. A row with no base
   // blob is a file the repository never had; the build index says no language of it exists.
-  for (const entry of entries) {
-    const [collection = '', slug = ''] = entry.key.split('/');
-    const fresh = rows
-      .filter((row) => entryKey(row.path) === entry.key)
-      .every((row) => row.baseBlob === '');
-    if (
-      fresh &&
-      collection !== 'globals' &&
-      !collectionEntries('default', index, collection, []).some((e) => e.id === slug)
-    )
-      entry.created = true;
-  }
+  for (const entry of entries) if (neverPublished(entry.key, rows)) entry.created = true;
   // For the drawer's check lines: a problem found in several languages opens the default one.
   return Response.json({ entries, defaultLocale: config.i18n.defaultLocale });
 }

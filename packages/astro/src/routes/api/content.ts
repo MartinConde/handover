@@ -17,6 +17,7 @@ import {
   collectionEntries,
   deeplTranslate,
   entryAddress,
+  entryKey,
   entryOffer,
   entryPageUrl,
   entrySource,
@@ -342,8 +343,25 @@ export const SHA = /^[0-9a-f]{7,40}$/;
 
 export const NAME = /^[\w-]+$/;
 
+/** A draft with no published version: every row of it is a file the repository never had. */
+export function neverPublished(
+  key: string,
+  drafts: readonly { path: string; baseBlob?: string }[],
+): boolean {
+  const [collection = '', slug = ''] = key.split('/');
+  return (
+    collection !== 'globals' &&
+    drafts.filter((row) => entryKey(row.path) === key).every((row) => row.baseBlob === '') &&
+    // The build index says no language of it exists.
+    !collectionEntries('default', index, collection, []).some((e) => e.id === slug)
+  );
+}
+
 export async function pickable(ctx: RequestContext) {
-  const rows = await overlayRows('default', ctx.db(), index);
+  const [rows, drafts] = await Promise.all([
+    overlayRows('default', ctx.db(), index),
+    pendingDrafts('default', ctx.db()),
+  ]);
   return Object.entries(config.collections).flatMap(([collection, collected]) =>
     collectionEntries('default', index, collection, rows, collected.titleField).map((entry) => {
       const urls: Record<string, string> = {};
@@ -369,6 +387,7 @@ export async function pickable(ctx: RequestContext) {
           .map(([locale]) => locale),
         locales,
         urls,
+        ...(neverPublished(`${collection}/${entry.id}`, drafts) ? { created: true } : {}),
       };
     }),
   );

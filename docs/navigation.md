@@ -59,7 +59,7 @@ Each listed item carries its `entry` (`{ id, data }`), so a flyout can draw teas
 entry's fields. They come sorted by file name, the order the menu editor shows them in; sort them in the
 site if another order matters. The client sets it with **List its pages under it** in the item editor. The menu editor then
 shows those entries under the item as plain rows, marked as added automatically; they cannot be
-moved or removed there.
+moved or removed there. An entry that has never been published is left out until it is, as on the site.
 
 **The tree is shared, the labels are not.** Which items a menu has, in which order, what each
 points at and where it opens is the same in every language's file; `label` is the one key a

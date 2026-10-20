@@ -4,6 +4,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- The menu editor no longer lists an entry that has never been published under an index item
+  that lists its pages; the site does not draw it either.
 - Resolving a conflict where the two sides differ only in a link or in bold or italic now shows
   each side's Markdown, instead of the same words twice.
 - Discarding an entry from the pending-changes drawer while somebody else is editing it now says

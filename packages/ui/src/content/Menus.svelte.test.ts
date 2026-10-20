@@ -34,6 +34,14 @@ const OFFERED = [
     hidden: true,
     urls: { en: '/listings/mill-house', de: '/de/objekte/muehlenhaus' },
   },
+  {
+    collection: 'listings',
+    path: 'listings/new-barn',
+    title: 'New Barn',
+    created: true,
+    locales: ['en', 'de'],
+    urls: { en: '/listings/new-barn', de: '/de/objekte/neue-scheune' },
+  },
 ];
 
 /** The collections with an index page, which a menu can point at though no file is one. */
@@ -373,6 +381,19 @@ test('an item that lists its entries shows the ones the site draws as read-only 
   ).toEqual(['Das Mühlenhaus']);
   expect(q('.auto-note').textContent?.trim()).toBe('Added automatically from Listings');
   expect(document.querySelectorAll('.auto-entries button')).toHaveLength(0);
+});
+
+test('an entry that was never published is not listed under the item', async () => {
+  const listing = item({
+    label: 'Listings',
+    link: { type: 'index', collection: 'listings' },
+    entries: true,
+  });
+  show([listing], ['header'], false, 'de');
+  await settle();
+  expect(
+    Array.from(document.querySelectorAll('.auto-entries li')).map((li) => li.textContent?.trim()),
+  ).not.toContain('New Barn');
 });
 
 test('an entry hidden in the menu language is not listed under the item', async () => {

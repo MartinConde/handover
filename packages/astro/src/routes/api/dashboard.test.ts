@@ -605,6 +605,31 @@ test('the picker list carries every collection with the address each language se
   ]);
 });
 
+// The menu editor leaves these out of "list its pages", as the site does.
+test('the picker marks an entry nothing of which has been published, and only that one', async () => {
+  const row = (name: string) => ({
+    path: `src/content/listings/en/${name}.yaml`,
+    contents: `_version: 1\ntitle: "${name}"\n`,
+  });
+  overlayRows.mockResolvedValueOnce([row('new-barn'), row('mill-house')]);
+  pendingDrafts.mockImplementationOnce(async () => [
+    { ...row('new-barn'), baseBlob: '', updatedAt: 1755864000000 },
+    { ...row('mill-house'), baseBlob: 'abc123', updatedAt: 1755863000000 },
+  ]);
+
+  const body = (await (await GET(ctx('entries'))).json()) as {
+    entries: { path: string; created?: true }[];
+  };
+
+  expect(
+    body.entries.filter((e) => e.path.startsWith('listings/')).map((e) => [e.path, e.created]),
+  ).toEqual([
+    ['listings/mill-house', undefined],
+    ['listings/new-barn', true],
+    ['listings/seaview-cottage', undefined],
+  ]);
+});
+
 // 3.26 listed a hidden entry with nothing to say about it.
 test('the picker says which of its rows is off the site', async () => {
   overlayRows.mockResolvedValueOnce([
