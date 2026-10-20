@@ -1062,13 +1062,31 @@ test('a hidden entry with no rule says so rather than naming nothing', () => {
 // Rename lives in the address row, which only a collection with localized slugs draws.
 const renamable = { ...entry, localizedSlugs: true, route: '/listings/[slug]' };
 
-test('the publish menu offers Ready to publish, then Hide from site…', async () => {
+test('the publish menu offers Ready to publish, Hide from site… and Discard changes', async () => {
   vi.stubGlobal('fetch', autosaved());
   const root = show({ entry: { ...entry, pending: ['en'] } });
   await tick();
   openPublishMenu(root);
 
-  expect(publishMenuItems(root)).toEqual(['Ready to publish', 'Hide from site…']);
+  expect(publishMenuItems(root)).toEqual([
+    'Ready to publish',
+    'Hide from site…',
+    'Discard changes',
+  ]);
+});
+
+test('the publish menu offers Discard changes only while the entry has a draft', async () => {
+  vi.stubGlobal('fetch', autosaved());
+  const drafted = show({ entry: { ...entry, pending: ['en'] } });
+  await tick();
+  openPublishMenu(drafted);
+  expect(publishMenuItems(drafted)).toContain('Discard changes');
+  unmount(state.app);
+
+  const clean = show({ entry: { ...entry, held: true } });
+  await tick();
+  openPublishMenu(clean);
+  expect(publishMenuItems(clean)).not.toContain('Discard changes');
 });
 
 test('Delete is its own button in the header actions', async () => {

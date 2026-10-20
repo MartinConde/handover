@@ -8,7 +8,7 @@ What is waiting, committing it, and what the host has done with the commit since
 flow these serve is [Drafts and publishing](publishing.md#publishing).
 
 ```
-GET /admin/api/drafts  →  { "entries": [{ "key", "title", "collection", "locales", "files", "redirects", "updated_at", "held_by" }], "defaultLocale" }
+GET /admin/api/drafts  →  { "entries": [{ "key", "title", "collection", "locales", "files", "redirects", "created", "updated_at", "held_by" }], "defaultLocale" }
 ```
 
 What is waiting to be published — the drawer's list, **one row per entry** and never per
@@ -18,7 +18,8 @@ that has one, falling back to the file name. `locales` is the languages of it th
 waiting, in config order, and `files` their paths — which is what matches a refusal's
 `paths` back to a row. `redirects` is how many redirect rules the entry owes and is absent
 when it owes none; `redirects.yaml` itself is assembled at publish and is never a row.
-`held_by` is `{ "id", "name", "since" }` when somebody marked the entry *Not ready yet* —
+`created` is `true` when no language of the entry is in the repository yet, so discarding it
+removes the entry; it is absent otherwise. `held_by` is `{ "id", "name", "since" }` when somebody marked the entry *Not ready yet* —
 `since` the moment they did, epoch milliseconds, which the drawer reads as *· 2 days* — and it
 is read once per entry rather than per file, since the hold is the entry's.
 

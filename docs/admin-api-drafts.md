@@ -92,11 +92,14 @@ no translation mark, or git no longer holds those bytes. `404` for an entry no c
 DELETE /admin/api/drafts/:collection/:slug  →  {}
 ```
 
-Throws the entry's stored draft away; the next open reads the file in the repository
-instead. Nothing is committed and the published page is untouched. This is what the
-drawer's **Discard** does with a file a publish was refused over
-([Publish conflicts](conflicts.md#a-file-that-changed-in-the-repository)). `404` if
-the collection is not configured.
+Throws the entry's stored drafts away, **every language's**, with the redirect rules and the
+*Not ready yet* mark stored on them; the next open reads the files in the repository instead.
+An entry that has no file in any language disappears altogether. Nothing is committed and the
+published page is untouched. This is what the drawer's **Discard** and the editor's
+**Discard changes** do, for a file a publish was refused over
+([Publish conflicts](conflicts.md#a-file-that-changed-in-the-repository)) or any other
+draft. `404` if the collection is not configured. `409` with the editor's name while somebody
+else has the entry open.
 
 ```
 POST /admin/api/drift/:collection/:slug     →  {}

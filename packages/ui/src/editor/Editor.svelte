@@ -822,6 +822,35 @@ function startDeleting() {
   deleting = true;
 }
 
+let discarding = $state(false);
+let discardBusy = $state(false);
+
+function startDiscarding() {
+  rememberActionTrigger();
+  actionFailed = undefined;
+  discarding = true;
+}
+
+// Authoritative like a restore: the draft rows are gone, so the form must be read again.
+async function discardDraft() {
+  discardBusy = true;
+  actionFailed = undefined;
+  const outcome = await entrySession.authoritativeChange(
+    async () => {
+      const res = await fetch(`/admin/api/drafts/${collection}/${slug}`, { method: 'DELETE' });
+      if (uncertainResponse(res)) throw new TypeError('The discard response was not confirmed.');
+      if (!res.ok) actionFailed = await retainedFailure(res, 'PENDING_DISCARD_FAILED');
+      return res.ok;
+    },
+    () => (onreload ? onreload() : onchanged()),
+  );
+  discardBusy = false;
+  if (outcome.ok) return;
+  if (outcome.reason === 'save') actionFailed = { code: 'PENDING_DISCARD_SAVE_FAILED' };
+  else if (outcome.reason === 'refused') actionFailed ??= { code: 'PENDING_DISCARD_FAILED' };
+  else actionFailed = { code: 'PENDING_DISCARD_UNCONFIRMED' };
+}
+
 // Every language with a file: the source always, the rest once loaded.
 const present = $derived(
   entry.locales.filter((of) => of === entry.sourceLocale || entrySession.hasSnapshot(of)),
@@ -1568,6 +1597,12 @@ async function saveAddress() {
             {hidden ? m.editor_show_on_site({}, options) : m.editor_hide_from_site({}, options)}
           </button>
         {/if}
+        {#if hasPending()}
+          <button type="button" role="menuitem" onclick={() => { publishMenu = false; startDiscarding(); }}>
+            <span class="check" aria-hidden="true"></span>
+            {m.editor_discard_changes({}, options)}
+          </button>
+        {/if}
       </div>
     {/if}
   </div>
@@ -1584,7 +1619,7 @@ async function saveAddress() {
 {/snippet}
 
 <main class={['main main-editor', { 'is-canvas-fullscreen': mode === 'canvas' }]} style:--entry-header-h={`calc(var(--topbar-stuck, 0px) + ${headerHeight}px)`}>
-  {#if actionFailed && !renaming && !deleting && !offing}<p class="notice notice-danger" role="alert">{feedbackText(actionFailed)} {messageDetail(actionFailed, uiLocale)}</p>{/if}
+  {#if actionFailed && !renaming && !deleting && !offing && !discarding}<p class="notice notice-danger" role="alert">{feedbackText(actionFailed)} {messageDetail(actionFailed, uiLocale)}</p>{/if}
   {#if holdFailed}<p class="notice notice-danger" role="alert">{feedbackText(holdFailed)} {messageDetail(holdFailed, uiLocale)}</p>{/if}
   {#if saveError}<p class="notice notice-danger" role="alert">{feedbackText(saveError)} {messageDetail(saveError, uiLocale)} <button class="btn-link" type="button" onclick={() => flush()}>{m.editor_save_retry({}, options)}</button></p>{/if}
   {#each entry.offerProblems ?? [] as problem (problem)}
@@ -2065,6 +2100,19 @@ async function saveAddress() {
       onhide={() => { deleting = false; hiding = true; }}
       onclose={() => (deleting = false)}
     />
+  {/if}
+  {#if discarding}
+    <Modal labelledby="discard-h" returnTo={actionTrigger} dismissible={!discardBusy} onclose={() => (discarding = false)}>
+        <h2 id="discard-h">{m.pending_discard_question({ title }, options)}</h2>
+        <p>{entry.published.length ? m.pending_discard_explanation({}, options) : m.pending_discard_created({}, options)}</p>
+        {#if actionFailed}<div class="notice notice-danger" role="alert">{feedbackText(actionFailed)} {messageDetail(actionFailed, uiLocale)}</div>{/if}
+        <div class="actions">
+          <button class="btn" type="button" disabled={discardBusy} onclick={() => (discarding = false)}>{m.common_cancel({}, options)}</button>
+          <button class="btn btn-danger" type="button" disabled={discardBusy} onclick={discardDraft}>
+            {discardBusy ? m.pending_discarding({}, options) : m.pending_discard_changes({}, options)}
+          </button>
+        </div>
+    </Modal>
   {/if}
   {#if offing}
     {@const going = offing}

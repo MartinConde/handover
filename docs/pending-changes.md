@@ -49,10 +49,27 @@ field labels switch where the site gives one per language.
   disagree*. Which blocks an entry has is the same in every language
   ([Languages](i18n.md#a-block-one-language-only-has)), so a file that disagrees with its
   siblings is a hand edit or a bad merge and committing it would bake the difference into
-  git. Discard is not the way out of this one: open the entry and answer the panel it shows,
-  which is where the files are made to agree
+  git. Discarding would only throw the changes away; to keep them, open the entry and answer
+  the panel it shows, which is where the files are made to agree
 - A commit is not a live site: the site rebuilds afterwards, which takes a minute or two,
   and the admin itself is redeployed with it ([Build status](build-status.md))
+
+## Discarding changes
+
+Every row has **Discard**, and an entry's own publish menu (the arrow beside **Publish this
+entry**) has **Discard changes** while the entry has unpublished changes. Both ask first, then
+throw the entry's unpublished changes away and read it from the repository again. Nothing is
+committed and the published page is untouched.
+
+- **Every language goes, not only the one on screen.** A translation that was never published
+  goes with the rest.
+- **What was waiting to go out with the words goes too**: a changed address and its redirect,
+  a hide, and the *Not ready yet* mark.
+- **An entry that was never published has nothing to go back to**, so discarding removes it.
+  The confirmation says so instead of promising the repository's version.
+- **An entry somebody else has open cannot be discarded.** The menu entry is disabled while
+  the entry is locked, and the drawer's Discard is refused
+  ([Working together](working-together.md#being-edited-by)).
 
 ## Checks before a publish
 

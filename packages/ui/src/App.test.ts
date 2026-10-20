@@ -1245,6 +1245,52 @@ test('discarding a draft loads the entry again instead of leaving the old one on
   expect(root.querySelector<HTMLInputElement>('#f-title')?.value).toBe('Repository title');
 });
 
+test('Discard changes in the entry menu deletes the draft and the form shows the file again', async () => {
+  let discarded = false;
+  let entryLoads = 0;
+  const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+    if (url === '/admin/api/ping') return Response.json({ ok: true, collections: ['listings'] });
+    if (url === '/admin/api/drafts')
+      return Response.json({ entries: discarded ? [] : [pendingEntry('listings/mill-house')] });
+    if (url === '/admin/api/publish/checks') return Response.json({ results: [] });
+    if (init?.method === 'DELETE') {
+      discarded = true;
+      return Response.json({});
+    }
+    if (isLock(url)) return Response.json(HELD);
+    if (url === '/admin/api/entries/listings/mill-house') {
+      entryLoads += 1;
+      return Response.json(
+        entryAnswer({
+          data: { title: discarded ? 'Repository title' : 'Draft title' },
+          pending: discarded ? [] : ['en'],
+        }),
+      );
+    }
+    return Response.json({});
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show(session(), '/admin/c/listings/mill-house');
+  await vi.dynamicImportSettled();
+  await settle(3);
+  expect(root.querySelector<HTMLInputElement>('#f-title')?.value).toBe('Draft title');
+
+  root.querySelector<HTMLButtonElement>('.publish-more')?.click();
+  flushSync();
+  Array.from(root.querySelectorAll<HTMLButtonElement>('.publish-menu [role="menuitem"]'))
+    .find((item) => item.textContent?.trim() === 'Discard changes')
+    ?.click();
+  flushSync();
+  root.querySelector<HTMLButtonElement>('.dialog .btn-danger')?.click();
+  await settle(3);
+
+  expect(fetchMock).toHaveBeenCalledWith('/admin/api/drafts/listings/mill-house', {
+    method: 'DELETE',
+  });
+  expect(entryLoads).toBe(2);
+  expect(root.querySelector<HTMLInputElement>('#f-title')?.value).toBe('Repository title');
+});
+
 // The header points at the drawer, so the drawer must offer the way out without a second publish.
 const conflictShell = () => {
   const PATH = 'src/content/listings/en/mill-house.yaml';

@@ -115,6 +115,11 @@ lists them with a checkbox each and commits the checked ones. What the drawer sh
 refuses, holding an entry back, and what happens after the commit — build status and revert —
 are on [Pending changes](pending-changes.md).
 
+**"I want to start that entry over."** **Discard changes** in the entry's publish menu, or
+**Discard** on its drawer row, throws away its unpublished changes in every language and shows
+the version in the repository. An entry that was never published is removed by it
+([Pending changes](pending-changes.md#discarding-changes)).
+
 An entry whose [source language changed](source-language.md#changing-the-language-an-entry-is-written-in)
 has an unpublished change in every language, so all of its files go out together; until then the
 editor says so above the entry's header.

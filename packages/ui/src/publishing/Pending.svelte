@@ -38,6 +38,8 @@ export type PendingEntry = {
   /** Address changes it owes; redirects.yaml is assembled at publish and is never a row. */
   redirects?: number;
   updated_at: number;
+  /** No language of it is in the repository yet, so discarding removes the entry itself. */
+  created?: boolean;
   /** Somebody marked it "Not ready yet"; null where nobody has. */
   held_by?: { id: string; name: string | null; since?: number | null } | null;
 };
@@ -500,15 +502,13 @@ function askDiscard(entry: PendingEntry) {
         {m.pending_edited({ date: formatFieldTime(entry.updated_at, uiLocale) }, options)}
       </div>
       <div class="change-actions">
-        {#if conflicts.includes(entry.key)}
-          <button
-            class="btn btn-sm"
-            type="button"
-            disabled={busy || discarding}
-            aria-label={m.pending_discard_entry({ title: named(entry) }, options)}
-            onclick={() => askDiscard(entry)}
-          >{m.pending_discard({}, options)}</button>
-        {/if}
+        <button
+          class="btn btn-sm"
+          type="button"
+          disabled={busy || discarding}
+          aria-label={m.pending_discard_entry({ title: named(entry) }, options)}
+          onclick={() => askDiscard(entry)}
+        >{m.pending_discard({}, options)}</button>
         <button
           class="btn btn-ghost btn-icon"
           type="button"
@@ -725,7 +725,9 @@ function askDiscard(entry: PendingEntry) {
   >
       <h2 id="discard-h">{m.pending_discard_question({ title: named(confirming) }, options)}</h2>
       <p>
-        {m.pending_discard_explanation({}, options)}
+        {confirming.created
+          ? m.pending_discard_created({}, options)
+          : m.pending_discard_explanation({}, options)}
       </p>
       <div class="actions">
         <button class="btn" type="button" disabled={discarding} onclick={() => (confirming = undefined)}>{m.common_cancel({}, options)}</button>

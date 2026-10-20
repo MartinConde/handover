@@ -282,6 +282,33 @@ test('a global waiting to be published is listed under its label', async () => {
   });
 });
 
+// Discarding such an entry removes it, so the drawer has to know before it asks.
+test('an entry no language of which exists yet is marked created in the pending list', async () => {
+  pendingDrafts.mockImplementationOnce(async () => [
+    {
+      path: 'src/content/listings/en/new-barn.yaml',
+      contents: 'title: New barn\n',
+      baseBlob: '',
+      updatedAt: 1755864000000,
+    },
+    {
+      path: 'src/content/listings/en/mill-house.yaml',
+      contents: 'title: The Mill House\n',
+      baseBlob: '',
+      updatedAt: 1755863000000,
+    },
+  ]);
+
+  const { entries } = (await (await GET(ctx('drafts'))).json()) as {
+    entries: { key: string; created?: true }[];
+  };
+
+  expect(entries.map((e) => [e.key, e.created])).toEqual([
+    ['listings/new-barn', true],
+    ['listings/mill-house', undefined],
+  ]);
+});
+
 // The drawer picks entries, so the grouping is done where the titles are.
 test('the pending list is one row per entry, whatever languages of it are waiting', async () => {
   state.locales = ['en', 'de'];

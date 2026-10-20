@@ -240,6 +240,35 @@ test('discarding the conflicted entry asks first, then drops that draft alone', 
   expect(q(root, '.change-row.is-blocked')).toBeNull();
 });
 
+test('an entry nothing refused still offers Discard, and confirming deletes its draft', async () => {
+  const fetchMock = vi.fn(async () => Response.json({}));
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show();
+
+  const rows = Array.from(root.querySelectorAll('.change-row'));
+  const button = q<HTMLButtonElement>(rows[0] as Element, '.change-actions .btn-sm');
+  expect(button?.getAttribute('aria-label')).toBe('Discard your changes to Home');
+  button?.click();
+  flushSync();
+  q<HTMLButtonElement>(root, '.dialog .btn-danger')?.click();
+  await tick();
+  flushSync();
+
+  expect(fetchMock).toHaveBeenCalledWith('/admin/api/drafts/pages/home', { method: 'DELETE' });
+  expect(discarded).toHaveBeenCalledWith('pages/home');
+});
+
+test('discarding an entry that was never published says it is removed altogether', () => {
+  const root = show([{ ...ENTRIES[1], created: true }] as unknown as typeof ENTRIES);
+
+  q<HTMLButtonElement>(root, '.change-actions .btn-sm')?.click();
+  flushSync();
+
+  expect(q(root, '.dialog p')?.textContent).toBe(
+    'This entry has never been published, so there is nothing to go back to: discarding removes it, in every language.',
+  );
+});
+
 test('Escape closes only the nested confirmation and returns to the drawer', async () => {
   vi.stubGlobal(
     'fetch',
@@ -439,7 +468,7 @@ test('Discard names the entry it would throw away, for anybody who cannot see th
   );
 });
 
-// Drift is settled in the editor, not here, so the row says that and offers no Discard.
+// Drift is settled in the editor, not here, so the row says that.
 test('an entry whose languages have drifted apart is named on its row as that', async () => {
   vi.stubGlobal(
     'fetch',
@@ -462,8 +491,8 @@ test('an entry whose languages have drifted apart is named on its row as that', 
     "Nothing was published. One entry's languages disagree about which blocks it has — the files have to agree before it can go out.",
   );
   expect(q(root, '.change-row.is-blocked .badge-danger')?.textContent).toBe('Languages disagree');
-  // Discard is the way out of a conflict, not of drift.
-  expect(q(root, '.change-row.is-blocked .change-actions .btn-sm')).toBe(null);
+  // Every row discards now; drift only means the row is not the way out of it.
+  expect(q(root, '.change-row.is-blocked .change-actions .btn-sm')?.textContent).toBe('Discard');
   expect(published).not.toHaveBeenCalled();
 });
 

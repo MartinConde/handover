@@ -4,6 +4,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Every row of the pending-changes drawer has **Discard**, and an entry's publish menu has
+  **Discard changes** while it has unpublished changes. The confirmation says that every
+  language goes, and that an entry never published is removed. `GET /admin/api/drafts` marks
+  such an entry `created`.
 - A save keeps the trailing space of a one-line text (`"Telefon: "`). Only text with line
   breaks loses spaces at line ends, so it can be written as a `|` block.
 - Docs: [Rendering the menus](docs/rendering-menus.md) is its own page, split out of
