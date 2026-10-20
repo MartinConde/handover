@@ -3,25 +3,17 @@ import { KeyboardSensor, PointerSensor, type Sensors } from '@dnd-kit/dom';
 import { type DragDropEventHandlers, DragDropProvider } from '@dnd-kit/svelte';
 import { createSortable, isSortable } from '@dnd-kit/svelte/sortable';
 import {
-  EMBED_LABELS,
   type EmbedRefusalReason,
-  type EmbedValue,
-  embedThumb,
   type Field,
   type Form,
   fieldAddress,
   labelIn,
   newId,
-  parseEmbedUrl,
   type ResolvedSeo,
-  SEO_DESCRIPTION_LIMIT,
-  SEO_TITLE_LIMIT,
-  SOCIAL_CARD,
   type Translation,
-  unsafeLinkScheme,
   type WordPart,
 } from '@handover/core';
-import { type Snippet, tick } from 'svelte';
+import type { Snippet } from 'svelte';
 import Menus, { type Menu } from '../../content/Menus.svelte';
 import PagePicker from '../../content/PagePicker.svelte';
 import { EMPTY_ENTRY_DIRECTORY, type Pickable, readEntryDirectory } from '../../entry-directory.js';
@@ -41,14 +33,17 @@ import type {
   ListCommandResult,
   ListOperation,
 } from '../entry-session.svelte';
+import EmbedField from './EmbedField.svelte';
 import Fields from './Fields.svelte';
 import FileField from './FileField.svelte';
 import { aspect, centred, type Data, type FieldLevel, readFrom, stored } from './field-level.js';
 import ImageCard from './ImageCard.svelte';
 import ImageField from './ImageField.svelte';
+import LinkField from './LinkField.svelte';
 import PerLanguageInput from './PerLanguageInput.svelte';
 import ReferencePeek, { type Reference } from './ReferencePeek.svelte';
 import RichText from './RichText.svelte';
+import SeoField from './SeoField.svelte';
 import TextField from './TextField.svelte';
 
 let {
@@ -212,18 +207,6 @@ const childAddress = (at: readonly string[], child: string) => {
 };
 // Not conditional on a machine: the stale marker and badge are worth having without one.
 const prose = (field: Field) => translating && (field.type === 'text' || field.type === 'richtext');
-// A `site` that is not a URL prints no host rather than throwing.
-const host = $derived.by(() => {
-  try {
-    return site ? new URL(site).host : '';
-  } catch {
-    return '';
-  }
-});
-const crumbs = $derived(
-  [host, ...(servedAt ?? '').split('/').filter(Boolean).map(decodeURIComponent)].join(' › '),
-);
-
 let projection = $state<Data>();
 const displayedRoot = $derived(projection ?? viewRoot ?? root);
 
@@ -469,57 +452,9 @@ const point = (at: readonly string[]): [number, number] => {
 const dot = (at: readonly string[]) => point(at).map((n) => n * 100);
 /** Which image field has the focal dialog open, by the same id its widget is drawn under. */
 let framing = $state('');
-/** Which embed field has the paste box open over a value it already holds. */
+// One paste box and one paste refusal per level, by field id.
 let pasting = $state('');
-/** The last paste that was not a link we know, and the field it was made in. */
 let refused = $state<{ id: string; reason?: EmbedRefusalReason }>({ id: '' });
-
-// A control that replaces itself would drop focus, so focus follows onto its replacement.
-const focusOn = (elementId: string) =>
-  void tick().then(() => document.getElementById(elementId)?.focus());
-
-// A hand-edited file can hold anything under an embed key; half a value draws no card.
-function embedValue(at: readonly string[]): EmbedValue | undefined {
-  const v = read(at) as EmbedValue | undefined;
-  return v && typeof v.id === 'string' && v.provider in EMBED_LABELS ? v : undefined;
-}
-
-// A mistyped link must never empty the field; a recognised one replaces the title too.
-function pasteEmbed(at: readonly string[], id: string, input: HTMLInputElement) {
-  refused = { id: '' };
-  if (!input.value.trim()) return;
-  const parsed = parseEmbedUrl(input.value);
-  if ('refused' in parsed) {
-    refused = { id, reason: parsed.reason };
-    return;
-  }
-  const { provider, id: chosen, start } = parsed.embed;
-  // `title` and `start` are holes so each keeps its place in the file once typed.
-  write(at, { provider, id: chosen, title: undefined, start });
-  input.value = '';
-  pasting = '';
-  focusOn(`${id}-change`);
-}
-const embedRefusal = (reason: EmbedRefusalReason | undefined) => {
-  if (reason === 'shortened-map') return m.field_embed_shortened_map({}, options);
-  if (reason === 'embed-code') return m.field_embed_code({}, options);
-  if (reason === 'map-view') return m.field_embed_map_view({}, options);
-  return m.field_embed_unknown({}, options);
-};
-// Every key a hole, so a description typed before a title does not land above it in the file.
-const SEO_SHAPE = {
-  title: undefined,
-  description: undefined,
-  image: undefined,
-  noindex: undefined,
-  canonical: undefined,
-};
-function seoWrite(at: readonly string[], key: string, value: unknown) {
-  const held = read(at) as Record<string, unknown> | undefined;
-  if (!translating && (held === undefined || !(key in held)))
-    write(at, { ...SEO_SHAPE, ...held, [key]: value });
-  else write([...at, key], value);
-}
 
 function picked(at: readonly string[], type: 'image' | 'file', items: MediaItem[]) {
   const held = read(at) as { alt?: unknown } | undefined;
@@ -553,14 +488,6 @@ function dropOn(id: string, e: DragEvent) {
   e.preventDefault();
   dropped = Array.from(e.dataTransfer?.files ?? []);
   picker = id;
-}
-
-const linkType = (at: readonly string[]) => (read([...at, 'type']) === 'url' ? 'url' : 'entry');
-function setLinkType(at: readonly string[], type: 'url' | 'entry') {
-  writeMany(at, [
-    { path: ['type'], value: type },
-    { path: [type === 'url' ? 'ref' : 'href'], value: undefined },
-  ]);
 }
 
 const level: FieldLevel = {
@@ -677,54 +604,6 @@ const level: FieldLevel = {
   </div>
 {/snippet}
 
-{#snippet embedThumbnail(value: EmbedValue)}
-  {@const still = embedThumb(value)}
-  <span class="thumb" style="aspect-ratio: 16 / 9">{#if still}<MediaImage src={still} alt="" loading="lazy" {uiLocale} />{/if}</span>
-{/snippet}
-
-{#snippet previews(at: readonly string[])}
-  {@const title = str([...at, 'title']) || inheritedSeo?.title || ''}
-  {@const said = str([...at, 'description']) || inheritedSeo?.description || ''}
-  {@const desc = said.length > SEO_DESCRIPTION_LIMIT ? `${said.slice(0, SEO_DESCRIPTION_LIMIT).trimEnd()} …` : said}
-  {@const own = read([...at, 'image']) !== undefined}
-  {@const picture = own ? src([...at, 'image']) : inheritedSeo?.image ? `${mediaBase}/${inheritedSeo.image.src}` : ''}
-  {@const of = locale.toUpperCase()}
-  <div class="previews">
-    <div class="preview-box">
-      <p class="variant-title">{m.field_seo_search_preview({ locale: of }, options)}</p>
-      <div class="snippet" role="group" aria-label={m.field_seo_search_preview_label({}, options)}>
-        <div class="url"><span class="fav" aria-hidden="true">{host.charAt(0).toUpperCase()}</span><span class="crumbs">{crumbs}</span></div>
-        <div class="title">{title}</div>
-        <div class="desc">{desc}</div>
-      </div>
-    </div>
-    <div class="preview-box">
-      <p class="variant-title">{m.field_seo_social_card({ locale: of }, options)}</p>
-      <div class="social-card" role="group" aria-label={m.field_seo_social_card_label({}, options)}>
-        <div class="thumb">{#if picture}<MediaImage src={picture} alt="" {uiLocale} />{/if}</div>
-        <div class="body"><div class="domain">{host}</div><div class="title">{title}</div><div class="desc">{desc}</div></div>
-      </div>
-    </div>
-  </div>
-{/snippet}
-
-{#snippet seoWords(id: string, at: readonly string[], key: string, label: string, limit: number, placeholder: string, hint: string)}
-  {@const value = str([...at, key])}
-  {@const described = [`${id}.${key}-meter`, hint ? `${id}.${key}-hint` : ''].filter(Boolean).join(' ')}
-  {@const over = value.trim().length > limit}
-  <div class="field">
-    <div class="label-row"><label for="{id}.{key}">{label}</label><span class={['meter', { 'is-over': over }]} id="{id}.{key}-meter">{value.trim().length ? m.field_seo_meter({ count: value.trim().length, limit }, options) : m.field_seo_meter_empty({ limit }, options)}{over ? ` — ${m.field_seo_may_cut({}, options)}` : ''}</span></div>
-    {#if key === 'description'}
-      <textarea class="input textarea" id="{id}.{key}" {placeholder} aria-describedby={described} {value} oninput={(e) => seoWrite(at, key, e.currentTarget.value || undefined)}></textarea>
-    {:else}
-      <input class="input" id="{id}.{key}" type="text" {placeholder} aria-describedby={described} {value} oninput={(e) => seoWrite(at, key, e.currentTarget.value || undefined)} />
-    {/if}
-    <div class={['gauge', { 'is-long': over }]} aria-hidden="true"><span style="width: {Math.min(100, Math.round((value.trim().length / limit) * 100))}%"></span></div>
-    {#if reference}<ReferencePeek {reference} path={childAddress(at, key)} {uiLocale} />{/if}
-    {#if hint}<p class="hint" id="{id}.{key}-hint">{hint}</p>{/if}
-  </div>
-{/snippet}
-
 {#snippet chosenEntry(id: string, labelId: string, says: string | undefined, ref: string, open: () => void)}
   {@const found = known.entries.find((e) => e.path === ref)}
   <div class="ref-list" {id} role="group" aria-labelledby={labelId} aria-describedby={says}>
@@ -811,31 +690,7 @@ const level: FieldLevel = {
       <div class="field"><div class="label-row"><label for="{id}.label">{m.field_link_label({}, options)}</label>{@render machineMark(childAddress(at, 'label'), `${text} label`)}</div><input class="input" id="{id}.label" type="text" value={str([...at, 'label'])} oninput={(e) => write([...at, 'label'], e.currentTarget.value || undefined)} />{#if reference}<ReferencePeek {reference} path={childAddress(at, 'label')} {uiLocale} />{/if}</div>
     {:else if field.type === 'link'}
       {@render groupLabel(id, field, text, at)}
-      <div class="link-field-controls">
-        <fieldset class="link-destination">
-          <legend>{m.field_link_destination({}, options)}</legend>
-          <div class="seg" role="group" aria-label={m.field_link_type({}, options)}>
-            <button type="button" aria-pressed={linkType(at) === 'entry'} onclick={() => setLinkType(at, 'entry')}>{m.field_link_page_entry({}, options)}</button>
-            <button type="button" aria-pressed={linkType(at) === 'url'} onclick={() => setLinkType(at, 'url')}>URL</button>
-          </div>
-          {#if linkType(at) === 'url'}
-            {@const scheme = unsafeLinkScheme('default', str([...at, 'href']))}
-            <div class={['field', { 'is-invalid': scheme }]}>
-              <div class="label-row"><label for="{id}.href">{m.field_link_address({}, options)}</label></div>
-              <input class="input" id="{id}.href" type="url" placeholder={m.field_link_address_placeholder({}, options)} aria-invalid={scheme ? 'true' : undefined} aria-describedby={scheme ? `${id}.href-err` : undefined} value={str([...at, 'href'])} oninput={(e) => writeMany(at, [{ path: ['type'], value: 'url' }, { path: ['href'], value: e.currentTarget.value }])} />
-              {#if scheme}<p class="error" id="{id}.href-err">{m.field_link_scheme_not_allowed({ scheme }, options)}</p>{/if}
-            </div>
-          {:else if picker === id}
-            <PagePicker {id} label={text} labelId="{id}-l" {uiLocale} chosen={str([...at, 'ref'])} onpick={(e) => { writeMany(at, [{ path: ['type'], value: 'entry' }, { path: ['ref'], value: e.path }]); picker = ''; }} onclose={() => (picker = '')} />
-          {:else if str([...at, 'ref'])}
-            {@render chosenEntry(`${id}.ref`, `${id}-l`, says, str([...at, 'ref']), () => (picker = id))}
-          {:else}
-            {@render noEntry(`${id}.ref`, `${id}-l`, says, m.field_link_choose({}, options), () => (picker = id))}
-          {/if}
-        </fieldset>
-        <div class="field"><div class="label-row"><label for="{id}.label">{m.field_link_label({}, options)}</label></div><input class="input" id="{id}.label" type="text" value={str([...at, 'label'])} oninput={(e) => write([...at, 'label'], e.currentTarget.value || undefined)} /></div>
-        <label class="check" for="{id}.newTab"><input type="checkbox" id="{id}.newTab" checked={read([...at, 'newTab']) === true} onchange={(e) => write([...at, 'newTab'], e.currentTarget.checked || undefined)} /><span>{m.field_link_new_tab({}, options)}</span></label>
-      </div>
+      <LinkField {level} {id} {at} {text} {says} chosen={chosenEntry} empty={noEntry} />
     {:else if field.type === 'richtext'}
       {@render groupLabel(id, field, text, at)}
       <RichText {id} labelId="{id}-l" {locale} {uiLocale} tier={field.tier} invalid={!!err} describedby={says} value={str(at)} address={address(at)} {session} onchange={(md, history) => write(at, md, history)} />
@@ -993,149 +848,17 @@ const level: FieldLevel = {
       {:else}
         {@render noEntry(id, `${id}-l`, says, m.field_choose_named({ field: text }, options), () => (picker = id))}
       {/if}
-    {:else if field.type === 'embed' && translating}
-      {@const value = embedValue(at)}
-      <!-- A translation owns the words and not the video: the title, and nothing else. -->
-      {@render groupLabel(id, field, text, at)}
-      {#if value}
-        <div class="media-card" {id} role="group" aria-labelledby="{id}-l">
-          {@render embedThumbnail(value)}
-          <div class="meta">
-            <div><div class="name"><span class="badge badge-info">{EMBED_LABELS[value.provider]}</span> <span class="sub">{value.id}</span></div></div>
-            <PerLanguageInput {level} {id} {at} key="title" label={m.field_title({}, options)} />
-            <p class="hint">{m.field_video_same({}, options)}</p>
-          </div>
-        </div>
-      {:else}
-        <p class="hint" {id}>{m.field_list_empty({}, options)}</p>
-      {/if}
     {:else if field.type === 'embed'}
-      {@const value = embedValue(at)}
-      {#if value && pasting !== id}
-        {@render groupLabel(id, field, text, at)}
-      {:else}
-        <div class="label-row"><label for={id} id="{id}-l">{text}{#if field.required}<span class="req" aria-hidden="true">*</span>{/if}</label></div>
-        <input class="input" {id} type="url" placeholder={m.field_embed_placeholder({}, options)} aria-invalid={refused.id === id ? 'true' : bad} aria-describedby={[refused.id === id ? `${id}-paste` : '', value ? `${id}-keep` : '', says].filter(Boolean).join(' ') || undefined} oninput={(e) => pasteEmbed(at, id, e.currentTarget)} />
-        {#if refused.id === id}<p class="error" id="{id}-paste">{embedRefusal(refused.reason)}</p>{/if}
-        {#if value}<p class="hint" id="{id}-keep">{m.field_embed_keep_hint({}, options)}</p>{/if}
-      {/if}
-      {#if value}
-        <div class="media-card" id={pasting === id ? undefined : id} role="group" aria-labelledby="{id}-l" aria-describedby={pasting === id ? undefined : says}>
-          {@render embedThumbnail(value)}
-          <div class="meta">
-            <div><div class="name"><span class="badge badge-info">{EMBED_LABELS[value.provider]}</span> <span class="sub">{value.id}</span></div></div>
-            {#if pasting === id}
-              <div class="actions"><button class="btn btn-sm btn-ghost" type="button" onclick={() => { pasting = ''; refused = { id: '' }; focusOn(`${id}-change`); }}>{m.field_embed_keep({}, options)}</button></div>
-            {:else}
-              <PerLanguageInput {level} {id} {at} key="title" label={m.field_title({}, options)} />
-              {#if value.provider !== 'google-maps'}
-                <div class="field"><div class="label-row"><label for="{id}.start">{m.field_embed_start({}, options)}</label></div><input class="input" id="{id}.start" type="number" min="0" step="1" aria-describedby="{id}.start-hint" value={num([...at, 'start'])} oninput={(e) => write([...at, 'start'], e.currentTarget.value === '' ? undefined : e.currentTarget.valueAsNumber)} /><p class="hint" id="{id}.start-hint">{m.field_embed_seconds_optional({}, options)}</p></div>
-              {/if}
-              <div class="actions">
-                <button class="btn btn-sm" id="{id}-change" type="button" onclick={() => { pasting = id; focusOn(id); }}>{m.field_change({}, options)}</button>
-                <button class="btn btn-sm btn-ghost" type="button" onclick={() => { write(at, undefined); pasting = ''; focusOn(id); }}>{m.field_remove_value({}, options)}</button>
-              </div>
-            {/if}
-          </div>
-        </div>
-      {/if}
-    {:else if field.type === 'seo' && translating}
-      <!-- A translation owns the words a page is found by: title, description, alt. -->
-      {@render groupLabel(id, field, text, at)}
-      <div class="form" {id} role="group" aria-labelledby="{id}-l" aria-describedby={says}>
-        {@render seoWords(id, at, 'title', m.field_seo_search_title({}, options), SEO_TITLE_LIMIT, inheritedSeo?.title ?? '', m.field_seo_title_fallback({}, options))}
-        {@render seoWords(id, at, 'description', m.field_seo_description({}, options), SEO_DESCRIPTION_LIMIT, inheritedSeo?.description ?? '', '')}
-        {#if read([...at, 'image']) !== undefined}
-          <div class="media-card">
-            <span class="thumb" style="aspect-ratio: {aspect(SOCIAL_CARD)}"><MediaImage src={src([...at, 'image'])} alt="" style="object-position: {dot([...at, 'image'])[0]}% {dot([...at, 'image'])[1]}%" {uiLocale} /></span>
-            <div class="meta">
-              <PerLanguageInput {level} id="{id}.image" at={[...at, 'image']} key="alt" label={m.field_alt_text({}, options)} />
-              <p class="hint">{m.field_picture_same({}, options)}</p>
-            </div>
-          </div>
-        {/if}
-        {#if host}{@render previews(at)}{/if}
-      </div>
+      <EmbedField {level} {id} {at} {field} {text} {says} {bad} bind:pasting bind:refused />
     {:else if field.type === 'seo'}
-      {@const image = [...at, 'image']}
-      {@const hiding = read([...at, 'noindex']) === true}
-      {@const scheme = unsafeLinkScheme('default', str([...at, 'canonical']))}
       {@render groupLabel(id, field, text, at)}
-      <div class="form" {id} role="group" aria-labelledby="{id}-l" aria-describedby={says}>
-        {@render seoWords(id, at, 'title', m.field_seo_search_title({}, options), SEO_TITLE_LIMIT, inheritedSeo?.title ?? '', m.field_seo_pattern_fallback({}, options))}
-        {@render seoWords(id, at, 'description', m.field_seo_description({}, options), SEO_DESCRIPTION_LIMIT, inheritedSeo?.description ?? '', '')}
-        <div class="field">
-          <div class="label-row"><span id="{id}.image-l">{m.field_seo_social_image({}, options)}</span><span class="mode">{m.field_same_every_language({}, options)}</span></div>
-          {#if read(image) !== undefined}
-            <div class="media-card" id="{id}.image" role="group" tabindex="-1" aria-labelledby="{id}.image-l">
-              <span class="thumb" style="aspect-ratio: {aspect(SOCIAL_CARD)}"><MediaImage src={src(image)} alt="" style="object-position: {dot(image)[0]}% {dot(image)[1]}%" {uiLocale} /><span class="focal" style="left: {dot(image)[0]}%; top: {dot(image)[1]}%" aria-hidden="true"></span></span>
-              <div class="meta">
-                <div><div class="sub">{str([...image, 'src'])} · {num([...image, 'width'])} × {num([...image, 'height'])}</div></div>
-                <PerLanguageInput {level} id="{id}.image" at={image} key="alt" label={m.field_alt_text({}, options)} />
-                <div class="actions">
-                  <button class="btn btn-sm" type="button" onclick={() => (framing = `${id}.image`)}>{m.field_picture_set_focal({}, options)}</button>
-                  <button class="btn btn-sm" type="button" onclick={() => (picker = `${id}.image`)}>{m.field_replace({}, options)}</button>
-                  <button class="btn btn-sm btn-ghost" type="button" onclick={() => write(image, undefined)}>{inheritedSeo?.image ? m.field_seo_site_default({}, options) : m.field_remove_value({}, options)}</button>
-                </div>
-              </div>
-            </div>
-          {:else}
-            <!-- svelte-ignore a11y_no_static_element_interactions -- the child button is the control -->
-            <div class="dropzone" role="group" aria-labelledby="{id}.image-l" ondragover={(e) => e.preventDefault()} ondrop={(e) => dropOn(`${id}.image`, e)}>
-              <span>{inheritedSeo?.image ? m.field_seo_site_card({}, options) : m.field_image_drop({}, options)}</span>
-              <span class="hint">{SOCIAL_CARD.ratio} · {m.field_image_min_width({ min: SOCIAL_CARD.min ?? 0 }, options)}</span>
-              <button class="btn btn-sm" type="button" onclick={() => (picker = `${id}.image`)}>{m.field_picture_choose({}, options)}</button>
-            </div>
-          {/if}
-        </div>
-        <div class="field">
-          <label class="switch" for="{id}.noindex"><input type="checkbox" role="switch" id="{id}.noindex" checked={hiding} onchange={(e) => seoWrite(at, 'noindex', e.currentTarget.checked)} /><span>{m.field_seo_hide({}, options)}</span></label>
-          {#if hiding}
-            <p class="notice notice-warn">{m.field_seo_hide_notice({}, options)}</p>
-          {/if}
-        </div>
-        {#if host}{@render previews(at)}{/if}
-        <details class="group">
-          <summary>{m.field_seo_canonical({}, options)}{#if str([...at, 'canonical'])}<span class="count">{str([...at, 'canonical'])}</span>{/if}</summary>
-          <div class={['field', { 'is-invalid': scheme }]}>
-            <div class="label-row"><label for="{id}.canonical">{m.field_seo_canonical({}, options)}</label></div>
-            <input class="input" id="{id}.canonical" type="url" aria-invalid={scheme ? 'true' : undefined} aria-describedby="{id}.canonical-hint{scheme ? ` ${id}.canonical-err` : ''}" value={str([...at, 'canonical'])} oninput={(e) => seoWrite(at, 'canonical', e.currentTarget.value || undefined)} />
-            {#if scheme}<p class="error" id="{id}.canonical-err">{m.field_link_scheme_not_allowed({ scheme }, options)}</p>{/if}
-            <p class="hint" id="{id}.canonical-hint">{m.field_seo_canonical_hint({}, options)}</p>
-          </div>
-        </details>
-      </div>
+      <SeoField {level} {id} {at} {says} {locale} {inheritedSeo} {site} {servedAt} />
     {:else}
       <div class="label-row"><label for={id}>{text}</label></div>
       <p class="hint" {id}>{m.field_not_editable_yet({}, options)}</p>
     {/if}
     {#if err}<p class="error" id="{id}-err">{err}</p>{/if}
     {#if marked}{@render stale(marked)}{/if}
-    {#if framing === `${id}.image` && field.type === 'seo'}
-      {@const image = [...at, 'image']}
-      <!-- A 1.91:1 card cut from a 3:2 photo loses a band top and bottom. -->
-      <Focal
-        name={m.field_seo_social_image({}, options)}
-        url={src(image)}
-        focal={point(image)}
-        presets={[{ label: m.field_seo_social_image({}, options), preset: SOCIAL_CARD }]}
-        {uiLocale}
-        onsave={(moved) => { write([...image, 'focal'], centred(moved) ? undefined : moved); framing = ''; }}
-        onclose={() => (framing = '')}
-      />
-    {/if}
-    {#if picker === `${id}.image` && field.type === 'seo'}
-      <Media
-        kind="images"
-        label={m.field_seo_social_image({}, options)}
-        preset={SOCIAL_CARD}
-        base={mediaBase}
-        {dropped}
-        {uiLocale}
-        onpick={(items) => { seoWrite(at, 'image', stored('image', items[0] as MediaItem)); picker = ''; dropped = []; }}
-        onclose={() => { picker = ''; dropped = []; }}
-      />
-    {/if}
   </div>
   {#if afterTitle && at.join('.') === titleKey}{@render afterTitle()}{/if}
 {/snippet}
