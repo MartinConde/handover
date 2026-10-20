@@ -746,6 +746,8 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
   </div>
 {/snippet}
 
+{#snippet nested(inner: readonly Field[], at: readonly string[], mode: Translation, view: Data, rowLabel?: string)}<Fields fields={inner} bind:root {blocks} {blockLabels} {problems} path={at} {rowLabel} {translating} {machine} {ontranslate} {sourceChanged} bind:dismissed {sourceLabel} {translatedAt} {onretranslate} {prefix} {mediaBase} {locale} {uiLocale} {site} {servedAt} {session} {oncommand} {onreveal} viewRoot={view} inherited={mode} {structureLocked} {textOnly} {reference} />{/snippet}
+
 {#snippet row(field: Field)}
   {@const at = [...path, ...field.path]}
   {@const id = `${prefix}-${at.join('.')}`}
@@ -830,7 +832,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
     {:else if field.type === 'group'}
       <details class="group" open>
         <summary>{text}<span class="count">{m.field_count({ count: field.fields.length }, options)}</span></summary>
-        <div class="form"><Fields fields={field.fields} bind:root {blocks} {blockLabels} {problems} path={at} {translating} {machine} {ontranslate} {sourceChanged} bind:dismissed {sourceLabel} {translatedAt} {onretranslate} {prefix} {mediaBase} {locale} {uiLocale} {site} {servedAt} {session} {oncommand} {onreveal} viewRoot={displayedRoot} inherited={mode} {structureLocked} {textOnly} {reference} /></div>
+        <div class="form">{@render nested(field.fields, at, mode, displayedRoot)}</div>
       </details>
     {:else if field.type === 'array' && gallery(field) && !translating}
       {@const items = rows(at)}
@@ -900,7 +902,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
           {@const shut = !open && folded[keyOf(items, i)] !== false}
           {#if scalar}
           <div class={['row-card', { 'is-scalar': true, 'is-dragging': s.isDragging }]} {@attach !translating && s.attach}>
-            <div class="row-fields"><Fields fields={field.item} bind:root {blocks} {blockLabels} {problems} path={[...at, String(i)]} rowLabel="{text} {i + 1}" {translating} {machine} {ontranslate} {sourceChanged} bind:dismissed {sourceLabel} {translatedAt} {onretranslate} {prefix} {mediaBase} {locale} {uiLocale} {site} {servedAt} {session} {oncommand} {onreveal} viewRoot={displayedRoot} inherited={mode} {structureLocked} {textOnly} {reference} /></div>
+            <div class="row-fields">{@render nested(field.item, [...at, String(i)], mode, displayedRoot, `${text} ${i + 1}`)}</div>
             {#if !translating}{@render controls(at, i, name, s.attachHandle)}{/if}
           </div>
           {:else}
@@ -913,7 +915,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
               </button>
               {#if !translating}{@render controls(at, i, name, s.attachHandle)}{/if}
             </header>
-            {#if !shut}<div class="form" id="{id}.{i}-b"><Fields fields={field.item} bind:root {blocks} {blockLabels} {problems} path={[...at, String(i)]} rowLabel="{text} {i + 1}" {translating} {machine} {ontranslate} {sourceChanged} bind:dismissed {sourceLabel} {translatedAt} {onretranslate} {prefix} {mediaBase} {locale} {uiLocale} {site} {servedAt} {session} {oncommand} {onreveal} viewRoot={displayedRoot} inherited={mode} {structureLocked} {textOnly} {reference} /></div>{/if}
+            {#if !shut}<div class="form" id="{id}.{i}-b">{@render nested(field.item, [...at, String(i)], mode, displayedRoot, `${text} ${i + 1}`)}</div>{/if}
           </article>
           {/if}
         {:else}
@@ -948,7 +950,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
             {#if shut}
               <!-- folded: the header is the whole card -->
             {:else if inner}
-              <div class="form" id="{id}.{i}-b"><Fields fields={inner} bind:root {blocks} {blockLabels} {problems} path={[...at, String(i)]} {translating} {machine} {ontranslate} {sourceChanged} bind:dismissed {sourceLabel} {translatedAt} {onretranslate} {prefix} {mediaBase} {locale} {uiLocale} {site} {servedAt} {session} {oncommand} {onreveal} viewRoot={displayedRoot} inherited={mode} {structureLocked} {textOnly} {reference} /></div>
+              <div class="form" id="{id}.{i}-b">{@render nested(inner, [...at, String(i)], mode, displayedRoot)}</div>
             {:else}
               <p class="ref-note" id="{id}.{i}-b">{block(row)._ref ?? m.field_block_missing({ type: block(row)._type ?? '' }, options)} — {m.field_not_editable({}, options)}</p>
             {/if}
