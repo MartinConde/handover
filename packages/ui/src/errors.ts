@@ -56,6 +56,19 @@ export async function responseMessage(response: Response, fallback: string): Pro
   };
 }
 
+/** `responseMessage`, plus a plain-text refusal's own words, such as who holds the entry. */
+export async function retainedFailure(response: Response, fallback: string): Promise<UiMessage> {
+  const message = await responseMessage(response, fallback);
+  if (
+    message.detail ||
+    message.code === 'CONNECTION_LOST' ||
+    !response.headers.get('content-type')?.startsWith('text/plain')
+  )
+    return message;
+  const detail = (await response.clone().text()).trim();
+  return detail ? { ...message, detail } : message;
+}
+
 const KNOWN_CODES = new Set([
   'CONNECTION_LOST',
   'INVALID_EMAIL_OR_PASSWORD',

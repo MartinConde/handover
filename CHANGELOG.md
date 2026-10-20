@@ -4,6 +4,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Discarding an entry from the pending-changes drawer while somebody else is editing it now says
+  who, as the editor already did, instead of only "not discarded (409)".
 - The entries an index menu item lists now come sorted by file name, as the menu editor shows
   them, instead of in whatever order Astro's loader read the files.
 - A draft nobody edited no longer shows an older version of its file in preview, the entry

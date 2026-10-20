@@ -68,7 +68,7 @@ committed and the published page is untouched.
 - **An entry that was never published has nothing to go back to**, so discarding removes it.
   The confirmation says so instead of promising the repository's version.
 - **An entry somebody else has open cannot be discarded.** The menu entry is disabled while
-  the entry is locked, and the drawer's Discard is refused
+  the entry is locked, and the drawer's Discard is refused, naming who is editing it
   ([Working together](working-together.md#being-edited-by)).
 
 ## Checks before a publish

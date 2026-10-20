@@ -1,7 +1,7 @@
 <script lang="ts">
 import type { DiffGroup, Labels } from '@handover/core';
 import { onDestroy, untrack } from 'svelte';
-import { messageLine, responseMessage, type UiMessage } from '../errors.js';
+import { messageLine, responseMessage, retainedFailure, type UiMessage } from '../errors.js';
 import {
   capitalise,
   collectionName,
@@ -377,7 +377,7 @@ async function discard() {
       error = { code: 'PENDING_DISCARD_REMOTE_CHANGED' };
       return;
     }
-    error = { code: 'PENDING_DISCARD_FAILED', status: res.status };
+    error = await retainedFailure(res, 'PENDING_DISCARD_FAILED');
     return;
   }
   conflicts = conflicts.filter((k) => k !== entry.key);

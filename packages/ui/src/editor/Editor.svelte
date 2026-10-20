@@ -27,7 +27,7 @@ import CanvasWorkspace from '../canvas/CanvasWorkspace.svelte';
 import type { CanvasRenderRequest } from '../canvas/canvas-renderer';
 import OffsiteDialog, { type Target } from '../content/Offsite.svelte';
 import { invalidateEntryDirectory } from '../entry-directory.js';
-import { messageDetail, messageText, responseMessage } from '../errors.js';
+import { messageDetail, messageText, retainedFailure } from '../errors.js';
 import { formatExactTime, formatLanguageName, messageOptions, type UiLocale } from '../i18n.js';
 import {
   guardEntryActions,
@@ -137,17 +137,6 @@ let {
 } = $props();
 const options = $derived(messageOptions(uiLocale));
 const feedbackText = (message: UiMessage) => messageText(message, uiLocale);
-async function retainedFailure(response: Response, fallback: string): Promise<UiMessage> {
-  const message = await responseMessage(response, fallback);
-  if (
-    message.detail ||
-    message.code === 'CONNECTION_LOST' ||
-    !response.headers.get('content-type')?.startsWith('text/plain')
-  )
-    return message;
-  const detail = (await response.clone().text()).trim();
-  return detail ? { ...message, detail } : message;
-}
 
 // svelte-ignore state_referenced_locally -- the loaded files seed this opened entry's session
 const entryForm = { fields: [...entry.fields], blocks: entry.blocks };

@@ -258,6 +258,30 @@ test('an entry nothing refused still offers Discard, and confirming deletes its 
   expect(discarded).toHaveBeenCalledWith('pages/home');
 });
 
+test('a discard refused because somebody else holds the entry names them', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(
+      async () =>
+        new Response('Anna is editing this entry — it can be discarded once they are done', {
+          status: 409,
+        }),
+    ),
+  );
+  const root = show();
+
+  q<HTMLButtonElement>(root, '.change-row .change-actions .btn-sm')?.click();
+  flushSync();
+  q<HTMLButtonElement>(root, '.dialog .btn-danger')?.click();
+  await tick();
+  flushSync();
+
+  expect(q(root, '.notice-danger')?.textContent).toBe(
+    'Those changes were not discarded (409). Technical detail: Anna is editing this entry — it can be discarded once they are done',
+  );
+  expect(discarded).not.toHaveBeenCalled();
+});
+
 test('discarding an entry that was never published says it is removed altogether', () => {
   const root = show([{ ...ENTRIES[1], created: true }] as unknown as typeof ENTRIES);
 
