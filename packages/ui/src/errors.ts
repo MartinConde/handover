@@ -85,102 +85,160 @@ export async function retainedFailure(response: Response, fallback: string): Pro
   return detail ? { ...message, detail } : message;
 }
 
-const KNOWN_CODES = new Set([
-  'CONNECTION_LOST',
-  'INVALID_EMAIL_OR_PASSWORD',
-  'CREDENTIAL_ACCOUNT_NOT_FOUND',
-  'INVALID_PASSWORD',
-  'SESSION_NOT_FRESH',
-  'SESSION_EXPIRED',
-  'INVALID_EMAIL',
-  'USER_NOT_FOUND',
-  'USER_EMAIL_NOT_FOUND',
-  'INVALID_USER',
-  'EMAIL_NOT_VERIFIED',
-  'EMAIL_CAN_NOT_BE_UPDATED',
-  'CHANGE_EMAIL_DISABLED',
-  'FAILED_TO_UPDATE_USER',
-  'PASSWORD_ALREADY_SET',
-  'PASSWORD_TOO_SHORT',
-  'PASSWORD_TOO_LONG',
-  'INVALID_TOKEN',
-  'TOKEN_EXPIRED',
-  'EDITOR_HOLD_FAILED',
-  'EDITOR_LOCK_TAKE_FAILED',
-  'EDITOR_SAVE_CONNECTION',
-  'EDITOR_SAVE_REFUSED',
-  'EDITOR_SAVE_REVISION',
-  'FIELD_REQUIRED',
-  'MEDIA_METADATA_INVALID',
-  'MEDIA_NOT_FOUND',
-  'MEDIA_STORAGE_UNAVAILABLE',
-  'MEDIA_IN_USE',
-  'MEDIA_PUBLISHED_IN_USE',
-  'MEDIA_TOO_LARGE',
-  'MEDIA_SIZE_MISMATCH',
-  'MEDIA_TYPE_MISMATCH',
-  'MEDIA_EMPTY',
-  'MEDIA_INGEST_TIMEOUT',
-  'MEDIA_UPLOAD_BUCKET_MISSING',
-  'MEDIA_UNAVAILABLE',
-  'MEDIA_BECAME_USED',
-  'BODY_TOO_LARGE',
-  'BODY_STRUCTURE_INVALID',
-  'RESOURCE_LIMIT',
-  'ENTRY_LOCALE_IS_SOURCE',
-  'ENTRY_DRIFT_ANSWERS_INVALID',
-  'TRANSLATION_TARGET_EXISTS',
-  'ENTRY_ADDRESS_TOO_LONG',
-  'ENTRY_ADDRESS_INVALID',
-  'ENTRY_ADDRESS_TAKEN',
-  'ENTRY_LOCALE_LAST_PUBLISHED',
-  'ENTRY_LOCALE_LAST_FILE',
-  'ENTRY_SOURCE_CONFLICT',
-  'ENTRY_SOURCE_UNDECLARED',
-  'ENTRY_SOURCE_MISSING',
-  'ENTRY_SOURCE_TARGET_UNDECLARED',
-  'ENTRY_SOURCE_UNCHANGED',
-  'ENTRY_SOURCE_TARGET_MISSING',
-  'ENTRY_SOURCE_TARGET_OFF',
-  'ENTRY_SOURCE_REVISION',
-  'ENTRY_SOURCE_DRIFT',
-  'ENTRY_SOURCE_ONLY_CONFLICT',
-  'ENTRY_SOURCE_TARGET_INVALID',
-  'ENTRY_RENAME_UNPUBLISHED',
-  'ENTRY_DUPLICATE_UNPUBLISHED',
-  'ENTRY_RENAME_COLLISION',
-  'TEMPLATE_UNPUBLISHED',
-  'HISTORY_RESTORE_NO_FILE',
-  'HISTORY_RESTORE_UNREADABLE',
-  'REVERT_CONFLICT',
-  'REDIRECT_NOT_FOUND',
-  'REDIRECT_MANAGED',
-  'PUBLISH_INCOMPLETE',
-  'PUBLISH_DRIFT',
-  'PUBLISH_SOURCE_UNRESOLVED',
-  'PUBLISH_CONFLICT',
-  'PUBLISH_REF_MOVED',
-  'PUBLISH_REPOSITORY_UNAVAILABLE',
-  'PUBLISH_FINALIZATION_PENDING',
-  'PUBLISH_CHECKS_FAILED',
-  'PUBLISH_SELECTION_INVALID',
-  'PUBLISH_EXCLUDE_NOT_PENDING',
-  'PUBLISH_EXCLUDE_ALL',
-  'PUBLISH_EXCLUDE_PUBLISHED',
-  'PUBLISH_EXCLUDE_SOURCE',
-  'CONFLICT_SETTLED',
-  'CONFLICT_CHANGED',
-  'CONFLICT_ANSWERS_INVALID',
-  'CONFLICT_REPOSITORY_UNAVAILABLE',
-  'MEMBER_EMAIL_REQUIRED',
-  'MEMBER_ROLE_INVALID',
-  'MEMBER_ALREADY_SIGNED_IN',
-  'MEMBER_SELF_ROLE',
-  'MEMBER_LAST_OWNER',
-  'MEMBER_SELF_REMOVE',
-  'USER_ALREADY_EXISTS',
-  'USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL',
-]);
+type Render = (context: {
+  message: UiMessage;
+  locale: UiLocale;
+  options: ReturnType<typeof messageOptions>;
+}) => string;
+
+// Status 0 is no answer at all, so it gets the plain message.
+const withStatus =
+  (
+    plain: (inputs: Record<string, never>, opts: ReturnType<typeof messageOptions>) => string,
+    status: (inputs: { status: number }, opts: ReturnType<typeof messageOptions>) => string,
+  ): Render =>
+  ({ message, options }) =>
+    message.status ? status({ status: message.status }, options) : plain({}, options);
+
+const sameText = (codes: string[], render: Render) =>
+  Object.fromEntries(codes.map((code) => [code, render]));
+
+// Codes the server sends; adding one is one entry here.
+const SERVER_TEXT: Record<string, Render> = {
+  CONNECTION_LOST: ({ options }) => m.common_connection_lost({}, options),
+  ...sameText(['INVALID_EMAIL_OR_PASSWORD', 'CREDENTIAL_ACCOUNT_NOT_FOUND'], ({ options }) =>
+    m.auth_sign_in_failed({}, options),
+  ),
+  INVALID_PASSWORD: ({ options }) => m.account_current_password_wrong({}, options),
+  ...sameText(['SESSION_NOT_FRESH', 'SESSION_EXPIRED'], ({ options }) =>
+    m.account_password_sign_in_again({}, options),
+  ),
+  INVALID_EMAIL: ({ options }) => m.account_email_invalid({}, options),
+  ...sameText(['USER_NOT_FOUND', 'USER_EMAIL_NOT_FOUND', 'INVALID_USER'], ({ options }) =>
+    m.account_user_not_found({}, options),
+  ),
+  EMAIL_NOT_VERIFIED: ({ options }) => m.account_email_not_verified({}, options),
+  ...sameText(['EMAIL_CAN_NOT_BE_UPDATED', 'CHANGE_EMAIL_DISABLED'], ({ options }) =>
+    m.account_email_change_unavailable({}, options),
+  ),
+  FAILED_TO_UPDATE_USER: ({ options }) => m.account_update_failed({}, options),
+  PASSWORD_ALREADY_SET: ({ options }) => m.account_password_already_set({}, options),
+  PASSWORD_TOO_SHORT: ({ options }) => m.auth_password_too_short({}, options),
+  PASSWORD_TOO_LONG: ({ options }) => m.auth_password_too_long({}, options),
+  ...sameText(['INVALID_TOKEN', 'TOKEN_EXPIRED'], ({ options }) =>
+    m.auth_reset_token_failed({}, options),
+  ),
+  MEMBER_EMAIL_REQUIRED: ({ options }) => m.members_email_required({}, options),
+  MEMBER_ROLE_INVALID: ({ options }) => m.members_role_invalid({}, options),
+  MEMBER_ALREADY_SIGNED_IN: ({ options }) => m.members_already_signed_in({}, options),
+  MEMBER_SELF_ROLE: ({ options }) => m.members_self_role({}, options),
+  MEMBER_LAST_OWNER: ({ options }) => m.members_last_owner({}, options),
+  MEMBER_SELF_REMOVE: ({ options }) => m.members_self_remove({}, options),
+  ...sameText(['USER_ALREADY_EXISTS', 'USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL'], ({ options }) =>
+    m.members_already_exists({}, options),
+  ),
+  ENTRY_ADDRESS_TOO_LONG: ({ message, options }) =>
+    m.editor_address_too_long({ limit: message.limit ?? 80 }, options),
+  ENTRY_ADDRESS_INVALID: ({ options }) => m.editor_address_invalid({}, options),
+  ENTRY_ADDRESS_TAKEN: ({ message, locale, options }) =>
+    m.editor_address_taken(
+      {
+        address: message.address ?? '',
+        collection: message.collection ?? '',
+        language: message.locale ? formatLanguageName(message.locale, locale) : '',
+      },
+      options,
+    ),
+  ENTRY_RENAME_UNPUBLISHED: ({ options }) => m.entry_rename_unpublished({}, options),
+  ENTRY_DUPLICATE_UNPUBLISHED: ({ options }) => m.entry_duplicate_unpublished({}, options),
+  ENTRY_RENAME_COLLISION: ({ options }) => m.entry_rename_collision({}, options),
+  TEMPLATE_UNPUBLISHED: ({ options }) => m.entry_template_unpublished({}, options),
+  HISTORY_RESTORE_NO_FILE: ({ options }) => m.history_restore_no_file({}, options),
+  HISTORY_RESTORE_UNREADABLE: ({ options }) => m.history_restore_unreadable({}, options),
+  REVERT_CONFLICT: ({ message, options }) =>
+    m.revert_conflict(
+      { count: message.paths?.length ?? 0, files: (message.paths ?? []).join(', ') },
+      options,
+    ),
+  ENTRY_LOCALE_LAST_PUBLISHED: ({ message, locale, options }) =>
+    m.offsite_last_published(
+      {
+        languages: formatLanguageList(message.locales ?? [], locale),
+        remaining: formatLanguageList(message.remaining ?? [], locale),
+      },
+      options,
+    ),
+  ENTRY_LOCALE_LAST_FILE: ({ message, locale, options }) =>
+    m.offsite_last_file({ languages: formatLanguageList(message.locales ?? [], locale) }, options),
+  ENTRY_LOCALE_IS_SOURCE: ({ message, locale, options }) =>
+    m.entry_locale_is_source(
+      { language: message.locale ? formatLanguageName(message.locale, locale) : '' },
+      options,
+    ),
+  ENTRY_DRIFT_ANSWERS_INVALID: ({ options }) => m.drift_changed({}, options),
+  TRANSLATION_TARGET_EXISTS: ({ options }) => m.translation_target_exists({}, options),
+  ...sameText(
+    ['ENTRY_SOURCE_CONFLICT', 'ENTRY_SOURCE_UNDECLARED', 'ENTRY_SOURCE_MISSING'],
+    ({ options }) => m.entry_source_unresolved({}, options),
+  ),
+  ENTRY_SOURCE_TARGET_UNDECLARED: ({ options }) => m.entry_source_target_undeclared({}, options),
+  ENTRY_SOURCE_UNCHANGED: ({ options }) => m.entry_source_unchanged({}, options),
+  ENTRY_SOURCE_TARGET_MISSING: ({ options }) => m.entry_source_target_missing({}, options),
+  ENTRY_SOURCE_TARGET_OFF: ({ options }) => m.entry_source_target_off({}, options),
+  ENTRY_SOURCE_REVISION: ({ options }) => m.entry_source_revision({}, options),
+  ENTRY_SOURCE_DRIFT: ({ options }) => m.entry_source_drift({}, options),
+  ENTRY_SOURCE_ONLY_CONFLICT: ({ options }) => m.entry_source_only_conflict({}, options),
+  ENTRY_SOURCE_TARGET_INVALID: ({ options }) => m.entry_source_target_invalid({}, options),
+  REDIRECT_NOT_FOUND: ({ options }) => m.redirect_not_found({}, options),
+  REDIRECT_MANAGED: ({ options }) => m.redirect_managed_error({}, options),
+  PUBLISH_INCOMPLETE: ({ message, options }) =>
+    m.publish_incomplete({ count: message.count ?? 0 }, options),
+  PUBLISH_DRIFT: ({ message, options }) => m.publish_drift({ count: message.count ?? 0 }, options),
+  PUBLISH_SOURCE_UNRESOLVED: ({ message, options }) =>
+    m.publish_source_unresolved({ count: message.count ?? 0 }, options),
+  PUBLISH_CONFLICT: ({ message, options }) =>
+    m.publish_conflict({ count: message.count ?? 0 }, options),
+  PUBLISH_REF_MOVED: ({ options }) => m.publish_ref_moved({}, options),
+  PUBLISH_REPOSITORY_UNAVAILABLE: ({ options }) => m.publish_repository_unavailable({}, options),
+  PUBLISH_FINALIZATION_PENDING: ({ options }) => m.publish_finalization_pending({}, options),
+  PUBLISH_CHECKS_FAILED: ({ options }) => m.pending_checks_failed({}, options),
+  PUBLISH_SELECTION_INVALID: ({ options }) => m.publish_selection_invalid({}, options),
+  PUBLISH_EXCLUDE_NOT_PENDING: ({ options }) => m.publish_exclude_not_pending({}, options),
+  PUBLISH_EXCLUDE_ALL: ({ options }) => m.publish_exclude_all({}, options),
+  PUBLISH_EXCLUDE_PUBLISHED: ({ options }) => m.publish_exclude_published({}, options),
+  PUBLISH_EXCLUDE_SOURCE: ({ options }) => m.publish_exclude_source({}, options),
+  CONFLICT_SETTLED: ({ options }) => m.conflict_settled({}, options),
+  CONFLICT_CHANGED: ({ options }) => m.conflict_changed({}, options),
+  CONFLICT_ANSWERS_INVALID: ({ options }) => m.conflict_answers_invalid({}, options),
+  CONFLICT_REPOSITORY_UNAVAILABLE: ({ options }) => m.conflict_repository_unavailable({}, options),
+  EDITOR_HOLD_FAILED: ({ options }) => m.editor_hold_failed({}, options),
+  EDITOR_LOCK_TAKE_FAILED: ({ options }) => m.editor_lock_take_failed({}, options),
+  EDITOR_SAVE_CONNECTION: ({ options }) => m.editor_save_connection({}, options),
+  EDITOR_SAVE_REFUSED: ({ options }) => m.editor_save_refused({}, options),
+  EDITOR_SAVE_REVISION: ({ options }) => m.editor_save_revision({}, options),
+  MEDIA_METADATA_INVALID: ({ options }) => m.media_library_metadata_invalid({}, options),
+  MEDIA_NOT_FOUND: ({ options }) => m.media_library_not_found({}, options),
+  MEDIA_STORAGE_UNAVAILABLE: ({ options }) => m.media_library_storage_unavailable({}, options),
+  MEDIA_IN_USE: ({ message, options }) =>
+    m.media_library_delete_in_use({ count: message.count ?? 0 }, options),
+  MEDIA_PUBLISHED_IN_USE: ({ message, options }) =>
+    m.media_library_delete_published_in_use({ count: message.count ?? 0 }, options),
+  MEDIA_TOO_LARGE: ({ message, locale, options }) =>
+    m.media_upload_too_large({ limit: fileSize(message.limit, locale) }, options),
+  MEDIA_SIZE_MISMATCH: ({ options }) => m.media_upload_size_mismatch({}, options),
+  MEDIA_TYPE_MISMATCH: ({ options }) => m.media_upload_type_mismatch({}, options),
+  MEDIA_EMPTY: ({ options }) => m.media_upload_empty({}, options),
+  MEDIA_INGEST_TIMEOUT: ({ options }) => m.media_upload_timeout({}, options),
+  MEDIA_UPLOAD_BUCKET_MISSING: ({ options }) => m.media_upload_bucket_missing({}, options),
+  MEDIA_UNAVAILABLE: ({ options }) => m.media_unavailable({}, options),
+  MEDIA_BECAME_USED: ({ options }) => m.media_became_used({}, options),
+  BODY_TOO_LARGE: ({ options }) => m.request_too_large({}, options),
+  BODY_STRUCTURE_INVALID: ({ options }) => m.request_malformed({}, options),
+  RESOURCE_LIMIT: ({ options }) => m.request_rate_limited({}, options),
+};
+
+// FIELD_REQUIRED is rendered by validationText.
+const KNOWN_CODES = new Set([...Object.keys(SERVER_TEXT), 'FIELD_REQUIRED']);
 
 const numberFormats = new Map<UiLocale, Intl.NumberFormat>();
 
@@ -253,423 +311,152 @@ function validationText(message: UiMessage, locale: UiLocale): string | undefine
   }
 }
 
+// Outcomes the client raises itself; the server never sends these codes.
+const LOCAL_TEXT: Record<string, Render> = {
+  AUTH_SIGN_IN_FAILED: ({ options }) => m.auth_sign_in_failed({}, options),
+  AUTH_PASSWORD_TOO_SHORT: ({ options }) => m.auth_password_too_short({}, options),
+  AUTH_PASSWORDS_DIFFERENT: ({ options }) => m.auth_passwords_different({}, options),
+  AUTH_RESET_FAILED: ({ options }) => m.auth_reset_failed({}, options),
+  AUTH_RESET_REQUEST_FAILED: ({ options }) => m.auth_reset_request_failed({}, options),
+  AUTH_GITHUB_FAILED: ({ options }) => m.auth_github_failed({}, options),
+  ACCOUNT_NAME_SAVE_FAILED: ({ options }) => m.account_name_save_failed({}, options),
+  ACCOUNT_NAME_SAVED: ({ options }) => m.account_name_saved({}, options),
+  ACCOUNT_PASSWORD_FAILED: ({ options }) => m.account_password_failed({}, options),
+  ACCOUNT_PASSWORD_CHANGED: ({ options }) => m.account_password_changed({}, options),
+  ACCOUNT_PASSWORD_SET: ({ options }) => m.account_password_set({}, options),
+  ACCOUNT_EMAIL_CHANGE_SENT: ({ options }) => m.account_email_change_sent({}, options),
+  ACCOUNT_EMAIL_CHANGE_FAILED: ({ options }) => m.account_email_change_failed({}, options),
+  ACCOUNT_EMAIL_LINK_FAILED: ({ options }) => m.account_email_link_failed({}, options),
+  ACCOUNT_SESSIONS_END_FAILED: ({ options }) => m.account_sessions_end_failed({}, options),
+  ACCOUNT_SESSIONS_ENDED: ({ options }) => m.account_sessions_ended({}, options),
+  ACCOUNT_LOAD_FAILED: ({ options }) => m.account_load_failed({}, options),
+  MEMBER_LIST_FAILED: withStatus(m.members_load_failed, m.members_load_failed_status),
+  MEMBER_INVITE_FAILED: withStatus(m.members_invite_failed, m.members_invite_failed_status),
+  MEMBER_ROLE_FAILED: withStatus(m.members_role_failed, m.members_role_failed_status),
+  MEMBER_REMOVE_FAILED: withStatus(m.members_remove_failed, m.members_remove_failed_status),
+  ENTRY_LIST_LOAD_FAILED: withStatus(m.entry_list_load_failed, m.entry_list_load_failed_status),
+  ENTRY_DELETED_LOAD_FAILED: withStatus(
+    m.entry_deleted_load_failed,
+    m.entry_deleted_load_failed_status,
+  ),
+  ENTRY_ACTION_FAILED: withStatus(m.entry_action_failed, m.entry_action_failed_status),
+  ENTRY_CREATE_FAILED: withStatus(m.new_entry_create_failed, m.new_entry_create_failed_status),
+  ENTRY_CREATE_UNCONFIRMED: ({ options }) => m.new_entry_create_unconfirmed({}, options),
+  SOURCE_CHANGE_SAVE_FAILED: ({ options }) => m.source_change_save_failed({}, options),
+  SOURCE_CHANGE_RESPONSE_LOST: ({ options }) => m.source_change_response_lost({}, options),
+  SOURCE_CHANGE_RELOAD_FAILED: ({ options }) => m.source_change_reload_failed({}, options),
+  CREATE_ALL_SAVE_FAILED: ({ options }) => m.create_all_save_failed({}, options),
+  CREATE_ALL_RELOAD_FAILED: ({ options }) => m.create_all_reload_failed({}, options),
+  REDIRECT_LOAD_FAILED: withStatus(m.redirect_load_failed, m.redirect_load_failed_status),
+  REDIRECT_SAVE_FAILED: withStatus(m.redirect_save_failed, m.redirect_save_failed_status),
+  REDIRECT_DELETE_FAILED: withStatus(m.redirect_delete_failed, m.redirect_delete_failed_status),
+  REDIRECT_FROM_REQUIRED: ({ options }) => m.redirect_validation_from_required({}, options),
+  REDIRECT_FROM_ABSOLUTE: ({ options }) => m.redirect_validation_from_absolute({}, options),
+  REDIRECT_FROM_SLASH: ({ message, options }) =>
+    m.redirect_validation_from_slash({ suggestion: message.suggestion ?? '/' }, options),
+  REDIRECT_FROM_WHITESPACE: ({ options }) => m.redirect_validation_from_whitespace({}, options),
+  REDIRECT_TO_REQUIRED: ({ options }) => m.redirect_validation_to_required({}, options),
+  REDIRECT_TO_WHITESPACE: ({ options }) => m.redirect_validation_to_whitespace({}, options),
+  REDIRECT_TO_INVALID: ({ message, options }) =>
+    m.redirect_validation_to_invalid({ suggestion: message.suggestion ?? '/' }, options),
+  REDIRECT_SAME_ADDRESS: ({ options }) => m.redirect_validation_same({}, options),
+  REDIRECT_SHADOWS_PAGE: ({ message, options }) =>
+    m.redirect_validation_shadows({ page: message.page ?? '' }, options),
+  REDIRECT_FROM_EXISTS: ({ options }) => m.redirect_validation_exists({}, options),
+  PUBLISH_SAVE_FAILED: ({ options }) => m.publish_save_failed({}, options),
+  PUBLISH_CHECKS_BLOCKED: ({ options }) => m.publish_checks_blocked({}, options),
+  PUBLISH_RESPONSE_LOST: ({ options }) => m.publish_response_lost({}, options),
+  PUBLISH_ENTRY_RESPONSE_LOST: ({ options }) => m.publish_entry_response_lost({}, options),
+  PUBLISH_RELOAD_FAILED: ({ options }) => m.publish_reload_failed({}, options),
+  PUBLISH_ENTRY_RELOAD_FAILED: ({ options }) => m.publish_entry_reload_failed({}, options),
+  PUBLISH_FAILED: withStatus(m.publish_failed, m.publish_failed_status),
+  PUBLISH_ENTRY_INCOMPLETE: ({ options }) => m.publish_entry_incomplete({}, options),
+  PUBLISH_ENTRY_DRIFT: ({ options }) => m.publish_entry_drift({}, options),
+  PENDING_DISCARD_SAVE_FAILED: ({ options }) => m.pending_discard_save_failed({}, options),
+  PENDING_DISCARD_UNCONFIRMED: ({ options }) => m.pending_discard_unconfirmed({}, options),
+  PENDING_DISCARD_REMOTE_CHANGED: ({ options }) => m.pending_discard_remote_changed({}, options),
+  PENDING_DISCARD_FAILED: ({ message, options }) =>
+    m.pending_discard_failed({ status: message.status ?? 0 }, options),
+  PENDING_DIFF_FAILED: ({ message, options }) =>
+    m.pending_diff_failed({ page: message.page ?? '', status: message.status ?? 0 }, options),
+  HISTORY_LOAD_FAILED: withStatus(m.history_load_failed, m.history_load_failed_status),
+  HISTORY_DIFF_FAILED: ({ options }) => m.history_diff_failed({}, options),
+  HISTORY_RESTORE_SAVE_FAILED: ({ options }) => m.history_restore_save_failed({}, options),
+  HISTORY_RESTORE_UNCONFIRMED: ({ options }) => m.history_restore_unconfirmed({}, options),
+  HISTORY_RESTORE_RELOAD_FAILED: ({ options }) => m.history_restore_reload_failed({}, options),
+  HISTORY_RESTORE_FAILED: withStatus(m.history_restore_failed, m.history_restore_failed_status),
+  CONFLICT_LOAD_FAILED: withStatus(m.conflict_load_failed, m.conflict_load_failed_status),
+  CONFLICT_SAVE_FAILED: ({ options }) => m.conflict_save_failed({}, options),
+  CONFLICT_UNCONFIRMED: ({ options }) => m.conflict_unconfirmed({}, options),
+  CONFLICT_RESOLVE_FAILED: withStatus(m.conflict_resolve_failed, m.conflict_resolve_failed_status),
+  TRANSLATION_FAILED: withStatus(m.translation_failed, m.translation_failed_status),
+  TRANSLATION_UNCONFIRMED: ({ options }) => m.translation_unconfirmed({}, options),
+  TRANSLATION_STALE: ({ options }) => m.translation_stale({}, options),
+  TRANSLATION_CREATE_FAILED: withStatus(
+    m.translation_create_failed,
+    m.translation_create_failed_status,
+  ),
+  TRANSLATION_CREATE_UNCONFIRMED: ({ options }) => m.translation_create_unconfirmed({}, options),
+  TRANSLATION_CREATED_FILL_FAILED: ({ options }) => m.translation_created_fill_failed({}, options),
+  TRANSLATION_CREATED_FILL_UNCONFIRMED: ({ options }) =>
+    m.translation_created_fill_unconfirmed({}, options),
+  MEDIA_UPLOAD_DECLARATION_FAILED: withStatus(
+    m.media_upload_declaration_failed,
+    m.media_upload_declaration_failed_status,
+  ),
+  MEDIA_UPLOAD_DECLARATION_UNCONFIRMED: ({ options }) =>
+    m.media_upload_declaration_unconfirmed({}, options),
+  MEDIA_UPLOAD_DECLARATION_INVALID: ({ options }) =>
+    m.media_upload_declaration_invalid({}, options),
+  MEDIA_UPLOAD_BUCKET_FAILED: withStatus(
+    m.media_upload_bucket_failed,
+    m.media_upload_bucket_failed_status,
+  ),
+  MEDIA_UPLOAD_BUCKET_UNCONFIRMED: ({ options }) => m.media_upload_bucket_unconfirmed({}, options),
+  MEDIA_UPLOAD_CONFIRMATION_FAILED: withStatus(
+    m.media_upload_confirmation_failed,
+    m.media_upload_confirmation_failed_status,
+  ),
+  MEDIA_UPLOAD_CONFIRMATION_UNCONFIRMED: ({ options }) =>
+    m.media_upload_confirmation_unconfirmed({}, options),
+  MEDIA_UPLOAD_CONFIRMATION_INVALID: ({ options }) =>
+    m.media_upload_confirmation_invalid({}, options),
+  MEDIA_UPLOAD_NORMALIZATION_FAILED: ({ options }) =>
+    m.media_upload_normalization_failed({}, options),
+  MEDIA_UPLOAD_FAILED: ({ options }) => m.media_upload_failed({}, options),
+  MEDIA_LIBRARY_READ_FAILED: withStatus(
+    m.media_library_read_failed,
+    m.media_library_read_failed_status,
+  ),
+  MEDIA_LIBRARY_READ_INVALID: ({ options }) => m.media_library_read_invalid({}, options),
+  MEDIA_METADATA_FAILED: withStatus(
+    m.media_library_metadata_failed,
+    m.media_library_metadata_failed_status,
+  ),
+  MEDIA_METADATA_UNCONFIRMED: ({ options }) => m.media_library_metadata_unconfirmed({}, options),
+  CANVAS_NO_PAGE: ({ options }) => m.canvas_failure_no_page({}, options),
+  CANVAS_DRAFT_UNRENDERABLE: ({ options }) => m.canvas_failure_draft_unrenderable({}, options),
+  CANVAS_LOADER_MISSING: ({ options }) => m.canvas_failure_loader_missing({}, options),
+  CANVAS_POST_FAILED: ({ options }) => m.canvas_failure_post({}, options),
+  MEDIA_DELETE_FAILED: withStatus(
+    m.media_library_delete_failed,
+    m.media_library_delete_failed_status,
+  ),
+  MEDIA_DELETE_UNCONFIRMED: ({ options }) => m.media_library_delete_unconfirmed({}, options),
+  MEDIA_DELETE_INVALID: ({ options }) => m.media_library_delete_invalid({}, options),
+  CROP_SOURCE_FAILED: withStatus(m.crop_source_failed, m.crop_source_failed_status),
+  CROP_RENDER_FAILED: ({ options }) => m.crop_render_failed({}, options),
+  CROP_FAILED: ({ options }) => m.crop_failed({}, options),
+};
+
+const TEXT = { ...SERVER_TEXT, ...LOCAL_TEXT };
+
 export function messageText(message: UiMessage, locale: UiLocale): string {
   const validation = validationText(message, locale);
   if (validation) return validation;
   const options = messageOptions(locale);
-  // Status 0 is no answer at all, so it gets the plain message.
-  const withStatus = (
-    plain: (inputs: Record<string, never>, opts: typeof options) => string,
-    status: (inputs: { status: number }, opts: typeof options) => string,
-  ) => (message.status ? status({ status: message.status }, options) : plain({}, options));
-  switch (message.code) {
-    case 'CONNECTION_LOST':
-      return m.common_connection_lost({}, options);
-    case 'INVALID_EMAIL_OR_PASSWORD':
-    case 'CREDENTIAL_ACCOUNT_NOT_FOUND':
-    case 'AUTH_SIGN_IN_FAILED':
-      return m.auth_sign_in_failed({}, options);
-    case 'INVALID_PASSWORD':
-      return m.account_current_password_wrong({}, options);
-    case 'SESSION_NOT_FRESH':
-    case 'SESSION_EXPIRED':
-      return m.account_password_sign_in_again({}, options);
-    case 'INVALID_EMAIL':
-      return m.account_email_invalid({}, options);
-    case 'USER_NOT_FOUND':
-    case 'USER_EMAIL_NOT_FOUND':
-    case 'INVALID_USER':
-      return m.account_user_not_found({}, options);
-    case 'EMAIL_NOT_VERIFIED':
-      return m.account_email_not_verified({}, options);
-    case 'EMAIL_CAN_NOT_BE_UPDATED':
-    case 'CHANGE_EMAIL_DISABLED':
-      return m.account_email_change_unavailable({}, options);
-    case 'FAILED_TO_UPDATE_USER':
-      return m.account_update_failed({}, options);
-    case 'PASSWORD_ALREADY_SET':
-      return m.account_password_already_set({}, options);
-    case 'PASSWORD_TOO_SHORT':
-    case 'AUTH_PASSWORD_TOO_SHORT':
-      return m.auth_password_too_short({}, options);
-    case 'PASSWORD_TOO_LONG':
-      return m.auth_password_too_long({}, options);
-    case 'AUTH_PASSWORDS_DIFFERENT':
-      return m.auth_passwords_different({}, options);
-    case 'INVALID_TOKEN':
-    case 'TOKEN_EXPIRED':
-      return m.auth_reset_token_failed({}, options);
-    case 'AUTH_RESET_FAILED':
-      return m.auth_reset_failed({}, options);
-    case 'AUTH_RESET_REQUEST_FAILED':
-      return m.auth_reset_request_failed({}, options);
-    case 'AUTH_GITHUB_FAILED':
-      return m.auth_github_failed({}, options);
-    case 'ACCOUNT_NAME_SAVE_FAILED':
-      return m.account_name_save_failed({}, options);
-    case 'ACCOUNT_NAME_SAVED':
-      return m.account_name_saved({}, options);
-    case 'ACCOUNT_PASSWORD_FAILED':
-      return m.account_password_failed({}, options);
-    case 'ACCOUNT_PASSWORD_CHANGED':
-      return m.account_password_changed({}, options);
-    case 'ACCOUNT_PASSWORD_SET':
-      return m.account_password_set({}, options);
-    case 'ACCOUNT_EMAIL_CHANGE_SENT':
-      return m.account_email_change_sent({}, options);
-    case 'ACCOUNT_EMAIL_CHANGE_FAILED':
-      return m.account_email_change_failed({}, options);
-    case 'ACCOUNT_EMAIL_LINK_FAILED':
-      return m.account_email_link_failed({}, options);
-    case 'ACCOUNT_SESSIONS_END_FAILED':
-      return m.account_sessions_end_failed({}, options);
-    case 'ACCOUNT_SESSIONS_ENDED':
-      return m.account_sessions_ended({}, options);
-    case 'ACCOUNT_LOAD_FAILED':
-      return m.account_load_failed({}, options);
-    case 'MEMBER_EMAIL_REQUIRED':
-      return m.members_email_required({}, options);
-    case 'MEMBER_ROLE_INVALID':
-      return m.members_role_invalid({}, options);
-    case 'MEMBER_ALREADY_SIGNED_IN':
-      return m.members_already_signed_in({}, options);
-    case 'MEMBER_SELF_ROLE':
-      return m.members_self_role({}, options);
-    case 'MEMBER_LAST_OWNER':
-      return m.members_last_owner({}, options);
-    case 'MEMBER_SELF_REMOVE':
-      return m.members_self_remove({}, options);
-    case 'USER_ALREADY_EXISTS':
-    case 'USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL':
-      return m.members_already_exists({}, options);
-    case 'MEMBER_LIST_FAILED':
-      return withStatus(m.members_load_failed, m.members_load_failed_status);
-    case 'MEMBER_INVITE_FAILED':
-      return withStatus(m.members_invite_failed, m.members_invite_failed_status);
-    case 'MEMBER_ROLE_FAILED':
-      return withStatus(m.members_role_failed, m.members_role_failed_status);
-    case 'MEMBER_REMOVE_FAILED':
-      return withStatus(m.members_remove_failed, m.members_remove_failed_status);
-    case 'ENTRY_LIST_LOAD_FAILED':
-      return withStatus(m.entry_list_load_failed, m.entry_list_load_failed_status);
-    case 'ENTRY_DELETED_LOAD_FAILED':
-      return withStatus(m.entry_deleted_load_failed, m.entry_deleted_load_failed_status);
-    case 'ENTRY_ACTION_FAILED':
-      return withStatus(m.entry_action_failed, m.entry_action_failed_status);
-    case 'ENTRY_CREATE_FAILED':
-      return withStatus(m.new_entry_create_failed, m.new_entry_create_failed_status);
-    case 'ENTRY_CREATE_UNCONFIRMED':
-      return m.new_entry_create_unconfirmed({}, options);
-    case 'ENTRY_ADDRESS_TOO_LONG':
-      return m.editor_address_too_long({ limit: message.limit ?? 80 }, options);
-    case 'ENTRY_ADDRESS_INVALID':
-      return m.editor_address_invalid({}, options);
-    case 'ENTRY_ADDRESS_TAKEN':
-      return m.editor_address_taken(
-        {
-          address: message.address ?? '',
-          collection: message.collection ?? '',
-          language: message.locale ? formatLanguageName(message.locale, locale) : '',
-        },
-        options,
-      );
-    case 'ENTRY_RENAME_UNPUBLISHED':
-      return m.entry_rename_unpublished({}, options);
-    case 'ENTRY_DUPLICATE_UNPUBLISHED':
-      return m.entry_duplicate_unpublished({}, options);
-    case 'ENTRY_RENAME_COLLISION':
-      return m.entry_rename_collision({}, options);
-    case 'TEMPLATE_UNPUBLISHED':
-      return m.entry_template_unpublished({}, options);
-    case 'HISTORY_RESTORE_NO_FILE':
-      return m.history_restore_no_file({}, options);
-    case 'HISTORY_RESTORE_UNREADABLE':
-      return m.history_restore_unreadable({}, options);
-    case 'REVERT_CONFLICT':
-      return m.revert_conflict(
-        { count: message.paths?.length ?? 0, files: (message.paths ?? []).join(', ') },
-        options,
-      );
-    case 'ENTRY_LOCALE_LAST_PUBLISHED':
-      return m.offsite_last_published(
-        {
-          languages: formatLanguageList(message.locales ?? [], locale),
-          remaining: formatLanguageList(message.remaining ?? [], locale),
-        },
-        options,
-      );
-    case 'ENTRY_LOCALE_LAST_FILE':
-      return m.offsite_last_file(
-        { languages: formatLanguageList(message.locales ?? [], locale) },
-        options,
-      );
-    case 'ENTRY_LOCALE_IS_SOURCE':
-      return m.entry_locale_is_source(
-        { language: message.locale ? formatLanguageName(message.locale, locale) : '' },
-        options,
-      );
-    case 'ENTRY_DRIFT_ANSWERS_INVALID':
-      return m.drift_changed({}, options);
-    case 'TRANSLATION_TARGET_EXISTS':
-      return m.translation_target_exists({}, options);
-    case 'ENTRY_SOURCE_CONFLICT':
-    case 'ENTRY_SOURCE_UNDECLARED':
-    case 'ENTRY_SOURCE_MISSING':
-      return m.entry_source_unresolved({}, options);
-    case 'ENTRY_SOURCE_TARGET_UNDECLARED':
-      return m.entry_source_target_undeclared({}, options);
-    case 'ENTRY_SOURCE_UNCHANGED':
-      return m.entry_source_unchanged({}, options);
-    case 'ENTRY_SOURCE_TARGET_MISSING':
-      return m.entry_source_target_missing({}, options);
-    case 'ENTRY_SOURCE_TARGET_OFF':
-      return m.entry_source_target_off({}, options);
-    case 'ENTRY_SOURCE_REVISION':
-      return m.entry_source_revision({}, options);
-    case 'ENTRY_SOURCE_DRIFT':
-      return m.entry_source_drift({}, options);
-    case 'ENTRY_SOURCE_ONLY_CONFLICT':
-      return m.entry_source_only_conflict({}, options);
-    case 'ENTRY_SOURCE_TARGET_INVALID':
-      return m.entry_source_target_invalid({}, options);
-    case 'SOURCE_CHANGE_SAVE_FAILED':
-      return m.source_change_save_failed({}, options);
-    case 'SOURCE_CHANGE_RESPONSE_LOST':
-      return m.source_change_response_lost({}, options);
-    case 'SOURCE_CHANGE_RELOAD_FAILED':
-      return m.source_change_reload_failed({}, options);
-    case 'CREATE_ALL_SAVE_FAILED':
-      return m.create_all_save_failed({}, options);
-    case 'CREATE_ALL_RELOAD_FAILED':
-      return m.create_all_reload_failed({}, options);
-    case 'REDIRECT_NOT_FOUND':
-      return m.redirect_not_found({}, options);
-    case 'REDIRECT_MANAGED':
-      return m.redirect_managed_error({}, options);
-    case 'REDIRECT_LOAD_FAILED':
-      return withStatus(m.redirect_load_failed, m.redirect_load_failed_status);
-    case 'REDIRECT_SAVE_FAILED':
-      return withStatus(m.redirect_save_failed, m.redirect_save_failed_status);
-    case 'REDIRECT_DELETE_FAILED':
-      return withStatus(m.redirect_delete_failed, m.redirect_delete_failed_status);
-    case 'REDIRECT_FROM_REQUIRED':
-      return m.redirect_validation_from_required({}, options);
-    case 'REDIRECT_FROM_ABSOLUTE':
-      return m.redirect_validation_from_absolute({}, options);
-    case 'REDIRECT_FROM_SLASH':
-      return m.redirect_validation_from_slash({ suggestion: message.suggestion ?? '/' }, options);
-    case 'REDIRECT_FROM_WHITESPACE':
-      return m.redirect_validation_from_whitespace({}, options);
-    case 'REDIRECT_TO_REQUIRED':
-      return m.redirect_validation_to_required({}, options);
-    case 'REDIRECT_TO_WHITESPACE':
-      return m.redirect_validation_to_whitespace({}, options);
-    case 'REDIRECT_TO_INVALID':
-      return m.redirect_validation_to_invalid({ suggestion: message.suggestion ?? '/' }, options);
-    case 'REDIRECT_SAME_ADDRESS':
-      return m.redirect_validation_same({}, options);
-    case 'REDIRECT_SHADOWS_PAGE':
-      return m.redirect_validation_shadows({ page: message.page ?? '' }, options);
-    case 'REDIRECT_FROM_EXISTS':
-      return m.redirect_validation_exists({}, options);
-    case 'PUBLISH_SAVE_FAILED':
-      return m.publish_save_failed({}, options);
-    case 'PUBLISH_CHECKS_BLOCKED':
-      return m.publish_checks_blocked({}, options);
-    case 'PUBLISH_RESPONSE_LOST':
-      return m.publish_response_lost({}, options);
-    case 'PUBLISH_ENTRY_RESPONSE_LOST':
-      return m.publish_entry_response_lost({}, options);
-    case 'PUBLISH_RELOAD_FAILED':
-      return m.publish_reload_failed({}, options);
-    case 'PUBLISH_ENTRY_RELOAD_FAILED':
-      return m.publish_entry_reload_failed({}, options);
-    case 'PUBLISH_FAILED':
-      return withStatus(m.publish_failed, m.publish_failed_status);
-    case 'PUBLISH_INCOMPLETE':
-      return m.publish_incomplete({ count: message.count ?? 0 }, options);
-    case 'PUBLISH_DRIFT':
-      return m.publish_drift({ count: message.count ?? 0 }, options);
-    case 'PUBLISH_SOURCE_UNRESOLVED':
-      return m.publish_source_unresolved({ count: message.count ?? 0 }, options);
-    case 'PUBLISH_CONFLICT':
-      return m.publish_conflict({ count: message.count ?? 0 }, options);
-    case 'PUBLISH_REF_MOVED':
-      return m.publish_ref_moved({}, options);
-    case 'PUBLISH_REPOSITORY_UNAVAILABLE':
-      return m.publish_repository_unavailable({}, options);
-    case 'PUBLISH_FINALIZATION_PENDING':
-      return m.publish_finalization_pending({}, options);
-    case 'PUBLISH_ENTRY_INCOMPLETE':
-      return m.publish_entry_incomplete({}, options);
-    case 'PUBLISH_ENTRY_DRIFT':
-      return m.publish_entry_drift({}, options);
-    case 'PUBLISH_CHECKS_FAILED':
-      return m.pending_checks_failed({}, options);
-    case 'PUBLISH_SELECTION_INVALID':
-      return m.publish_selection_invalid({}, options);
-    case 'PUBLISH_EXCLUDE_NOT_PENDING':
-      return m.publish_exclude_not_pending({}, options);
-    case 'PUBLISH_EXCLUDE_ALL':
-      return m.publish_exclude_all({}, options);
-    case 'PUBLISH_EXCLUDE_PUBLISHED':
-      return m.publish_exclude_published({}, options);
-    case 'PUBLISH_EXCLUDE_SOURCE':
-      return m.publish_exclude_source({}, options);
-    case 'PENDING_DISCARD_SAVE_FAILED':
-      return m.pending_discard_save_failed({}, options);
-    case 'PENDING_DISCARD_UNCONFIRMED':
-      return m.pending_discard_unconfirmed({}, options);
-    case 'PENDING_DISCARD_REMOTE_CHANGED':
-      return m.pending_discard_remote_changed({}, options);
-    case 'PENDING_DISCARD_FAILED':
-      return m.pending_discard_failed({ status: message.status ?? 0 }, options);
-    case 'PENDING_DIFF_FAILED':
-      return m.pending_diff_failed(
-        { page: message.page ?? '', status: message.status ?? 0 },
-        options,
-      );
-    case 'HISTORY_LOAD_FAILED':
-      return withStatus(m.history_load_failed, m.history_load_failed_status);
-    case 'HISTORY_DIFF_FAILED':
-      return m.history_diff_failed({}, options);
-    case 'HISTORY_RESTORE_SAVE_FAILED':
-      return m.history_restore_save_failed({}, options);
-    case 'HISTORY_RESTORE_UNCONFIRMED':
-      return m.history_restore_unconfirmed({}, options);
-    case 'HISTORY_RESTORE_RELOAD_FAILED':
-      return m.history_restore_reload_failed({}, options);
-    case 'HISTORY_RESTORE_FAILED':
-      return withStatus(m.history_restore_failed, m.history_restore_failed_status);
-    case 'CONFLICT_LOAD_FAILED':
-      return withStatus(m.conflict_load_failed, m.conflict_load_failed_status);
-    case 'CONFLICT_SETTLED':
-      return m.conflict_settled({}, options);
-    case 'CONFLICT_CHANGED':
-      return m.conflict_changed({}, options);
-    case 'CONFLICT_ANSWERS_INVALID':
-      return m.conflict_answers_invalid({}, options);
-    case 'CONFLICT_REPOSITORY_UNAVAILABLE':
-      return m.conflict_repository_unavailable({}, options);
-    case 'CONFLICT_SAVE_FAILED':
-      return m.conflict_save_failed({}, options);
-    case 'CONFLICT_UNCONFIRMED':
-      return m.conflict_unconfirmed({}, options);
-    case 'CONFLICT_RESOLVE_FAILED':
-      return withStatus(m.conflict_resolve_failed, m.conflict_resolve_failed_status);
-    case 'EDITOR_HOLD_FAILED':
-      return m.editor_hold_failed({}, options);
-    case 'EDITOR_LOCK_TAKE_FAILED':
-      return m.editor_lock_take_failed({}, options);
-    case 'EDITOR_SAVE_CONNECTION':
-      return m.editor_save_connection({}, options);
-    case 'EDITOR_SAVE_REFUSED':
-      return m.editor_save_refused({}, options);
-    case 'EDITOR_SAVE_REVISION':
-      return m.editor_save_revision({}, options);
-    case 'TRANSLATION_FAILED':
-      return withStatus(m.translation_failed, m.translation_failed_status);
-    case 'TRANSLATION_UNCONFIRMED':
-      return m.translation_unconfirmed({}, options);
-    case 'TRANSLATION_STALE':
-      return m.translation_stale({}, options);
-    case 'TRANSLATION_CREATE_FAILED':
-      return withStatus(m.translation_create_failed, m.translation_create_failed_status);
-    case 'TRANSLATION_CREATE_UNCONFIRMED':
-      return m.translation_create_unconfirmed({}, options);
-    case 'TRANSLATION_CREATED_FILL_FAILED':
-      return m.translation_created_fill_failed({}, options);
-    case 'TRANSLATION_CREATED_FILL_UNCONFIRMED':
-      return m.translation_created_fill_unconfirmed({}, options);
-    case 'MEDIA_UPLOAD_DECLARATION_FAILED':
-      return withStatus(
-        m.media_upload_declaration_failed,
-        m.media_upload_declaration_failed_status,
-      );
-    case 'MEDIA_UPLOAD_DECLARATION_UNCONFIRMED':
-      return m.media_upload_declaration_unconfirmed({}, options);
-    case 'MEDIA_UPLOAD_DECLARATION_INVALID':
-      return m.media_upload_declaration_invalid({}, options);
-    case 'MEDIA_UPLOAD_BUCKET_FAILED':
-      return withStatus(m.media_upload_bucket_failed, m.media_upload_bucket_failed_status);
-    case 'MEDIA_UPLOAD_BUCKET_UNCONFIRMED':
-      return m.media_upload_bucket_unconfirmed({}, options);
-    case 'MEDIA_UPLOAD_CONFIRMATION_FAILED':
-      return withStatus(
-        m.media_upload_confirmation_failed,
-        m.media_upload_confirmation_failed_status,
-      );
-    case 'MEDIA_UPLOAD_CONFIRMATION_UNCONFIRMED':
-      return m.media_upload_confirmation_unconfirmed({}, options);
-    case 'MEDIA_UPLOAD_CONFIRMATION_INVALID':
-      return m.media_upload_confirmation_invalid({}, options);
-    case 'MEDIA_UPLOAD_NORMALIZATION_FAILED':
-      return m.media_upload_normalization_failed({}, options);
-    case 'MEDIA_UPLOAD_FAILED':
-      return m.media_upload_failed({}, options);
-    case 'MEDIA_LIBRARY_READ_FAILED':
-      return withStatus(m.media_library_read_failed, m.media_library_read_failed_status);
-    case 'MEDIA_LIBRARY_READ_INVALID':
-      return m.media_library_read_invalid({}, options);
-    case 'MEDIA_METADATA_FAILED':
-      return withStatus(m.media_library_metadata_failed, m.media_library_metadata_failed_status);
-    case 'MEDIA_METADATA_UNCONFIRMED':
-      return m.media_library_metadata_unconfirmed({}, options);
-    case 'MEDIA_METADATA_INVALID':
-      return m.media_library_metadata_invalid({}, options);
-    case 'MEDIA_NOT_FOUND':
-      return m.media_library_not_found({}, options);
-    case 'MEDIA_STORAGE_UNAVAILABLE':
-      return m.media_library_storage_unavailable({}, options);
-    case 'MEDIA_IN_USE':
-      return m.media_library_delete_in_use({ count: message.count ?? 0 }, options);
-    case 'MEDIA_PUBLISHED_IN_USE':
-      return m.media_library_delete_published_in_use({ count: message.count ?? 0 }, options);
-    case 'MEDIA_TOO_LARGE':
-      return m.media_upload_too_large({ limit: fileSize(message.limit, locale) }, options);
-    case 'MEDIA_SIZE_MISMATCH':
-      return m.media_upload_size_mismatch({}, options);
-    case 'MEDIA_TYPE_MISMATCH':
-      return m.media_upload_type_mismatch({}, options);
-    case 'MEDIA_EMPTY':
-      return m.media_upload_empty({}, options);
-    case 'MEDIA_INGEST_TIMEOUT':
-      return m.media_upload_timeout({}, options);
-    case 'MEDIA_UPLOAD_BUCKET_MISSING':
-      return m.media_upload_bucket_missing({}, options);
-    case 'MEDIA_UNAVAILABLE':
-      return m.media_unavailable({}, options);
-    case 'MEDIA_BECAME_USED':
-      return m.media_became_used({}, options);
-    case 'BODY_TOO_LARGE':
-      return m.request_too_large({}, options);
-    case 'BODY_STRUCTURE_INVALID':
-      return m.request_malformed({}, options);
-    case 'RESOURCE_LIMIT':
-      return m.request_rate_limited({}, options);
-    case 'CANVAS_NO_PAGE':
-      return m.canvas_failure_no_page({}, options);
-    case 'CANVAS_DRAFT_UNRENDERABLE':
-      return m.canvas_failure_draft_unrenderable({}, options);
-    case 'CANVAS_LOADER_MISSING':
-      return m.canvas_failure_loader_missing({}, options);
-    case 'CANVAS_POST_FAILED':
-      return m.canvas_failure_post({}, options);
-    case 'MEDIA_DELETE_FAILED':
-      return withStatus(m.media_library_delete_failed, m.media_library_delete_failed_status);
-    case 'MEDIA_DELETE_UNCONFIRMED':
-      return m.media_library_delete_unconfirmed({}, options);
-    case 'MEDIA_DELETE_INVALID':
-      return m.media_library_delete_invalid({}, options);
-    case 'CROP_SOURCE_FAILED':
-      return withStatus(m.crop_source_failed, m.crop_source_failed_status);
-    case 'CROP_RENDER_FAILED':
-      return m.crop_render_failed({}, options);
-    case 'CROP_FAILED':
-      return m.crop_failed({}, options);
-    default:
-      return m.common_unknown_error({}, options);
-  }
+  const render = Object.hasOwn(TEXT, message.code) ? TEXT[message.code] : undefined;
+  return render ? render({ message, locale, options }) : m.common_unknown_error({}, options);
 }
 
 export function messageDetail(message: Pick<UiMessage, 'detail' | 'holder'>, locale: UiLocale) {
