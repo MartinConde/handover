@@ -54,7 +54,7 @@ login screen.
 
 If the mail cannot be sent the row is still made, so the invite is there to resend once the
 [mailer](email.md) is fixed. The screen says so rather than pretending nothing happened.
-The invitation email itself is not translated by the admin interface preference.
+The invitation email is written in English or German by the rules in [Email language](email.md#email-language).
 
 ### Changing a role
 

@@ -137,8 +137,9 @@ expired-link, and Account screens are bilingual. Their visible notices and known
 failures change language immediately without clearing a typed email, password, or profile name.
 For owners, the Members screen applies the same behavior to invitations and account administration.
 Known authentication refusal codes are translated there without using Better Auth's English prose
-to decide the result; unknown safe detail remains separate. The message sent to an invited person
-is outside the interface-language setting.
+to decide the result; unknown safe detail remains separate. The invitation email is written in the
+invited person's saved interface language, else the inviting owner's
+([Email language](email.md#email-language)).
 
 An expired or used link is recoverable from the sign-in screen. A wrong current password stays a
 field error. Unknown provider or server detail, when it is safe and useful on the signed-in Account
