@@ -83,7 +83,8 @@ it could not finish. Create the database and take the id from the output:
 npx wrangler d1 create your-site
 ```
 
-The tables come from the package. `drizzle-kit` reads them from `astro-handover/schema`
+The tables come from the package. `drizzle-kit` reads them from the package's schema file
+(`drizzle.config.ts` points at `node_modules/astro-handover/dist/schema.js`)
 and writes plain SQL into `migrations/`, which `wrangler` applies:
 
 ```sh

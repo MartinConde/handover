@@ -61,7 +61,7 @@ The package's own tables live in D1 and change with the package: `drafts`, `medi
 npx handover db generate
 ```
 
-runs `drizzle-kit generate` against `astro-handover/schema` — a new `migrations/*.sql`
+runs `drizzle-kit generate` against the package's schema file (`dist/schema.js`) — a new `migrations/*.sql`
 when a table changed, "nothing to migrate" when not — and records the package's schema
 version in `migrations/handover.json`. Commit both. The deploy command applies the SQL
 ([deploy](deploy.md#the-database)).
