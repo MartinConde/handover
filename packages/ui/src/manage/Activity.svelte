@@ -1,5 +1,6 @@
 <script lang="ts">
 import { ACTIVITY_GROUPS, type ActivityEvent, type DiffGroup } from '@handover/core';
+import { messageDetail, messageText, retainedFailure, type UiMessage } from '../errors.js';
 import { formatExactTime, formatRelativeTime, messageOptions, type UiLocale } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
 import Diff from '../publishing/Diff.svelte';
@@ -50,7 +51,15 @@ const status = $derived(
 let asked = 0;
 /** The removal being put back, and what the server said if it would not be. */
 let putting = $state('');
-let refused = $state<{ status: number; detail?: string }>();
+let refused = $state<{ status: number; message?: UiMessage }>();
+const FALLBACK = 'HISTORY_RESTORE_FAILED';
+/** A lock or a coded refusal is said in the interface language; any other 409 keeps the server's sentence. */
+const refusedDetail = $derived.by(() => {
+  const message = refused?.message;
+  if (!message) return undefined;
+  if (message.holder !== undefined) return messageDetail(message, uiLocale);
+  return message.code === FALLBACK ? message.detail : messageText(message, uiLocale);
+});
 /** Which row is open — one at a time, the way the log reads. */
 let why = $state('');
 /** What each publish row's commit changed, read from the server the first time it is opened. */
@@ -121,17 +130,10 @@ async function putBack(event: ActivityEvent) {
   });
   putting = '';
   if (!res.ok) {
-    const body = await res.text();
-    let detail = body;
-    if (body.startsWith('{')) {
-      try {
-        const error = (JSON.parse(body) as { error?: unknown }).error;
-        detail = typeof error === 'string' ? error : body;
-      } catch {
-        // Preserve the response as diagnostics; malformed JSON must not break the recovery state.
-      }
-    }
-    refused = { status: res.status, detail: res.status === 409 && detail ? detail : undefined };
+    refused = {
+      status: res.status,
+      message: res.status === 409 ? await retainedFailure(res, FALLBACK) : undefined,
+    };
     return;
   }
   await load();
@@ -197,7 +199,7 @@ const RESTORABLE = ['entry-delete', 'locale-off'];
     <p class="list-note">{m.activity_editor_scope({}, options)}</p>
   {/if}
   {#if failure}<p class="notice notice-danger" role="alert">{m.activity_load_failed_status({ status: failure }, options)}</p>{/if}
-  {#if refused}<p class="notice notice-warn" role="alert">{refused.detail ? m.activity_restore_conflict({ detail: refused.detail }, options) : m.activity_restore_failed_status({ status: refused.status }, options)}</p>{/if}
+  {#if refused}<p class="notice notice-warn" role="alert">{refusedDetail ? m.activity_restore_conflict({ detail: refusedDetail }, options) : m.activity_restore_failed_status({ status: refused.status }, options)}</p>{/if}
   {#if loading}
     <Skeleton label={m.common_loading({}, options)} />
   {:else if events.length === 0}

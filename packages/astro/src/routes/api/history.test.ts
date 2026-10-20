@@ -582,6 +582,10 @@ test('restoring a version of an entry that commit does not have is refused', asy
   const res = await restoring('history/listings/barn/restore', { commit_sha: 'abc1234' });
 
   expect(res.status).toBe(409);
+  expect(await res.json()).toEqual({
+    code: 'HISTORY_RESTORE_NO_FILE',
+    error: 'That version has no file of this entry',
+  });
   expect(restoreDraft).not.toHaveBeenCalled();
 });
 
@@ -614,7 +618,10 @@ test('a version this package cannot read is refused with the reason', async () =
   const res = await restoring('history/listings/mill-house/restore', { commit_sha: 'abc1234' });
 
   expect(res.status).toBe(409);
-  expect(await res.text()).toContain('newer than this package knows');
+  expect(await res.json()).toEqual({
+    code: 'HISTORY_RESTORE_UNREADABLE',
+    error: 'version 99 is newer than this package knows (1)',
+  });
   expect(restoreDraft).not.toHaveBeenCalled();
 });
 
@@ -751,6 +758,7 @@ test('revert is 409 naming the file that has moved on since', async () => {
   const res = await POST(post('revert', JSON.stringify({ commit_sha: 'def456' })));
   expect(res.status).toBe(409);
   expect(await res.json()).toEqual({
+    code: 'REVERT_CONFLICT',
     error:
       'src/content/listings/en/mill-house.yaml has changed since that commit, so it cannot be put back',
     paths: ['src/content/listings/en/mill-house.yaml'],

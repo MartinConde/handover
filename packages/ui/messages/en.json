@@ -787,6 +787,10 @@
   "entry_deleted_load_failed_status": "Could not load what was deleted ({status})",
   "entry_action_failed": "That did not work.",
   "entry_action_failed_status": "That did not work ({status})",
+  "entry_rename_unpublished": "Publish this entry before renaming it.",
+  "entry_duplicate_unpublished": "Publish this entry before duplicating it.",
+  "entry_template_unpublished": "Publish this entry before saving it as a template.",
+  "entry_rename_collision": "That name is already taken in the repository.",
   "entry_list_deleted_note": "A deleted entry is in neither the published site nor your unpublished changes. This is a record of what happened, kept for 180 days, rather than a filter over {collection}.",
   "entry_list_deleted_table": "Deleted entries in {collection}",
   "entry_list_file_name": "File name",
@@ -2330,6 +2334,18 @@
   "history_restore_reload_failed": "The version was restored, but the entry could not be reloaded. Reload the page before editing.",
   "history_restore_failed": "That version could not be restored.",
   "history_restore_failed_status": "That version could not be restored ({status}).",
+  "history_restore_no_file": "That version has no file of this entry.",
+  "history_restore_unreadable": "That version cannot be read.",
+  "revert_conflict": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{files} has changed since that commit, so it cannot be put back.",
+        "countPlural=other": "{count} files have changed since that commit, so they cannot be put back: {files}"
+      }
+    }
+  ],
   "diff_both_languages": "Both languages",
   "diff_all_languages": "All languages",
   "diff_language_removed": "The {language} version was removed",

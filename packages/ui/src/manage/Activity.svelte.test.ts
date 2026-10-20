@@ -879,6 +879,46 @@ test('restore is offered on a removal and sends the commit that row named', asyn
   expect(committed).toHaveBeenCalledOnce();
 });
 
+const putBackRefused = async (body: unknown) => {
+  server({
+    events: [
+      ev('entry-delete', {
+        subject: 'src/content/listings/en/mill-house.yaml',
+        detail: { locales: ['en'] },
+        commitSha: 'd1b2c3d4e5f60718',
+      }),
+    ],
+    cursor: null,
+  });
+  const root = await show('owner', 'de');
+  vi.mocked(fetch).mockImplementationOnce(async () => Response.json(body, { status: 409 }));
+  (root.querySelector('li .meta button') as HTMLButtonElement).click();
+  await settle();
+  return root.querySelector('.notice-warn')?.textContent;
+};
+
+test('a restore refused over the lock names the holder in German', async () => {
+  const text = await putBackRefused({
+    error: 'Anna is editing this entry',
+    held_by: { id: 'u9', name: 'Anna' },
+  });
+
+  expect(text).toContain('Wird von Anna bearbeitet');
+  expect(text).not.toContain('is editing');
+});
+
+test('a restore refused over moved files names them in German', async () => {
+  const text = await putBackRefused({
+    code: 'REVERT_CONFLICT',
+    error: 'a.yaml has changed since that commit, so it cannot be put back',
+    paths: ['a.yaml'],
+  });
+
+  expect(text).toContain(
+    'a.yaml wurde seit diesem Commit geändert und kann deshalb nicht zurückgesetzt werden.',
+  );
+});
+
 // A restore is refused only when something is at the path again; the server names the file.
 test('a refused restore says what the server said', async () => {
   server({

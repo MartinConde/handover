@@ -209,6 +209,33 @@ test('an open creation keeps its draft and translates retained failure', async (
   expect(reads).toBe(1);
 });
 
+test('a 400 answer is not shown as technical detail', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (_url: string, init?: RequestInit) =>
+      init?.method === 'POST'
+        ? new Response('fr is not a language this site declares', { status: 400 })
+        : Response.json({ entries: [] }),
+    ),
+  );
+  app = mount(NewEntry, {
+    target: document.body,
+    props: { collection: 'pages', uiLocale: 'en' as UiLocale, onclose: () => {} },
+  });
+  await settle();
+  const title = document.querySelector<HTMLInputElement>('#new-title');
+  if (!title) throw new Error('title missing');
+  title.value = 'About';
+  title.dispatchEvent(new Event('input', { bubbles: true }));
+  document.querySelector<HTMLButtonElement>('button[type="submit"]')?.click();
+  await settle();
+
+  expect(document.querySelector('[role="alert"]')?.textContent).toContain(
+    'That did not work (400)',
+  );
+  expect(document.querySelector('[role="alert"]')?.textContent).not.toContain('fr is not');
+});
+
 test.each([
   [
     'invalid JSON',

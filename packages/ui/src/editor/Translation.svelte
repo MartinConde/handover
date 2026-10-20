@@ -186,7 +186,11 @@ async function fill(paths?: string[]) {
 
 async function translationFailure(response: Response): Promise<UiMessage> {
   const message = await responseMessage(response, 'TRANSLATION_FAILED');
-  if (message.detail || !response.headers.get('content-type')?.startsWith('text/plain'))
+  if (
+    message.detail ||
+    (response.status !== 409 && response.status !== 503) ||
+    !response.headers.get('content-type')?.startsWith('text/plain')
+  )
     return message;
   const detail = (await response.clone().text()).trim();
   return detail ? { ...message, detail } : message;

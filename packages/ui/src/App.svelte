@@ -12,7 +12,7 @@ import type { CreatedAll } from './editor/Editor.svelte';
 import type { EditorEntry } from './editor/entry-payload';
 import SourceRecovery, { type SourceProblem } from './editor/SourceRecovery.svelte';
 import { invalidateEntryDirectory } from './entry-directory.js';
-import { messageDetail } from './errors.js';
+import { messageDetail, retainedFailure } from './errors.js';
 import {
   type CollectionLabels,
   capitalise,
@@ -95,11 +95,13 @@ type ShellMessage = {
     | 'REVERT_SAVE_FAILED'
     | 'REVERT_UNCERTAIN'
     | 'REVERT_FAILED'
+    | 'REVERT_CONFLICT'
     | 'ENTRY_NOT_FOUND'
     | 'ENTRY_LOAD_FAILED';
   count?: number;
   detail?: string;
   name?: string;
+  paths?: string[];
   status?: number;
 };
 const text = (message: ShellMessage) => {
@@ -122,6 +124,11 @@ const text = (message: ShellMessage) => {
       return m.shell_revert_uncertain({}, options);
     case 'REVERT_FAILED':
       return m.shell_revert_failed({ status: message.status ?? 0 }, options);
+    case 'REVERT_CONFLICT':
+      return m.revert_conflict(
+        { count: message.paths?.length ?? 0, files: (message.paths ?? []).join(', ') },
+        options,
+      );
     case 'ENTRY_NOT_FOUND':
       return m.shell_entry_not_found({}, options);
     case 'ENTRY_LOAD_FAILED':
@@ -540,17 +547,16 @@ async function revert() {
       revertError = { code: 'REVERT_UNCERTAIN' };
       return;
     }
-    const body = await res.text();
-    // A file that has moved on since is the server's own sentence, and it names the file.
-    let detail: string | undefined;
-    if (res.status === 409) {
-      try {
-        detail = (JSON.parse(body) as { error?: string }).error ?? body;
-      } catch {
-        detail = body;
-      }
-    }
-    revertError = { code: 'REVERT_FAILED', status: res.status, ...(detail ? { detail } : {}) };
+    // A file that has moved on since is named in the interface language; any other 409 keeps the server's sentence.
+    const refusal = res.status === 409 ? await retainedFailure(res, 'REVERT_FAILED') : undefined;
+    revertError =
+      refusal?.code === 'REVERT_CONFLICT'
+        ? { code: 'REVERT_CONFLICT', paths: refusal.paths ?? [] }
+        : {
+            code: 'REVERT_FAILED',
+            status: res.status,
+            ...(refusal?.detail ? { detail: refusal.detail } : {}),
+          };
     return;
   }
   await commitChanged();

@@ -27,6 +27,7 @@ import type { RequestContext } from '../../environment.js';
 import { formSchema } from '../../index.js';
 import { readJson } from './body.js';
 import {
+  codedError,
   entryLocales,
   entryPath,
   entryPaths,
@@ -286,14 +287,17 @@ export async function restoreVersion(
     }),
   );
   const found = read.filter((f) => f !== undefined);
-  if (!found.length) return new Response('That version has no file of this entry', { status: 409 });
+  if (!found.length)
+    return codedError(409, 'HISTORY_RESTORE_NO_FILE', 'That version has no file of this entry');
   let files: typeof found;
   try {
     files = found.map((f) => ({ ...f, entry: migrateDocument('default', f.entry) }));
   } catch (err) {
-    return new Response(err instanceof Error ? err.message : 'That version cannot be read', {
-      status: 409,
-    });
+    return codedError(
+      409,
+      'HISTORY_RESTORE_UNREADABLE',
+      err instanceof Error ? err.message : 'That version cannot be read',
+    );
   }
   // The whole form, `slug` included: `formFor` strips the address but the file writes it.
   const form = formOf('default', formSchema(schema));

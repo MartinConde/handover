@@ -793,6 +793,10 @@
   "entry_deleted_load_failed_status": "Die gelöschten Einträge konnten nicht geladen werden ({status}).",
   "entry_action_failed": "Die Aktion ist fehlgeschlagen.",
   "entry_action_failed_status": "Die Aktion ist fehlgeschlagen ({status}).",
+  "entry_rename_unpublished": "Veröffentliche diesen Eintrag, bevor du ihn umbenennst.",
+  "entry_duplicate_unpublished": "Veröffentliche diesen Eintrag, bevor du ihn duplizierst.",
+  "entry_template_unpublished": "Veröffentliche diesen Eintrag, bevor du ihn als Vorlage speicherst.",
+  "entry_rename_collision": "Dieser Name ist im Repository bereits vergeben.",
   "entry_list_deleted_note": "Ein gelöschter Eintrag befindet sich weder auf der veröffentlichten Website noch in deinen unveröffentlichten Änderungen. Dies ist ein 180 Tage aufbewahrtes Protokoll und kein Filter für {collection}.",
   "entry_list_deleted_table": "Gelöschte Einträge in {collection}",
   "entry_list_file_name": "Dateiname",
@@ -2327,6 +2331,18 @@
   "history_restore_reload_failed": "Die Version wurde wiederhergestellt, aber der Eintrag konnte nicht neu geladen werden. Lade die Seite neu, bevor du weiterarbeitest.",
   "history_restore_failed": "Diese Version konnte nicht wiederhergestellt werden.",
   "history_restore_failed_status": "Diese Version konnte nicht wiederhergestellt werden ({status}).",
+  "history_restore_no_file": "Diese Version enthält keine Datei dieses Eintrags.",
+  "history_restore_unreadable": "Diese Version kann nicht gelesen werden.",
+  "revert_conflict": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{files} wurde seit diesem Commit geändert und kann deshalb nicht zurückgesetzt werden.",
+        "countPlural=other": "{count} Dateien wurden seit diesem Commit geändert und können deshalb nicht zurückgesetzt werden: {files}"
+      }
+    }
+  ],
   "diff_both_languages": "Beide Sprachen",
   "diff_all_languages": "Alle Sprachen",
   "diff_language_removed": "Die Version auf {language} wurde entfernt",

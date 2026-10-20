@@ -19,6 +19,7 @@ export interface UiMessage {
   locale?: string;
   locales?: string[];
   remaining?: string[];
+  paths?: string[];
 }
 
 export interface UiProblem {
@@ -64,6 +65,7 @@ export async function responseMessage(response: Response, fallback: string): Pro
     ...(typeof body?.locale === 'string' ? { locale: body.locale } : {}),
     ...(strings('locales') ? { locales: strings('locales') } : {}),
     ...(strings('remaining') ? { remaining: strings('remaining') } : {}),
+    ...(strings('paths') ? { paths: strings('paths') } : {}),
   };
 }
 
@@ -117,6 +119,13 @@ const KNOWN_CODES = new Set([
   'ENTRY_SOURCE_DRIFT',
   'ENTRY_SOURCE_ONLY_CONFLICT',
   'ENTRY_SOURCE_TARGET_INVALID',
+  'ENTRY_RENAME_UNPUBLISHED',
+  'ENTRY_DUPLICATE_UNPUBLISHED',
+  'ENTRY_RENAME_COLLISION',
+  'TEMPLATE_UNPUBLISHED',
+  'HISTORY_RESTORE_NO_FILE',
+  'HISTORY_RESTORE_UNREADABLE',
+  'REVERT_CONFLICT',
   'REDIRECT_NOT_FOUND',
   'REDIRECT_MANAGED',
   'PUBLISH_INCOMPLETE',
@@ -319,6 +328,23 @@ export function messageText(message: UiMessage, locale: UiLocale): string {
           collection: message.collection ?? '',
           language: message.locale ? formatLanguageName(message.locale, locale) : '',
         },
+        options,
+      );
+    case 'ENTRY_RENAME_UNPUBLISHED':
+      return m.entry_rename_unpublished({}, options);
+    case 'ENTRY_DUPLICATE_UNPUBLISHED':
+      return m.entry_duplicate_unpublished({}, options);
+    case 'ENTRY_RENAME_COLLISION':
+      return m.entry_rename_collision({}, options);
+    case 'TEMPLATE_UNPUBLISHED':
+      return m.entry_template_unpublished({}, options);
+    case 'HISTORY_RESTORE_NO_FILE':
+      return m.history_restore_no_file({}, options);
+    case 'HISTORY_RESTORE_UNREADABLE':
+      return m.history_restore_unreadable({}, options);
+    case 'REVERT_CONFLICT':
+      return m.revert_conflict(
+        { count: message.paths?.length ?? 0, files: (message.paths ?? []).join(', ') },
         options,
       );
     case 'ENTRY_LOCALE_LAST_PUBLISHED':

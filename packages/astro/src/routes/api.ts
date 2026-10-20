@@ -25,7 +25,7 @@ import { createAuth } from '../auth.js';
 import { requestContext } from '../environment.js';
 import { formSchema } from '../index.js';
 import { bodyErrorResponse, readJson } from './api/body.js';
-import { tabOf } from './api/content.js';
+import { codedError, tabOf } from './api/content.js';
 import { dashboard, globalsList, listEntries, pendingList, pickList } from './api/dashboard.js';
 import { autosave, hold, lockState } from './api/entries/editing.js';
 import { discard, duplicate, remove, rename } from './api/entries/lifecycle.js';
@@ -284,8 +284,12 @@ async function answering(
       );
     // A refused revert names its files the way a publish's conflict does.
     if (err instanceof RevertConflictError)
-      return Response.json({ error: err.message, paths: err.paths }, { status: 409 });
-    if (err instanceof RenameCollisionError) return new Response(err.message, { status: 409 });
+      return Response.json(
+        { code: 'REVERT_CONFLICT', error: err.message, paths: err.paths },
+        { status: 409 },
+      );
+    if (err instanceof RenameCollisionError)
+      return codedError(409, 'ENTRY_RENAME_COLLISION', err.message);
     if (err instanceof RefMovedError)
       return codes.refMoved
         ? Response.json({ code: codes.refMoved, error: err.message }, { status: 409 })

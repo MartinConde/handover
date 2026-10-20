@@ -130,7 +130,11 @@ async function create(event: Event) {
   });
   if (!res.ok) {
     const failure = await responseMessage(res, 'ENTRY_CREATE_FAILED');
-    if (failure.code === 'ENTRY_CREATE_FAILED' && !failure.detail) {
+    if (
+      failure.code === 'ENTRY_CREATE_FAILED' &&
+      !failure.detail &&
+      (res.status === 409 || res.status === 503)
+    ) {
       const detail = await res.text().catch(() => '');
       error = { ...failure, ...(detail ? { detail } : {}) };
     } else error = failure;

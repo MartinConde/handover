@@ -24,7 +24,7 @@ import {
 import type { RequestContext } from '../../environment.js';
 import { formSchema } from '../../index.js';
 import { readJson } from './body.js';
-import { entryFiles, entryPath, takenNames } from './content.js';
+import { codedError, entryFiles, entryPath, takenNames } from './content.js';
 
 /** The baseline order: which published file a template copies where the files disagree about their source. */
 const sourceOrder = () => [...new Set([config.i18n.defaultLocale, ...config.i18n.locales])];
@@ -93,7 +93,11 @@ export async function saveTemplate(
     .map((locale) => files.find((f) => f.locale === locale && f.file))
     .find(Boolean);
   if (!from?.file)
-    return new Response('Publish this entry before saving it as a template', { status: 409 });
+    return codedError(
+      409,
+      'TEMPLATE_UNPUBLISHED',
+      'Publish this entry before saving it as a template',
+    );
   const wanted = typeof body?.to === 'string' && body.to ? body.to : slug;
   const name = entryName('default', wanted, await templateNames(collection, database));
   const retryKey = `template-saved:${collection}/${slug}:${name}`;

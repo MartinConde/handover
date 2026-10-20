@@ -4,6 +4,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Refusals to rename, duplicate, save as a template or restore a version, and a revert or restore
+  refused because a file has changed, now show in the interface language (en, de). Those `409`s are
+  JSON with a `code` (`ENTRY_RENAME_UNPUBLISHED`, `ENTRY_DUPLICATE_UNPUBLISHED`,
+  `TEMPLATE_UNPUBLISHED`, `ENTRY_RENAME_COLLISION`, `HISTORY_RESTORE_NO_FILE`,
+  `HISTORY_RESTORE_UNREADABLE`, `REVERT_CONFLICT`) instead of plain text; `error` stays the English
+  sentence and `REVERT_CONFLICT` keeps `paths`.
 - The publish checks are now shown in the interface language (en, de) in the pending-changes
   drawer, the publish confirmation and the editor, with field names taken from their `{ en, de }`
   labels. Each result from `POST /admin/api/publish/checks` gains `code` and `params`; `message`

@@ -26,6 +26,11 @@ Conventions across all of them:
 - **A `409` because somebody else is editing the entry** (rename, delete, hide, show, restore,
   discard, resolve) is JSON: `{ "error": "<sentence>", "held_by": { "id", "name" } }`. `name` is
   `null` when the holder has none; the admin phrases it in the interface language
+- **These `409`s are JSON `{ "code", "error" }`**, with the code also in `x-handover-error-code`,
+  so the admin can phrase them in the interface language: `ENTRY_RENAME_UNPUBLISHED`,
+  `ENTRY_DUPLICATE_UNPUBLISHED` and `TEMPLATE_UNPUBLISHED` (the entry was never published),
+  `ENTRY_RENAME_COLLISION` (the new name exists in the repository), `HISTORY_RESTORE_NO_FILE` and
+  `HISTORY_RESTORE_UNREADABLE` (the version to restore). `error` stays the English sentence
 - Times are epoch milliseconds
 
 Accounts, members and the mailer check are not here: they are Better Auth's, and what a site

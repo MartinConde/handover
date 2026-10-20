@@ -268,7 +268,7 @@ const json = (body: unknown) => ({
   body: JSON.stringify(body),
 });
 
-// A 409 or 503 is the server's own sentence and reads better than anything said here.
+// A 409 or 503 the interface has no words for is the server's own sentence.
 async function send(url: string, init: RequestInit) {
   busy = true;
   error = undefined;
@@ -278,8 +278,8 @@ async function send(url: string, init: RequestInit) {
   error = await responseMessage(res, 'ENTRY_ACTION_FAILED');
   if (
     (res.status === 409 || res.status === 503) &&
-    !error.detail &&
-    error.code !== 'CONNECTION_LOST'
+    error.code === 'ENTRY_ACTION_FAILED' &&
+    !error.detail
   ) {
     const detail = said(await res.text());
     if (detail) error = { ...error, detail };
@@ -287,7 +287,7 @@ async function send(url: string, init: RequestInit) {
   return undefined;
 }
 
-// A refused restore names the files it is about in json; everything else answers in words.
+// The detail is also what makes the row show a lock holder's line.
 const said = (body: string) =>
   body.startsWith('{') ? ((JSON.parse(body) as { error?: string }).error ?? body) : body;
 

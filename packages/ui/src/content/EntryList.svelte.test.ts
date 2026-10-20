@@ -82,8 +82,8 @@ const menuItems = (root: ParentNode) =>
   Array.from(root.querySelectorAll<HTMLButtonElement>('.row .menu button'), (b) =>
     b.textContent?.trim(),
   );
-const act = async (root: ParentNode, title: string, item: string) => {
-  await click(root, `.row [aria-label="Actions for ${title}"]`);
+const act = async (root: ParentNode, title: string, item: string, actions = 'Actions for') => {
+  await click(root, `.row [aria-label="${actions} ${title}"]`);
   const found = Array.from(root.querySelectorAll<HTMLButtonElement>('.row .menu button')).find(
     (b) => b.textContent?.trim() === item,
   );
@@ -412,6 +412,29 @@ test('a refused rename says so and keeps the dialog open', async () => {
   expect(q(root, '.dialog [role="alert"]')?.textContent).toContain('Publish this entry');
   expect(q(root, '.dialog')).not.toBeNull();
   expect(changed).not.toHaveBeenCalled();
+});
+
+test('a refused rename is said in the interface language', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (_url: string, init?: RequestInit) =>
+      init
+        ? Response.json(
+            { code: 'ENTRY_RENAME_UNPUBLISHED', error: 'Publish this entry before renaming it' },
+            { status: 409, headers: { 'x-handover-error-code': 'ENTRY_RENAME_UNPUBLISHED' } },
+          )
+        : Response.json({ entries: ENTRIES }),
+    ),
+  );
+  const root = show('owner', 'de');
+  await settle();
+  await act(root, 'The Mill House', 'Umbenennen', 'Aktionen für');
+  await click(root, '.dialog .btn-primary');
+
+  expect(q(root, '.dialog [role="alert"]')?.textContent).toContain(
+    'Veröffentliche diesen Eintrag, bevor du ihn umbenennst.',
+  );
+  expect(q(root, '.dialog [role="alert"]')?.textContent).not.toContain('Technisches Detail');
 });
 
 // One language declared and the column is not drawn at all — nor emptied, nor always 1/1.

@@ -2132,6 +2132,32 @@ test('a revert is said in a notice', async () => {
   expect(toasts(root)).toEqual(['Reverted that publish — building']);
 });
 
+test('a refused revert names the files in the interface language', async () => {
+  buildBody = { commit_sha: 'c0ffee11', state: 'failed' };
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      if (url === '/admin/api/revert')
+        return Response.json(
+          { code: 'REVERT_CONFLICT', error: 'English sentence', paths: ['a.yaml', 'b.yaml'] },
+          { status: 409 },
+        );
+      return common(url) ?? Response.json({ entries: [] });
+    }),
+  );
+  const root = show(session(), '/admin', 'de');
+  await settle();
+  root.querySelector<HTMLButtonElement>('.sidebar .build-status .pill .btn-link')?.click();
+  flushSync();
+  document.querySelector<HTMLButtonElement>('[aria-labelledby="revert-h"] .btn-danger')?.click();
+  await settle();
+
+  expect(root.querySelector('.banner-warn')?.textContent).toContain(
+    '2 Dateien wurden seit diesem Commit geändert und können deshalb nicht zurückgesetzt werden: a.yaml, b.yaml',
+  );
+  expect(root.querySelector('.banner-warn')?.textContent).not.toContain('English sentence');
+});
+
 test('a notice leaves on its own after a few seconds', async () => {
   vi.useFakeTimers();
   publishing();

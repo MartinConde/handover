@@ -30,6 +30,7 @@ import {
 import type { RequestContext } from '../../../environment.js';
 import { readJson } from '../body.js';
 import {
+  codedError,
   entryFiles,
   entryPath,
   entrySubject,
@@ -78,7 +79,7 @@ export async function rename(
   const baseSha = existing?.baseSha ?? (await git.getHead());
   const files = await entryFiles(git, collection, slug, baseSha);
   if (!files.some((f) => f.file) && !existing)
-    return new Response('Publish this entry before renaming it', { status: 409 });
+    return codedError(409, 'ENTRY_RENAME_UNPUBLISHED', 'Publish this entry before renaming it');
   const revisionEntries = await Promise.all(
     files.map(async ({ path }) => {
       const row = await loadDraft('default', database, path);
@@ -199,7 +200,11 @@ export async function duplicate(
   const files = await entryFiles(git, collection, slug);
   // Same refusal as a rename: what is copied is what the repository has.
   if (!files.some((f) => f.file))
-    return new Response('Publish this entry before duplicating it', { status: 409 });
+    return codedError(
+      409,
+      'ENTRY_DUPLICATE_UNPUBLISHED',
+      'Publish this entry before duplicating it',
+    );
   const wanted = typeof body?.to === 'string' && body.to ? body.to : `${slug}-copy`;
   const to = entryName('default', wanted, await takenNames(collection, database));
   const drafted: Record<string, string> = {};

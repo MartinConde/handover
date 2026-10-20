@@ -168,7 +168,10 @@ test('an entry that was never published cannot be duplicated', async () => {
   createDraft.mockClear();
   const res = await POST(post('entries/listings/strandhaus-nord/duplicate', JSON.stringify({})));
   expect(res.status).toBe(409);
-  expect(await res.text()).toBe('Publish this entry before duplicating it');
+  expect(await res.json()).toEqual({
+    code: 'ENTRY_DUPLICATE_UNPUBLISHED',
+    error: 'Publish this entry before duplicating it',
+  });
   expect(createDraft).not.toHaveBeenCalled();
 });
 
@@ -182,7 +185,26 @@ test('renaming an entry that has never been published says so rather than failin
     post('entries/listings/strandhaus-nord/rename', JSON.stringify({ to: 'x' })),
   );
   expect(res.status).toBe(409);
-  expect(await res.text()).toContain('Publish');
+  expect(res.headers.get('x-handover-error-code')).toBe('ENTRY_RENAME_UNPUBLISHED');
+  expect(await res.json()).toEqual({
+    code: 'ENTRY_RENAME_UNPUBLISHED',
+    error: 'Publish this entry before renaming it',
+  });
+  expect(publish).not.toHaveBeenCalled();
+});
+
+test('renaming onto a name the repository already has is a coded 409', async () => {
+  publish.mockClear();
+  files['src/content/listings/en/harbour.yaml'] = 'title: Harbour\n';
+  const res = await POST(
+    post('entries/listings/mill-house/rename', JSON.stringify({ to: 'harbour' })),
+  );
+  delete files['src/content/listings/en/harbour.yaml'];
+  expect(res.status).toBe(409);
+  expect(await res.json()).toEqual({
+    code: 'ENTRY_RENAME_COLLISION',
+    error: 'The destination already exists in the repository',
+  });
   expect(publish).not.toHaveBeenCalled();
 });
 

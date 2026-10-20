@@ -191,7 +191,7 @@ POST /admin/api/revert   { "commit_sha": "…" }  →  { "commit_sha", "paths" }
 
 Undoes that commit with a commit of its own, [Reverting a publish](build-status.md#reverting-a-publish). It works over any
 eligible commit recorded in the server activity log, not only the last one. Every changed path must belong to that operation and to a configured editable content file; otherwise the whole request is `403`. Redirect-only operations additionally require an owner. The answer's `commit_sha` is the new commit and
-`paths` what it wrote. `400` without a `commit_sha`; `409` with `{ "error", "paths" }` when one of
+`paths` what it wrote. `400` without a `commit_sha`; `409` with `{ "code": "REVERT_CONFLICT", "error", "paths" }` when one of
 the files has changed since — nothing is written and the paths are named.
 
 ```

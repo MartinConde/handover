@@ -258,7 +258,10 @@ test('an entry that was never published cannot be saved as a template', async ()
     post('entries/listings/strandhaus-nord/template', JSON.stringify({}), owner),
   );
   expect(res.status).toBe(409);
-  expect(await res.text()).toBe('Publish this entry before saving it as a template');
+  expect(await res.json()).toEqual({
+    code: 'TEMPLATE_UNPUBLISHED',
+    error: 'Publish this entry before saving it as a template',
+  });
   expect(publish).not.toHaveBeenCalled();
 });
 
