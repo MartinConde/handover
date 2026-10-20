@@ -62,6 +62,7 @@ import type { EditorEntry } from './entry-payload';
 import SourceChange from './SourceChange.svelte';
 import { classifyDraftSaveRefusal } from './save';
 import { createEntryLock } from './entry-lock.svelte';
+import { drawn, focusField, land, revealField } from './field-reveal';
 import { createPublishChoice, type Readiness } from './publish-choice.svelte';
 import Translation from './Translation.svelte';
 
@@ -906,24 +907,6 @@ async function toggleHold() {
   else holdFailed = await retainedFailure(res, 'EDITOR_HOLD_FAILED');
 }
 
-// Scrolling there is not enough on its own: the count is a button, so it has to land somewhere.
-async function land(prefix: string, path: string | undefined) {
-  const field = path ? (await unfolded(`${prefix}-${path}`)) ?? drawn(prefix, path) : null;
-  for (let node = field?.parentElement; node; node = node.parentElement)
-    if (node instanceof HTMLDetailsElement) node.open = true;
-  await tick();
-  field?.scrollIntoView({ block: 'center' });
-  field?.focus();
-}
-// A picture's `src` has no control of its own, so the jump lands on the nearest drawn ancestor.
-function drawn(prefix: string, path: string | undefined) {
-  const steps = path?.split('.') ?? [];
-  for (; steps.length; steps.pop()) {
-    const field = document.getElementById(`${prefix}-${steps.join('.')}`);
-    if (field) return field;
-  }
-  return null;
-}
 async function goTo(path: string | undefined) {
   const field = drawn('f', path);
   // A field on the other tab is not on screen: go to that tab, then look for it once only.
@@ -935,25 +918,6 @@ async function goTo(path: string | undefined) {
     return;
   }
   await land('f', path);
-}
-const focusable = (node: Element) =>
-  node.matches('input, textarea, select, [contenteditable="true"]');
-// A folded block draws no fields at all, so the way in is the fold button of each closed card.
-async function unfolded(id: string) {
-  for (let guard = 0; guard <= id.split('.').length; guard++) {
-    const field = document.getElementById(id);
-    if (field && !field.classList.contains('is-folded')) return field;
-    const steps = id.split('.');
-    let card: HTMLElement | undefined = field ?? undefined;
-    for (steps.pop(); steps.length && !card; steps.pop()) {
-      const found = document.getElementById(steps.join('.'));
-      if (found?.classList.contains('is-folded')) card = found;
-    }
-    if (!card) return null;
-    card.querySelector<HTMLButtonElement>('button.fold')?.click();
-    await tick();
-  }
-  return null;
 }
 
 let revealingForm = 0;
@@ -978,21 +942,7 @@ async function selectForm(selection: CanvasSelection) {
   const prefix = locale === entry.sourceLocale ? 'f' : 't';
   revealingForm++;
   try {
-    const id = `${prefix}-${at.join('.')}`;
-    const field = (await unfolded(id)) ?? document.getElementById(`${id}-field`) ?? drawn(prefix, at.join('.'));
-    if (!field || request !== formSelection || of !== locale || mode !== 'split') return;
-    for (let node: HTMLElement | null = field; node; node = node.parentElement)
-      if (node instanceof HTMLDetailsElement) node.open = true;
-    await tick();
-    const input = focusable(field) ? field : field.querySelector<HTMLElement>(
-      'input:not([type="hidden"]):not(:disabled), textarea:not(:disabled), select:not(:disabled), [contenteditable="true"]',
-    ) ?? field.querySelector<HTMLElement>('button:not(:disabled), summary');
-    for (let node = input?.parentElement; node; node = node.parentElement)
-      if (node instanceof HTMLDetailsElement) node.open = true;
-    await tick();
-    if (request !== formSelection || of !== locale || mode !== 'split') return;
-    (input ?? field).scrollIntoView({ block: 'center' });
-    input?.focus({ preventScroll: true });
+    await revealField(prefix, at.join('.'), () => request === formSelection && of === locale && mode === 'split');
   } finally {
     revealingForm--;
   }
@@ -1013,15 +963,7 @@ async function jumpTo(path: string): Promise<boolean> {
   }
   // On a narrow screen the two columns are tabs, and this one is the tab being worked in.
   if (side && !alone) mobilePane = 'page';
-  const input = await unfolded(`t-${at.join('.')}`);
-  // The nearest drawn ancestor is not this field: a container taking focus is not a visit.
-  if (!input || !focusable(input)) return false;
-  for (let node = input.parentElement; node; node = node.parentElement)
-    if (node instanceof HTMLDetailsElement) node.open = true;
-  await tick();
-  input.scrollIntoView({ block: 'center' });
-  input.focus();
-  return document.activeElement === input || input.getAttribute('contenteditable') === 'true';
+  return focusField(`t-${at.join('.')}`);
 }
 
 const goToFirst = () => {
