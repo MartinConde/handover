@@ -72,24 +72,63 @@ const shown = $derived(groups.filter((g) => g.locale !== undefined || g.changes.
       <!-- A picture has no history of its own. -->
       <div class="row is-block is-picture">
         <small>{label}</small>
-        <span>{change.before && change.after ? m.diff_photo_replaced({}, options) : change.after ? m.diff_photo_added({}, options) : m.diff_photo_removed({}, options)}</span>
+        <span
+          >{change.before && change.after
+            ? m.diff_photo_replaced({}, options)
+            : change.after
+              ? m.diff_photo_added({}, options)
+              : m.diff_photo_removed({}, options)}</span
+        >
         <div class="pair">
           {#if change.before}
-            <div><span class="lbl" title={basename(change.before)}><b>{m.diff_before({}, options)}</b>{' '}<span>{basename(change.before)}</span></span><div class="ratio-preview is-16x9 is-old"><MediaImage src="{mediaBase}/{change.before}" alt="" loading="lazy" {uiLocale} /></div></div>
+            <div
+              ><span class="lbl" title={basename(change.before)}
+                ><b>{m.diff_before({}, options)}</b>{' '}<span>{basename(change.before)}</span
+                ></span
+              ><div class="ratio-preview is-16x9 is-old"
+                ><MediaImage
+                  src="{mediaBase}/{change.before}"
+                  alt=""
+                  loading="lazy"
+                  {uiLocale}
+                /></div
+              ></div
+            >
           {/if}
           {#if change.after}
-            <div><span class="lbl" title={basename(change.after)}><b>{m.diff_after({}, options)}</b>{' '}<span>{basename(change.after)}</span></span><div class="ratio-preview is-16x9"><MediaImage src="{mediaBase}/{change.after}" alt="" loading="lazy" {uiLocale} /></div></div>
+            <div
+              ><span class="lbl" title={basename(change.after)}
+                ><b>{m.diff_after({}, options)}</b>{' '}<span>{basename(change.after)}</span></span
+              ><div class="ratio-preview is-16x9"
+                ><MediaImage
+                  src="{mediaBase}/{change.after}"
+                  alt=""
+                  loading="lazy"
+                  {uiLocale}
+                /></div
+              ></div
+            >
           {/if}
         </div>
       </div>
     {:else if change.kind === 'value'}
       <div class="row">
-        <small>{label}</small>{#if change.before !== undefined}<del>{change.beforeLabels?.[uiLocale] ?? change.before}</del>{/if}{#if change.before !== undefined && change.after !== undefined}<span
-            aria-hidden="true"
-          >{' → '}</span>{/if}{#if change.after !== undefined}<ins>{change.afterLabels?.[uiLocale] ?? change.after}</ins>{/if}
+        <small>{label}</small>{#if change.before !== undefined}<del
+            >{change.beforeLabels?.[uiLocale] ?? change.before}</del
+          >{/if}{#if change.before !== undefined && change.after !== undefined}<span
+            aria-hidden="true">{' → '}</span
+          >{/if}{#if change.after !== undefined}<ins
+            >{change.afterLabels?.[uiLocale] ?? change.after}</ins
+          >{/if}
       </div>
     {:else}
-      <div class="row"><small>{label}</small>{change.kind === 'whole' && change.what === 'link' ? m.diff_link_changed({}, options) : change.kind === 'whole' && change.what === 'formatting' ? m.diff_formatting_changed({}, options) : m.diff_changed({}, options)}</div>
+      <div class="row">
+        <small>{label}</small>{change.kind === 'whole' && change.what === 'link'
+          ? m.diff_link_changed({}, options)
+          : change.kind === 'whole' && change.what === 'formatting'
+            ? m.diff_formatting_changed({}, options)
+            : m.diff_changed({}, options)}
+      </div>
     {/if}
   {/each}
 {/snippet}

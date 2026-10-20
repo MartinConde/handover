@@ -199,7 +199,22 @@ const oldest = $derived(Math.min(...pending.map((entry) => entry.updated_at)));
         {#if newMenuOpen}
           <div class="menu" id="dashboard-new-types">
             {#each collections as name (name)}
-              <button type="button" onclick={() => { newTrigger?.focus(); newMenuOpen = false; creating = name; }}>{newLabel(name, uiLocale, m.dashboard_new_collection({ collection: collectionName(name, uiLocale, 'singular') }, options))}</button>
+              <button
+                type="button"
+                onclick={() => {
+                  newTrigger?.focus();
+                  newMenuOpen = false;
+                  creating = name;
+                }}
+                >{newLabel(
+                  name,
+                  uiLocale,
+                  m.dashboard_new_collection(
+                    { collection: collectionName(name, uiLocale, 'singular') },
+                    options,
+                  ),
+                )}</button
+              >
             {/each}
           </div>
         {/if}
@@ -306,7 +321,14 @@ const oldest = $derived(Math.min(...pending.map((entry) => entry.updated_at)));
               {#if where.length}
                 <span class="show">
                   {#each where as name (name)}
-                    <a href={sitePath(`/admin/c/${name}?locale=${row.locale}`)}>{where.length > 1 ? m.dashboard_show_collection({ collection: collectionName(name, uiLocale) }, options) : m.dashboard_show({}, options)}</a>
+                    <a href={sitePath(`/admin/c/${name}?locale=${row.locale}`)}
+                      >{where.length > 1
+                        ? m.dashboard_show_collection(
+                            { collection: collectionName(name, uiLocale) },
+                            options,
+                          )
+                        : m.dashboard_show({}, options)}</a
+                    >
                   {/each}
                 </span>
               {/if}
@@ -347,12 +369,24 @@ const oldest = $derived(Math.min(...pending.map((entry) => entry.updated_at)));
               <a href={sitePath(row.href)}>{row.labels?.[uiLocale] ?? row.title}</a>
               <span class="badge">{collectionName(row.collection, uiLocale)}</span>
               {#if row.editing}
-                <span class="lock">{m.dashboard_is_editing({ name: row.editing.name || m.dashboard_somebody({}, options) }, options)}</span>
+                <span class="lock"
+                  >{m.dashboard_is_editing(
+                    { name: row.editing.name || m.dashboard_somebody({}, options) },
+                    options,
+                  )}</span
+                >
               {/if}
               <span class="sub">
-                {row.kind === 'edit' ? (row.by ? m.dashboard_edited_by({ name: row.by }, options) : m.dashboard_edited({}, options)) : (row.by ? m.dashboard_published_by({ name: row.by }, options) : m.dashboard_published({}, options))}{' · '}<time
+                {row.kind === 'edit'
+                  ? row.by
+                    ? m.dashboard_edited_by({ name: row.by }, options)
+                    : m.dashboard_edited({}, options)
+                  : row.by
+                    ? m.dashboard_published_by({ name: row.by }, options)
+                    : m.dashboard_published({}, options)}{' · '}<time
                   datetime={new Date(row.at).toISOString()}
-                  title={formatExactTime(row.at, uiLocale)}>{formatRelativeTime(row.at, uiLocale)}</time
+                  title={formatExactTime(row.at, uiLocale)}
+                  >{formatRelativeTime(row.at, uiLocale)}</time
                 >
               </span>
             </li>

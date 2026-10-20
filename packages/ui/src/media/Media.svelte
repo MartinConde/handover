@@ -182,124 +182,254 @@ function drop(e: DragEvent) {
 </script>
 
 <Modal labelledby="picker-h" panelClass="dialog picker-dialog" dismissible={!uploading} {onclose}>
-    <div class="picker-head">
-      <div class="head-row">
-        <h2 id="picker-h">{many ? m.media_picker_title_many({ field: label }, options) : kind === 'images' ? m.media_picker_title_image({ field: label }, options) : m.media_picker_title_file({ field: label }, options)}</h2>
-        <span class="preset">
-          {#if kind === 'files'}{m.media_picker_allowed({ formats: extensions }, options)}
-          {:else if preset.ratio && preset.min}{m.media_picker_ratio_min({ ratio: preset.ratio, min: preset.min }, options)}
-          {:else if preset.min}{m.media_picker_min({ min: preset.min }, options)}
-          {:else if preset.ratio}{preset.ratio}{/if}
-        </span>
-      </div>
-      <div class="picker-tools">
-        <div class="field search">
-          <label class="visually-hidden" for="picker-q">{m.media_library_search({}, options)}</label>
-          <input class="input" id="picker-q" type="search" placeholder={m.media_library_search_placeholder({}, options)} bind:value={query} />
-        </div>
+  <div class="picker-head">
+    <div class="head-row">
+      <h2 id="picker-h"
+        >{many
+          ? m.media_picker_title_many({ field: label }, options)
+          : kind === 'images'
+            ? m.media_picker_title_image({ field: label }, options)
+            : m.media_picker_title_file({ field: label }, options)}</h2
+      >
+      <span class="preset">
+        {#if kind === 'files'}{m.media_picker_allowed({ formats: extensions }, options)}
+        {:else if preset.ratio && preset.min}{m.media_picker_ratio_min(
+            { ratio: preset.ratio, min: preset.min },
+            options,
+          )}
+        {:else if preset.min}{m.media_picker_min({ min: preset.min }, options)}
+        {:else if preset.ratio}{preset.ratio}{/if}
+      </span>
+    </div>
+    <div class="picker-tools">
+      <div class="field search">
+        <label class="visually-hidden" for="picker-q">{m.media_library_search({}, options)}</label>
+        <input
+          class="input"
+          id="picker-q"
+          type="search"
+          placeholder={m.media_library_search_placeholder({}, options)}
+          bind:value={query}
+        />
       </div>
     </div>
-    <div class="picker-body">
-      <div class="picker-main">
-        <!-- svelte-ignore a11y_no_static_element_interactions -- the child button is the control -->
-        <div class={['dropzone', { 'is-over': over }]} ondragover={(e) => { e.preventDefault(); over = true; }} ondragleave={() => (over = false)} ondrop={drop}>
-          <span>{kind === 'images' ? m.media_picker_drop_images({}, options) : m.media_picker_drop_files({}, options)}</span>
-          <span class="hint">
-            {#if kind === 'images'}{m.media_picker_image_hint({ max: preset.max ?? 2400 }, options)}
-            {:else}{m.media_picker_file_hint({ formats: extensions }, options)}{/if}
-          </span>
-          <label class="visually-hidden" for="picker-file">{m.media_picker_files_to_upload({}, options)}</label>
-          <input class="visually-hidden" type="file" id="picker-file" multiple accept={kind === 'images' ? 'image/*' : accept.join(',')} bind:this={chooser} onchange={(e) => { take(Array.from(e.currentTarget.files ?? [])); e.currentTarget.value = ''; }} />
-          <button class="btn btn-sm" type="button" onclick={() => chooser?.click()}>{m.media_picker_choose_computer({}, options)}</button>
-        </div>
-        {#if queue.length}
-          <fieldset class="picker-group">
-            <legend>{m.media_picker_uploading({}, options)}</legend>
-            <ul class="upload-queue">
-              {#each queue as row}
-                <li class="upload-row">
-                  <span class="name">{row.name}</span>
-                  <span class={['state', { 'is-failed': row.failed }]} role={row.failed ? 'alert' : undefined} aria-live={row.failed ? undefined : 'polite'}>{queueText(row.state)}{#if typeof row.state !== 'string' && row.state.detail}<span class="technical-detail">{messageDetail(row.state, uiLocale)}</span>{/if}</span>
-                </li>
-              {/each}
-            </ul>
-          </fieldset>
-        {/if}
+  </div>
+  <div class="picker-body">
+    <div class="picker-main">
+      <!-- svelte-ignore a11y_no_static_element_interactions -- the child button is the control -->
+      <div
+        class={['dropzone', { 'is-over': over }]}
+        ondragover={(e) => {
+          e.preventDefault();
+          over = true;
+        }}
+        ondragleave={() => (over = false)}
+        ondrop={drop}
+      >
+        <span
+          >{kind === 'images'
+            ? m.media_picker_drop_images({}, options)
+            : m.media_picker_drop_files({}, options)}</span
+        >
+        <span class="hint">
+          {#if kind === 'images'}{m.media_picker_image_hint({ max: preset.max ?? 2400 }, options)}
+          {:else}{m.media_picker_file_hint({ formats: extensions }, options)}{/if}
+        </span>
+        <label class="visually-hidden" for="picker-file"
+          >{m.media_picker_files_to_upload({}, options)}</label
+        >
+        <input
+          class="visually-hidden"
+          type="file"
+          id="picker-file"
+          multiple
+          accept={kind === 'images' ? 'image/*' : accept.join(',')}
+          bind:this={chooser}
+          onchange={(e) => {
+            take(Array.from(e.currentTarget.files ?? []));
+            e.currentTarget.value = '';
+          }}
+        />
+        <button class="btn btn-sm" type="button" onclick={() => chooser?.click()}
+          >{m.media_picker_choose_computer({}, options)}</button
+        >
+      </div>
+      {#if queue.length}
         <fieldset class="picker-group">
-          <legend>{kind === 'images' ? m.media_picker_all_images({}, options) : m.media_picker_all_files({}, options)}</legend>
-          {#if readError}
-            <div class="notice notice-danger media-read-error" role="alert">
-              {readKnown ? m.media_picker_read_failed_stale({}, options) : m.media_library_read_failed({}, options)}
-              <button class="btn-link" type="button" onclick={retryRead}>{m.common_retry({}, options)}</button>
-            </div>
-          {/if}
-          <div class="media-grid">
-            {#if readLoading && !readKnown}
-              <p class="hint">{m.media_picker_loading({}, options)}</p>
-            {:else}
+          <legend>{m.media_picker_uploading({}, options)}</legend>
+          <ul class="upload-queue">
+            {#each queue as row}
+              <li class="upload-row">
+                <span class="name">{row.name}</span>
+                <span
+                  class={['state', { 'is-failed': row.failed }]}
+                  role={row.failed ? 'alert' : undefined}
+                  aria-live={row.failed ? undefined : 'polite'}
+                  >{queueText(
+                    row.state,
+                  )}{#if typeof row.state !== 'string' && row.state.detail}<span
+                      class="technical-detail">{messageDetail(row.state, uiLocale)}</span
+                    >{/if}</span
+                >
+              </li>
+            {/each}
+          </ul>
+        </fieldset>
+      {/if}
+      <fieldset class="picker-group">
+        <legend
+          >{kind === 'images'
+            ? m.media_picker_all_images({}, options)
+            : m.media_picker_all_files({}, options)}</legend
+        >
+        {#if readError}
+          <div class="notice notice-danger media-read-error" role="alert">
+            {readKnown
+              ? m.media_picker_read_failed_stale({}, options)
+              : m.media_library_read_failed({}, options)}
+            <button class="btn-link" type="button" onclick={retryRead}
+              >{m.common_retry({}, options)}</button
+            >
+          </div>
+        {/if}
+        <div class="media-grid">
+          {#if readLoading && !readKnown}
+            <p class="hint">{m.media_picker_loading({}, options)}</p>
+          {:else}
             {#each items as item (item.id)}
               {@const refused = why(item)}
               <label class="tile">
                 <!-- aria-disabled, not disabled: a disabled control would skip the reason. -->
-                <input type={many ? 'checkbox' : 'radio'} name="picker-pick" value={item.id} checked={chosen.some((i) => i.id === item.id)} aria-disabled={refused ? 'true' : undefined} aria-describedby={refused ? `why-${item.id}` : undefined} onchange={() => { if (!refused) choose(item); }} />
+                <input
+                  type={many ? 'checkbox' : 'radio'}
+                  name="picker-pick"
+                  value={item.id}
+                  checked={chosen.some((i) => i.id === item.id)}
+                  aria-disabled={refused ? 'true' : undefined}
+                  aria-describedby={refused ? `why-${item.id}` : undefined}
+                  onchange={() => {
+                    if (!refused) choose(item);
+                  }}
+                />
                 {#if kind === 'images'}
                   <span class="thumb"><MediaImage src={item.url} alt="" {uiLocale} /></span>
                 {:else}
-                  <span class="file-icon" aria-hidden="true">{(item.mime?.split('/').pop() ?? '').toUpperCase()}</span>
+                  <span class="file-icon" aria-hidden="true"
+                    >{(item.mime?.split('/').pop() ?? '').toUpperCase()}</span
+                  >
                 {/if}
                 <span class="name">{name(item)}</span>
-                <span class="sub"><span>{item.width ? `${item.width} × ${item.height}` : fileSize(item.bytes, uiLocale)}</span></span>
+                <span class="sub"
+                  ><span
+                    >{item.width
+                      ? `${item.width} × ${item.height}`
+                      : fileSize(item.bytes, uiLocale)}</span
+                  ></span
+                >
                 {#if refused}<span class="why" id="why-{item.id}">{refused}</span>{/if}
               </label>
             {:else}
-              {#if !readError}<p class="hint">{query ? m.media_library_no_matches({}, options) : kind === 'images' ? m.media_library_empty_images({}, options) : m.media_library_empty_files({}, options)}</p>{/if}
+              {#if !readError}<p class="hint"
+                  >{query
+                    ? m.media_library_no_matches({}, options)
+                    : kind === 'images'
+                      ? m.media_library_empty_images({}, options)
+                      : m.media_library_empty_files({}, options)}</p
+                >{/if}
             {/each}
-            {/if}
-          </div>
-        </fieldset>
-      </div>
-      <div class="picker-side">
-        {#if many}
-          <p class="side-title">{chosen.length ? m.media_picker_chosen_order({ count: chosen.length }, options) : m.media_picker_nothing_chosen({}, options)}</p>
-          <!-- Taking one back out is × on its row here, not un-ticking it in a grid of forty. -->
-          <ul class="upload-queue">
-            {#each chosen as item (item.id)}
-              <li class="upload-row">
-                <span class="name">{name(item)}</span>
-                <span class="state">{item.width ? `${item.width} × ${item.height}` : fileSize(item.bytes, uiLocale)}</span>
-                <span class="actions"><button class="btn btn-icon btn-sm" type="button" aria-label={m.media_picker_remove({ filename: name(item) }, options)} onclick={() => choose(item)}>×</button></span>
-              </li>
-            {/each}
-          </ul>
-          <p class="hint">{m.media_picker_focal_each({ field: label }, options)}</p>
-        {:else}
-          <p class="side-title">{m.media_picker_selected({}, options)}</p>
-          {#if !one}
-            <p class="empty-side">{kind === 'images' ? m.media_picker_select_empty_image({}, options) : m.media_picker_select_empty_file({}, options)}</p>
-          {:else}
-            {#if kind === 'images'}
-              {@const dot = [(one.focal?.[0] ?? 0.5) * 100, (one.focal?.[1] ?? 0.5) * 100]}
-              <div class="ratio-preview" style="aspect-ratio: {aspect}">
-                <MediaImage src={one.url} alt="" style="object-position: {dot[0]}% {dot[1]}%" {uiLocale} />
-                <span class="focal" style="left: {dot[0]}%; top: {dot[1]}%" aria-hidden="true"></span>
-              </div>
-              <p class="hint">{m.media_picker_focal_hint({}, options)}</p>
-            {/if}
-            <dl class="facts">
-              <div><dt>{name(one)}</dt><dd>{one.width ? `${one.width} × ${one.height} · ` : ''}{fileSize(one.bytes, uiLocale)}</dd></div>
-              <div><dt>{m.media_picker_stored_as({}, options)}</dt><dd class="sub">{one.src}</dd></div>
-            </dl>
           {/if}
+        </div>
+      </fieldset>
+    </div>
+    <div class="picker-side">
+      {#if many}
+        <p class="side-title"
+          >{chosen.length
+            ? m.media_picker_chosen_order({ count: chosen.length }, options)
+            : m.media_picker_nothing_chosen({}, options)}</p
+        >
+        <!-- Taking one back out is × on its row here, not un-ticking it in a grid of forty. -->
+        <ul class="upload-queue">
+          {#each chosen as item (item.id)}
+            <li class="upload-row">
+              <span class="name">{name(item)}</span>
+              <span class="state"
+                >{item.width
+                  ? `${item.width} × ${item.height}`
+                  : fileSize(item.bytes, uiLocale)}</span
+              >
+              <span class="actions"
+                ><button
+                  class="btn btn-icon btn-sm"
+                  type="button"
+                  aria-label={m.media_picker_remove({ filename: name(item) }, options)}
+                  onclick={() => choose(item)}>×</button
+                ></span
+              >
+            </li>
+          {/each}
+        </ul>
+        <p class="hint">{m.media_picker_focal_each({ field: label }, options)}</p>
+      {:else}
+        <p class="side-title">{m.media_picker_selected({}, options)}</p>
+        {#if !one}
+          <p class="empty-side"
+            >{kind === 'images'
+              ? m.media_picker_select_empty_image({}, options)
+              : m.media_picker_select_empty_file({}, options)}</p
+          >
+        {:else}
+          {#if kind === 'images'}
+            {@const dot = [(one.focal?.[0] ?? 0.5) * 100, (one.focal?.[1] ?? 0.5) * 100]}
+            <div class="ratio-preview" style="aspect-ratio: {aspect}">
+              <MediaImage
+                src={one.url}
+                alt=""
+                style="object-position: {dot[0]}% {dot[1]}%"
+                {uiLocale}
+              />
+              <span class="focal" style="left: {dot[0]}%; top: {dot[1]}%" aria-hidden="true"></span>
+            </div>
+            <p class="hint">{m.media_picker_focal_hint({}, options)}</p>
+          {/if}
+          <dl class="facts">
+            <div
+              ><dt>{name(one)}</dt><dd
+                >{one.width ? `${one.width} × ${one.height} · ` : ''}{fileSize(
+                  one.bytes,
+                  uiLocale,
+                )}</dd
+              ></div
+            >
+            <div><dt>{m.media_picker_stored_as({}, options)}</dt><dd class="sub">{one.src}</dd></div
+            >
+          </dl>
         {/if}
-      </div>
+      {/if}
     </div>
-    <div class="picker-foot">
-      <a href={sitePath(`/admin/media`)}>{m.media_picker_manage({}, options)}</a>
-      <span class="spacer"></span>
-      <span class="count">{chosen.length ? m.media_picker_selected_count({ count: chosen.length }, options) : m.media_picker_nothing_selected({}, options)}</span>
-      <button class="btn" type="button" disabled={uploading} onclick={onclose}>{m.common_cancel({}, options)}</button>
-      <button class="btn btn-primary" type="button" disabled={uploading || !chosen.length} onclick={() => onpick(chosen)}>
-        {uploading ? m.media_upload_uploading({}, options) : many && chosen.length > 1 ? m.media_picker_insert_images({ count: chosen.length }, options) : m.media_picker_insert({}, options)}
-      </button>
-    </div>
+  </div>
+  <div class="picker-foot">
+    <a href={sitePath(`/admin/media`)}>{m.media_picker_manage({}, options)}</a>
+    <span class="spacer"></span>
+    <span class="count"
+      >{chosen.length
+        ? m.media_picker_selected_count({ count: chosen.length }, options)
+        : m.media_picker_nothing_selected({}, options)}</span
+    >
+    <button class="btn" type="button" disabled={uploading} onclick={onclose}
+      >{m.common_cancel({}, options)}</button
+    >
+    <button
+      class="btn btn-primary"
+      type="button"
+      disabled={uploading || !chosen.length}
+      onclick={() => onpick(chosen)}
+    >
+      {uploading
+        ? m.media_upload_uploading({}, options)
+        : many && chosen.length > 1
+          ? m.media_picker_insert_images({ count: chosen.length }, options)
+          : m.media_picker_insert({}, options)}
+    </button>
+  </div>
 </Modal>

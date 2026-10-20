@@ -317,11 +317,22 @@ function backToPassword() {
               {m.auth_too_many_attempts({}, messageOptions(uiLocale))}
             </div>
           {:else if notice}
-            <div class="notice notice-success" id="sign-in-message" role="status">{m.auth_password_saved({}, messageOptions(uiLocale))}</div>
+            <div class="notice notice-success" id="sign-in-message" role="status">
+              {m.auth_password_saved({}, messageOptions(uiLocale))}
+            </div>
           {/if}
           <div class="button-row">
             <button class="btn btn-primary btn-block" type="submit" disabled={busy || limited}>
-              {#if usePassword}{m.auth_sign_in({}, messageOptions(uiLocale))}{:else if view === 'link-dead'}{m.auth_send_new_link({}, messageOptions(uiLocale))}{:else if methods.emailLink}{m.auth_email_link({}, messageOptions(uiLocale))}{:else}{m.auth_use_password({}, messageOptions(uiLocale))}{/if}
+              {#if usePassword}{m.auth_sign_in(
+                  {},
+                  messageOptions(uiLocale),
+                )}{:else if view === 'link-dead'}{m.auth_send_new_link(
+                  {},
+                  messageOptions(uiLocale),
+                )}{:else if methods.emailLink}{m.auth_email_link(
+                  {},
+                  messageOptions(uiLocale),
+                )}{:else}{m.auth_use_password({}, messageOptions(uiLocale))}{/if}
             </button>
             {#if methods.emailLink && !usePassword}
               <button

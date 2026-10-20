@@ -177,75 +177,180 @@ function step(e: KeyboardEvent) {
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -- arrow keys move focus inside -->
-<div class={['picker', { 'is-library': library }]} role="group" aria-labelledby={labelId} onkeydown={step}>
-  <label class="visually-hidden" for="{id}-q">{m.page_picker_search_label({ label: displayedLabel }, options)}</label>
-  <input class="input" id="{id}-q" type="search" placeholder={m.page_picker_search_placeholder({}, options)} bind:value={query} bind:this={box} oninput={() => (shut = {})} />
+<div
+  class={['picker', { 'is-library': library }]}
+  role="group"
+  aria-labelledby={labelId}
+  onkeydown={step}
+>
+  <label class="visually-hidden" for="{id}-q"
+    >{m.page_picker_search_label({ label: displayedLabel }, options)}</label
+  >
+  <input
+    class="input"
+    id="{id}-q"
+    type="search"
+    placeholder={m.page_picker_search_placeholder({}, options)}
+    bind:value={query}
+    bind:this={box}
+    oninput={() => (shut = {})}
+  />
   {#if directoryError}
     <div class="notice notice-danger directory-read-error" role="alert">
       {directoryText}{all.entries.length ? ` ${m.page_picker_stale_choices({}, options)}` : ''}
-      <button class="btn-link" type="button" onclick={loadDirectory}>{m.common_retry({}, options)}</button>
+      <button class="btn-link" type="button" onclick={loadDirectory}
+        >{m.common_retry({}, options)}</button
+      >
     </div>
   {/if}
-  <div class="picker-list" bind:this={list} role={library ? 'group' : 'listbox'} aria-label={displayedLabel}>
+  <div
+    class="picker-list"
+    bind:this={list}
+    role={library ? 'group' : 'listbox'}
+    aria-label={displayedLabel}
+  >
     {#if directoryLoading && !all.entries.length}
       <p class="hint">{m.page_picker_loading({}, options)}</p>
     {:else}
-    {#each groups as group (group.name)}
-      <!-- Not a heading: the picker opens under a different outline level on every screen. -->
-      <div role="group" aria-labelledby="{id}-g-{group.name}">
-      {#if library}
-        <button class="group-name group-toggle" id="{id}-g-{group.name}" type="button" aria-expanded={isOpen(group.name)} onclick={() => toggle(group.name)}>
-          <span class="group-label">{collectionName(group.name, uiLocale)}</span>
-          <span class="group-count">{group.rows.length}</span>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
-        </button>
-      {:else}
-      <p class="group-name" id="{id}-g-{group.name}" role="presentation">{collectionName(group.name, uiLocale)}</p>
-      {/if}
-      {#if !library || isOpen(group.name)}
-      {#each group.rows as row (row.path)}
-        {@const no = why(row)}
-        {@const says = no ?? note(row)}
-        <!-- aria-disabled: a disabled button takes no focus, so the reason goes unheard. -->
-        <button type="button" data-path={library ? row.path : undefined} role={library ? undefined : 'option'} aria-label={library ? addLabel(row) : undefined} aria-selected={library ? undefined : row.path === chosen ? 'true' : 'false'} aria-disabled={no || !directoryCurrent ? 'true' : undefined} aria-describedby={says && (!library || !row.index) ? `${id}-why-${row.path}` : undefined} title={library ? undefined : locale ? (row.urls[locale] ?? row.path) : row.path} onclick={() => directoryCurrent && !no && onpick(row)}>
+      {#each groups as group (group.name)}
+        <!-- Not a heading: the picker opens under a different outline level on every screen. -->
+        <div role="group" aria-labelledby="{id}-g-{group.name}">
           {#if library}
-            {@const only = onlyIn(row)}
-            <span class="library-title">{row.index ? m.page_picker_collection_page({}, options) : rowTitle(row)}</span>
-            {#if row.hidden && !row.index}<span class="library-tag is-warn">{m.menus_hidden({}, options)}</span>{/if}
-            {#if only}<span class="library-tag library-only">{m.menus_language_only({ language: only }, options)}</span>{/if}
-            {#if included.includes(row.path)}<span class="library-included" title={m.page_picker_in_menu({}, options)}>✓<span class="visually-hidden"> {m.page_picker_in_menu({}, options)}</span></span>{/if}
-            <span class="library-add" aria-hidden="true">+</span>
+            <button
+              class="group-name group-toggle"
+              id="{id}-g-{group.name}"
+              type="button"
+              aria-expanded={isOpen(group.name)}
+              onclick={() => toggle(group.name)}
+            >
+              <span class="group-label">{collectionName(group.name, uiLocale)}</span>
+              <span class="group-count">{group.rows.length}</span>
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.6"
+                aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg
+              >
+            </button>
           {:else}
-          {@const only = onlyIn(row)}
-          <span class="library-title">{rowTitle(row)}</span>
-          {#if row.hidden && !row.index}<span class="library-tag is-warn">{m.menus_hidden({}, options)}</span>{/if}
-          {#if only}<span class="library-tag library-only">{m.menus_language_only({ language: only }, options)}</span>{/if}
+            <p class="group-name" id="{id}-g-{group.name}" role="presentation">
+              {collectionName(group.name, uiLocale)}
+            </p>
           {/if}
-        </button>
-        {#if says && (!library || !row.index)}<p class={['why', { 'visually-hidden': library || (!no && row.hidden && !row.index) }]} id="{id}-why-{row.path}">{library && row.hidden && !no ? m.page_picker_hidden_library_note({}, options) : says}</p>{/if}
+          {#if !library || isOpen(group.name)}
+            {#each group.rows as row (row.path)}
+              {@const no = why(row)}
+              {@const says = no ?? note(row)}
+              <!-- aria-disabled: a disabled button takes no focus, so the reason goes unheard. -->
+              <button
+                type="button"
+                data-path={library ? row.path : undefined}
+                role={library ? undefined : 'option'}
+                aria-label={library ? addLabel(row) : undefined}
+                aria-selected={library ? undefined : row.path === chosen ? 'true' : 'false'}
+                aria-disabled={no || !directoryCurrent ? 'true' : undefined}
+                aria-describedby={says && (!library || !row.index)
+                  ? `${id}-why-${row.path}`
+                  : undefined}
+                title={library ? undefined : locale ? (row.urls[locale] ?? row.path) : row.path}
+                onclick={() => directoryCurrent && !no && onpick(row)}
+              >
+                {#if library}
+                  {@const only = onlyIn(row)}
+                  <span class="library-title"
+                    >{row.index ? m.page_picker_collection_page({}, options) : rowTitle(row)}</span
+                  >
+                  {#if row.hidden && !row.index}<span class="library-tag is-warn"
+                      >{m.menus_hidden({}, options)}</span
+                    >{/if}
+                  {#if only}<span class="library-tag library-only"
+                      >{m.menus_language_only({ language: only }, options)}</span
+                    >{/if}
+                  {#if included.includes(row.path)}<span
+                      class="library-included"
+                      title={m.page_picker_in_menu({}, options)}
+                      >✓<span class="visually-hidden">
+                        {m.page_picker_in_menu({}, options)}</span
+                      ></span
+                    >{/if}
+                  <span class="library-add" aria-hidden="true">+</span>
+                {:else}
+                  {@const only = onlyIn(row)}
+                  <span class="library-title">{rowTitle(row)}</span>
+                  {#if row.hidden && !row.index}<span class="library-tag is-warn"
+                      >{m.menus_hidden({}, options)}</span
+                    >{/if}
+                  {#if only}<span class="library-tag library-only"
+                      >{m.menus_language_only({ language: only }, options)}</span
+                    >{/if}
+                {/if}
+              </button>
+              {#if says && (!library || !row.index)}<p
+                  class={[
+                    'why',
+                    { 'visually-hidden': library || (!no && row.hidden && !row.index) },
+                  ]}
+                  id="{id}-why-{row.path}"
+                >
+                  {library && row.hidden && !no
+                    ? m.page_picker_hidden_library_note({}, options)
+                    : says}
+                </p>{/if}
+            {/each}
+          {/if}
+        </div>
+      {:else}
+        {#if !directoryError}<p class="hint">
+            {query
+              ? m.page_picker_no_matches({ query }, options)
+              : m.page_picker_empty({}, options)}
+          </p>{/if}
       {/each}
-      {/if}
-      </div>
-    {:else}
-      {#if !directoryError}<p class="hint">{query ? m.page_picker_no_matches({ query }, options) : m.page_picker_empty({}, options)}</p>{/if}
-    {/each}
     {/if}
   </div>
   {#if onurl}
     <div class="custom-link">
       <h3 class="side-title">{m.page_picker_custom_link({}, options)}</h3>
       <div class="field">
-        <div class={['label-row', { 'visually-hidden': library }]}><label for="{id}-url">{m.page_picker_address({}, options)}</label></div>
-        <input class="input" id="{id}-url" type="url" placeholder={m.page_picker_address_placeholder({}, options)} bind:value={typed} aria-invalid={refused ? 'true' : undefined} aria-describedby={refused ? `${id}-url-err` : undefined} />
-        {#if refused}<p class="error" id="{id}-url-err">{m.page_picker_links_not_allowed({ scheme: refused }, options)}</p>{/if}
+        <div class={['label-row', { 'visually-hidden': library }]}>
+          <label for="{id}-url">{m.page_picker_address({}, options)}</label>
+        </div>
+        <input
+          class="input"
+          id="{id}-url"
+          type="url"
+          placeholder={m.page_picker_address_placeholder({}, options)}
+          bind:value={typed}
+          aria-invalid={refused ? 'true' : undefined}
+          aria-describedby={refused ? `${id}-url-err` : undefined}
+        />
+        {#if refused}<p class="error" id="{id}-url-err">
+            {m.page_picker_links_not_allowed({ scheme: refused }, options)}
+          </p>{/if}
       </div>
     </div>
   {/if}
   {#if onclose || onurl}
     <div class="actions">
-      {#if onclose}<button class="btn btn-sm" type="button" onclick={onclose}>{m.common_cancel({}, options)}</button>{/if}
+      {#if onclose}<button class="btn btn-sm" type="button" onclick={onclose}
+          >{m.common_cancel({}, options)}</button
+        >{/if}
       {#if onurl}
-        <button class="btn btn-sm btn-primary" type="button" disabled={!typed.trim() || !!refused} onclick={() => { onurl?.(typed.trim()); if (library) typed = ''; }}>{library ? m.page_picker_add_custom_link({}, options) : m.page_picker_use_address({}, options)}</button>
+        <button
+          class="btn btn-sm btn-primary"
+          type="button"
+          disabled={!typed.trim() || !!refused}
+          onclick={() => {
+            onurl?.(typed.trim());
+            if (library) typed = '';
+          }}
+          >{library
+            ? m.page_picker_add_custom_link({}, options)
+            : m.page_picker_use_address({}, options)}</button
+        >
       {/if}
     </div>
   {/if}

@@ -26,4 +26,15 @@ const paths: Record<string, string> = {
 };
 </script>
 
-<svg class="canvas-icon" width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d={paths[name] || paths.block} /></svg>
+<svg
+  class="canvas-icon"
+  width="18"
+  height="18"
+  viewBox="0 0 20 20"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="1.4"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  aria-hidden="true"><path d={paths[name] || paths.block} /></svg
+>

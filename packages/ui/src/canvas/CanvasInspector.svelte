@@ -236,13 +236,26 @@ function completionEvents(node: HTMLFormElement) {
 >
   <header>
     <div class="canvas-inspector-title">
-      <span class="canvas-selection-icon"><CanvasIcon name={imageField ? 'image' : selection.kind === 'field' ? 'text' : 'block'} /></span>
+      <span class="canvas-selection-icon"
+        ><CanvasIcon
+          name={imageField ? 'image' : selection.kind === 'field' ? 'text' : 'block'}
+        /></span
+      >
       <div>
-        {#if !floating}<span class="canvas-inspector-kicker">{m.canvas_inspector({}, options)} · {fieldType}</span>{/if}
+        {#if !floating}<span class="canvas-inspector-kicker"
+            >{m.canvas_inspector({}, options)} · {fieldType}</span
+          >{/if}
         <h2 id={`${panelId}-heading`}>{selectionLabel || heading}</h2>
       </div>
     </div>
-    <button class="btn btn-ghost btn-sm" type="button" aria-label={floating ? m.canvas_image_close({}, options) : m.canvas_close_inspector({}, options)} onclick={onclose}><CanvasIcon name={floating ? 'close' : 'collapse-right'} /></button>
+    <button
+      class="btn btn-ghost btn-sm"
+      type="button"
+      aria-label={floating
+        ? m.canvas_image_close({}, options)
+        : m.canvas_close_inspector({}, options)}
+      onclick={onclose}><CanvasIcon name={floating ? 'close' : 'collapse-right'} /></button
+    >
   </header>
   {#if context && !floating}<p class="canvas-inspector-context" title={context}>{context}</p>{/if}
 

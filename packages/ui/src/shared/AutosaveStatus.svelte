@@ -26,6 +26,14 @@ let {
 const options = $derived(messageOptions(uiLocale));
 </script>
 
-<span class={['autosave', { 'is-saving': saving, 'is-offline': failed }]} role={announce ? 'status' : undefined}>
-  {#if saving}{m.editor_save_saving({}, options)}{:else if failed}{m.editor_save_not_saved({}, options)}{#if failure}{' '}{@render failure()}{/if}{:else if unsaved}{short ? m.editor_save_unsaved({}, options) : m.editor_save_unsaved_changes({}, options)}{:else}{m.editor_save_saved({}, options)}{/if}
+<span
+  class={['autosave', { 'is-saving': saving, 'is-offline': failed }]}
+  role={announce ? 'status' : undefined}
+>
+  {#if saving}{m.editor_save_saving({}, options)}{:else if failed}{m.editor_save_not_saved(
+      {},
+      options,
+    )}{#if failure}{' '}{@render failure()}{/if}{:else if unsaved}{short
+      ? m.editor_save_unsaved({}, options)
+      : m.editor_save_unsaved_changes({}, options)}{:else}{m.editor_save_saved({}, options)}{/if}
 </span>

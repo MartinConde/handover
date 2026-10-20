@@ -104,67 +104,184 @@ async function make() {
 }
 </script>
 
-<Modal labelledby="crop-h" panelClass="dialog focal-dialog crop-dialog" dismissible={!busy} {onclose}>
-    <h2 id="crop-h">{m.crop_title({ name: item.filename ?? item.src }, options)}</h2>
-    <p>{m.crop_intro({}, options)}</p>
-    <div class="dialog-cols">
-      <!-- svelte-ignore a11y_no_static_element_interactions -- the sliders are the control -->
-      <div class="focal-stage" bind:this={stage} onpointermove={drag} onpointerup={() => (dragging = undefined)} onpointercancel={() => (dragging = undefined)}>
-        <img src={item.url} alt="" draggable="false" />
-        <div class="crop-box" style="left: {pc(region.x, width)}%; top: {pc(region.y, height)}%; width: {pc(region.w, width)}%; height: {pc(region.h, height)}%" onpointerdown={(e) => grab(e)}>
-          {#each CORNERS as corner (corner)}
-            <!-- svelte-ignore a11y_no_static_element_interactions -- pointer affordance for the sliders -->
-            <span class="crop-handle h-{corner}" aria-hidden="true" onpointerdown={(e) => grab(e, corner)}></span>
+<Modal
+  labelledby="crop-h"
+  panelClass="dialog focal-dialog crop-dialog"
+  dismissible={!busy}
+  {onclose}
+>
+  <h2 id="crop-h">{m.crop_title({ name: item.filename ?? item.src }, options)}</h2>
+  <p>{m.crop_intro({}, options)}</p>
+  <div class="dialog-cols">
+    <!-- svelte-ignore a11y_no_static_element_interactions -- the sliders are the control -->
+    <div
+      class="focal-stage"
+      bind:this={stage}
+      onpointermove={drag}
+      onpointerup={() => (dragging = undefined)}
+      onpointercancel={() => (dragging = undefined)}
+    >
+      <img src={item.url} alt="" draggable="false" />
+      <div
+        class="crop-box"
+        style="left: {pc(region.x, width)}%; top: {pc(region.y, height)}%; width: {pc(
+          region.w,
+          width,
+        )}%; height: {pc(region.h, height)}%"
+        onpointerdown={(e) => grab(e)}
+      >
+        {#each CORNERS as corner (corner)}
+          <!-- svelte-ignore a11y_no_static_element_interactions -- pointer affordance for the sliders -->
+          <span
+            class="crop-handle h-{corner}"
+            aria-hidden="true"
+            onpointerdown={(e) => grab(e, corner)}
+          ></span>
+        {/each}
+      </div>
+    </div>
+    <div class="crop-side">
+      <div class="crop-group">
+        <h3 class="variant-title" id="crop-shape-h">{m.crop_shape({}, options)}</h3>
+        <div class="seg crop-shape" role="group" aria-labelledby="crop-shape-h">
+          <button type="button" aria-pressed={!ratio} onclick={() => lock(undefined)}
+            >{m.crop_free({}, options)}</button
+          >
+          {#each ratios as r (r)}
+            <button type="button" aria-pressed={ratio === r} onclick={() => lock(r)}>{r}</button>
           {/each}
         </div>
       </div>
-      <div class="crop-side">
-        <div class="crop-group">
-          <h3 class="variant-title" id="crop-shape-h">{m.crop_shape({}, options)}</h3>
-          <div class="seg crop-shape" role="group" aria-labelledby="crop-shape-h">
-            <button type="button" aria-pressed={!ratio} onclick={() => lock(undefined)}>{m.crop_free({}, options)}</button>
-            {#each ratios as r (r)}
-              <button type="button" aria-pressed={ratio === r} onclick={() => lock(r)}>{r}</button>
-            {/each}
+      <div class="crop-group">
+        <h3 class="variant-title">{m.crop_position({}, options)}</h3>
+        <div class="field">
+          <div class="label-row">
+            <label for="crop-x">{m.crop_left({}, options)}</label><output for="crop-x"
+              >{region.x} px</output
+            >
           </div>
+          <input
+            class="range"
+            id="crop-x"
+            type="range"
+            min="0"
+            max={Math.max(0, width - region.w)}
+            value={region.x}
+            disabled={width <= region.w}
+            style="--fill: {pc(region.x, width - region.w)}%"
+            oninput={(e) => (region = { ...region, x: Number(e.currentTarget.value) })}
+          />
         </div>
-        <div class="crop-group">
-          <h3 class="variant-title">{m.crop_position({}, options)}</h3>
-          <div class="field">
-            <div class="label-row"><label for="crop-x">{m.crop_left({}, options)}</label><output for="crop-x">{region.x} px</output></div>
-            <input class="range" id="crop-x" type="range" min="0" max={Math.max(0, width - region.w)} value={region.x} disabled={width <= region.w} style="--fill: {pc(region.x, width - region.w)}%" oninput={(e) => (region = { ...region, x: Number(e.currentTarget.value) })} />
+        <div class="field">
+          <div class="label-row">
+            <label for="crop-y">{m.crop_top({}, options)}</label><output for="crop-y"
+              >{region.y} px</output
+            >
           </div>
-          <div class="field">
-            <div class="label-row"><label for="crop-y">{m.crop_top({}, options)}</label><output for="crop-y">{region.y} px</output></div>
-            <input class="range" id="crop-y" type="range" min="0" max={Math.max(0, height - region.h)} value={region.y} disabled={height <= region.h} style="--fill: {pc(region.y, height - region.h)}%" oninput={(e) => (region = { ...region, y: Number(e.currentTarget.value) })} />
-          </div>
-        </div>
-        <div class="crop-group">
-          <h3 class="variant-title">{m.crop_size({}, options)}</h3>
-          <div class="field">
-            <div class="label-row"><label for="crop-w">{m.crop_width({}, options)}</label><output for="crop-w">{region.w} px</output></div>
-            <input class="range" id="crop-w" type="range" min={MIN} max={width} value={region.w} style="--fill: {pc(region.w - MIN, width - MIN)}%" oninput={(e) => (region = sizeRegion(region, width, height, Number(e.currentTarget.value), region.h, ratio))} />
-          </div>
-          {#if !ratio}
-            <div class="field">
-              <div class="label-row"><label for="crop-hgt">{m.crop_height({}, options)}</label><output for="crop-hgt">{region.h} px</output></div>
-              <input class="range" id="crop-hgt" type="range" min={MIN} max={height} value={region.h} style="--fill: {pc(region.h - MIN, height - MIN)}%" oninput={(e) => (region = sizeRegion(region, width, height, region.w, Number(e.currentTarget.value)))} />
-            </div>
-          {/if}
-        </div>
-        <div class="crop-meta">
-          <span aria-live="polite"><b>{m.crop_dimensions({ cropWidth: region.w, cropHeight: region.h, sourceWidth: width, sourceHeight: height }, options)}</b></span>
-          <span>
-            <ParaglideMessage message={m.crop_saved_as} inputs={{ name: cropName(item.filename) }} {options}>
-              {#snippet filename({ children })}<code>{@render children?.()}</code>{/snippet}
-            </ParaglideMessage>
-          </span>
+          <input
+            class="range"
+            id="crop-y"
+            type="range"
+            min="0"
+            max={Math.max(0, height - region.h)}
+            value={region.y}
+            disabled={height <= region.h}
+            style="--fill: {pc(region.y, height - region.h)}%"
+            oninput={(e) => (region = { ...region, y: Number(e.currentTarget.value) })}
+          />
         </div>
       </div>
+      <div class="crop-group">
+        <h3 class="variant-title">{m.crop_size({}, options)}</h3>
+        <div class="field">
+          <div class="label-row">
+            <label for="crop-w">{m.crop_width({}, options)}</label><output for="crop-w"
+              >{region.w} px</output
+            >
+          </div>
+          <input
+            class="range"
+            id="crop-w"
+            type="range"
+            min={MIN}
+            max={width}
+            value={region.w}
+            style="--fill: {pc(region.w - MIN, width - MIN)}%"
+            oninput={(e) =>
+              (region = sizeRegion(
+                region,
+                width,
+                height,
+                Number(e.currentTarget.value),
+                region.h,
+                ratio,
+              ))}
+          />
+        </div>
+        {#if !ratio}
+          <div class="field">
+            <div class="label-row">
+              <label for="crop-hgt">{m.crop_height({}, options)}</label><output for="crop-hgt"
+                >{region.h} px</output
+              >
+            </div>
+            <input
+              class="range"
+              id="crop-hgt"
+              type="range"
+              min={MIN}
+              max={height}
+              value={region.h}
+              style="--fill: {pc(region.h - MIN, height - MIN)}%"
+              oninput={(e) =>
+                (region = sizeRegion(
+                  region,
+                  width,
+                  height,
+                  region.w,
+                  Number(e.currentTarget.value),
+                ))}
+            />
+          </div>
+        {/if}
+      </div>
+      <div class="crop-meta">
+        <span aria-live="polite"
+          ><b
+            >{m.crop_dimensions(
+              {
+                cropWidth: region.w,
+                cropHeight: region.h,
+                sourceWidth: width,
+                sourceHeight: height,
+              },
+              options,
+            )}</b
+          ></span
+        >
+        <span>
+          <ParaglideMessage
+            message={m.crop_saved_as}
+            inputs={{ name: cropName(item.filename) }}
+            {options}
+          >
+            {#snippet filename({ children })}<code>{@render children?.()}</code>{/snippet}
+          </ParaglideMessage>
+        </span>
+      </div>
     </div>
-    {#if failure}<p class="notice notice-danger" role="alert">{messageText(failure, uiLocale)}{#if failure.detail}<span class="technical-detail">{messageDetail(failure, uiLocale)}</span>{/if}</p>{/if}
-    <div class="actions">
-      <button class="btn" type="button" disabled={busy} onclick={onclose}>{m.common_cancel({}, options)}</button>
-      <button class="btn btn-primary" type="button" disabled={busy} onclick={make}>{busy ? m.crop_working({}, options) : m.crop_create({}, options)}</button>
-    </div>
+  </div>
+  {#if failure}<p class="notice notice-danger" role="alert">
+      {messageText(failure, uiLocale)}{#if failure.detail}<span class="technical-detail"
+          >{messageDetail(failure, uiLocale)}</span
+        >{/if}
+    </p>{/if}
+  <div class="actions">
+    <button class="btn" type="button" disabled={busy} onclick={onclose}
+      >{m.common_cancel({}, options)}</button
+    >
+    <button class="btn btn-primary" type="button" disabled={busy} onclick={make}
+      >{busy ? m.crop_working({}, options) : m.crop_create({}, options)}</button
+    >
+  </div>
 </Modal>

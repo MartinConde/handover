@@ -389,39 +389,73 @@ async function done() {
   {#if tab === 'all'}
     <div class="collection-controls">
       <div class="search-field">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg>
-        <label class="visually-hidden" for="entry-search">{m.entry_list_search_label({ collection: plural }, options)}</label>
-        <input class="input" id="entry-search" type="search" placeholder={m.entry_list_search_placeholder({ collection: plural }, options)} bind:value={search} />
+        <svg viewBox="0 0 24 24" aria-hidden="true"
+          ><circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 4 4" /></svg
+        >
+        <label class="visually-hidden" for="entry-search"
+          >{m.entry_list_search_label({ collection: plural }, options)}</label
+        >
+        <input
+          class="input"
+          id="entry-search"
+          type="search"
+          placeholder={m.entry_list_search_placeholder({ collection: plural }, options)}
+          bind:value={search}
+        />
       </div>
-    <div class="filters">
-      <label class="visually-hidden" for="list-status">{m.entry_list_status({}, options)}</label>
-      <select class={['filter', { 'is-on': showing !== 'all' }]} id="list-status" bind:value={showing}>
-        <option value="all">{m.entry_list_all({}, options)}</option>
-        <option value="live">{m.entry_list_live({}, options)}</option>
-        <option value="hidden">{m.entry_list_hidden({}, options)}</option>
-      </select>
-      {#if many}
-        <label class="visually-hidden" for="list-locale">{m.entry_list_language({}, options)}</label>
-        <select class={['filter', { 'is-on': language }]} id="list-locale" bind:value={language}>
-          <option value="">{m.entry_list_every_language({}, options)}</option>
-          {#each locales as locale (locale)}
-            <option value={locale}>{formatLanguageName(locale, uiLocale)}</option>
-          {/each}
+      <div class="filters">
+        <label class="visually-hidden" for="list-status">{m.entry_list_status({}, options)}</label>
+        <select
+          class={['filter', { 'is-on': showing !== 'all' }]}
+          id="list-status"
+          bind:value={showing}
+        >
+          <option value="all">{m.entry_list_all({}, options)}</option>
+          <option value="live">{m.entry_list_live({}, options)}</option>
+          <option value="hidden">{m.entry_list_hidden({}, options)}</option>
         </select>
-        <label class="visually-hidden" for="list-owed">{m.entry_list_work({}, options)}</label>
-        <select class={['filter', { 'is-on': language && work !== 'owed' }]} id="list-owed" bind:value={work} disabled={!language}>
-          <option value="owed">{m.entry_list_work_owed({}, options)}</option>
-          <option value="missing">{m.entry_list_work_missing({}, options)}</option>
-          <option value="unfinished">{m.entry_list_work_unfinished({}, options)}</option>
-          <option value="stale">{m.entry_list_work_stale({}, options)}</option>
-          <option value="machine">{m.entry_list_work_machine({}, options)}</option>
-        </select>
-      {/if}
-    </div>
-      {#if filtered}<button class="btn btn-ghost btn-sm" type="button" onclick={() => { search = ''; showing = 'all'; language = ''; work = 'owed'; }}>{m.entry_list_clear_filters({}, options)}</button>{/if}
+        {#if many}
+          <label class="visually-hidden" for="list-locale"
+            >{m.entry_list_language({}, options)}</label
+          >
+          <select class={['filter', { 'is-on': language }]} id="list-locale" bind:value={language}>
+            <option value="">{m.entry_list_every_language({}, options)}</option>
+            {#each locales as locale (locale)}
+              <option value={locale}>{formatLanguageName(locale, uiLocale)}</option>
+            {/each}
+          </select>
+          <label class="visually-hidden" for="list-owed">{m.entry_list_work({}, options)}</label>
+          <select
+            class={['filter', { 'is-on': language && work !== 'owed' }]}
+            id="list-owed"
+            bind:value={work}
+            disabled={!language}
+          >
+            <option value="owed">{m.entry_list_work_owed({}, options)}</option>
+            <option value="missing">{m.entry_list_work_missing({}, options)}</option>
+            <option value="unfinished">{m.entry_list_work_unfinished({}, options)}</option>
+            <option value="stale">{m.entry_list_work_stale({}, options)}</option>
+            <option value="machine">{m.entry_list_work_machine({}, options)}</option>
+          </select>
+        {/if}
+      </div>
+      {#if filtered}<button
+          class="btn btn-ghost btn-sm"
+          type="button"
+          onclick={() => {
+            search = '';
+            showing = 'all';
+            language = '';
+            work = 'owed';
+          }}>{m.entry_list_clear_filters({}, options)}</button
+        >{/if}
     </div>
   {/if}
-  {#if error && !dialog}<p class="notice notice-danger" role="alert">{textOf(error)}{#if error.detail}<span class="technical-detail">{messageDetail(error, uiLocale)}</span>{/if}</p>{/if}
+  {#if error && !dialog}<p class="notice notice-danger" role="alert">
+      {textOf(error)}{#if error.detail}<span class="technical-detail"
+          >{messageDetail(error, uiLocale)}</span
+        >{/if}
+    </p>{/if}
   {#if tab === 'deleted'}
     <p class="list-note">{m.entry_list_deleted_note({ collection: plural }, options)}</p>
     {#if deletedLoading && !deleted.length}
@@ -473,7 +507,11 @@ async function done() {
             <div class="row row-note" role="row">
               <div class="td" role="cell">
                 <p class="notice notice-warn" id="why-{row.id}">
-                  {m.entry_list_restore_blocked({}, options)} <span class="technical-detail">{m.common_technical_detail({ detail: row.blocked }, options)}</span> {m.entry_list_restore_blocked_hint({}, options)}
+                  {m.entry_list_restore_blocked({}, options)}
+                  <span class="technical-detail"
+                    >{m.common_technical_detail({ detail: row.blocked }, options)}</span
+                  >
+                  {m.entry_list_restore_blocked_hint({}, options)}
                 </p>
               </div>
             </div>
@@ -495,20 +533,24 @@ async function done() {
       {search.trim()
         ? m.entry_list_no_search_results({ search: search.trim() }, options)
         : language
-        ? {
-            owed: m.entry_list_language_complete,
-            missing: m.entry_list_language_none_missing,
-            stale: m.entry_list_language_none_stale,
-            unfinished: m.entry_list_language_none_unfinished,
-            machine: m.entry_list_language_none_machine,
-          }[work]({ language: formatLanguageName(language, uiLocale) }, options)
-        : showing === 'hidden'
-          ? m.entry_list_no_hidden({ collection: plural }, options)
-          : m.entry_list_no_live({ collection: plural }, options)}
+          ? {
+              owed: m.entry_list_language_complete,
+              missing: m.entry_list_language_none_missing,
+              stale: m.entry_list_language_none_stale,
+              unfinished: m.entry_list_language_none_unfinished,
+              machine: m.entry_list_language_none_machine,
+            }[work]({ language: formatLanguageName(language, uiLocale) }, options)
+          : showing === 'hidden'
+            ? m.entry_list_no_hidden({ collection: plural }, options)
+            : m.entry_list_no_live({ collection: plural }, options)}
     </p>
   {:else if entries.length}
     <!-- Without the languages column the grid is the five-column `has-select.cols-4`. -->
-    <div class={['table has-select', { 'cols-4': !many }]} role="table" aria-label={capitalise(plural)}>
+    <div
+      class={['table has-select', { 'cols-4': !many }]}
+      role="table"
+      aria-label={capitalise(plural)}
+    >
       <!-- role="table" needs a row around its columnheaders; display: contents keeps the grid. -->
       <div class="row-head" role="row">
         <div class="th" role="columnheader">
@@ -655,28 +697,36 @@ async function done() {
 {#if putting}
   {@const row = putting}
   <Modal labelledby="restore-h" returnTo={trigger} dismissible={!busy} onclose={close}>
-      <h2 id="restore-h">{m.entry_list_restore_question({ name: row.slug }, options)}</h2>
-      <p>{m.entry_list_restore_explanation({ date: formatExactTime(row.at, uiLocale) }, options)}</p>
-      <ul class="publish-set">
-        <li>
-          {#if row.locales.length}
-            <span class="chips" aria-hidden="true">
-              {#each row.locales as locale (locale)}<span class="chip">{locale.toUpperCase()}</span
-                >{/each}
-            </span>
-          {/if}
-          {row.whole ? m.entry_list_restore_every_language({}, options) : m.entry_list_restore_one_language({}, options)}
-        </li>
-        <li>{m.entry_list_restore_redirect({}, options)}</li>
-      </ul>
-      <p class="hint">{m.entry_list_restore_pictures({}, options)}</p>
-      {#if error}<div class="notice notice-danger" role="alert">{textOf(error)}{#if error.detail}<span class="technical-detail">{messageDetail(error, uiLocale)}</span>{/if}</div>{/if}
-      <div class="actions">
-        <button class="btn" type="button" disabled={busy} onclick={close}>{m.common_cancel({}, options)}</button>
-        <button class="btn btn-primary" type="button" disabled={busy} onclick={() => restore(row)}>
-          {busy ? m.entry_list_restoring({}, options) : m.entry_list_restore({}, options)}
-        </button>
-      </div>
+    <h2 id="restore-h">{m.entry_list_restore_question({ name: row.slug }, options)}</h2>
+    <p>{m.entry_list_restore_explanation({ date: formatExactTime(row.at, uiLocale) }, options)}</p>
+    <ul class="publish-set">
+      <li>
+        {#if row.locales.length}
+          <span class="chips" aria-hidden="true">
+            {#each row.locales as locale (locale)}<span class="chip">{locale.toUpperCase()}</span
+              >{/each}
+          </span>
+        {/if}
+        {row.whole
+          ? m.entry_list_restore_every_language({}, options)
+          : m.entry_list_restore_one_language({}, options)}
+      </li>
+      <li>{m.entry_list_restore_redirect({}, options)}</li>
+    </ul>
+    <p class="hint">{m.entry_list_restore_pictures({}, options)}</p>
+    {#if error}<div class="notice notice-danger" role="alert">
+        {textOf(error)}{#if error.detail}<span class="technical-detail"
+            >{messageDetail(error, uiLocale)}</span
+          >{/if}
+      </div>{/if}
+    <div class="actions">
+      <button class="btn" type="button" disabled={busy} onclick={close}
+        >{m.common_cancel({}, options)}</button
+      >
+      <button class="btn btn-primary" type="button" disabled={busy} onclick={() => restore(row)}>
+        {busy ? m.entry_list_restoring({}, options) : m.entry_list_restore({}, options)}
+      </button>
+    </div>
   </Modal>
 {/if}
 
@@ -710,78 +760,124 @@ async function done() {
     dismissible={!busy}
     onclose={close}
   >
-      {#if dialog === 'rename'}
-        <h2 id="entry-dialog-h">{m.entry_list_rename_question({ title: titleOf(target as Entry) }, options)}</h2>
-        <form onsubmit={rename}>
-          <div class="field">
-            <div class="label-row"><label for="rename-to">{m.entry_list_file_name({}, options)}</label></div>
-            <input
-              class="input filename"
-              id="rename-to"
-              type="text"
-              bind:value={text}
-              aria-describedby="rename-hint"
-            />
-            <p class="hint" id="rename-hint">{m.entry_list_saved_as({}, options)} <span class="filename">{preview}</span>. {m.entry_list_rename_hint({}, options)}</p>
+    {#if dialog === 'rename'}
+      <h2 id="entry-dialog-h">
+        {m.entry_list_rename_question({ title: titleOf(target as Entry) }, options)}
+      </h2>
+      <form onsubmit={rename}>
+        <div class="field">
+          <div class="label-row">
+            <label for="rename-to">{m.entry_list_file_name({}, options)}</label>
           </div>
-          {#if error}<div class="notice notice-danger" role="alert">{textOf(error)}{#if error.detail}<span class="technical-detail">{messageDetail(error, uiLocale)}</span>{/if}</div>{/if}
-          <div class="actions">
-            <button class="btn" type="button" disabled={busy} onclick={close}>{m.common_cancel({}, options)}</button>
-            <button class="btn btn-primary" type="submit" disabled={busy}>
-              {busy ? m.entry_list_renaming({}, options) : m.entry_list_rename({}, options)}
-            </button>
+          <input
+            class="input filename"
+            id="rename-to"
+            type="text"
+            bind:value={text}
+            aria-describedby="rename-hint"
+          />
+          <p class="hint" id="rename-hint">
+            {m.entry_list_saved_as({}, options)} <span class="filename">{preview}</span>. {m.entry_list_rename_hint(
+              {},
+              options,
+            )}
+          </p>
+        </div>
+        {#if error}<div class="notice notice-danger" role="alert">
+            {textOf(error)}{#if error.detail}<span class="technical-detail"
+                >{messageDetail(error, uiLocale)}</span
+              >{/if}
+          </div>{/if}
+        <div class="actions">
+          <button class="btn" type="button" disabled={busy} onclick={close}
+            >{m.common_cancel({}, options)}</button
+          >
+          <button class="btn btn-primary" type="submit" disabled={busy}>
+            {busy ? m.entry_list_renaming({}, options) : m.entry_list_rename({}, options)}
+          </button>
+        </div>
+      </form>
+    {:else if dialog === 'template'}
+      <h2 id="entry-dialog-h">
+        {m.entry_list_template_question({ title: titleOf(target as Entry) }, options)}
+      </h2>
+      <form onsubmit={saveTemplate}>
+        <div class="field">
+          <div class="label-row">
+            <label for="template-to">{m.entry_list_template_name({}, options)}</label>
           </div>
-        </form>
-      {:else if dialog === 'template'}
-        <h2 id="entry-dialog-h">{m.entry_list_template_question({ title: titleOf(target as Entry) }, options)}</h2>
-        <form onsubmit={saveTemplate}>
-          <div class="field">
-            <div class="label-row"><label for="template-to">{m.entry_list_template_name({}, options)}</label></div>
-            <input
-              class="input filename"
-              id="template-to"
-              type="text"
-              bind:value={text}
-              aria-describedby="template-hint"
-            />
-            <p class="hint" id="template-hint">{m.entry_list_saved_as({}, options)} <span class="filename">{preview}</span>. {m.entry_list_template_hint({ collection: plural }, options)}</p>
+          <input
+            class="input filename"
+            id="template-to"
+            type="text"
+            bind:value={text}
+            aria-describedby="template-hint"
+          />
+          <p class="hint" id="template-hint">
+            {m.entry_list_saved_as({}, options)} <span class="filename">{preview}</span>. {m.entry_list_template_hint(
+              { collection: plural },
+              options,
+            )}
+          </p>
+        </div>
+        {#if error}<div class="notice notice-danger" role="alert">
+            {textOf(error)}{#if error.detail}<span class="technical-detail"
+                >{messageDetail(error, uiLocale)}</span
+              >{/if}
+          </div>{/if}
+        <div class="actions">
+          <button class="btn" type="button" disabled={busy} onclick={close}
+            >{m.common_cancel({}, options)}</button
+          >
+          <button class="btn btn-primary" type="submit" disabled={busy}>
+            {busy
+              ? m.entry_list_saving_template({}, options)
+              : m.entry_list_save_template({}, options)}
+          </button>
+        </div>
+      </form>
+    {:else}
+      <h2 id="entry-dialog-h">
+        {m.entry_list_duplicate_question({ title: titleOf(target as Entry) }, options)}
+      </h2>
+      <form onsubmit={duplicate}>
+        <div class="field">
+          <div class="label-row">
+            <label for="copy-to">{m.entry_list_file_name({}, options)}</label>
           </div>
-          {#if error}<div class="notice notice-danger" role="alert">{textOf(error)}{#if error.detail}<span class="technical-detail">{messageDetail(error, uiLocale)}</span>{/if}</div>{/if}
-          <div class="actions">
-            <button class="btn" type="button" disabled={busy} onclick={close}>{m.common_cancel({}, options)}</button>
-            <button class="btn btn-primary" type="submit" disabled={busy}>
-              {busy ? m.entry_list_saving_template({}, options) : m.entry_list_save_template({}, options)}
-            </button>
-          </div>
-        </form>
-      {:else}
-        <h2 id="entry-dialog-h">{m.entry_list_duplicate_question({ title: titleOf(target as Entry) }, options)}</h2>
-        <form onsubmit={duplicate}>
-          <div class="field">
-            <div class="label-row"><label for="copy-to">{m.entry_list_file_name({}, options)}</label></div>
-            <input
-              class="input filename"
-              id="copy-to"
-              type="text"
-              bind:value={text}
-              aria-describedby="copy-hint"
-            />
-            <p class="hint" id="copy-hint">{m.entry_list_saved_as({}, options)} <span class="filename">{preview}</span>. {many ? m.entry_list_duplicate_hint_many({}, options) : m.entry_list_duplicate_hint_one({}, options)}</p>
-          </div>
-          {#if target?.pending}
-            <label class="choice">
-              <input type="checkbox" bind:checked={withDrafts} />
-              {m.entry_list_duplicate_drafts({}, options)}
-            </label>
-          {/if}
-          {#if error}<div class="notice notice-danger" role="alert">{textOf(error)}{#if error.detail}<span class="technical-detail">{messageDetail(error, uiLocale)}</span>{/if}</div>{/if}
-          <div class="actions">
-            <button class="btn" type="button" disabled={busy} onclick={close}>{m.common_cancel({}, options)}</button>
-            <button class="btn btn-primary" type="submit" disabled={busy}>
-              {busy ? m.entry_list_duplicating({}, options) : m.entry_list_duplicate({}, options)}
-            </button>
-          </div>
-        </form>
-      {/if}
+          <input
+            class="input filename"
+            id="copy-to"
+            type="text"
+            bind:value={text}
+            aria-describedby="copy-hint"
+          />
+          <p class="hint" id="copy-hint">
+            {m.entry_list_saved_as({}, options)} <span class="filename">{preview}</span>. {many
+              ? m.entry_list_duplicate_hint_many({}, options)
+              : m.entry_list_duplicate_hint_one({}, options)}
+          </p>
+        </div>
+        {#if target?.pending}
+          <label class="choice">
+            <input type="checkbox" bind:checked={withDrafts} />
+            {m.entry_list_duplicate_drafts({}, options)}
+          </label>
+        {/if}
+        {#if error}<div class="notice notice-danger" role="alert">
+            {textOf(error)}{#if error.detail}<span class="technical-detail"
+                >{messageDetail(error, uiLocale)}</span
+              >{/if}
+          </div>{/if}
+        <div class="actions">
+          <button class="btn" type="button" disabled={busy} onclick={close}
+            >{m.common_cancel({}, options)}</button
+          >
+          <button class="btn btn-primary" type="submit" disabled={busy}>
+            {busy ? m.entry_list_duplicating({}, options) : m.entry_list_duplicate({}, options)}
+          </button>
+        </div>
+      </form>
+    {/if}
   </Modal>
 {/if}

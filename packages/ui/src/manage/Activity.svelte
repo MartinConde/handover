@@ -198,8 +198,14 @@ const RESTORABLE = ['entry-delete', 'locale-off'];
   {#if role !== 'owner'}
     <p class="list-note">{m.activity_editor_scope({}, options)}</p>
   {/if}
-  {#if failure}<p class="notice notice-danger" role="alert">{m.activity_load_failed_status({ status: failure }, options)}</p>{/if}
-  {#if refused}<p class="notice notice-warn" role="alert">{refusedDetail ? m.activity_restore_conflict({ detail: refusedDetail }, options) : m.activity_restore_failed_status({ status: refused.status }, options)}</p>{/if}
+  {#if failure}<p class="notice notice-danger" role="alert">
+      {m.activity_load_failed_status({ status: failure }, options)}
+    </p>{/if}
+  {#if refused}<p class="notice notice-warn" role="alert">
+      {refusedDetail
+        ? m.activity_restore_conflict({ detail: refusedDetail }, options)
+        : m.activity_restore_failed_status({ status: refused.status }, options)}
+    </p>{/if}
   {#if loading}
     <Skeleton label={m.common_loading({}, options)} />
   {:else if events.length === 0}
