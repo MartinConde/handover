@@ -4,6 +4,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Internal: the admin's markup is re-indented and its long lines wrapped, with the compiled
+  output unchanged, and three test files no longer use non-null assertions.
 - Internal: the admin shell's drafts and build status and its revert dialog sit in their own
   module and component, and the Canvas panel resizing in its own module; the admin's message
   texts list server codes apart from the client's own outcomes, so a new server code is one entry.
