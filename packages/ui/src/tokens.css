@@ -642,6 +642,8 @@ select.filter.is-on { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
 .table .td.title { min-width: 0; flex-wrap: wrap; gap: var(--s-2); }
 .table .td.title a { color: var(--ink); font-weight: 500; text-decoration: none; }
 .table .td.title a:hover { text-decoration: underline; }
+.table .td.title .home-mark { display: inline-flex; align-items: center; gap: 4px; }
+.table .td.title .home-mark svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .table .td.num { font-size: var(--text-sm); color: var(--ink-2); white-space: nowrap; }
 /* Redirects — four columns. */
 .redirects { display: grid; gap: var(--s-4); align-content: start; min-width: 0; }

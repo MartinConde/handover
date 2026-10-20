@@ -117,6 +117,45 @@ test('the list is one row per entry, titled and linked by file name', async () =
   );
 });
 
+const withIndex = (index: string) =>
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () =>
+      Response.json({
+        entries: [
+          ...ENTRIES,
+          {
+            id: 'index',
+            locales: { en: { title: 'Coastal homes', path: 'src/content/listings/en/index.yaml' } },
+          },
+        ],
+        locales: ['en'],
+        index,
+      }),
+    ),
+  );
+
+test('the entry served at / is marked as the home page', async () => {
+  withIndex('/');
+  const root = show(undefined, 'de');
+  await settle();
+
+  const rows = Array.from(root.querySelectorAll('.row .td.title'));
+  expect(rows.map((row) => row.querySelector('.home-mark')?.textContent?.trim() ?? null)).toEqual([
+    null,
+    null,
+    'Startseite',
+  ]);
+});
+
+test("a collection's own index entry is not the home page", async () => {
+  withIndex('/listings');
+  const root = show();
+  await settle();
+
+  expect(root.querySelector('.home-mark')).toBeNull();
+});
+
 // A filter narrows the heading to "1 of 2" rather than replacing the collection's size.
 test('under the Status filter the heading counts what is shown, of the total', async () => {
   api([

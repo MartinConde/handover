@@ -540,6 +540,12 @@ async function done() {
           </div>
           <div class="td title" role="cell">
             <a href={sitePath(`/admin/c/${collection}/${entry.id}${queueQuery(language || undefined, work)}`)}>{titleOf(entry)}</a>
+            {#if index === '/' && entry.id === 'index'}
+              <span class="sub home-mark">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11 12 4l8 7"/><path d="M6 9.5V20h12V9.5"/><path d="M10 20v-5h4v5"/></svg>
+                {m.entry_list_home_page({}, options)}
+              </span>
+            {/if}
             {#if isHidden(entry)}<span class="badge">{m.entry_list_hidden({}, options)}</span>{/if}
             {#if entry.editing}<span class="badge">{entry.editing.name ? m.entry_list_being_edited_by({ name: entry.editing.name }, options) : m.entry_list_being_edited({}, options)}</span>{/if}
           </div>
