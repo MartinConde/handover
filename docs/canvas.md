@@ -118,6 +118,19 @@ session epoch, active entry identity, locale, and content version. Treat that lo
 request metadata. The integration sets it only after the Canvas POST has resolved the page address
 back to the requested content file.
 
+## When a render fails
+
+A failed Canvas render answers with an HTML page whose `data-handover-canvas-manifest` script
+holds `{ "status": "error", "error": { "status", "message", "code", "detail" } }`. `message` is
+an English sentence; `code` and `detail` are there for these three, and Canvas phrases them in the
+interface language, with `detail` kept apart as the exact text:
+
+| `code` | `status` | When |
+|---|---|---|
+| `CANVAS_NO_PAGE` | `404` | The site serves no page at that address, or the loader's `load` returns nothing for it |
+| `CANVAS_DRAFT_UNRENDERABLE` | `422` | The page throws a `ContentError` while rendering the draft (an address over the limit above is one); `detail` is its message |
+| `CANVAS_LOADER_MISSING` | `500` | The collection has no `load` name, or its loader lacks `load` and `Page` (`loadIndex` and `Index` for an index); `detail` repeats `message` |
+
 ## Suppress external effects
 
 A completed edit renders a fresh candidate document before it replaces the visible one. Client
