@@ -19,7 +19,7 @@ export const messageOptions = (locale: UiLocale) => ({ locale }) as const;
 
 export type CollectionLabels = Record<
   string,
-  { label?: string | Labels; singular?: string | Labels }
+  { label?: string | Labels; singular?: string | Labels; newLabel?: string | Labels }
 >;
 
 // Fixed by the site's build, so the shell sets it once rather than every screen taking a prop.
@@ -41,6 +41,10 @@ export function collectionName(
   if (form === 'plural') return plural ?? name;
   return labelIn(singular, locale) ?? plural ?? name.replace(/s$/, '');
 }
+
+/** The site's own wording for the new-entry button and heading; German needs the noun's gender. */
+export const newLabel = (name: string, locale: UiLocale) =>
+  labelIn(collectionLabels[name]?.newLabel, locale);
 
 const relativeFormatters = new Map<UiLocale, Intl.RelativeTimeFormat>();
 const dateFormatters = new Map<UiLocale, Intl.DateTimeFormat>();

@@ -37,6 +37,7 @@ digits and dashes.
 | `localizedSlugs` | no | Each language may serve this collection's entries at a web address of its own. See below. |
 | `label` | no | What the admin calls the collection, written as it reads mid-sentence: `'homes'` or `{ en: 'homes', de: 'Häuser' }`. Without it the key is used. See [Names in each interface language](#names-in-each-interface-language). |
 | `singular` | no | One entry of it, the same way: `{ en: 'home', de: 'Haus' }`. Without it the `label` is used, or the key without its final `s`. |
+| `newLabel` | no | The new-entry button and the heading of its dialog, shown as written: `{ en: 'New home', de: 'Neues Haus' }`. German needs the noun's gender, which a fixed "New …" template cannot give. Without it the admin builds the wording from `singular`. |
 
 ## `i18n`
 
@@ -118,13 +119,14 @@ collections: {
     schema: listing,
     label: { en: 'homes', de: 'Häuser' },
     singular: { en: 'home', de: 'Haus' },
+    newLabel: { en: 'New home', de: 'Neues Haus' },
   },
 },
 ```
 
-The sidebar reads **Homes** or **Häuser**, and the button reads **New home** or **Neu in Häuser**.
-Write a collection's names the way they read inside a sentence. Headings capitalise the first
-letter. In a collection's `label` or `singular`, a key other than `en` or `de` stops the build:
+The sidebar reads **Homes** or **Häuser**, and the button reads **New home** or **Neues Haus**.
+Write `label` and `singular` the way they read inside a sentence, and `newLabel` the way the button reads. Headings capitalise the first
+letter. In a collection's `label`, `singular` or `newLabel`, a key other than `en` or `de` stops the build:
 
 ```
 cms.config.ts › collections.listings.label: "ger" is not an interface language — en, de
@@ -133,7 +135,7 @@ cms.config.ts › collections.listings.label: "ger" is not an interface language
 Globals, fields and block types take the same shape through `.meta({ label })`, and the options
 of a select through `.meta({ options: { value: { en, de } } })`. See
 [Field types](field-types.md#labels) for fields, options and block types, and `globals` below. A
-description stays one string. Two places keep one name however the admin is set. The Canvas
+global's `description` takes the same shape (zod types it as a string, hence the `as never` in the example). A field's or block's description is not shown in the admin. Two places keep one name however the admin is set. The Canvas
 Structure list names a block by `_label` or its type, because the site renders it.
 
 ## `globals`
@@ -150,7 +152,10 @@ export const site = z
   .object({ name: z.string(), footerText: z.string() })
   .meta({
     label: { en: 'Site details', de: 'Website-Angaben' },
-    description: 'The name, contact details and footer line every page carries',
+    description: {
+      en: 'The name, contact details and footer line every page carries',
+      de: 'Name, Kontaktdaten und Fußzeile jeder Seite',
+    } as never,
   });
 ```
 

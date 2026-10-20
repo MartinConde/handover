@@ -136,8 +136,8 @@ export const GET: APIRoute = async ({ params, request, url, locals }) => {
       ok: true,
       collections: Object.keys(config.collections),
       collectionLabels: Object.fromEntries(
-        Object.entries(config.collections).flatMap(([name, { label, singular }]) =>
-          label || singular ? [[name, { label, singular }]] : [],
+        Object.entries(config.collections).flatMap(([name, { label, singular, newLabel }]) =>
+          label || singular || newLabel ? [[name, { label, singular, newLabel }]] : [],
         ),
       ),
       // The middleware has already asserted a session by the time any of this runs.

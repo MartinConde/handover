@@ -635,6 +635,22 @@ test('defineConfig fails when a collection label names no interface language', (
   ).not.toThrow();
 });
 
+test('defineConfig fails when a collection newLabel names no interface language', () => {
+  expect(() =>
+    defineConfig({
+      i18n: EN,
+      collections: {
+        posts: {
+          schema: z.object({}),
+          newLabel: { en: 'New post', ger: 'Neuer Beitrag' } as never,
+        },
+      },
+    }),
+  ).toThrow(
+    'cms.config.ts › collections.posts.newLabel: "ger" is not an interface language — en, de',
+  );
+});
+
 // The key is the address segment: a capital or a space would be a link nothing reaches.
 test('defineConfig fails when a screen key is not an address segment', () => {
   expect(() =>

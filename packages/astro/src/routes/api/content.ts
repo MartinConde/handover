@@ -169,11 +169,13 @@ export const schemaOf = (
 export const globalLabel = (key: string, schema: Parameters<typeof formSchema>[0]) => {
   const root = formSchema(schema) as { label?: unknown; description?: unknown };
   const labels = labelsOf(root.label);
+  const descriptions = labelsOf(root.description);
   return {
     key,
     label: labelIn(root.label, 'en') ?? key,
     ...(labels ? { labels } : {}),
-    description: typeof root.description === 'string' ? root.description : undefined,
+    description: labelIn(root.description, 'en'),
+    ...(descriptions ? { descriptions } : {}),
   };
 };
 

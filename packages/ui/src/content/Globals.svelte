@@ -8,12 +8,14 @@ import Skeleton from '../shared/Skeleton.svelte';
 let { uiLocale = 'en' }: { uiLocale?: UiLocale } = $props();
 const options = $derived(messageOptions(uiLocale));
 const named = (global: Global) => global.labels?.[uiLocale] ?? global.label;
+const described = (global: Global) => global.descriptions?.[uiLocale] ?? global.description;
 
 type Global = {
   key: string;
   label: string;
   labels?: Labels;
   description?: string;
+  descriptions?: Labels;
   /** The languages this global has a file in; the rest are the dashed chip. */
   locales: string[];
   pending: boolean;
@@ -88,7 +90,7 @@ async function load() {
             {/if}
             <a href={sitePath(`/admin/site/${global.key}`)}>{named(global)}</a>
           </h2>
-          {#if global.description}<p>{global.description}</p>{/if}
+          {#if described(global)}<p>{described(global)}</p>{/if}
           <div class="meta">
             {#if global.editing || locales.length > 1}
               <span class="meta-row">

@@ -101,7 +101,8 @@ export function defineNavigation({
       // Shown on the Site settings card; a global without a label is listed under its key.
       .meta({
         label: { en: 'Navigation', de: 'Navigation' },
-        description: 'The menus the site renders',
+        // zod types `description` as a string; the admin reads the per-language form too.
+        description: { en: 'The menus the site renders', de: 'Die Menüs der Website' } as never,
       })
   );
 }
@@ -272,6 +273,8 @@ export interface HandoverConfig {
       label?: string | Labels;
       /** One entry of it, the same way: `{ en: 'post', de: 'Beitrag' }`. */
       singular?: string | Labels;
+      /** The new-entry button and dialog heading, verbatim: `{ en: 'New post', de: 'Neuer Beitrag' }`. */
+      newLabel?: string | Labels;
     }
   >;
   /** One schema per file under `src/content/globals/<locale>/`, keyed by file name. */
@@ -366,7 +369,7 @@ export function defineConfig(config: HandoverConfig): HandoverConfig {
   }
   // A misspelled language would fall back to English with nothing saying why.
   for (const [name, c] of Object.entries(config.collections))
-    for (const key of ['label', 'singular'] as const) {
+    for (const key of ['label', 'singular', 'newLabel'] as const) {
       const label = c[key];
       if (typeof label !== 'object') continue;
       for (const locale of Object.keys(label))

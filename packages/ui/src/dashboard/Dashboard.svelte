@@ -6,6 +6,7 @@ import {
   formatExactTime,
   formatRelativeTime,
   messageOptions,
+  newLabel,
   type UiLocale,
 } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
@@ -182,7 +183,7 @@ const oldest = $derived(Math.min(...pending.map((entry) => entry.updated_at)));
     {#if collections.length}
       <div class="quick">
         {#each collections as name (name)}
-          <button class="btn" type="button" onclick={() => (creating = name)}>{m.dashboard_new_collection({ collection: collectionName(name, uiLocale, 'singular') }, options)}</button>
+          <button class="btn" type="button" onclick={() => (creating = name)}>{newLabel(name, uiLocale) ?? m.dashboard_new_collection({ collection: collectionName(name, uiLocale, 'singular') }, options)}</button>
         {/each}
       </div>
     {/if}

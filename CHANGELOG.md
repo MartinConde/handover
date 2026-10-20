@@ -4,6 +4,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- A global's `description` can be `{ en, de }` like its `label`, and the Site settings cards read the one for the interface language; the default navigation global's description now has both. A collection can set `newLabel: { en: 'New page', de: 'Neue Seite' }`, shown as written on its new-entry button and dialog heading; without it the wording is built from `singular` as before.
 - Emails Handover sends (password reset, email-change approval and confirmation, sign-in link, invitation, password-set notice, test email) are written in English or German: the recipient's saved interface language, else the inviting or requesting owner's, else the request's device language or `Accept-Language`, else English. The preview error page follows the signed-in account's language the same way. Response bodies are unchanged.
 - Better Auth refusals on the Account screen (invalid email, unknown account, email not verified, email change unavailable, update failed, password already set, expired session) and its rate limiter's `429` now read in the interface language (en, de) instead of showing Better Auth's English sentence. The Settings checks show a localized sentence first when the provider refuses or a check is not set up, and the provider's own sentence follows as technical detail. The responses are unchanged.
 - Upload refusals (too large, size or type mismatch, empty, timed out, no upload bucket), the

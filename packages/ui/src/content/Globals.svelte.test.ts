@@ -68,6 +68,17 @@ test('a global labelled per language is named in the interface language', async 
   expect(all(root, '.global-card h2 a')[0]?.textContent).toBe('Website-Angaben');
 });
 
+test('a global described per language reads its description in the interface language', async () => {
+  const root = show(
+    [{ ...GLOBALS[0], descriptions: { en: 'Contact details', de: 'Kontaktdaten' } }],
+    ['en', 'de'],
+    'de',
+  );
+  await settle();
+
+  expect(all(root, '.global-card > p')[0]?.textContent).toBe('Kontaktdaten');
+});
+
 test('a language with no file yet is the dashed chip, and an unpublished change is the dot', async () => {
   const root = show();
   await settle();

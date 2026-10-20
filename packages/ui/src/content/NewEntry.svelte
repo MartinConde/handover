@@ -2,7 +2,13 @@
 import { addressError, entryName } from '@handover/core';
 import { invalidateEntryDirectory } from '../entry-directory.js';
 import { messageDetail, messageText, responseMessage, type UiMessage } from '../errors.js';
-import { collectionName, formatLanguageName, messageOptions, type UiLocale } from '../i18n.js';
+import {
+  collectionName,
+  formatLanguageName,
+  messageOptions,
+  newLabel,
+  type UiLocale,
+} from '../i18n.js';
 import { navigate } from '../navigate';
 import * as m from '../paraglide/messages.js';
 import { request as fetch } from '../request.js';
@@ -154,7 +160,7 @@ async function create(event: Event) {
 </script>
 
 <Modal labelledby="new-entry-h" initialFocus="#new-title" dismissible={!busy} {onclose}>
-    <h2 id="new-entry-h">{m.new_entry_heading({ collection: headingCollection }, options)}</h2>
+    <h2 id="new-entry-h">{newLabel(collection, uiLocale) ?? m.new_entry_heading({ collection: headingCollection }, options)}</h2>
     <form onsubmit={create}>
       <div class="field">
         <div class="label-row"><label for="new-title">{m.new_entry_title({}, options)}</label></div>

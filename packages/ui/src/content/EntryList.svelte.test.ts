@@ -1,7 +1,7 @@
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
 import { SIX, sixLanguageRows } from '../editor/six-languages.fixture';
-import type { UiLocale } from '../i18n.js';
+import { type UiLocale, useCollectionLabels } from '../i18n.js';
 import { settle } from '../test-helpers.fixture.js';
 import EntryList from './EntryList.svelte';
 
@@ -168,6 +168,16 @@ test('a German empty collection uses localized presentation around its authored 
     'Erstelle den ersten Eintrag in listings, um Inhalte zu deiner Website hinzuzufügen.',
   );
   expect(q(root, '.empty .btn-primary')?.textContent?.trim()).toBe('Neu in listings');
+});
+
+test('a collection with a newLabel names its new button that way in German', async () => {
+  useCollectionLabels({ listings: { newLabel: { en: 'New home', de: 'Neues Haus' } } });
+  api([]);
+  const root = show(undefined, 'de');
+  await settle();
+  useCollectionLabels({});
+
+  expect(q(root, '.empty .btn-primary')?.textContent?.trim()).toBe('Neues Haus');
 });
 
 test('the new entry dialog shows the file name the title will produce', async () => {
