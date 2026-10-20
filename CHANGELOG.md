@@ -4,98 +4,95 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
-- An array of images is edited as a gallery: a grid of thumbnails you drag to reorder, with a
-  dialog per picture for alt text, focal point and Replace. Pictures without alt text are marked.
-
-- Add block opens a dialog so choices stay accessible in nested forms. Open section
-  headers keep their tint without the left-hand accent. The wider block chooser uses
-  spacious cards in a responsive grid, with its heading and Cancel action always visible.
-
-- Refreshed entry forms with clearer section cards, lighter nested groups, larger controls
-  and full-width list actions. Compact image cards show filenames and dimensions; clicking
-  the preview opens focal-point editing.
-
-- Translated blocks and list items keep their disclosure buttons and text fields enabled.
-
+- The entry form is redrawn. An array of images is a gallery of thumbnails you drag to reorder, with
+  a dialog per picture for alt text, focal point and Replace, and pictures without alt text are
+  marked. Existing blocks and object-list items open as compact, collapsed cards with content
+  summaries; new items open for editing, validation and field navigation reveal nested fields
+  automatically, and simple lists remain directly editable. Section cards are clearer, nested groups
+  lighter, controls larger and list actions full-width, open section headers keep their tint without
+  the left-hand accent, and compact image cards show filenames and dimensions with a click on the
+  preview opening focal-point editing. Add block opens a dialog with a responsive grid of cards, its
+  heading and Cancel action always visible, so choices stay accessible in nested forms.
 - Live preview connects to the form: opening a section scrolls the page to it, and selecting
   annotated content reveals and focuses its form field without inline editing.
-
-- Existing blocks and object-list items open as compact, collapsed cards with content
-  summaries. New items open for editing; validation and field navigation reveal nested
-  fields automatically. Simple lists remain directly editable.
-
-- The dashboard groups content creation under one **New…** menu. Dialogs and sheets close
-  when their overlay is clicked, except during a pending operation. Tall dialogs and destination
-  lists scroll within the viewport, long action labels wrap, and destructive buttons retain
-  readable contrast on hover.
-
-- In the entry list, the entry served at `/` comes first and carries a house icon and **Home page** (**Startseite**) beside its title.
-- A global can set `.meta({ descriptions: { en, de } })` beside its `label`, and the Site settings cards read the one for the interface language; a plain `description` string still works. The default navigation global's description now has both. A collection can set `newLabel: { en: 'New page', de: 'Neue Seite' }`, shown as written on its new-entry button and dialog heading; without it the wording is built from `singular` as before.
-- Emails Handover sends (password reset, email-change approval and confirmation, sign-in link, invitation, password-set notice, test email) are written in English or German: the recipient's saved interface language, else the inviting or requesting owner's, else the request's device language or `Accept-Language`, else English. The preview error page follows the signed-in account's language the same way. Response bodies are unchanged.
-- Better Auth refusals on the Account screen (invalid email, unknown account, email not verified, email change unavailable, update failed, password already set, expired session) and its rate limiter's `429` now read in the interface language (en, de) instead of showing Better Auth's English sentence. The Settings checks show a localized sentence first when the provider refuses or a check is not set up, and the provider's own sentence follows as technical detail. The responses are unchanged.
-- Upload refusals (too large, size or type mismatch, empty, timed out, no upload bucket), the
-  media-being-deleted refusal on save, creating a language that exists or is not offered, stale
-  drift answers, and a Canvas page with no address, a draft that cannot be rendered or a missing
-  loader now show in the interface language (en, de). Those responses are JSON with a `code`
-  (`MEDIA_TOO_LARGE` also carries `limit` in bytes; `MEDIA_UNAVAILABLE` and `MEDIA_BECAME_USED` sit
-  next to `reason: "media"`), and the Canvas error manifest gains `error.code` and `error.detail`;
-  `error` stays the English sentence.
-- Refusals to rename, duplicate, save as a template or restore a version, and a revert or restore
-  refused because a file has changed, now show in the interface language (en, de). Those `409`s are
-  JSON with a `code` (`ENTRY_RENAME_UNPUBLISHED`, `ENTRY_DUPLICATE_UNPUBLISHED`,
-  `TEMPLATE_UNPUBLISHED`, `ENTRY_RENAME_COLLISION`, `HISTORY_RESTORE_NO_FILE`,
-  `HISTORY_RESTORE_UNREADABLE`, `REVERT_CONFLICT`) instead of plain text; `error` stays the English
-  sentence and `REVERT_CONFLICT` keeps `paths`.
-- The publish checks are now shown in the interface language (en, de) in the pending-changes
-  drawer, the publish confirmation and the editor, with field names taken from their `{ en, de }`
-  labels. Each result from `POST /admin/api/publish/checks` gains `code` and `params`; `message`
-  stays as the English sentence.
+- The dashboard groups content creation under one **New…** menu. Dialogs and sheets close when their
+  overlay is clicked, except during a pending operation; tall dialogs and destination lists scroll
+  within the viewport, long action labels wrap, and destructive buttons retain readable contrast on
+  hover.
+- In the entry list, the entry served at `/` comes first and carries a house icon and **Home page**
+  (**Startseite**) beside its title.
+- A global can set `.meta({ descriptions: { en, de } })` beside its `label`, and the Site settings
+  cards read the one for the interface language; a plain `description` string still works. The
+  default navigation global's description now has both. A collection can set
+  `newLabel: { en: 'New page', de: 'Neue Seite' }`, shown as written on its new-entry button and
+  dialog heading; without it the wording is built from `singular` as before.
+- Emails Handover sends (password reset, email-change approval and confirmation, sign-in link,
+  invitation, password-set notice, test email) are written in English or German: the recipient's
+  saved interface language, else the inviting or requesting owner's, else the request's device
+  language or `Accept-Language`, else English. The preview error page follows the signed-in
+  account's language the same way. Response bodies are unchanged.
+- Refusals and checks show in the interface language (en, de) instead of an English sentence;
+  `error` and `message` stay the English sentence. Upload refusals (too large, size or type
+  mismatch, empty, timed out, no upload bucket), the media-being-deleted refusal on save, creating a
+  language that exists or is not offered, stale drift answers, and a Canvas page with no address, a
+  draft that cannot be rendered or a missing loader are JSON with a `code` (`MEDIA_TOO_LARGE` also
+  carries `limit` in bytes; `MEDIA_UNAVAILABLE` and `MEDIA_BECAME_USED` sit next to
+  `reason: "media"`), and the Canvas error manifest gains `error.code` and `error.detail`. Refusals
+  to rename, duplicate, save as a template or restore a version, and a revert or restore refused
+  because a file has changed, are `409`s with a JSON `code` (`ENTRY_RENAME_UNPUBLISHED`,
+  `ENTRY_DUPLICATE_UNPUBLISHED`, `TEMPLATE_UNPUBLISHED`, `ENTRY_RENAME_COLLISION`,
+  `HISTORY_RESTORE_NO_FILE`, `HISTORY_RESTORE_UNREADABLE`, `REVERT_CONFLICT`) instead of plain text;
+  `REVERT_CONFLICT` keeps `paths`. Better Auth refusals on the Account screen (invalid email,
+  unknown account, email not verified, email change unavailable, update failed, password already
+  set, expired session) and its rate limiter's `429` read in the interface language, and the
+  Settings checks show a localized sentence first when the provider refuses or a check is not set
+  up, with the provider's own sentence as technical detail; those responses are unchanged. The
+  publish checks show in the pending-changes drawer, the publish confirmation and the editor, with
+  field names taken from their `{ en, de }` labels; each result from
+  `POST /admin/api/publish/checks` gains `code` and `params`.
 - A select's options can be named with `.meta({ options: { value: 'Name' | { en, de } } })` and
   show in the interface language in the form, History, pending changes and conflicts. The
   History and conflict API values carry `beforeLabels` and `afterLabels` for them. The menu's
   built-in field names, the picture and search sub-field names in History and conflicts, and the
   name of a block type with no label are now in the interface language too (en, de).
-- A Discard refused because somebody else is editing the entry now names them in the interface
-  language (en, de). The `409` for any action refused over the lock is JSON, `{ error, held_by }`,
-  instead of plain text.
+- A Discard refused because somebody else is editing the entry names them, in the interface language
+  (en, de), in the editor and in the pending-changes drawer, which said only "not discarded (409)".
+  The `409` for any action refused over the lock is JSON, `{ error, held_by }`, instead of plain
+  text.
 - The menu editor no longer lists an entry that has never been published under an index item
   that lists its pages; the site does not draw it either.
-- Resolving a conflict where the two sides differ only in a link or in bold or italic now shows
-  each side's Markdown, instead of the same words twice.
-- Discarding an entry from the pending-changes drawer while somebody else is editing it now says
-  who, as the editor already did, instead of only "not discarded (409)".
 - The entries an index menu item lists now come sorted by file name, as the menu editor shows
   them, instead of in whatever order Astro's loader read the files.
-- A draft nobody edited no longer shows an older version of its file in preview, the entry
-  lists or the SEO defaults after the file changed in the repository, and the editor no longer
-  calls it waiting to publish.
-- A rich-text change in History, Pending changes and the conflict resolver now shows the words
-  without Markdown symbols instead of "changed" or raw source. A change to only a link or only
-  the formatting says so.
-- Two blocks of one type are numbered in History, Pending changes and conflict questions, such as
-  *Text 2 · Body*.
+- A draft nobody edited follows its file. After the file changed in the repository, preview, the
+  entry lists and the SEO defaults no longer show an older version of it, the editor no longer calls
+  it waiting to publish, and opening the entry reads the file again instead of showing the older
+  version without a warning.
+- An unedited draft that a rename, revert, language offer, source change or conflict resolution
+  moves onto one of Handover's own commits is previewed and listed from that commit's file until its
+  build lands, and the build check then drops it. A save clears this, so a later edit is pending as
+  before.
+- A rich-text change in History, Pending changes and the conflict resolver shows the words without
+  Markdown symbols instead of "changed" or raw source. A change to only a link or only the
+  formatting says so, and one that only adds or removes a line break shows a marked ↵. The conflict
+  **Resolve** dialog shows the text of each side of a rich-text field, where it used to say
+  *rewritten* for both, and each side's Markdown where the sides differ only in a link or in bold or
+  italic, instead of the same words twice.
 - A page with nothing to edit on the page itself now tells the client to use the form, where the
   Canvas Structure pane used to say the template has no editable annotations.
 - An optional switch the file never held is no longer written as `false` on save, even after it
   was switched on and off; one the file already holds keeps its value.
 - The menu editor shows the entries a **List its pages under it** item lists as read-only rows
   under the item, with a line saying they are added automatically.
-- The conflict **Resolve** dialog shows the text of each side of a rich-text field, where it
-  used to say *rewritten* for both.
-- History and Pending show a rich-text change that only adds or removes a line break as a
-  marked ↵, where it used to say only "changed".
 - A change inside a block is named by the block's type and the field (*Legal content · Intro*) in
   History and in the conflict **Resolve** dialog, where it used to repeat the block's first text.
-- Opening an entry whose draft has no edits reads the file again if it changed in the
-  repository since, rather than showing the older version without a warning.
+  Two blocks of one type are numbered in History, Pending changes and conflict questions, such as
+  *Text 2 · Body*.
 - Every row of the pending-changes drawer has **Discard**, and an entry's publish menu has
   **Discard changes** while it has unpublished changes. The confirmation says that every
   language goes, and that an entry never published is removed. `GET /admin/api/drafts` marks
   such an entry `created`.
 - A save keeps the trailing space of a one-line text (`"Telefon: "`). Only text with line
   breaks loses spaces at line ends, so it can be written as a `|` block.
-- Docs: [Rendering the menus](docs/rendering-menus.md) is its own page, split out of
-  Navigation menus.
 - A menu item linking a collection's index can list the collection's live entries under it
   (`entries: true`, **List its pages under it** in the item editor). `menusAt()` puts them before
   the item's own children, each with its `entry` (`{ id, data }`) for teasers.
@@ -200,10 +197,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   an unverified copy of a member's address could sign in as that member, the owner included.
 - **Security:** Better Auth is now 1.7.7, which fixes a critical sign-in bypass
   ([GHSA-965c-763c-88jm](https://github.com/better-auth/better-auth/security/advisories/GHSA-965c-763c-88jm)).
-  Handover's settings already blocked it, but the fix belongs in the runtime.
-  **Schema version 12** drops `account.issuer` and its unique index, which Better Auth no longer
-  writes: run `npx handover db generate`, apply the migration, then deploy. Pending email links and
-  GitHub sign-ins started before the deploy stop working; request new ones.
+  Handover's settings already blocked it, but the fix belongs in the runtime. **Schema version 12**
+  drops `account.issuer` and its unique index, which Better Auth no longer writes: run
+  `npx handover db generate`, apply the migration, then deploy. Pending email links and GitHub
+  sign-ins started before the deploy stop working; request new ones.
 - **Security:** on a site with `i18n.base`, an `/admin/api/` request that left the base off
   reached the API without signing in. It now needs a session like every other API request.
 - The entry editor's header is two rows instead of three. The breadcrumb names the entry and
@@ -230,7 +227,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `unpublished-install.md` allows the `esbuild` and `workerd` build scripts in its
   `pnpm-workspace.yaml` example and says it assumes pnpm 11 or later, where the install otherwise
   stops with `ERR_PNPM_IGNORED_BUILDS`.
-- `rendering.md` shows how a template draws a picture and keeps its focal point in frame.
+- Docs: [Rendering pictures](docs/rendering-pictures.md) is its own page, split out of
+  `rendering.md`, and shows how a template draws a picture and keeps its focal point in frame.
+  [Structured fields in the admin](docs/structured-fields-admin.md), [A page with an address per
+  language](docs/loaders-addresses.md) and [Preview in the editor](docs/preview-in-the-editor.md)
+  are split out of `structured-fields.md`, `loaders.md` and `preview.md` the same way.
 - An entry that fails to open (a 500, GitHub's 503 or a lost connection) offers **Retry**, which
   reads it again. *No such entry* offers none.
 - `translating.md` says what **Create all N missing languages** does when a change still being
@@ -309,8 +310,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   files, and every test that serves a Canvas preview goes through one helper.
 - Internal: the astro Canvas component tests drop two duplicate renders.
 - Internal: the in-page Canvas entry no longer re-exports the admin renderer, the bridge or the
-  plain-text runtime, which only a test fixture used. Its initial graph drops from 371,281 to 362,311 bytes
-  decoded (118,405 to 115,444 gzip, 103,671 to 100,959 Brotli).
+  plain-text runtime, which only a test fixture used. Its initial graph drops from 371,281 to
+  362,311 bytes decoded (118,405 to 115,444 gzip, 103,671 to 100,959 Brotli).
 - Internal: core tests cover a height-limited crop, the publish checks' second media chunk, the
   exact published-cleanup chunk boundary and a refused reset link being used again.
 - Internal: the rich-text recovery browser test waits for the heading to become editable before
@@ -378,97 +379,77 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Browser acceptance checks now run in CI for Chromium, Firefox, and WebKit.
 - Canvas block sorting keeps its drop position when the pointer stops and sibling animations finish.
   Reduced-motion drag previews keep the same scale as the blocks overview.
-
 - Canvas labels and selection outlines use softer borders without a heavy focus ring.
   Structure dims rows outside the active block list while dragging, keeping valid
   siblings clear and restoring all rows on drop or cancel.
-
 - Structure supports dnd-kit sorting with drag previews, animated sibling movement,
   keyboard controls, and Escape cancellation. Nested content moves with its block;
   drops stay within the same block list. Expand/collapse arrows are larger SVG icons.
 - Canvas action icons use a transparent, borderless treatment. Pointer selection no
   longer shows the browser's blue focus ring around labels; keyboard focus remains visible.
-
 - Canvas actions sit above the selection outline beside its label. Blocks expose direct
   drag, move up/down, duplicate, and delete icons with tooltips; the overflow menu and
   on-canvas block replacement action are removed. Field Inspector controls align there too.
-
 - Canvas pointer drags now show a dashed drop slot and temporarily scale the active
   blocks wrapper to 65%, centered horizontally. The iframe and surrounding page stay
   fixed. Drop or cancel restores the wrapper; reduced-motion preferences skip animation.
-
 - Canvas block dragging now uses dnd-kit, with a floating block preview, animated
   sibling reordering, automatic scrolling, and Escape cancellation.
-
 - Canvas labels now include clickable block ancestors (for example, Hero › Image).
   Select an ancestor to move or manage the whole block without opening Structure;
   clicking its content still selects the field. The element name itself also selects
   that element, so every breadcrumb segment is clickable. Structural wrappers are skipped.
-
 - Soft newlines used to wrap Markdown source now enter the Canvas rich-text editor as
   spaces, matching the rendered page instead of becoming visible line breaks. Paragraph
   boundaries and typed spaces are preserved; opening the editor does not save a change.
-
 - Rich-text editing mounts onto the authored prose container instead of inserting a
   wrapper. Direct-child styling, margin behavior, and layout sizing stay intact when
   the caret appears; the container’s original attributes are restored on exit.
-
 - Plain array-row wrappers, such as columns without their own block editor, no longer
   highlight or become active in Canvas. Their editable children and empty block lists
   remain accessible; Structure retains the wrappers as expandable groups.
-
 - Shared Canvas content has a dashed outline and a Shared label. Selecting it opens a
   floating explanation with a link to edit its source in a new tab. Hovered elements
   have their own labels, and selected labels stay visible during inline text editing.
-
 - The on-element Inspector button now closes the panel when clicked again for the same
   selection. Hover outlines remain visible outside active text, including parent blocks
   and images behind a hero heading.
-
 - Populated block-list wrappers no longer receive hover or selection outlines or act as
   selection targets. Individual blocks and fields remain selectable; empty lists retain
   their Add block control.
-
-- Canvas edits text on the first click. Clicking an annotated text or rich-text field puts the
-  caret where the pointer landed instead of opening the Inspector, and a button at the field's top
-  right opens the Inspector when the whole field is wanted — while the editor is open, too. Double
-  click inside the open editor selects a word, as it does anywhere else. Selecting a field or block on the page or in
-  Structure preserves the Inspector’s open/closed state; an open Inspector follows selection.
-  Links and buttons keep their floating link editor. Explicit Inspector and media replacement
-  actions still open the panel.
-  Inline editing no longer re-wraps the text it opens on: the rendered `overflow-wrap`,
-  `word-break` and `line-break` are held for as long as the editor is open, so a long word keeps
-  the line breaks the page gave it. Selection and hover outlines are lime over a dark hairline,
-  which stays visible on a pale page and over a dark hero alike.
-
+- Canvas edits text on the first click. Clicking an annotated text or rich-text field puts the caret
+  where the pointer landed instead of opening the Inspector, and a button at the field's top right
+  opens the Inspector when the whole field is wanted — while the editor is open, too. Double click
+  inside the open editor selects a word, as it does anywhere else. Selecting a field or block on the
+  page or in Structure preserves the Inspector’s open/closed state; an open Inspector follows
+  selection. Links and buttons keep their floating link editor. Explicit Inspector and media
+  replacement actions still open the panel. Inline editing no longer re-wraps the text it opens on:
+  the rendered `overflow-wrap`, `word-break` and `line-break` are held for as long as the editor is
+  open, so a long word keeps the line breaks the page gave it. Selection and hover outlines are lime
+  over a dark hairline, which stays visible on a pale page and over a dark hero alike.
 - The admin screens example reads the interface language reactively, so a site that copies it
   compiles without Svelte's `state_referenced_locally` warning, and the page now says the
   `✕ missing peer @inlang/paraglide-js` that `autoInstallPeers: false` prints is expected.
   See [Admin screens](docs/admin-screens.md).
-
 - A site's own endpoint can type the session: the integration writes an `App.Locals`
   declaration into `.astro/`, so `locals.handover` is known under `src/pages/admin/api/`.
   `Session` is exported from `astro-handover` beside it.
-
 - A site's admin screens are compiled into the admin. `astro build` rebuilds the admin SPA inside
   the site before the site's own build, with the components `admin.screens` names compiled in, and
   serves that bundle from `/admin/x/<key>`; `astro dev` rebuilds it whenever a screen is saved. A
   site without screens builds nothing extra and ships the admin as it came. A site with them lists
   `svelte` and `@inlang/paraglide-js-svelte` itself and, on pnpm, sets `autoInstallPeers: false`.
   See [Admin screens](docs/admin-screens.md).
-
 - The admin serves a site's own screens: `/admin/x/<key>` renders the component `admin.screens`
   names, links it in the sidebar under **Site**, and hides both from a role the key does not
   list. A screen is handed the session, the admin's own authed `fetch`, its navigation and the
   interface language — `ScreenProps` from `astro-handover/screen`.
   See [Admin screens](docs/admin-screens.md).
-
 - `cms.config.ts` takes an `admin.screens` block: a site names pages of its own by key, Svelte
   component path, label and the roles that see them. The build refuses a key that is not an
   address segment, a label in a language the admin does not have, a role that is not `owner` or
   `editor`, and a component file that is not there. `GET /admin/api/ping` answers with the list,
   empty for a site that declares none.
-
 - `astro dev` works in a site that installs the package rather than linking it. Every route
   answered `500 module is not defined`, because Vite's dev optimiser does not look for
   dependencies inside `node_modules` and `@handover/core`'s CommonJS transitives reached the
@@ -610,8 +591,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   that it goes live when the entry publishes. The panel for files that disagree about `_source`
   now offers *Make German the source* for each language with a file. Every refusal of the
   change reads in the interface language.
-- Join the content form and live preview into one workspace, reduce nested field padding, and refresh the canvas toolbar, structure panel, inspector, and stage.
-
+- Join the content form and live preview into one workspace, reduce nested field padding, and
+  refresh the canvas toolbar, structure panel, inspector, and stage.
 - Redirects is laid out like the other lists: title, rule count and **Add redirect** on one
   row, the search under it, and each rule on one line (old address, arrow, new address). Edit
   and Delete are icon buttons beside **Test**.
@@ -621,8 +602,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   lighter, and the current sidebar item is a white card.
 - Admin UI internals follow current Svelte 5 idioms (window listeners, attachments,
   `$state.raw`, class arrays); no behaviour change.
-- Fold the live preview away by pressing **Live preview** again; it slides shut like the sidebar
-  and the form takes the full width. Entries on single-language sites get the toggle too, and the choice is remembered.
+- Fold the live preview away by pressing **Live preview** again; it slides shut like the sidebar and
+  the form takes the full width. Entries on single-language sites get the toggle too, and the choice
+  is remembered.
 - Tidy the editor's content pane: list rows stack their fields under a small header with the
   grip, number and remove button, plain word lists sit one per line, block headers use a
   clear chevron and line icons, and nested blocks keep their full width.
@@ -631,19 +613,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   current choice; the address moves to the row's tooltip.
 - Label a list's add button "Add item" instead of "Add to {field}"; screen readers still hear
   which list it adds to. The live-preview block controls use line icons too.
-
 - Show the tabs on collection lists, the media library and the menu editor as the same pill
   switch the editor uses, instead of an underline.
-
 - Collapse the sidebar to icons with the button at the left of the top bar; hovering or focusing an
   icon shows its name. The browser remembers the choice.
-
 - Show the breadcrumb (*Pages / Home*, *Site settings / Redirects*) in the top bar, after the
   sidebar button. The editor's autosave state now sits next to **Publish**.
-
 - Stop showing *This editing session expired while idle* after two minutes without typing. If
   nobody else opened the entry meanwhile, the next edit takes the lock back quietly.
-
 - Replace the Form/Split/Canvas views and the separate **Side by side** button with **Beside the
   form**: **Page**, **Side by side** or **Form only**, plus a **Canvas** button. Entries that have a
   page open with it beside the form. That page stays in view while the form scrolls, has one header
@@ -651,162 +628,131 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   through; Structure, Inspector, undo and Edit/Interact are in **Canvas** only. The entry header is
   a row shorter, with the web address beside the Content/SEO/History tabs. A view picked before
   this release is forgotten once.
-
 - Change your email on **Account**. The current address approves the change by link, then the new
   address confirms it; a site without a mailer shows the email without the form.
-
 - Redesign **Account**: profile, interface language, password and sessions are separate cards,
   each with its button and its result in the card's footer. The account menu no longer has an
   interface-language picker; choose the language on **Account**.
-
 - Redesign **Settings**: one line at the top says whether everything works, with **Check again**;
   DeepL and writing-help keys come first under **Translation and AI**, with the translation check's
   result on the DeepL row; services are single rows that open for their provider and last result,
   and a failing one opens by itself; the configuration moves into a closed **About this site**.
-
 - Tidy the navigation builder: the library groups pages into collapsible sections per collection
   with one line per page and no paths, menu rows are single lines in one list, and the item
   editor puts label and link side by side with language visibility as one **Shown in** select.
-
 - Name an unlabelled `index` menu item by the collection's `label` in each language, on the site
   through `menusAt()` and in the navigation builder, instead of the humanised key everywhere.
-
 - Name collections, globals, fields and block types in each interface language. A collection takes
   `label` and `singular` in `cms.config.ts`; a schema takes `.meta({ label: { en, de } })`. The
   editor, entry lists, dashboard, pending changes, History diffs, conflicts and Canvas panels read
   the editor's language and switch without a reload. A collection label with a key other than
   `en` or `de` stops the build.
-
 - Cache validated Paraglide output by its complete compiler-input fingerprint. The
   release proof now covers archive installation, fresh and upgraded consumer migrations, packaged
   Worker size, browser timing, and the absence of admin translation assets on public pages.
-
 - Complete the interface-language documentation against the shipped admin: the package overview
   and both guide sets now describe full Handover-owned English/German coverage, the exact picker
   labels, persistence and live-switching boundaries, authored-copy exclusions, migration path and
   remaining native German editorial sign-off. Contributor and API examples were rechecked against
   the catalog, locale, authentication and bootstrap contracts.
-
 - Review the complete English/German admin at desktop and phone widths, standardize German on
   informal `du` and inclusive role labels, and add a generated long-string pseudo-locale for
   layout review.
   Locale-sensitive formatters now accept a newly configured UI locale without component changes.
-
 - Finish the English/German admin string and error audit: translate retained editor
   restore/drift/conflict guidance and shared missing-image accessibility text, and make Canvas
   structure presentation recognize semantic paths instead of English synthetic labels. Known
   failures remain code-driven while legacy prose-only payloads keep localized generic recovery and
   separate technical detail.
-
 - Translate retained Canvas plain-text editing recovery and mark every Handover-owned in-frame
   overlay with the interface language while leaving the preview document in its content language.
   Live switching preserves IME composition, caret, accepted content and history; navigation routes,
   methods, protocol discriminators and exact refusal identifiers remain unchanged.
-
 - Translate Canvas selection paths, structural fallback names, block actions and keyboard/drag
   announcements into English and German. Live switching preserves the selected annotation, open
   action menu, focused action and active drag while template-authored labels remain unchanged.
-
 - Translate Canvas link and rich-text controls into English and German, including entry search,
   unsafe-address guidance, toolbar names, accessible attributes and retained recovery. Live
   switching preserves the open link draft and focused input plus the active TipTap document,
   selection, formatting, composition and session undo history; lazy rich-text controls start in the
   latest accepted language without a content write or directory reread.
-
 - Translate the Canvas Inspector and staged block controls into English and German, including
   field-kind labels, content-language names, notices, tooltips and accessibility text. Live
   switching preserves the selected field, focused widget, replacement draft and authored schema
   labels or block names; narrow-panel actions wrap instead of clipping longer German labels.
-
 - Translate the Canvas workspace, Structure controls, navigation and validation feedback, recovery
   actions, accessibility text and embedded-frame title into English and German. Live switching
   updates the existing iframe and retained failure descriptors without refetching content, replacing
   the page, or losing editor state; exact technical detail remains separate from recovery guidance.
-
 - Synchronize the interface language into the editable Canvas through a dedicated, validated
   parent-to-iframe bridge message. Initial, live-switched and late-initialized controls share the
   latest accepted English/Deutsch locale without replacing the iframe, changing content locale or
   advancing content versions; foreign, malformed and stale messages are ignored.
-
 - Translate Settings, connection diagnostics, integration-key dialogs and development checks into
   English and German. Stable result codes distinguish unavailable configuration, provider refusal,
   optional connections and integration operations without inferring a cause from HTTP status.
   Live switching preserves check results, exact identifiers/provider detail and an open secret
   draft without rerunning checks or changing site configuration.
-
 - Translate the Members screen into English and German, including invitation, role and removal
   dialogs, sign-in metadata, dates, accessibility labels and retained feedback. Stable CMS and
   authentication codes keep known refusals localizable; live switching preserves names, email
   addresses, entry titles, dialog state, typed invitations and permission behavior without another
   members read. Invitation email contents remain unchanged.
-
 - Translate the activity log and dashboard activity rows into English and German, including whole
   event sentences, filters, group labels, plural counts, dates, accessibility labels, empty states,
   commit details and retained restore/load recovery. Catalogs control where a linked entry appears,
   so German does not inherit English word order; live switching keeps rows, filters, expanded diffs,
   commits and event data in place without another activity read or translated data write.
-
 - Translate the field-by-field conflict resolver into English and German, including choices,
   merged-change explanations, timestamps, accessibility labels and recovery. Stable conflict
   response codes distinguish a settled or changed report, stale answers and an unreachable
   repository; live switching preserves the loaded report, selected sides, focus and retained
   failure without another repository read or draft write.
-
 - Translate version history, field-by-field diffs, restore confirmation/recovery and preview-pane
   chrome into English and German. Live switching preserves history filters, selected versions,
   comparisons, dialogs, loaded diffs, the preview iframe and render identity without another
   request; authored history/content and the preview page's content language remain unchanged, and
   timestamps retain the browser timezone.
-
 - Translate the pending-changes drawer and one-entry publish confirmation into English and German,
   including selection and hold counts, precheck summaries, dates, accessibility labels and retained
   publish/discard recovery. Stable publish/check response codes preserve status, paths, drift,
   conflict and uncertain-finalization semantics; live switching keeps selections, locks, dialogs,
   check results and in-flight work without another content request or check pass.
-
 - Translate redirects, off-site destination choices, hidden-address summaries and localized-address
   validation into English and German. Stable redirect, address, and last-language error descriptors
   preserve HTTP outcomes and legacy diagnostics. Live switching keeps paths, filters, selected
   targets, typed URLs, dialog nodes, focus, content-language scope and editor drafts unchanged.
-
 - Translate Site settings and the full navigation builder into English and German, including
   dates, language names, counts, drag/drop and row actions, dialogs, accessibility labels, and
   retained list/directory feedback. Live switching preserves shared menu structure, ordering,
   open item editors, focus and local label drafts without rereading site or entry data.
-
 - Translate content-language controls, translation columns, machine/stale indicators and block
   drift reconciliation into English and German. Reactive language names and retained failures
   follow the interface locale while selected content language, drafts, focused fields, drift
   answers and pending requests stay in place; one-language sites gain no content controls.
-
 - Translate the full media library into English and German, including filters, counts, dates, byte
   sizes, details, metadata recovery and deletion guidance. Stable media codes distinguish current
   and published usage, missing assets and unavailable storage while preserving API statuses and
   legacy error text. Live switching keeps selection, search, filters, focus, authored metadata and
   pending uploads; uncertain or malformed deletes reload before another mutation.
-
 - Translate crop and focal-point dialogs, live control labels and retained source/render/upload
   recovery into English and German. Live switching preserves dialog nodes, focus, crop geometry,
   focal coordinates, authored filenames and preset labels without image processing, content writes
   or upload restarts.
-
 - Translate media-picker guidance, limits, selections, upload queues and retained recovery into
   English and German. Stable upload-stage descriptors preserve server diagnostics and distinguish
   refused, malformed and unconfirmed outcomes; live switching keeps search, focus, chosen order and
   pending work without another library read or upload restart.
-
 - Translate rich-text toolbar names, unsupported-formatting guidance and lazy link controls into
   English and German. A live interface-language switch preserves the TipTap editor, focus,
   selection, active formatting, Markdown, session undo history and an open link draft without a
   content write or entry-directory reread.
-
 - Translate structured, repeated, link, reference, image, file, embed and SEO field presentation
   into English and German. Open field popovers, retained embed guidance, Handover-owned compact
-  dates and SEO notices reformat in place while nested inputs, focus, selections, values and authored
-  schema copy remain unchanged. Link-choice and row-action sentences translate as complete UI copy,
-  and SEO meters describe their plural limits correctly. Embed parsing retains its legacy refusal
-  text and adds a stable reason so the editor never infers recovery from English prose.
-
+  dates and SEO notices reformat in place while nested inputs, focus, selections, values and
+  authored schema copy remain unchanged. Link-choice and row-action sentences translate as complete
+  UI copy, and SEO meters describe their plural limits correctly. Embed parsing retains its legacy
+  refusal text and adds a stable reason so the editor never infers recovery from English prose.
 - Localize required and built-in scalar type, date, selection, text-length, and number-bound
   validation in the entry editor. Add stable descriptors and safe bounds parameters to draft/read
   problems while retaining field paths and legacy messages. Visible validation and scalar controls
@@ -814,7 +760,6 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   messages and consumer global error maps remain authored. Integer failures explain that a whole
   number is needed, character limits pluralize correctly, and numeric limits retain their precision
   while using the interface language's decimal separator.
-
 - Translate entry-editor tabs, view controls, status and overflow actions, URL metadata, rename
   presentation, outline labels, and the removed-language timestamp into English and German. Live
   interface-language changes keep the editor session, content language, focused field and typed
@@ -824,7 +769,6 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   descriptor-backed validation now reformat while visible without changing queued writes, values,
   undo or recovery. Custom schema validation stays authored. Translation, off-site, publish-dialog,
   and history feedback remain in their staged follow-up work.
-
 - Translate entry creation and shared page/entry pickers into English and German. Live language
   changes retain titles, starters, searches, custom URLs, selected entries and content language
   without rereading content; picker language names follow the interface locale, retained failures
@@ -832,282 +776,220 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   labels are translated while schema labels stay authored, invalid creation-directory envelopes or
   rows use the retry state, and an uninterpretable successful creation warns that the outcome is
   unconfirmed.
-
 - Translate entry lists, filters, counts, empty states, row actions, deleted-entry history, dates,
   language names, and retained list feedback into English and German. Live language changes keep
   search and status/language filters, `?locale=`, selected rows, authored titles, and open list
   action drafts in place without rereading the collection.
-
 - Translate the signed-in shell, navigation, dashboard, pending/build indicators, revert flow,
   retained shell feedback, dates, and accessibility labels into English and German. Live language
   changes preserve dashboard data, build polling, authored labels and diagnostics, and open editor
   state. Successful shell reads now reject invalid response envelopes without replacing last-known
   status, and entry reads identify their specific not-found response with a stable header.
-
 - Translate the complete Account, sign-in, reset-password, and expired-link surfaces into English
   and German. Visible account/authentication feedback now follows live language changes without
   clearing forms or sessions; known auth codes, actionable password limits, malformed account-read
   recovery, and connection-loss uncertainty survive wrappers.
-
 - Add live English/Deutsch interface-language controls to signed-out screens, the account menu,
   and Account, with saved-account-first bootstrap, installation-scoped device hints, negotiated
   private shells, confirmed preference writes, and uncertainty reconciliation. Other admin screens
   remain staged for later translation.
-
 - Add validated, optional English/German account preference storage to the existing profile API
   and bootstrap response. Upgrades require the additive nullable `user.ui_locale` D1 migration;
   language controls follow in a later update.
-
 - Add a pinned, noninteractive contributor command that reproducibly generates the committed
   Better Auth schema from explicit configuration and output paths.
-
 - Block admin UI message generation when supported catalogs have missing, extra, or empty entries,
   incompatible placeholders/declarations/selectors, missing variant fallbacks, or locales that
   differ from the core allowlist. All UI workflows now share the same validation and compiler entry
   point.
-
 - Add the pinned, locally loaded Paraglide compiler and Svelte markup workflow for future admin UI
   translations, with initial English/German catalogs, explicit locale helpers, and reproducible
   ignored generated output. No interface language preference or translated product screen ships
   yet.
-
 - Document and automate repeatable decoded, gzip, and Brotli measurements for the admin, Canvas,
   lazy rich-text, embedded UI asset, and packaged Worker graphs; no runtime behavior changes.
-
 - Read build content once per virtual-index generation, preserving explicit development
   invalidation and byte-identical index, template, media-usage, and translation-staleness output.
-
 - Bind ordinary preview success to the exact requested address and saved version. Failed renders
   now stay failed, stalled renders time out with Retry, and an expired session offers to reload the
   admin, without another page fetch or any change to the Canvas renderer protocol.
-
 - Keep the local design preview's build, member, pending-entry, media, form, and session samples
   checked against the UI contracts. Its live timestamp and sign-in method now use the route
   shapes, and its pending sample names the two files it represents. Getting started now describes
   entry and batch publishing, checks, Resolve, and Discard as the current admin presents them.
-
 - Restore the CI lint baseline with mechanical formatting and import ordering; no runtime
   behavior changes.
-
 - Document the supported checkout-link and three-archive installation paths while Handover's
   packages remain unpublished. A CI smoke test now installs those archives without workspace
   fallback, runs the packaged CLI, checks public types and components, and builds an Astro site.
-
 - Make `handover init` safely resumable across resource creation, migration generation and
   application, and owner seeding. Existing Wrangler and Drizzle configs are validated before
   provisioning, user-owned bindings pause with an exact continuation command, and retries verify
   recorded Cloudflare resources instead of duplicating them.
-
 - Resolve the starter Hero's stored image key through `media.publicBase`, preserve its alt and
   dimensions, and carry its focal point into cover-crop positioning.
-
 - Report rejected or opaque live redirect checks as unverified instead of working, offer the old
   address for a direct check, and include query parameters when comparing observed destinations.
-
 - Let a rate-limited login recover after the server's retry interval, with a one-minute fallback,
   while preserving the entered email. Failed password-reset requests now show a retryable error.
-
 - Distinguish unavailable admin reads from valid empty, signed-out, and fully published states.
   The shell, dashboard, media and page pickers, entry creation, redirects, conflicts, and account
   page now retain useful last-known data and offer targeted retries. Uncertain invitations are no
   longer diagnosed as broken email configuration, and failed account actions use error styling.
-
 - Keep cropped-image upload negotiation and confirmation on the configured site base while the
   original image and signed bucket upload continue to use their external URLs.
-
 - Copy a media-library default alt into content when an image is chosen. Existing page and
   translated overrides stay authoritative, and later library edits do not rewrite content.
-
 - Keep an asset's real usage attached to media-library metadata-save responses, so editing tags,
   alt text, focal position, or archive state cannot make a used asset appear deletable.
-
 - Preserve consecutive media-library metadata edits with optimistic per-asset save queues. Failed
   saves keep later input intact and can be retried without another edit.
-
 - Keep media picker and library results bound to the latest search and media tab. Image and file
   upload batches now retain the mode they started with and refresh only their matching view.
-
 - Refresh the shell's build, pending-change, and entry-directory state after every successful
   repository commit. Entry publishing, redirects, rename/delete/template/restore actions, locale
   removal, reverts, and the developer conflict simulator now share the existing build poller;
   draft-only and failed actions do not start one.
-
 - Coordinate drawer publishing, discard, conflict resolution, and publish reverts with the open
   entry's save lane. Final edits now save before an outside action runs, and authoritative
   replacements retire and reload the old editor session before editing resumes.
-
 - Freeze the pending drawer's selected entries while final publication checks run, decide from
   that exact response, and ignore obsolete background check results even when the selection
   returns to the same set.
-
 - Keep history diffs bound to the current entry and selected version or comparison. Late responses
   and closed comparisons can no longer replace the visible diff, error, or loading state.
-
 - Database schema version 9 claims scheduled maintenance jobs atomically, recovers abandoned
   claims after 15 minutes, and retries transient failures after exponential five-minute delays
   capped at one hour without changing the normal hourly or daily cadence after success.
-
 - Validate redirect sources and destinations consistently in editor commands, lifecycle changes,
   build schemas, and `_redirects` emission so whitespace and control characters cannot inject
   additional routing directives.
-
 - Reconcile every published draft overlay when a later commit becomes live. Cleanup now verifies
   deployed ancestry or exact content, preserves rollbacks and divergent deployments, and retries
   rows deferred by active editing locks without losing newer saves.
-
 - Keep an image's source and dimensions together during conflict resolution while translated alt
   text remains independently mergeable, including added and deleted direct and SEO images.
-
 - Coordinate permanent media deletion with draft writes. Deletion now leaves a durable tombstone,
   refuses references from stale pickers, survives object-store failures for safe retry, and cannot
   be undone by upload confirmation or reconciliation while it is pending.
-
 - Make repository mutations recoverable across Git and D1. Publish, rename, delete, locale,
   redirect, template, revert, and restore operations now record their exact intent before Git,
   recover tagged commits after lost responses, and retry database finalization without another
   commit or losing newer drafts. Durable operation records now provide build and undo authority;
   the expiring activity log remains best-effort telemetry.
-
 - Keep menu conflict resolution in step with its report. Draft edits to nested labels, links,
   children, row membership, and order now survive rebasing over unrelated repository changes,
   while explicit field choices still decide genuine conflicts.
-
 - Reject unreadable reserved metadata, non-object documents, and duplicate row IDs before content
   reaches the draft store. Save, create, translation, restore, conflict resolution, and imported
   repository content now share the same structural write boundary while incomplete and unknown
   fields remain editable.
-
 - Move unpublished translations with their entry during rename. All affected locale rows now
   finalize atomically from the files in the rename commit, while draft-only content, holds, and
   translation metadata remain unpublished at the new name.
-
 - Preserve aged draft work after its repository file disappears. Orphan cleanup now removes only
   unchanged, unheld, inactive rows and rechecks concurrent saves and editing locks before deletion.
-
 - Renew an entry's editing lease from the shared session mutation boundary, so Canvas text,
   history, and block operations keep the lock alive immediately just like Form and translation
   edits instead of waiting for a background-throttled autosave.
-
 - Name Canvas blocks in the Structure panel the way the form editor does — a block's `_label`,
   else its type — instead of numbering every row, and let a row with children collapse. Templates
   that already pass a whole block row to `edit.block(row)`, `<Blocks />` among them, get the names
   with no change. Structure and Inspector drop their internal hairlines for a lighter panel.
   A list annotated on the same element as the block that owns it, as nested block lists usually
   are, no longer appears above that block under the wrong parent.
-
 - Polish Canvas editing: show field validation with a direct Form recovery action, fill the
   available viewport, preserve Structure alongside the media Inspector on wide screens, and
   contain image controls and formatting toolbars on narrow screens. Rich-text activation replaces
   the rendered prose without a duplicate and keeps accepted text visible while refreshing. Quiet
   selection outlines and short field labels replace stacked outlines and full-path overlays.
-
 - Document the Canvas template contract with build-checked page and nested-block patterns, the
   public locals and annotation helpers, rules for Canvas-aware site side effects, and the release's
   editing boundaries. The block and preview guides now match the Form/Split/Canvas implementation.
-
 - Bound Canvas work on large entries. Entry versions and dirty state now advance without
   serializing the whole document on each keystroke; snapshots materialize only for saves and
   renders. Preview draft paths are indexed and each changed file is parsed and validated once per
   request, while visible overlay geometry shares observers and one animation-frame measurement
   pass.
-
 - Coordinate Canvas navigation without letting the iframe leave its snapshot session. Edit and
   Interact both resolve real relative and localized site links through the versioned bridge and
   flush every dirty locale before opening another editable entry. Interact disables editing
   overlays while preserving site controls; hash links stay local, non-editable pages, external
   links, and downloads use explicit open actions, and new-tab previews remain ordinary
   authenticated GETs with no snapshot data in their URLs.
-
 - Add duplicate, delete, and same-list reorder controls to selected Canvas blocks. Pointer drags
   remain a reversible visual projection until drop, Escape cancels without changing content, and
   labelled move controls plus `Alt` + arrow keys provide keyboard parity. Referenced blocks remove
   only their page occurrence, recursive duplication keeps fresh IDs across locales, and shared
   undo/redo restores translated subtrees even after deletion has autosaved.
-
 - Add schema-filtered Canvas block insertion and replacement. Selected blocks expose before/after
   controls and the keyboard insert shortcut, while annotated empty block lists expose their own
   insertion point. A temporary Inspector keeps configuration local until required fields are
   complete; Cancel changes nothing and Apply creates one undoable structural transaction. Failed
   candidate renders retain both the last working Canvas and the newly edited Form state.
-
 - Add lazy rich-text editing to selected Canvas prose annotations. Canvas and Form now share the
   same TipTap extension tiers, Markdown serializer, controlled reconciliation, and session-owned
   undo/redo selections. Formatting and IME composition cross the versioned command bridge, while
   code-edited Markdown outside its configured tier stays read-only and unchanged.
-
 - Add focused plain-text editing to selected Canvas text annotations. Double-click or Enter begins
   editing, paste remains plain text, IME composition commits atomically, and Escape or blur exits
   before the established fresh render. Serialized, versioned acknowledgements share Form's session
   undo/redo and cursor history; refused stale edits restore the authoritative Form value without
   relaxing the bridge's origin, frame, locale, document, version, or target checks.
-
 - Reuse the existing schema widgets in a right-side Canvas Inspector. Stable selections resolve
   structured child addresses back to their owning field, retain source/translation restrictions,
   lock disablement, validation and atomic session commands, and schedule a fresh render only after
   a completed change. Referenced globals and other entries link to their owning editor instead of
   borrowing the active page's write authority; derived structural selections can return to Form.
-
 - Add Canvas selection and structure navigation. Explicit field, block, and list annotations now
   produce isolated in-frame hover and selection overlays, nested breadcrumbs, grouped repeated
   roots, and selectable empty lists. A versioned bridge keeps the parent Structure tree and
   logical target in sync; pointer selection, arrow-key sibling traversal, Shift+arrow ancestry,
   Enter selection, accessible position announcements, and tree-driven scrolling share the same
   stable targets without inferring editable content from ordinary HTML.
-
 - Add one shared Form/Split/Canvas entry shell. The versioned view preference is scoped to the
   site's normalized base and signed-in editor, unsupported sites safely fall back to Form, and
   full Canvas collapses the application sidebar. Split and narrow-screen pane switches retain the
   same unsaved session while Canvas renders its current locale snapshot through the preview POST.
-
 - Coalesce completed Canvas edits and block actions into one render after 200 ms while retaining
   only the latest pending snapshot. Ready documents now wait for inline editing, composition, and
   dragging to finish before promotion; obsolete responses cannot replace the active page, and
   promotion restores the selected annotation's scroll anchor across layout or viewport changes
   without taking focus from parent inspector controls.
-
 - Render each Canvas update through a fresh, uniquely named iframe and native snapshot POST. A
   candidate replaces the visible document only after its matching bridge handshake and load have
   completed at the current content version; render errors, bootstrap timeouts, and obsolete replies
   dispose the candidate while retaining the active page, and repeated renders leave Back/Forward
   history intact.
-
 - Add the versioned Canvas browser bridge. Handshakes and commands are bound to the expected
   origin, iframe, render request, entry, locale, session epoch, content version, and selected
   target; every accepted or refused command is acknowledged, and a reused command ID never runs
   twice.
-
 - Let `<Blocks />` carry an optional Canvas edit context through custom block components without
   adding wrapper markup. Fields and explicit empty lists can annotate existing elements, repeated
   shared-global occurrences retain both their source owner and page location, duplicate block IDs
   are refused in Canvas, and public rendering remains marker-free.
-
 - Carry verified Canvas document identity through typed request locals. Site templates can use
   `createEditContext(Astro)` and `isCanvas(Astro)` without changing public or ordinary preview
   output, while Canvas success and known-error documents expose escaped result manifests.
-
 - Render Canvas previews from authenticated, same-origin form POSTs carrying the current locale
   snapshots. The preview route overlays that transient data in memory without saving it, accepts
   both editors and owners, and rejects malformed or encoded bodies larger than 5 MiB.
-
 - Split the browser build into manifest-backed admin and Canvas entries. The admin shell now loads
   only its own entry and associated styles while the asset route keeps shared and lazy chunks
   available; entry editing and Canvas rich text load from explicit on-demand boundaries.
-
 - Make block and row structure edits part of entry-session undo/redo, including after autosave.
   Duplication now copies only the selected subtree across loaded locales, reuses one recursive ID
   map for every descendant, preserves unrelated parent identities and machine markers, and sends
   locale-owned restoration data through the scoped structural save envelope.
-
 - Accept a scoped `structure` envelope on source draft saves. Structural history can restore
   locale-owned row data and valid machine-translation markers while the route validates stable
   container addresses, locale revisions, seed identity, and marker scope. Ordinary saves retain
   their existing filtering, lock, drift, conflict, and response behavior.
-
 - Add selective global loading to `globalsAt()`: loaders can name layout dependencies and
   supply the rendered block tree, including nested `_ref` targets. Preview validates only
   those drafts, so an incomplete unused global no longer blocks a page. Required invalid or
   missing globals return a readable `422`; existing whole-collection calls remain compatible.
-
 - Compact the shared entry editor header by keeping its title, state, language controls, preview,
   and publish action on one responsive row when space allows. Short forms stay single-column;
   field jump links now appear only once a form has more than five sections.
@@ -1129,7 +1011,6 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   images. Media details open on selection and can be dismissed.
 - Add a development-only design preview at `packages/ui/review.html`, using sample content and
   local API responses. It is excluded from the production admin build.
-
 - **A check error is a problem the editor shows.** A picture with nothing behind it used to
   surface only in the publish dialog, where *Go to field* landed on an unmarked card and the
   header's *problems* count left it out. The checks now run when a drafted entry opens and
@@ -1160,7 +1041,6 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Fix the navigation translation pane collapsing to a narrow column in locale-only view.
   Clarify the shared-menu workflow and make language visibility an optional item setting.
   Navigation label placeholders and hidden-page warnings now use the selected locale.
-
 - **Globals lose the empty right pane.** The dashed placeholder offered Preview, which a global
   never has; the right column now appears when Side by side is on. The navigation builder no
   longer sits in a 640px form. The second language's rows stack title, box and address instead of
@@ -1173,10 +1053,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Preview navigation, language switchers and localized address lookups no longer validate
   unrelated page bodies. An incomplete linked draft no longer blocks the homepage; the
   page being previewed and other content its loader renders still require valid drafts.
-
 - Pin Better Auth to the tested 1.7.1 account schema. Packed installations can no longer
   silently select 1.7.3, whose removed `issuer` writes prevent authentication from starting.
-
 - Saves use server-seeded edit snapshots and revisions, preserve newer work during publication,
   and flush before navigation or dependent actions. Rename and creation reserve destination
   paths atomically. Revert and restore require a recorded CMS operation and authorized paths;
@@ -1194,13 +1072,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   public finalization. Recovery uses the same validation. Reload open admin tabs on upgrade.
 - Malformed publish selections and unknown CLI arguments are refused before writes; help is
   read-only.
-
 - Protect public results across deployments: `entryAt()` hides public entries while authenticated
   preview can still read them, and new starters use that helper. Media deletion checks the
   deployed snapshot as well as drafts and repository content. Redirect undo restores edited
   and deleted rules and refuses overlapping changes. Address changes retain pending hide
   destinations, and revert preserves unpublished work while invalidating stale edit revisions.
-
 - **Publish this entry runs the checks.** The entry header's dialog runs the same pre-publish
   pass the drawer does over its one entry — when it opens and again on the press — lists what
   it found, and refuses an error the same way: *Fix 1 error to publish*, disabled, or *Nothing
@@ -1299,7 +1175,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   no pre-publish checks, which it has since they shipped.
 - **Docs: Rendering content slimmed to its components** — the language switcher has
   [a page of its own](docs/language-switcher.md), and `<Nav />` / `menusAt()` moved onto
-  [Navigation menus](docs/navigation.md#rendering-the-menus); inbound links repointed.
+  [Navigation menus](docs/rendering-menus.md); inbound links repointed.
 - **Docs: Site files is three pages instead of one 190-line page** — [the hub](docs/site-files.md)
   with globals and templates, [Navigation menus](docs/navigation.md) and
   [Redirects](docs/redirects.md); inbound links repointed.
@@ -1349,7 +1225,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   their own on a phone.
 - **Notes fold in the drawer.** The pre-publish checks list errors and warnings as before and put
   the notes of each entry under *N notes*, opened on demand — a site with no SEO defaults gets two
-  per entry, and twenty entries made forty lines ([Pending changes](docs/pending-changes.md#checks-before-a-publish)).
+  per entry, and twenty entries made forty lines ([Pending
+  changes](docs/pending-changes.md#checks-before-a-publish)).
 - **A role change names the member in the row itself**, so the dashboard's activity tile — which
   has no member list — reads *made Jonas Weber an owner* rather than *made a member an owner*.
 - The language chips in the entry list, the drawer, the editor, Site settings, the drift panel and
@@ -1396,7 +1273,6 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   unreachable, and the account menu is a real menu with name, email, role, Account and Sign out.
 - **The top bar's unpublished-changes indicator says more than a count**: how long the oldest
   change has been waiting, and how many entries are held back.
-
 - **A dashboard at `/admin`.** The landing page is a state-of-the-site view instead of the
   first collection's list: what is waiting to be published and how old it is, the build pill
   with who published last and a Revert, the last eight entries anybody edited with the lock
@@ -1445,14 +1321,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `site` key `astro.config.mjs` needs for the canonical and the alternates.
 - **A sitemap and a robots.txt at build.** `astro build` writes `sitemap-index.xml`, one
   `sitemap-<locale>.xml` per language and `robots.txt` into the static assets. The sitemap holds
-  every entry in a collection with a `route`, per language, minus the hidden ones, the languages
-  an entry is not offered in and anything whose `seo.noindex` is on, with `hreflang` alternates
-  on each URL; `robots.txt` points at the index and disallows `/admin` and `/_preview`, unless
-  the site ships a `robots.txt` of its own in `public/` ([Search and sharing](docs/seo.md#sitemap-and-robotstxt)).
+  every entry in a collection with a `route`, per language, minus the hidden ones, the languages an
+  entry is not offered in and anything whose `seo.noindex` is on, with `hreflang` alternates on each
+  URL; `robots.txt` points at the index and disallows `/admin` and `/_preview`, unless the site
+  ships a `robots.txt` of its own in `public/` ([Search and
+  sharing](docs/seo.md#sitemap-and-robotstxt)).
 - **An SEO field's words are translated.** The second language gets the search title, the
   description and the picture's alt text; the picture itself, the switch and the canonical read
   the same in every language.
-
 - **An embed field you can fill in.** Paste a YouTube, Vimeo or Google Maps link and it becomes a
   card with the provider's name, the id that was stored and — for YouTube — the provider's own
   still, with the frame's title and the second the video starts at under it. The URL itself is
@@ -1466,7 +1342,6 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **An embed's title is translated.** The second language gets the title and nothing else: the
   provider, the id and the start time are the same in every language, and a save from that column
   cannot change them.
-
 - **Version history on every entry.** A **History** tab beside Content shows that entry's git
   log, read from GitHub on open and stored nowhere: a commit that wrote several of the entry's
   language files is one version, with a chip per language and the person who published it from
@@ -1500,9 +1375,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   reordered by dragging a row's handle or with the up, down, indent and outdent buttons on it.
   An item pointing at a page this language does not have, or at a hidden one, is flagged where
   it stands ([Navigation menus](docs/navigation.md)).
-- **`<Nav />` and `menusAt()`.** The menu one language renders: every `ref` resolved to the
-  address that language serves, and every item it cannot show dropped — with its children — so a
-  menu never links to a page that is not there ([Rendering content](docs/navigation.md#rendering-the-menus)).
+- **`<Nav />` and `menusAt()`.** The menu one language renders: every `ref` resolved to the address
+  that language serves, and every item it cannot show dropped — with its children — so a menu never
+  links to a page that is not there ([Rendering content](docs/rendering-menus.md)).
 - **Menu labels translate; the tree does not.** Which items a menu has, in which order and
   pointing where is the same in every language — moving one moves it in all of them — and each
   language keeps its own words for the rows. A translation's column draws that tree as one box
@@ -1567,7 +1442,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   rather than a deletion per field, and a removed row with no words of its own is *Row 2*,
   not its id.
 - **Remove on an integration key asks first**, with the card's own sentence about what takes
-  over ([Settings](docs/diagnostics.md#integrations)).
+  over ([Settings](docs/diagnostics.md#translation-and-ai)).
 - **A `cron-` row in the activity log reads as a sentence** — *The hourly media check
   recorded 2 uploads the library had missed.* — instead of *System — cron-reconcile*
   ([Activity log](docs/activity.md)).
@@ -1577,13 +1452,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   secrets table is [Secrets](docs/secrets.md), out of [Deploy](docs/deploy.md). The bucket's
   CORS rule in [Media](docs/media.md) reads `GET, PUT`. The build-minute quota pill is not
   planned, not pending.
-
 - **The lock is per tab.** Each editor tab beats the lock with a token of its own, so the same
-  person opening an entry twice meets *You have this open in another tab* in the second one
-  instead of both tabs writing the same draft. Saves carry the token; a save without the
-  holder's is refused. The `locks` table gains a `tab` column — **schema version 3**, so run
-  `npx handover db generate` and commit `migrations/` after upgrading
-  ([Working together](docs/working-together.md), [`handover db generate`](docs/cli.md#handover-db-generate)).
+  person opening an entry twice meets *You have this open in another tab* in the second one instead
+  of both tabs writing the same draft. Saves carry the token; a save without the holder's is
+  refused. The `locks` table gains a `tab` column — **schema version 3**, so run
+  `npx handover db generate` and commit `migrations/` after upgrading ([Working
+  together](docs/working-together.md), [`handover db generate`](docs/cli.md#handover-db-generate)).
 - **An open entry is blocked for everyone else.** Hide, Show and Restore now refuse while
   another person holds the entry, with the sentence Rename and Delete already answer.
 - **`/admin/impersonate-user` is switched off.** Nothing in the admin asked for it, and an
@@ -1596,7 +1470,6 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `getEntryLocales` no longer makes Astro log *Entry … was not found* once per untranslated
   language on every page: the collection is asked whether the id exists before the entry is
   asked for by name.
-
 - **`handover init` sets a new site up.** One command scaffolds the site's own files, creates
   the D1 database and the R2 bucket, writes `wrangler.jsonc` with the `DB` binding and the
   bucket's vars, `src/worker.ts` and `drizzle.config.ts`, generates and applies the migrations,
@@ -1606,7 +1479,6 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   account page afterwards. A file that is already there is left alone and named, a config file
   you wrote gets the block to paste printed instead, and a project that already has
   `migrations/` is refused before anything is created. [Setting a site up](docs/init.md).
-
 - **What it scaffolds.** A project with no `src/content.config.ts` gets a starter that builds
   and renders as it stands — `schemas.ts` and `content.config.ts`, a `pages` collection with
   blocks, the block registry and two block components, `Page.astro`, `src/loaders/page.ts`, a
@@ -1615,23 +1487,19 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   already has a `content.config.ts` keeps it: its collections are read out of it and only
   `cms.config.ts` is written. Either way the languages come from `astro.config.mjs`, because the
   build stops when the two disagree. [What it writes](docs/init.md#what-it-writes).
-
 - **`handover init` has a page of its own**, [Setting a site up](docs/init.md); `cli.md` keeps
   `migrate` and `db generate`. `README.md` says what the package does today rather than what it
   did at 0.1.
-
 - **Duplicate an entry.** Every entry list row has **Duplicate**, which copies every language of
   the entry under a new file name — pre-filled `<name>-copy` and editable. The copy is one entry
   across its languages: the same block gets the same new `_id` in each of them. It arrives hidden
   and without the staleness marks, and it is a draft, so nothing is in the repository until you
   publish it. An entry with unpublished changes is asked whether to copy those too.
   [`POST /admin/api/entries/:collection/:slug/duplicate`](docs/admin-api.md).
-
 - **New entry can start from a template.** A file under `src/content/_templates/<collection>/`
   is offered in the dialog beside Blank, named after the file. Its values are copied into the new
   draft and its blocks are given ids, so the starter itself needs none.
   [Templates](docs/site-files.md#templates).
-
 - **A delete can be undone.** Every entry list has a **Deleted** tab beside **All**, listing what
   the admin took away in that collection — the whole entry, or one language of it — with who,
   when, and **Restore**. The same button is on the row in the activity log. Restoring undoes that
@@ -1639,35 +1507,27 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   rules it appended come back out of `redirects.yaml`, and there is nothing left to publish
   afterwards. It is refused, naming the path, when something is at one of them again.
   [Entry lifecycle](docs/entry-lifecycle.md#putting-a-deleted-entry-back).
-
 - **Turning a language off can be undone too**, and *Turn German back on* offers it: the German
   words come back from the repository instead of an empty form. What no commit can carry comes
   with it — the mark on the files that stayed goes back into their unpublished edits, so the
   next publish does not write the language straight off again.
-
 - **`locale-off` is an activity kind**, with the languages that went. `entry-delete` now carries
   those languages too, as `detail.locales`, where it carried a file count.
   [Activity log](docs/activity.md).
-
 - `POST /admin/api/restore { "commit_sha" }` and `GET /admin/api/deleted/<collection>`.
   [Admin API](docs/admin-api-entries.md).
-
 - ⚠️ `revertCommit` in `@handover/core` answers with the files it wrote as well as their paths,
   so that `restoreCommit` beside it can read them. A route that answered with the whole result
   would now put file contents on the wire; both of ours answer `{ commit_sha, paths }`.
-
 - The activity read, `GET /admin/api/activity`, is documented in
   [The admin API](docs/admin-api.md#activity) with the other routes rather than on the activity
   page, which is now about what is recorded and how a row reads.
-
 - **Renaming or deleting an entry waits for the colleague who has it open.** Both actions
   commit every locale file at once, so neither runs under somebody else's edit; while they hold
   the entry it is refused with a sentence naming them. The lock then follows the rename, and a
   delete lets it go. [Entry lifecycle](docs/entry-lifecycle.md#renaming-and-deleting-an-entry).
-
-- **A rename and a delete are in the activity log**, as `entry-rename` (with the name it had
-  before) and `entry-delete` (with the commit that removed the files). [Activity log](docs/activity.md).
-
+- **A rename and a delete are in the activity log**, as `entry-rename` (with the name it had before)
+  and `entry-delete` (with the commit that removed the files). [Activity log](docs/activity.md).
 - **A third cron job, daily.** Git and the database cannot share a transaction, so a rename or a
   delete killed between its commit and its database write used to leave a draft row pointing at
   a file no longer in the repository — which the next publish would have written back. The sweep
@@ -1675,60 +1535,49 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   never files: an entry that has not been published yet, and the row a delete leaves to keep the
   path off the entry list until the build catches up. No new trigger and no migration.
   [The schedule](docs/deploy.md#the-schedule).
-
 - **Deleting a page asks where its visitors should go**, in the same dialog hiding uses: the
-  collection's overview, another page picked from the list, a web address, or nowhere. The
-  answer becomes one `reason: "deleted"` redirect per language, from the address that language
-  served, in the very commit that removes the files. Until now every delete sent every language
-  to the collection's overview. [Entry lifecycle](docs/entry-lifecycle.md#renaming-and-deleting-an-entry).
-
+  collection's overview, another page picked from the list, a web address, or nowhere. The answer
+  becomes one `reason: "deleted"` redirect per language, from the address that language served, in
+  the very commit that removes the files. Until now every delete sent every language to the
+  collection's overview. [Entry lifecycle](docs/entry-lifecycle.md#renaming-and-deleting-an-entry).
 - `DELETE /admin/api/entries/<collection>/<slug>` takes that answer as `{ "redirect": … }`, in
   the four shapes the status route already takes. No body is still the collection's overview.
   [Admin API](docs/admin-api-entries.md).
-
 - ⚠️ `deleteEntry` and `deleteLocales` in `@handover/core` take **a function** for the redirect
   target — `(locale) => string | undefined` — where they took one route for every language. A
   picked page has a different address in each language, and some languages none at all.
-
 - **A listing that is sold comes off the site without being deleted.** The entry header has a
   status selector — **Live** or **Hidden**, and nothing called "draft" — and every row of the
   entry list has a **Hide**; checking several rows hides them together. A hidden entry keeps its
   file, stays in the admin with a badge, and the site stops rendering it.
   [Entry lifecycle](docs/entry-lifecycle.md#hiding-an-entry).
-
 - **Hiding a page asks where its visitors should go.** The collection's overview, another page
   picked from the list, a web address, or nowhere — answered once, and for a batch once for all
   of them. The answer becomes one redirect per language, from the address that language served,
   and lands in `redirects.yaml` in the same commit as the status. Showing the entry again takes
   those rules back out in the commit that puts the page back.
   [Entry lifecycle](docs/entry-lifecycle.md#hiding-an-entry).
-
 - ⚠️ **The schema in `content.config.ts` has to keep the reserved keys** for hidden entries to
   stay off the site. Astro drops what a `z.object` does not declare, so `_status` never reached
   the built data and `filterLive` could not see it. Wrap each collection's schema in a
   `withReserved` helper — [Template convention](docs/template-convention.md#contentconfigts)
   has the four lines. A collection declared `z.looseObject({})` needs nothing.
-
 - `POST /admin/api/status/<collection>` hides or shows one entry or a batch, and takes the
   redirect answer. `GET /admin/api/entries` now says which rows are `hidden`, the entry route
   answers `hidden` and where it `redirects` while it is, and the list route carries the
   collection's `index`. [Admin API](docs/admin-api-entries.md).
-
 - **Pointing at a page is a search box now.** A `reference` field, the Page / Entry half of a
   `link` field and the rich text toolbar's link button all open the same list: every entry the
   site has, grouped by collection, searchable by title or path, with a chip per language saying
   which ones that entry is written in. A `reference` was read-only JSON until now, and a link
   target was a path typed from memory. [Field types](docs/field-types.md#in-the-admin),
   [Structured fields](docs/structured-fields-admin.md).
-
 - **A link the site would refuse is refused where it is typed.** `javascript:` and anything else
   outside `http`, `https`, `mailto`, `tel` and paths on the site is named under the box as it is
   typed, in the toolbar and in a `link` field's URL, instead of failing on save.
   [Field types](docs/field-types.md#rich-text).
-
 - `GET /admin/api/entries` answers every collection's entries with the address each language
   serves them at. [Admin API](docs/admin-api-entries.md).
-
 - **The keys the client owns are theirs to change.** Settings gains an **Integrations** section:
   a DeepL key — and, when there is a version with writing help in it, an AI provider's — can be
   pasted, replaced or removed by the site's owner without a deploy. Keys are stored encrypted in
@@ -1736,12 +1585,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   again: each card gives the last four characters, who set it and when, which of the three
   sources is in force, and what taking it away falls back to. A DeepL key is tried against DeepL
   before it is stored. Every change is a line in the activity log naming the key and never its
-  value. [Settings](docs/diagnostics.md#integrations).
-
+  value. [Settings](docs/diagnostics.md#translation-and-ai).
 - **A DeepL key pasted in Settings is the one that translates**, ahead of `DEEPL_API_KEY` on the
   Worker. A site that hands in its own `i18n.translate` is still translated by that code.
   [Translating](docs/machine-translation.md#a-machines-first-draft).
-
 - **Settings says what is connected.** The Manage group's Settings is now the owner's read-only
   view of the site: `cms.config.ts` as it came out, and a card per connection — GitHub, the
   bucket, email, translation, build status, the database — each tried for real when the page
@@ -1749,22 +1596,18 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   failing; one that was configured and refused shows the refusal itself, which is the sentence to
   forward. The failures are counted at the top with what stops working while they stand.
   [Settings](docs/diagnostics.md).
-
 - **Send a test email has a button.** It is the one check that never runs on its own, and it goes
   to the address of whoever is signed in. **Simulate a conflict** has one too, under *Developer
   tools*, while the site is running in development. [Settings](docs/diagnostics.md).
-
 - **An invite the mailer refused points at Settings.** The notice on the Members screen said to
   ask your developer; it now names the screen where the mailer's own sentence says which
   credential is missing.
-
 - **The editor previews the page.** **Preview** in the entry header opens the page beside the
   form, in the language on screen: it follows the autosave, refreshes on demand, opens in a tab
   and can be read at three widths. An entry the site has never published previews at the address
   it will get, with a banner saying so, and a draft the schema still refuses is a card naming
   each field instead of half a page. A build without `PREVIEW_ENABLED` says so in the pane
   rather than framing a 404. [Preview](docs/preview.md).
-
 - **Preview renders the page.** `/_preview/<path>` now calls the `load()` your own loader
   exports, over a source that lays the D1 drafts on the build's content, and renders the
   component that loader names — so an unpublished edit shows in the real templates, and the
@@ -1773,25 +1616,21 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   for a collection index), and every page's data-gathering — globals included — is in the
   loader rather than in the layout.
   [Preview](docs/preview.md), [Loaders and pages](docs/loaders.md).
-
 - **`Template convention` is two pages.** The rules and the two schema files stay in
   [Template convention](docs/template-convention.md); loaders, pages and layouts are
   [Loaders and pages](docs/loaders.md).
-
 - **The build pill stops counting on an old commit.** The host's build list can only be asked
   for a worker's recent builds — there is no commit filter — so a commit that had scrolled off
   it read as *Building…* for as long as the admin was open, and the draft rows that build was
   carrying were never cleared. Ten minutes without a build naming a commit is now as long as
   the pill waits; past that it reports the worker's newest deploy.
   [When a commit goes live](docs/build-status.md).
-
 - **Preview has a route and a gate.** `/_preview/<path>` is injected only where
   `PREVIEW_ENABLED` is set on the build, needs an admin session, serves only addresses the
   site's own routes serve, and answers `Cache-Control: private, no-store`,
   `X-Robots-Tag: noindex, nofollow` and `Content-Security-Policy: frame-ancestors 'self'` on
   every response.
   [Preview](docs/preview.md).
-
 - **Conflicts are answered field by field.** An entry somebody changed in the repository used
   to have one way out — throw your draft away and take theirs. The drawer's **Resolve** now
   opens the entry as two questions rather than two versions: fields only one side changed are
@@ -1801,14 +1640,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   edited in the draft are not a disagreement. Answering writes a new draft over the
   repository's file and the entry publishes normally; nothing is committed by the answer.
   [Publish conflicts](docs/conflicts.md#resolving-it-field-by-field).
-
 - **A drawer row opens into what it would publish.** The per-field diff below is now on every
   row of the pending-changes drawer, with the redirect rules riding along under *Riding along*.
-
 - **`POST /admin/api/checks/conflict`** makes a conflict to look at on a scratch entry, so the
   three-way view can be tried on a live site without hand-crafting commits. Owner only, and it
   commits: [the admin API](docs/admin-api-publishing.md) says what it leaves behind.
-
 - **Per-field diff.** `diffEntry()` in `@handover/core` says what changed between two states of
   one entry — the draft against the file in git, or one version against another — as fields
   rather than as lines, so nothing about the file format reaches the screen. The changes are
@@ -1817,7 +1653,6 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `_id`, so a block that moved says it moved instead of arriving as one deletion plus one
   addition. `pnpm --filter @handover/ui fixtures` renders every field type's diff on a page of
   its own.
-
 - **Background jobs.** One Cron Trigger every five minutes, one `scheduled` handler, and a
   registry that decides what is due: media reconciliation hourly, activity-log retention
   daily. A job that does something or throws writes a `cron-<job>` row in the activity log;
@@ -1825,7 +1660,6 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   ⚠️ **A site upgrading to this needs two lines in `wrangler.jsonc`** — `triggers.crons` and
   a `main` pointing at its own four-line `src/worker.ts` — both in
   [Deploy](docs/deploy.md#the-schedule). Without them nothing breaks; nothing runs either.
-
 - **Site settings.** The globals a site declares in `cms.config.ts` are editable in the admin,
   above the collections: one card per global, and a form that is the entry editor without the
   parts a file the schema names cannot have — no hide, no rename, no duplicate, no delete.
@@ -1833,21 +1667,17 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   screen's and work unchanged. What a card is called comes from the schema:
   `.meta({ label, description })`, falling back to the key
   ([Site files](docs/site-files.md#globals)).
-
 - **`_ref` blocks render.** A block with `_ref: "globals/<key>"` is filled from that global in
   the language the page is in, so one call to action can be edited once and shown on every page
   that points at it. `<Blocks />` takes a `globals` map for it — `globalsAt()` builds one — and
   fills every `_ref` in the tree, so a block component that nests `<Blocks />` is unchanged
   ([Blocks](docs/blocks.md)). ⚠️ A page whose blocks contain a `_ref` now needs that prop.
-
 - **Two build-time refusals about globals**: a `_ref` naming a global `cms.config.ts` does not
   declare, and a declared global with no file in the default language. Both name the file and
   the key, the way an unregistered block type already did.
-
 - Docs: `content-format.md` split — hiding, creating, renaming and deleting an entry are
   [Entry lifecycle](docs/entry-lifecycle.md); `rendering.md` split — `<Blocks />` and the
   component registry are [Blocks](docs/blocks.md).
-
 - **`image` and `file` fields are editable.** A filled one is a card — the picture at the
   field's own ratio with its focal dot, or the file's type and size — carrying the alt text or
   the display name, Replace and Remove. An empty one is a drop zone that takes a file dropped
@@ -1855,7 +1685,6 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   opened it: upload there or choose what is already stored. A language being translated gets
   the alt or the display name and nothing else
   ([Pictures and files in a field](docs/media-fields.md)).
-
 - **A field carries its own preset**, `image({ ratio, max, min })`: the ratio it is shown and
   cropped at, the cap an upload is downscaled to on the way in, and the optional floor the
   picker refuses under. The floor is measured on the *crop* — the widest crop at the field's
@@ -1864,25 +1693,20 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   library has no size for is refused by every image field, since the field stores those numbers.
   ⚠️ **Breaking:** `image` and `file` are now functions — `image()` and `file()` where they
   used to be bare schemas.
-
 - **PDFs and other files upload**, under `files/` keys and through the same pipeline minus the
   canvas step. A file is stored as a download (`content-disposition: attachment`) and its first
   bytes are read back on confirm: an object whose signature is not the type it was uploaded as
   is deleted, so a renamed `.html` never reaches the CDN domain. ⚠️ The bucket's CORS rule needs
   `content-disposition` in `allowed.headers` or every file upload fails the preflight
-  ([Media](docs/media.md#2-let-the-admins-origin-write-to-it)).
-
+  ([Media](docs/media.md#4-allow-public-media-reads-from-the-admin)).
 - **A file's display name is optional.** It is the translatable half, so a picture or a PDF
   chosen in one language no longer leaves another language's file invalid and unpublishable
   until somebody types a name for it ([Languages](docs/i18n.md)).
-
 - **`GET /admin/api/media?kind=images|files`** is the library the picker reads: newest first,
   archived left out ([The admin API](docs/admin-api-media.md)).
-
 - **`media.md` is two pages.** The bucket, its setup and what an upload does stay;
   what a field asks of a picture and how a client chooses one are
   [Pictures and files in a field](docs/media-fields.md).
-
 - **Pictures upload to R2.** The browser normalises what was chosen — downscaled to 2400px,
   re-encoded as WebP, EXIF stripped — hashes it, and asks the admin whether the site already
   has those bytes; if it does, nothing is uploaded at all. Otherwise it PUTs them straight to
@@ -1891,37 +1715,30 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   written. Objects are named by the SHA-256 of their own bytes, so the same picture is one
   object and one row however many times it is chosen. The setup — bucket, CORS rule, hostname,
   four env values — is [Media](docs/media.md), and the widgets that will call this are next.
-
 - **`POST /admin/api/media`** answers either the asset the site already holds or a presigned
   PUT for a key it chose, and **`PUT /admin/api/media/:hash`** is the verify-or-delete that
   turns the object into a row ([The admin API](docs/admin-api-media.md)).
-
 - **`media.publicBase` in `cms.config.ts`** — where the bucket is served from, so content files
   keep storing `media/…` keys and never URLs ([Configuration](docs/configuration.md#media)).
   Beside it, `R2_ACCOUNT_ID` and `R2_BUCKET` are vars and `R2_ACCESS_KEY_ID` and
   `R2_SECRET_ACCESS_KEY` are secrets; without all four the admin refuses uploads and names
   what is missing ([Deploy](docs/secrets.md)).
-
 - **`upload` in the activity log**, named by the file it was chosen as. Choosing a picture the
   site already holds is a reuse rather than an upload, and writes no row.
-
 - **`field-types.md` is two pages.** The scalars, rich text, links and labels stay; `image`,
   `file`, `embed`, `seo`, `reference` and the three nesting types are now
   [Structured fields](docs/structured-fields.md).
-
 - **The endpoints have a page of their own.** `docs/admin-api.md` collects every route the
   admin drives — entries, drafts, publishing, locks — where they had been split between
   `publishing.md` and `working-together.md`, and `publishing.md` had become half API listing.
   Nothing about the routes changed; both pages now point at it.
-
-- **The top bar says whether the site has caught up with the commit.** A publish is a commit and
-  a commit is not a live site — there is a one-to-three minute host build behind it — so the
-  shell now polls **Workers Builds** and shows *Building… 1m 20s* · *Live since 14:02* · *Build failed*,
-  with a banner while a build is running saying the admin may reload briefly under you. It needs
-  a read-only `CLOUDFLARE_API_TOKEN` and a `CLOUDFLARE_WORKER` var; without them no pill is
-  drawn and everything else is unchanged ([Deploy](docs/secrets.md)). Before anyone has
-  published, it reports your own last deploy instead, which is still what the site is serving.
-
+- **The top bar says whether the site has caught up with the commit.** A publish is a commit and a
+  commit is not a live site — there is a one-to-three minute host build behind it — so the shell now
+  polls **Workers Builds** and shows *Building… 1m 20s* · *Live since 14:02* · *Build failed*, with
+  a banner while a build is running saying the admin may reload briefly under you. It needs a
+  read-only `CLOUDFLARE_API_TOKEN` and a `CLOUDFLARE_WORKER` var; without them no pill is drawn and
+  everything else is unchanged ([Deploy](docs/secrets.md)). Before anyone has published, it reports
+  your own last deploy instead, which is still what the site is serving.
 - **One-tap revert.** *Revert last publish* sits in the failed pill and *Revert this publish*
   in the drawer's result panel. It is **not `git revert`** — the trees API has no three-way
   merge, so the inverse is composed: every file the commit touched goes back to its blob at the
@@ -1929,46 +1746,38 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   restored, and a file that has moved on since is refused rather than overwritten. The changes
   the commit carried come back as unpublished changes
   ([Drafts and publishing](docs/build-status.md)).
-
 - **Draft rows are cleared when the build carrying them is live.** Green is not enough: a row is
   also what an open tab publishes against, so an entry somebody is still editing keeps its row
   until their lock runs out.
-
-- **`GET /admin/api/build`** answers `{ "commit_sha", "state", "started_at", "live_at", "committed_at" }`,
-  and **`POST /admin/api/revert`** takes `{ "commit_sha" }` and answers the inverse commit, `409`
-  naming a file that has moved on since
-  ([Drafts and publishing](docs/publishing.md#the-endpoints)).
-
+- **`GET /admin/api/build`** answers
+  `{ "commit_sha", "state", "started_at", "live_at", "committed_at" }`, and
+  **`POST /admin/api/revert`** takes `{ "commit_sha" }` and answers the inverse commit, `409` naming
+  a file that has moved on since ([Drafts and publishing](docs/publishing.md#the-endpoints)).
 - **The pending-changes drawer picks what goes out.** It lists **entries** rather than files
   now — one row per entry, with its title, the languages of it that are waiting and what its
   address changes owe — and each row has a checkbox. Everything is checked except entries on
   hold, so "publish all of it" is still one press; checking a held entry includes it and
   releases the hold, which the drawer says before the button is pressed. Selection is per
   publish and is not stored ([Drafts and publishing](docs/publishing.md#publishing)).
-
 - **Publish this entry.** The entry header's button now commits that entry on its own instead
   of opening the drawer. It confirms first, naming every language file that goes with it.
-
 - **A refused entry no longer blocks the batch.** An entry somebody changed in the repository,
   or one the schema is not done with, takes itself out of the checked set and says why on its
   own row, so pressing Publish again sends the rest. Taking theirs whole with Discard is still
   the only way out of a conflict — there is no three-way merge
   ([Publish conflicts](docs/conflicts.md#a-file-that-changed-in-the-repository)).
-
 - **`GET /admin/api/drafts` answers entries, not files.** `{ "entries": [{ "key", "title",
   "collection", "locales", "files", "redirects", "updated_at", "held_by" }] }`. The grouping is
   done on the server because an entry's title comes from the build's content index, which
   nothing outside the Worker can read ([Drafts and publishing](docs/publishing.md#the-endpoints)).
-
 - **Every read a write is made from names a commit.** GitHub answers the contents API from a
   replica, cached under the ref it was asked for, so two reads of the branch seconds apart can be
   two different commits. A publish took `base_sha` from one read and the blobs it compares against
-  it from others: if the blob read was the older one, a colleague's commit was reported as no
-  change at all and the publish quietly wrote over it — the ref update had nothing to refuse,
-  since the parent was current. A publish, an autosave's first read of a file, and a rename,
-  delete or language-off now read every file at the one commit they are made against, and
-  `getFile` takes that commit ([Publish conflicts](docs/conflicts.md#a-file-that-changed-in-the-repository)).
-
+  it from others: if the blob read was the older one, a colleague's commit was reported as no change
+  at all and the publish quietly wrote over it — the ref update had nothing to refuse, since the
+  parent was current. A publish, an autosave's first read of a file, and a rename, delete or
+  language-off now read every file at the one commit they are made against, and `getFile` takes that
+  commit ([Publish conflicts](docs/conflicts.md#a-file-that-changed-in-the-repository)).
 - **A publish can be of one entry or a chosen set.** `POST /admin/api/publish` now takes
   `{ "entries": ["listings/mill-house"] }` and commits those entries — every language of each,
   with the redirect rules they owe; the entries left out keep theirs until they are published
@@ -1976,7 +1785,6 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   **on hold** goes out when it is named, which releases the hold and logs `hold-released`
   against whoever set it. The drawer's checkboxes that will send this arrive next
   ([Drafts and publishing](docs/publishing.md#the-endpoints)).
-
 - **Your own publish no longer looks like a conflict.** The rows a publish commits are re-seeded
   on that commit rather than thrown away — on the bytes it actually wrote, so a translation the
   publish stamped on the way past does not report a conflict with itself. Carry on typing in an
@@ -1984,14 +1792,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   still caught. Rows are kept until the build carrying them is live, so a title you published
   reads right in the entry list straight away
   ([Publish conflicts](docs/conflicts.md#your-own-publish-is-not-a-conflict)).
-
 - **A publish that made no commit is in the activity log.** `publish-conflict` when a file had
   changed in the repository since it was opened, `publish-failed` when the repository turned the
   commit down (`detail.reason` is `ref-moved` when another change got there first), and both rows
   expand on the activity screen to say what happened. A draft the schema is not done with is not
   a row — that is answered to whoever pressed the button. `lock-takeover` and `hold-released` read
   as sentences now instead of naming their kind ([Activity log](docs/activity.md)).
-
 - **Take over an entry somebody else is editing.** The *Being edited by…* banner now carries
   **Take over**, which confirms first and then moves the lock: the entry is re-read, so the form
   opens on what the other person had typed — there is one shared draft and nothing is copied or
@@ -2001,7 +1807,6 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   for it, and both draft endpoints now answer `409` with the lock when the caller does not hold
   it — the saves are the half the server enforces. Logged as `lock-takeover`
   ([Working together](docs/working-together.md#take-over)).
-
 - **"Not ready yet" holds an entry back from everybody's publish.** A toggle in the entry header,
   next to the status: the header tints and a batch publish leaves that entry out — every language
   of it, and its schema is not checked either, so a half-written page nobody is holding back is
@@ -2011,7 +1816,6 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   is cleared with the draft when the entry publishes or is discarded.
   `POST /admin/api/hold/:collection/:slug` takes `{ "hold": true }`
   ([Drafts and publishing](docs/pending-changes.md#holding-an-entry-back)).
-
 - **Two people can no longer type over each other.** Opening an entry takes a soft lock on it
   — every language at once, since they share a structure — and the lock is held by typing: the
   admin extends it while somebody edits and it frees itself about two minutes after the last
@@ -2024,7 +1828,6 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   is the heartbeat and `GET` the same answer taking nothing; both carry the `base_sha`/`base_blob`
   each of the entry's files was loaded against. Removing a member releases their locks, and the
   remove dialog names the entries first ([Working together](docs/working-together.md)).
-
 - **An Activity screen at `/admin/activity`.** The log now has a page over it, and both roles
   get it: an owner sees everybody, an editor sees their own, and which is which stays the
   server's filter rather than the screen's. Each row is a sentence — *Anna Berg published
@@ -2035,36 +1838,32 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   editor is already looking at one person) and entry path, and **Load more** for the next fifty.
   A kind nothing has written a sentence for yet is still drawn, named by its kind, so a screen
   does not break on the row that adds one ([Activity log](docs/activity.md#the-screen)).
-
-- **An activity log, and the first events in it.** Signing in, being invited, having a role
-  changed, setting a first password and publishing each write one row to the `activity` table
-  the Phase 3 migration created — no new migration, and nothing to turn on. `GET
-  /admin/api/activity` reads the newest 50 for whoever is signed in: **an owner sees everybody
-  and an editor sees only their own**, filtered on the server, so an editor naming somebody else
-  in the query string gets their own events back rather than a refusal. Paging is by cursor
-  rather than offset, because two events can share a millisecond. **No one-time link and no
-  token reaches a row** — an `invite` names the address and the role, and a message the provider
-  refused leaves a `mail-failed` row naming only what it was for, which is the first time a
-  failed reset is visible anywhere but `wrangler tail`. Removing somebody, and revoking an invite
-  nobody opened, are recorded with the address, which is the only record left once the `user` row
-  is deleted; a password being **changed** or **reset** is recorded as well as a first one being
-  set. The members screen's **Last sign-in** is
-  now the newer of a live session and a `login` event, so signing out everywhere no longer erases
-  it ([Activity log](docs/activity.md), [Roles and permissions](docs/roles.md#how-somebody-signs-in)).
-
+- **An activity log, and the first events in it.** Signing in, being invited, having a role changed,
+  setting a first password and publishing each write one row to the `activity` table the Phase 3
+  migration created — no new migration, and nothing to turn on. `GET /admin/api/activity` reads the
+  newest 50 for whoever is signed in: **an owner sees everybody and an editor sees only their own**,
+  filtered on the server, so an editor naming somebody else in the query string gets their own
+  events back rather than a refusal. Paging is by cursor rather than offset, because two events can
+  share a millisecond. **No one-time link and no token reaches a row** — an `invite` names the
+  address and the role, and a message the provider refused leaves a `mail-failed` row naming only
+  what it was for, which is the first time a failed reset is visible anywhere but `wrangler tail`.
+  Removing somebody, and revoking an invite nobody opened, are recorded with the address, which is
+  the only record left once the `user` row is deleted; a password being **changed** or **reset** is
+  recorded as well as a first one being set. The members screen's **Last sign-in** is now the newer
+  of a live session and a `login` event, so signing out everywhere no longer erases it ([Activity
+  log](docs/activity.md), [Roles and permissions](docs/roles.md#how-somebody-signs-in)).
 - **A Members screen at `/admin/members`.** Owners can now invite people, change a role between
-  owner and editor, resend an invite and remove somebody, without a `wrangler d1 execute` in
-  sight. An invite is a `user` row and an emailed link: the person opens it, which signs them in,
-  and their account page offers them a first password. That link works once and lasts **three
-  days**, where an ordinary sign-in link lasts fifteen minutes. The list's **Sign-in method**
-  column is worked out from the account rows rather than stored, so it says `GitHub`,
-  `Password + email link` or `Email link only` and cannot go stale. Two rules are refused by the
-  server rather than only greyed out in the menu: **the last owner cannot be demoted or removed**,
-  and **nobody can remove themselves**. The first is one database statement rather than a count
-  read beside a write, so two owners demoting each other at the same instant cannot both succeed. Removing somebody ends every session and deletes their
-  password and linked accounts; their unpublished drafts stay, because a draft belongs to the
-  site ([Roles and permissions](docs/roles.md#members--adminmembers)).
-
+  owner and editor, resend an invite and remove somebody, without a `wrangler d1 execute` in sight.
+  An invite is a `user` row and an emailed link: the person opens it, which signs them in, and their
+  account page offers them a first password. That link works once and lasts **three days**, where an
+  ordinary sign-in link lasts fifteen minutes. The list's **Sign-in method** column is worked out
+  from the account rows rather than stored, so it says `GitHub`, `Password + email link` or
+  `Email link only` and cannot go stale. Two rules are refused by the server rather than only greyed
+  out in the menu: **the last owner cannot be demoted or removed**, and **nobody can remove
+  themselves**. The first is one database statement rather than a count read beside a write, so two
+  owners demoting each other at the same instant cannot both succeed. Removing somebody ends every
+  session and deletes their password and linked accounts; their unpublished drafts stay, because a
+  draft belongs to the site ([Roles and permissions](docs/roles.md#members--adminmembers)).
 - **Two more mailers: SMTP and Cloudflare.** `mailer` in `cms.config.ts` now takes
   `{ provider: 'smtp', from, host, port? }` on `SMTP_USER` and `SMTP_PASS`, or
   `{ provider: 'cloudflare', from }` on a `send_email` binding named `EMAIL` and no secret at
@@ -2075,7 +1874,6 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   server your password in the clear. Cloudflare sending to anyone but yourself needs the Workers
   Paid plan, and the refusal says so in as many words ([Sending email](docs/email.md),
   [Configuration](docs/configuration.md#mailer), [Deploy](docs/secrets.md)).
-
 - **Three ways into `/admin`, and an account page.** The login now offers an emailed sign-in
   link and *Continue with GitHub* beside the password, and *Forgot password?* mails a link to a
   reset page at `/admin/reset`. Every one of them is closed to strangers: a link is mailed only
@@ -2084,7 +1882,6 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   email. `/admin/account` is everyone's own page — display name, email and role, a password form,
   and the sessions they are signed in on with *Sign out everywhere*. Somebody who arrived by an
   emailed link and has no password is offered one there.
-
 - **`HANDOVER_BASE_URL` is a new var, and the two emailing methods need it.** It is the site's
   own origin, stated in `wrangler.jsonc` rather than read off the request, because a `Host`
   header is written by whoever sent the request and an emailed sign-in link built from one is a
@@ -2094,12 +1891,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   trip to GitHub and back has five minutes on it, and running out of them now comes back to the
   login rather than to Better Auth's own error page
   ([Accounts and signing in](docs/auth.md), [Deploy](docs/secrets.md)).
-
 - `docs/auth.md` split three ways as it grew: [Accounts and signing in](docs/auth.md) is the ways
   in, [Roles and permissions](docs/roles.md) is who may do what, and [Sending email](docs/email.md)
   is the `mailer` block and the check that proves a key. Existing links to `auth.md` still land on
   the right page; the seeding recipe moved from `#2-` to `#3-create-the-first-account`.
-
 - **Handover can send email.** `mailer` in `cms.config.ts` names who sends it — the provider the
   package ships, `{ provider: 'resend', from: 'You <hello@your-site.com>' }` on a
   `RESEND_API_KEY` secret, or a function of your own given the message. With one configured, an
@@ -2109,35 +1904,29 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   provider that refuses gets `502` carrying the provider's own words — an unverified sending
   domain reads as itself rather than as a number
   ([Configuration](docs/configuration.md#mailer), [Sending email](docs/email.md)).
-
 - **`/admin` has accounts instead of one shared password.** Sign in with an email address and a
-  password against the site's own D1; sessions are signed with `BETTER_AUTH_SECRET`, which
-  replaces the old shared-password variable in `.dev.vars` and in `wrangler secret put`. Nobody
-  can create an account: `POST /admin/api/auth/sign-up/email` answers 400 and writes no row, and inviting
-  people is an owner-only endpoint. Two roles live in `user.role` — `owner` and `editor`, and an
+  password against the site's own D1; sessions are signed with `BETTER_AUTH_SECRET`, which replaces
+  the old shared-password variable in `.dev.vars` and in `wrangler secret put`. Nobody can create an
+  account: `POST /admin/api/auth/sign-up/email` answers 400 and writes no row, and inviting people
+  is an owner-only endpoint. Two roles live in `user.role` — `owner` and `editor`, and an
   unrecognised value reads as `editor`. The sidebar's new **Manage** group hides *Members* and
   *Settings* from an editor, and the top bar shows who is signed in with a *Sign out* button.
-  Password sign-in allows three attempts per ten seconds per address before a 429, and the
-  session cookie is `Secure` whenever the request arrived over https.
-  **Upgrading: set `BETTER_AUTH_SECRET` and insert the first owner by hand** — there is no
-  sign-up, so a site with no rows in `user` cannot be signed in to
-  ([Accounts and signing in](docs/auth.md)).
-
+  Password sign-in allows three attempts per ten seconds per address before a 429, and the session
+  cookie is `Secure` whenever the request arrived over https. **Upgrading: set `BETTER_AUTH_SECRET`
+  and insert the first owner by hand** — there is no sign-up, so a site with no rows in `user`
+  cannot be signed in to ([Accounts and signing in](docs/auth.md)).
 - `astro-handover/schema` exports the tables the rest of the CMS runs on — `media`, `locks`,
   `activity`, `settings` and `cron_state` — plus the login's `user`, `session`, `account`,
   `verification` and `rate_limit`, generated from the Better Auth config. Upgrading needs one
   `handover db generate`; the build fails until it has run. Nothing drops or changes an existing
   column, so a database holding drafts keeps them.
-
 - `docs/rendering.md` shows the language switcher on a page that is not an entry.
   `getEntryLocales()` answers about a collection and a slug, so an index builds its own pair
   from `entryUrl()` and the site's locales.
-
 - `entryAddress()` is exported: the address one file serves at, which is the `slug` in its data
   or its file name. A prerendered route on a `localizedSlugs` collection builds its
   `getStaticPaths` from it, and it is the only safe way to read that key — Astro puts a warning
   getter on `slug` for every entry without one.
-
 - **A language that already has a file can now be turned off.** The second column's header offers
   *Turn German off*, and confirming it commits: the German file leaves the repository, the
   languages the entry keeps go into the files that stay, and the URL German served redirects to
@@ -2148,7 +1937,6 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `_i18n` naming a language that went is dropped from the files that carry it, and a language
   whose file is only an unpublished draft makes no commit — the draft is thrown away. The entry
   response gained `route`, `index` and `prefixDefaultLocale` for the URLs the dialog names.
-
 - **An entry with no file in the site's default language can now be opened.** The language an
   entry's structure is edited in — and that its translations are made from — is the entry's own
   rather than the site's: the default language where the entry has a file in it, and otherwise
@@ -2159,7 +1947,6 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   language's URLs carry its segment. `POST /admin/api/drafts/:collection/:slug/:locale` no longer
   refuses the site's default language on sight — it refuses any language the entry already has a
   file in, with `409` — and `SourceOf`, the callback `publishDrafts` takes, now returns a promise.
-
 - Renaming or deleting an entry writes one redirect per language, under that language's own
   segment, from the URL that language actually served: on a `localizedSlugs` collection that is
   the `slug` in the language's own file, so a rename leaves a language whose address is its own
@@ -2167,19 +1954,16 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `deleteEntry` and `duplicateEntry` take `i18n` and `localizedSlugs` on their `EntryLocation`
   where they took `locales`, and `setEntryAddress` takes the collection's form. A duplicate no
   longer copies the original's address.
-
 - Reading a collection whose `glob` loader is missing `generateId` now throws, naming the option,
   instead of quietly matching no entry: Astro files an entry with a `slug` under its address, and
   a `localizedSlugs` collection keeps its address there. **A loader's miss is now a value rather
   than a thrown error** — `return undefined` and let the page answer `404`, instead of throwing
   and catching it in the route. A `.catch()` around the call swallows everything, which is what
   turned this new message back into a silent 404. `template-convention.md` shows the new shape.
-
 - Every write stamps `_version` and writes the file's keys in schema order, not the editor's save
   alone: reconciling drift, turning a language off, setting an address and duplicating an entry
   all leave a file the way `content-format.md` describes it. A file written by an earlier version
   has its keys reordered by the first write that touches it.
-
 - A web address per language, per collection: `localizedSlugs: true` beside a collection's
   `route` lets each language's file carry an optional `slug` overriding the file name in the
   URL. Empty falls back to the file name, so turning it on changes no URL until somebody fills
@@ -2193,7 +1977,6 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `POST /admin/api/entries/:collection/:slug/address/:locale` is the write. Such a collection's
   `glob` loader needs a `generateId` that returns the file's path: Astro's default files an
   entry under its `slug`, which is where the address lives.
-
 - A language switcher for the site. `<LocaleSwitcher locales current />` from
   `astro-handover/LocaleSwitcher.astro` draws the languages one entry can actually be read in;
   `getEntryLocales('default', source, cms, collection, slug)` is what answers that — a file in
@@ -2201,14 +1984,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   language segment `prefixDefaultLocale` asks for. An entry that exists in one language draws no
   switcher at all. `isLive()` takes an optional third argument, the language, for a caller that
   holds an entry rather than a file.
-
 - A top-level `_locales` that the entry's files contradict — a hand edit or a bad merge naming
   fewer languages than the entry has files in, or a code the site does not declare — is
   reported instead of being read two ways. The files win: a language with a file is offered in
   it, the entry list no longer strikes it through, and the entry says what is wrong above its
   form. `GET /admin/api/entries/:collection/:slug` carries the messages in `offerProblems`, and
   Create from English refuses citing them rather than "this entry is not offered in de".
-
 - Machine translation, behind a `translate(from, to)` hook. **Translate what's empty** in the
   second language's header fills every field that language has nothing in yet, a **Translate**
   button beside a field fills that one, and **Create and pre-fill** does both in one go from
@@ -2219,7 +2000,6 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   Another provider goes in `i18n.translate` in `cms.config.ts` — texts in, the same texts
   translated out. With neither, none of the buttons is drawn, and the entry response says so
   in `translator`.
-
 - An entry's **Publish…** is offered when any of its languages has an unpublished draft, not
   only the default one. `GET /admin/api/entries/:collection/:slug` answers `pending` with the
   languages that are ahead of the repository — `["de"]`, `[]` — where it used to answer
@@ -2227,7 +2007,6 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   the entry publishable without the second column being typed in, and a translation drafted
   last time offers Publish the moment the entry opens. The `pending` of the draft writes is
   unchanged: still `true`/`false`, still about the one file that write touched.
-
 - A language an entry has no file in now offers two answers instead of an empty form.
   **Create from English** — `POST /admin/api/drafts/:collection/:slug/:locale` — writes that
   language's file as a draft: the same blocks in the same order, every value the languages
@@ -2240,7 +2019,6 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   through rather than listing it as one still to write, and the switcher strikes it through
   too. Duplicating an entry copies every language of it with one shared map of new `_id`s, so
   the copy is still one entry across its files.
-
 - A second language is edited beside the first. The entry header carries a language switcher —
   buttons up to four languages, a menu above that — with a mark against a language the entry has
   no file in and against one whose source language has moved on since it was translated.
@@ -2257,7 +2035,6 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   card shows the words each language has for the block it is deciding about. `docs/i18n.md` is
   now the half a developer configures and the new `docs/translating.md` the half the client
   works in.
-
 - A translation says which English it was made from. Publishing a translated file writes
   `_i18n` into it — `sourceLocale`, the `sourceBlob` of the source language's file as that same
   commit leaves it, a `sourceHash` of the values inside it a translation is made from, and
@@ -2269,7 +2046,6 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   added a block — keeps the mark it had rather than claiming to be up to date. Staleness is a
   warning and never a refusal: a stale file publishes and builds like any other. See
   `docs/translating.md`.
-
 - Drift is answered in the entry. An entry whose languages disagree about its blocks opens on a
   reconciliation panel instead of its form, one card per block with the answers that block
   allows — derived from which languages have it against which should, so a block nothing marks
@@ -2283,7 +2059,6 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   fix made in the repository clears it. `POST /admin/api/drift/:collection/:slug` is the route
   behind it, and the entry response now also carries the site's `locales`. See
   `docs/translating.md`.
-
 - An entry's languages are compared when it opens. The structure is shared, so a block one
   language's file has and another's does not — with no `_locales` to say it belongs to that
   language alone — is two files that have drifted apart, and the entry now comes back with
@@ -2292,7 +2067,6 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   unfinished schema, because committing the file would bake the difference into git. A save
   still resolves nothing by itself. A site that declares one language reads nothing extra and
   is never refused for this. See `docs/translating.md`.
-
 - An entry's languages keep one structure. Adding a block, removing one or moving one is an
   edit to every language's file of that entry, written in the same autosave: the German file
   is reordered with the English one and keeps its German, a block that arrives brings the
@@ -2305,7 +2079,6 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   Renaming, deleting or discarding an entry now covers every declared language's file, not
   only the default one. A site that declares one language writes what it always did. See
   `docs/i18n.md`.
-
 - A field says how it translates. `.meta({ i18n: 'duplicate' })` on a schema field makes it
   one value shared by every language, `.meta({ i18n: false })` keeps it in the default
   language alone, and everything else is translated as before. An object hands its mode to
@@ -2314,7 +2087,6 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `height` and `focal` are the same everywhere — so nobody retypes an image URL per language.
   A save of a translation writes the fields that language owns and reads the rest off the
   file, instead of dropping what its form never showed (decap-cms#6978). See `docs/i18n.md`.
-
 - `cms.config.ts` declares its languages: `i18n: { locales: ['en', 'de'], defaultLocale:
   'en' }`, with an optional `prefixDefaultLocale`. It is required, a site with one language
   included — content files sit in a folder per language either way, so a second language is
@@ -2323,34 +2095,28 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   preview paths from ours; where they disagree the build stops in `astro:config:setup`
   naming both files and the key. Add the block to both files when you upgrade. See
   `docs/i18n.md`.
-
 - Nothing in the package changed. The two i18n mistakes other CMSs shipped — a field
   configured to duplicate disappearing from a translated file on save, and duplicating an
   entry copying only the default locale — now have tests in the repo, written before the
   feature and skipped until the sessions that make them pass.
-
 - Editing an entry keeps a key your schema no longer declares. The editor writes back the
   file it read rather than the fields it drew, so a field renamed in `schemas.ts` before
   its `handover migrate` step keeps its old value in the file instead of being dropped on
   the first save. This was already how it behaved; it is now a documented guarantee with a
   test behind it. See `docs/content-format.md`.
-
 - `docs/content-format.md` said a `_ref` block's content is filled at build time. It is
   not yet: the key is reserved, and `<Blocks />` skips the block until the globals
   collection exists, which is what `docs/template-convention.md` already said.
-
 - The content format is locked at `_version: 1`. The shape of a content file — reserved
   keys, field types, block structure, how the serialiser writes them — does not change
   under you any more: a later release that changes it ships a `handover migrate` step that
   rewrites your files and raises their `_version`, and nothing reinterprets a file it has
   not migrated. See `docs/content-format.md`.
-
 - The admin says when the GitHub App cannot see the repository. GitHub answers `404` for a
   repository outside the App's installation exactly as it does for a missing file, so every
   entry used to open onto "No such entry" with nothing pointing at the installation. The
   admin now names the repository and the installation instead — on opening an entry, on
   creating, renaming or deleting one, and on publishing. See `docs/deploy.md`.
-
 - An unquoted date in a content file fails the build with a message that says to quote it.
   `published: 2026-07-14` is a YAML timestamp: Astro's loader reads it as a `Date`, your
   `z.iso.date()` wants a string, and the build used to stop on
@@ -2359,7 +2125,6 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   the same files and exits `1`. Only hand-written files are affected — the CMS always
   quotes. `docs/template-convention.md` now shows a `content.config.ts`, including what a
   `base` that does not match the collection folder does.
-
 - A collection can say which field is its entry's title. `titleField: 'name'` on a
   collection in `cms.config.ts` makes the entry list, the editor's heading and **New
   entry** all use `name`, so a collection keyed on something other than `title` no longer
@@ -2368,7 +2133,6 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   integration now takes that config — `astro.config.mjs` imports `cms.config.ts` and passes
   it to `handover(cms)`, because the build reads the titles and cannot execute your config
   on its own. See `docs/configuration.md`.
-
 - Autosave no longer refuses an entry the schema is not happy with. A draft holds what you
   typed — a new entry whose required `reference` has no picker yet, or a required
   `positive()` number still at nothing, used to answer "Not saved" and lose the rest of the
@@ -2379,19 +2143,16 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   A save also keeps content keys your schema no longer declares, so renaming a field before
   writing its migration no longer loses the value on the first edit. See
   `docs/publishing.md`.
-
 - A link can only point somewhere safe. In a `richtext()` field and in a `link` field's
   `href`, the target must be `http`, `https`, `mailto`, `tel` or a path on your own site;
   `javascript:` and `data:` are refused when the entry is saved, naming the scheme and the
   line. `<Markdown />` checks again as it renders, so a file written by hand keeps the
   link's text and loses the link. See `docs/field-types.md`.
-
 - `<Markdown />` runs on Cloudflare. It no longer goes through Astro's Markdown pipeline,
   which is a native binary the Workers runtime cannot run (`The WASI method is not
   implemented`), and renders the richtext constructs from the Markdown the field is
   validated against instead. Headings still get ids; anything outside the tier's construct
   list, raw HTML above all, comes out as text and never as markup.
-
 - The `handover` command. `npx handover migrate --dry-run` lists every content file with
   its `_version`; `npx handover migrate` rewrites the ones behind the package (today that
   only stamps `_version: 1` on files that have none). `npx handover db generate` replaces
@@ -2399,11 +2160,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   version in `migrations/handover.json`, and **`astro build` now fails** while that file is
   missing or behind the installed package — run `npx handover db generate` once after
   upgrading and commit `migrations/`. See `docs/cli.md`.
-
 - A content file with no `_version` is read as version 1, and a save through the admin
   writes `_version: 1` into it, so every file the CMS has touched says which format it is
   in. See `docs/content-format.md`.
-
 - A publish that is refused because someone changed a file in the repository is no longer a
   dead end. The drawer marks the file it was refused over, and **Discard** on that row
   throws the unpublished changes away and reads the entry from the repository again, so the
@@ -2412,22 +2171,18 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `DELETE /admin/api/drafts/:collection/:slug`, and `POST /admin/api/publish` answers a
   conflict with `{ error, paths }` instead of a sentence. Keeping your version over theirs,
   or choosing field by field, is still to come. See `docs/publishing.md`.
-
 - The entry list is right the moment a rename or a delete is committed: the renamed entry
   is listed under its new name and a deleted one is gone, instead of waiting for the site
   to rebuild. Both write a row that says what the commit did to that file, laid over the
   build's index and dropped once the build has caught up; neither shows up as an
   unpublished change. A rename still carries the entry's unpublished edits to the new path.
   See `docs/publishing.md`.
-
 - A field's label in the admin is its key, humanised: `availableFrom` reads "Available
   from". `.meta({ label: 'SEO' })` on the field names it yourself, on any type including
   the `image`, `file`, `embed`, `seo` and `reference` helpers. See `docs/field-types.md`.
-
 - The entry list's columns line up with their headers again, and a read-only field says why
   it is read-only: `image`, `file`, `embed`, `seo` and `reference` show one line under the
   stored value naming the release that brings their editor. See `docs/field-types.md`.
-
 - The admin has an entry list. Every collection in `cms.config.ts` is a link in the
   sidebar, and `/admin/c/:collection` lists its entries with the titles the content index
   and the pending drafts give it. **New entry** takes a title, shows the filename derived
@@ -2441,7 +2196,6 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `DELETE /admin/api/entries/:collection/:slug`. `GET /admin/api/entries/:collection/:slug`
   now answers for an entry that exists only as a draft instead of 404. See
   `docs/publishing.md`.
-
 - The admin can list a collection without fetching every file from GitHub. The build reads
   every entry's title and `_status` out of `src/content/` — one row per entry across
   locales — and the new `GET /admin/api/entries/:collection` serves that with the pending
