@@ -147,16 +147,20 @@ const summary = (entry: Entry) =>
     },
     options,
   );
+const isHome = (entry: Entry) => index === '/' && entry.id === 'index';
+// The home page leads; filter's copy is sorted, and the sort is stable for the rest.
 const shown = $derived(
-  entries.filter(
-    (e) =>
-      (showing === 'all' || isHidden(e) === (showing === 'hidden')) &&
-      (!language || owes(e, language, work)) &&
-      (!search.trim() ||
-        [e.id, ...Object.values(e.locales).map((value) => value.title)].some((value) =>
-          value.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()),
-        )),
-  ),
+  entries
+    .filter(
+      (e) =>
+        (showing === 'all' || isHidden(e) === (showing === 'hidden')) &&
+        (!language || owes(e, language, work)) &&
+        (!search.trim() ||
+          [e.id, ...Object.values(e.locales).map((value) => value.title)].some((value) =>
+            value.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()),
+          )),
+    )
+    .sort((a, b) => Number(isHome(b)) - Number(isHome(a))),
 );
 const filtered = $derived(showing !== 'all' || language !== '' || search.trim() !== '');
 const chipTitle = (entry: Entry, locale: string) =>
@@ -540,7 +544,7 @@ async function done() {
           </div>
           <div class="td title" role="cell">
             <a href={sitePath(`/admin/c/${collection}/${entry.id}${queueQuery(language || undefined, work)}`)}>{titleOf(entry)}</a>
-            {#if index === '/' && entry.id === 'index'}
+            {#if isHome(entry)}
               <span class="sub home-mark">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11 12 4l8 7"/><path d="M6 9.5V20h12V9.5"/><path d="M10 20v-5h4v5"/></svg>
                 {m.entry_list_home_page({}, options)}

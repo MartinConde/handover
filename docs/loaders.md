@@ -114,7 +114,7 @@ preview would not show is the change the client just made to it.
 A page entry served at `/` is the `pages` collection's index, and the file named `index` is its
 copy: `pages: { schema: page, route: '/[slug]', index: '/', load: 'page' }` and
 `src/content/pages/de/index.yaml`. Preview, Canvas, page links and the sitemap give that entry
-`/`; `/index` is not its address. The admin's list marks it with a house and **Home page**. The pages loader reads it for its index:
+`/`; `/index` is not its address. The admin lists it first, marked with a house and **Home page**. The pages loader reads it for its index:
 
 ```ts
 // src/loaders/page.ts

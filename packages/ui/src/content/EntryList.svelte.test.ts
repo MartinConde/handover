@@ -135,16 +135,16 @@ const withIndex = (index: string) =>
     ),
   );
 
-test('the entry served at / is marked as the home page', async () => {
+test('the entry served at / is marked as the home page and listed first', async () => {
   withIndex('/');
   const root = show(undefined, 'de');
   await settle();
 
   const rows = Array.from(root.querySelectorAll('.row .td.title'));
   expect(rows.map((row) => row.querySelector('.home-mark')?.textContent?.trim() ?? null)).toEqual([
-    null,
-    null,
     'Startseite',
+    null,
+    null,
   ]);
 });
 
