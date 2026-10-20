@@ -111,6 +111,38 @@ export async function openDraft(
   return loadDraft(siteId, db, path);
 }
 
+/** An unedited row holds nobody's work, so a file changed under it is read again on open. */
+export async function refreshUntouched(
+  siteId: string,
+  db: Db,
+  row: Draft | undefined,
+  head: string,
+  file: { contents: string; blob_sha: string } | undefined,
+): Promise<Draft | undefined> {
+  if (!row || !file || row.publishedSha || row.baseBlob === file.blob_sha) return row;
+  if ((await blobSha(row.contents)) !== row.baseBlob) return row;
+  if (file.contents) parseEntry(siteId, file.contents);
+  // A new revision, so a tab still showing the old file is refused rather than merged over it.
+  await db
+    .update(drafts)
+    .set({
+      contents: file.contents,
+      baseSha: head,
+      baseBlob: file.blob_sha,
+      revision: nextRevision(row.revision),
+    })
+    .where(
+      and(
+        eq(drafts.siteId, siteId),
+        eq(drafts.path, row.path),
+        eq(drafts.revision, row.revision),
+        eq(drafts.contents, row.contents),
+        unreserved(siteId, row.path),
+      ),
+    );
+  return loadDraft(siteId, db, row.path);
+}
+
 /** The entry's other languages, so one save can keep their structure in step with this one. */
 export interface LocaleSync {
   form: Form;

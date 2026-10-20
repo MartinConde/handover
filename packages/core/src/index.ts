@@ -176,6 +176,7 @@ export {
   loadDraft,
   openDraft,
   pendingDrafts,
+  refreshUntouched,
   rewriteDrafts,
   saveDraft,
   saveTranslated,

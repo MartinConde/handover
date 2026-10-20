@@ -32,6 +32,7 @@ import {
   pendingDrafts,
   type RedirectRule,
   readSetting,
+  refreshUntouched,
 } from '@handover/core';
 import type { RequestContext } from '../../environment.js';
 import { entryForm, formSchema } from '../../index.js';
@@ -233,7 +234,14 @@ export async function entryLocales(
     locales.map(async (locale) => {
       const path = entryPath(collection, slug, locale);
       const file = await git.getFile(path, head);
-      return { locale, path, file, row: await loadDraft('default', database, path) };
+      const row = await loadDraft('default', database, path);
+      // Only on open: a save reads here too and must keep the base its revision was taken at.
+      return {
+        locale,
+        path,
+        file,
+        row: capture ? await refreshUntouched('default', database, row, head, file) : row,
+      };
     }),
   );
   // An empty file is still the language's file, so it opens as an empty entry.

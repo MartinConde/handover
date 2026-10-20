@@ -413,6 +413,31 @@ test('S01 repository edits after GET remain a conflict on the first save and pub
   expect(trees[head]?.[PATH]).toContain('Developer body');
 });
 
+test('an unedited draft opens with the repository change made since it was seeded', async () => {
+  await opened();
+  push([{ path: PATH, contents: INITIAL.replace('Original body', 'Developer body') }]);
+  const res = await call('GET', 'entries/pages/home');
+  expect(((await res.json()) as { data: { body: string } }).data.body).toBe('Developer body');
+  const row = await loadDraft('default', db, PATH);
+  expect(row?.baseSha).toBe(head);
+  expect(row?.baseBlob).toBe(await blobSha(trees[head]?.[PATH] ?? ''));
+});
+
+test('an edited draft keeps its words on reopen and still conflicts with a later repository change', async () => {
+  const entry = await opened();
+  expect((await save('My title', entry.revisions.en ?? '')).status).toBe(200);
+  push([{ path: PATH, contents: INITIAL.replace('Original body', 'Developer body') }]);
+  const res = await call('GET', 'entries/pages/home');
+  expect(((await res.json()) as { data: { title: string } }).data.title).toBe('My title');
+  expect((await call('POST', 'publish', { entries: ['pages/home'] })).status).toBe(409);
+});
+
+test('reopening an unedited draft of the current file leaves its revision alone', async () => {
+  const first = await opened();
+  const again = await opened();
+  expect(again.revisions.en).toBe(first.revisions.en);
+});
+
 test('stale client revisions are refused without replacing the winning save', async () => {
   const entry = await opened();
   const responses = await Promise.all([

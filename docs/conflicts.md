@@ -15,6 +15,9 @@ change pushed a moment earlier is caught rather than read as no change at all:
   in the repository since the editor loaded it, the publish is refused and no commit is
   made: the drawer marks that entry *Changed in the repository since you opened it* — same
   for a branch that moves while the commit is being written
+- **A draft nobody has edited is not a conflict.** Opening an entry starts a draft of the
+  file as it is. If the file changes in the repository before anybody types in it, the
+  next open reads the new version instead of the one it started from
 - **The refusal is about that entry, not about the batch.** A refused entry takes itself
   out of the set — its checkbox goes off and cannot go back on — so pressing Publish again
   sends the rest. **Publish this entry** in the header has no rest to send, so it puts the

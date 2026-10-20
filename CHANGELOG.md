@@ -4,6 +4,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Opening an entry whose draft has no edits reads the file again if it changed in the
+  repository since, rather than showing the older version without a warning.
 - Every row of the pending-changes drawer has **Discard**, and an entry's publish menu has
   **Discard changes** while it has unpublished changes. The confirmation says that every
   language goes, and that an entry never published is removed. `GET /admin/api/drafts` marks
