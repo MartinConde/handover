@@ -31,7 +31,9 @@ POST /admin/api/checks/database      →  { "ok": true, "code", "detail", "versi
 
 One connection, tried for real: an installation token and a read of the branch head; one small
 object written to the bucket, read back and deleted again; one word translated; the worker asked
-about without naming a commit; a read of the admin's own tables. `code` identifies the result and
+about without naming a commit; a read of the admin's own tables. `code` identifies the result
+(`DIAGNOSTIC_GITHUB_OK`, `_STORAGE_OK`, `_DATABASE_OK`, `_BUILD_OK`, `_BUILD_OFF`, `_TRANSLATION_OK`,
+`_TRANSLATION_OFF` and `_TRANSLATION_SINGLE_LANGUAGE`) and
 the named fields let the client format Handover's summary in the selected interface language.
 `detail` remains for older clients and for the exact sentence somebody forwards.
 

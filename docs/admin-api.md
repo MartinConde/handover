@@ -10,8 +10,9 @@ outside. They can change between versions, and `CHANGELOG.md` says when they do.
 Conventions across all of them:
 
 - Responses, including authentication and errors, use `Cache-Control: private, no-store`.
-  Non-upload request bodies are capped at 1 MiB regardless of Content-Type (`413`), with
-  JSON nesting and node limits (`400`). Upload and translation budgets return `429`.
+  Non-upload request bodies are capped at 1 MiB regardless of Content-Type (`413`
+  `BODY_TOO_LARGE`), with JSON nesting and node limits (`400` `BODY_STRUCTURE_INVALID`). Upload
+  and translation budgets return `429` (`RESOURCE_LIMIT`).
 - **`:collection` is a key from `cms.config.ts` and `:slug` is an entry's file name.**
   `404` whenever the collection is not configured, and generally when the entry has no
   file at all. A [global](site-files.md#globals) is addressed the same way, with `globals`
@@ -37,6 +38,21 @@ Conventions across all of them:
   `MEDIA_BECAME_USED` beside `reason: "media"` when a media item is being deleted or became used,
   `TRANSLATION_TARGET_EXISTS`, `ENTRY_SOURCE_TARGET_OFF` and `ENTRY_SOURCE_REVISION` when a language
   cannot be created, and `ENTRY_DRIFT_ANSWERS_INVALID` for drift answers that no longer match
+- **So do the rest**, each in the same `{ "code", "error" }` shape, with the code also in
+  `x-handover-error-code`:
+  - `MEDIA_NOT_FOUND` (`404`) and `MEDIA_STORAGE_UNAVAILABLE` (`503`, no media storage) on the
+    media routes, and `MEDIA_METADATA_INVALID` (`400`) for a body that is not `{ tags }`,
+    `{ alt }`, `{ archived }` or `{ focal }`
+  - `ENTRY_ADDRESS_INVALID` and `ENTRY_ADDRESS_TOO_LONG` (`422`, with `limit: 80`) and
+    `ENTRY_ADDRESS_TAKEN` (`409`) on a language's address; `ENTRY_LOCALE_LAST_PUBLISHED` and
+    `ENTRY_LOCALE_LAST_FILE` (`409`) when turning a language off would leave no published file,
+    or no file at all
+  - `REDIRECT_NOT_FOUND` (`404`) and `REDIRECT_MANAGED` (`409`, a rule that belongs to a hidden
+    entry). The `422` for a rule that is not valid is `{ "field", "message", "descriptor" }`
+    instead, with a `REDIRECT_*` code in `descriptor.code`
+  - `MEMBER_EMAIL_REQUIRED`, `MEMBER_ROLE_INVALID`, `MEMBER_ALREADY_SIGNED_IN`,
+    `MEMBER_SELF_ROLE`, `MEMBER_SELF_REMOVE` and `MEMBER_LAST_OWNER` (all `400`) on the owner's
+    member routes
 - Times are epoch milliseconds
 
 Accounts, members and the mailer check are not here: they are Better Auth's, and what a site
