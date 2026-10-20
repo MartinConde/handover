@@ -4,6 +4,7 @@ import { messageDetail, messageText, responseMessage, type UiMessage } from '../
 import { formatRelativeTime, messageOptions, type UiLocale } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
 import { request as fetch, sitePath, uncertainResponse } from '../request.js';
+import ConfirmDialog from '../shared/ConfirmDialog.svelte';
 import { dismiss } from '../shared/dismiss.js';
 import Modal from '../shared/Modal.svelte';
 import Skeleton from '../shared/Skeleton.svelte';
@@ -352,37 +353,36 @@ async function remove() {
       </form>
   </Modal>
 {:else if dialog === 'remove'}
-  <Modal labelledby="remove-h" describedby="remove-d" role="alertdialog" returnTo={trigger} dismissible={!busy} onclose={close}>
-      <h2 id="remove-h">
-        {#if target?.pending}
-          {m.members_revoke_question({ email: target.email }, options)}
-        {:else}
-          {m.members_remove_question({ name: target?.name || target?.email || '' }, options)}
-        {/if}
-      </h2>
-      <div id="remove-d">
-        {#if target?.pending}
+  <ConfirmDialog
+    labelledby="remove-h"
+    describedby="remove-d"
+    returnTo={trigger}
+    title={target?.pending
+      ? m.members_revoke_question({ email: target.email }, options)
+      : m.members_remove_question({ name: target?.name || target?.email || '' }, options)}
+    cancel={m.common_cancel({}, options)}
+    confirm={target?.pending ? m.members_revoke({}, options) : m.members_remove({}, options)}
+    {busy}
+    onconfirm={remove}
+    onclose={close}
+  >
+    <div id="remove-d">
+      {#if target?.pending}
+        <p>
+          {m.members_revoke_explanation({}, options)}
+        </p>
+      {:else}
+        {#if target?.editing.length}
           <p>
-            {m.members_revoke_explanation({}, options)}
+            {m.members_editing_before({}, options)}{#each target.editing as name, i}{#if i > 0}{i === target.editing.length - 1 ? m.members_list_and({}, options) : ', '}{/if}<strong>{name}</strong>{/each}{target.editing.length === 1 ? m.members_editing_after_one({}, options) : m.members_editing_after_many({}, options)}
           </p>
-        {:else}
-          {#if target?.editing.length}
-            <p>
-              {m.members_editing_before({}, options)}{#each target.editing as name, i}{#if i > 0}{i === target.editing.length - 1 ? m.members_list_and({}, options) : ', '}{/if}<strong>{name}</strong>{/each}{target.editing.length === 1 ? m.members_editing_after_one({}, options) : m.members_editing_after_many({}, options)}
-            </p>
-          {/if}
-          <p>
-            {m.members_remove_access_explanation({}, options)}
-          </p>
-          <p>{m.members_remove_drafts({}, options)}</p>
         {/if}
-      </div>
-      {#if error}<p class="notice notice-danger" role="alert">{text(error)}{#if error.detail}<span class="technical-detail">{messageDetail(error, uiLocale)}</span>{/if}</p>{/if}
-      <div class="actions">
-        <button class="btn" type="button" disabled={busy} onclick={close}>{m.common_cancel({}, options)}</button>
-        <button class="btn btn-danger" type="button" disabled={busy} onclick={remove}>
-          {target?.pending ? m.members_revoke({}, options) : m.members_remove({}, options)}
-        </button>
-      </div>
-  </Modal>
+        <p>
+          {m.members_remove_access_explanation({}, options)}
+        </p>
+        <p>{m.members_remove_drafts({}, options)}</p>
+      {/if}
+    </div>
+    {#if error}<p class="notice notice-danger" role="alert">{text(error)}{#if error.detail}<span class="technical-detail">{messageDetail(error, uiLocale)}</span>{/if}</p>{/if}
+  </ConfirmDialog>
 {/if}

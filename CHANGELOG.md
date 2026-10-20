@@ -4,8 +4,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
-- Internal: the admin's menus close on a click outside or Escape through one shared attachment
-  instead of five hand-written handlers.
+- Internal: the admin's menus close on a click outside or Escape through one shared attachment, and
+  its confirm dialogs share one component, instead of hand-written copies.
 - Internal: the admin drops unused and duplicate messages, dead exports and two unused CSS classes;
   the entry's "file contradicts its languages" banner is now a translated message.
 - Internal: the admin stylesheet drops about 50 selectors no screen uses, defines `--shadow-lg`,

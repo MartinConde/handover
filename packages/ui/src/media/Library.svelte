@@ -6,8 +6,8 @@ import { messageDetail, messageText, responseMessage, type UiMessage } from '../
 import { formatMediaDate, messageOptions, type UiLocale } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
 import { request as fetch, sitePath, uncertainResponse } from '../request.js';
+import ConfirmDialog from '../shared/ConfirmDialog.svelte';
 import MediaImage from '../shared/MediaImage.svelte';
-import Modal from '../shared/Modal.svelte';
 import Crop from './Crop.svelte';
 import Focal from './Focal.svelte';
 import { fileSize, type LibraryItem, MediaUploadError, uploadFile, uploadImage } from './upload.js';
@@ -726,25 +726,21 @@ const queueText = (state: QueueState) => {
 {/if}
 
 {#if confirming && chosen}
-  <Modal
+  <ConfirmDialog
     labelledby="del-h"
     describedby="del-d"
-    role="alertdialog"
     initialFocus=".actions .btn"
     returnTo={trigger}
-    dismissible={!deleting}
+    title={m.media_library_delete_title({ filename: name(chosen) }, options)}
+    cancel={m.common_cancel({}, options)}
+    confirm={deleting ? m.media_library_deleting({}, options) : m.media_library_delete_permanently({}, options)}
+    busy={deleting}
+    onconfirm={remove}
     onclose={closeDialog}
   >
-      <h2 id="del-h">{m.media_library_delete_title({ filename: name(chosen) }, options)}</h2>
-      <div id="del-d">
-        <p>{m.media_library_delete_intro({}, options)}</p>
-        <p>{kind === 'images' ? m.media_library_delete_archive_image({}, options) : m.media_library_delete_archive_file({}, options)}</p>
-      </div>
-      <div class="actions">
-        <button class="btn" type="button" disabled={deleting} onclick={closeDialog}>{m.common_cancel({}, options)}</button>
-        <button class="btn btn-danger" type="button" disabled={deleting} onclick={remove}>
-          {deleting ? m.media_library_deleting({}, options) : m.media_library_delete_permanently({}, options)}
-        </button>
-      </div>
-  </Modal>
+    <div id="del-d">
+      <p>{m.media_library_delete_intro({}, options)}</p>
+      <p>{kind === 'images' ? m.media_library_delete_archive_image({}, options) : m.media_library_delete_archive_file({}, options)}</p>
+    </div>
+  </ConfirmDialog>
 {/if}

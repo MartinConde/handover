@@ -4,6 +4,7 @@ import { messageLine, messageText, responseMessage, type UiMessage } from '../er
 import { languageTag, messageOptions, type UiLocale } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
 import { request as fetch, sitePath } from '../request.js';
+import ConfirmDialog from '../shared/ConfirmDialog.svelte';
 import Modal from '../shared/Modal.svelte';
 import Skeleton from '../shared/Skeleton.svelte';
 import PagePicker from './PagePicker.svelte';
@@ -582,28 +583,24 @@ async function remove() {
 {/if}
 
 {#if dropping}
-  <Modal
+  <ConfirmDialog
     labelledby="rd-del-h"
     describedby="rd-del-d"
-    role="alertdialog"
     returnTo={trigger}
-    dismissible={!saving}
+    title={m.redirect_delete_question({}, options)}
+    cancel={m.redirect_keep({}, options)}
+    confirm={saving ? m.redirect_deleting({}, options) : m.redirect_delete_anyway({}, options)}
+    busy={saving}
+    onconfirm={remove}
     onclose={close}
   >
-      <h2 id="rd-del-h">{m.redirect_delete_question({}, options)}</h2>
-      <div id="rd-del-d">
-        <p><code>{dropping.from}</code> → <code>{dropping.to}</code></p>
-        {#if young(dropping)}
-          <div class="notice notice-warn">
-            {m.redirect_delete_warning({ count: months(dropping) }, options)}
-          </div>
-        {/if}
-      </div>
-      <div class="actions">
-        <button class="btn" type="button" disabled={saving} onclick={close}>{m.redirect_keep({}, options)}</button>
-        <button class="btn btn-danger" type="button" disabled={saving} onclick={remove}
-          >{saving ? m.redirect_deleting({}, options) : m.redirect_delete_anyway({}, options)}</button
-        >
-      </div>
-  </Modal>
+    <div id="rd-del-d">
+      <p><code>{dropping.from}</code> → <code>{dropping.to}</code></p>
+      {#if young(dropping)}
+        <div class="notice notice-warn">
+          {m.redirect_delete_warning({ count: months(dropping) }, options)}
+        </div>
+      {/if}
+    </div>
+  </ConfirmDialog>
 {/if}

@@ -37,7 +37,7 @@ import Pending from './publishing/Pending.svelte';
 import { request as fetch, localPath, sitePath, uncertainResponse } from './request.js';
 import type { ScreenProps } from './screen.js';
 import BuildPill, { type Build } from './shared/BuildPill.svelte';
-import Modal from './shared/Modal.svelte';
+import ConfirmDialog from './shared/ConfirmDialog.svelte';
 import Skeleton from './shared/Skeleton.svelte';
 
 export interface Session {
@@ -1035,23 +1035,21 @@ const initial = $derived(
     {/each}
   </div>
   {#if confirmRevert}
-    <Modal
+    <ConfirmDialog
       labelledby="revert-h"
       describedby="revert-p"
-      dismissible={!reverting}
+      role="dialog"
+      title={m.build_revert_question({}, options)}
+      cancel={m.common_cancel({}, options)}
+      confirm={reverting ? m.build_reverting({}, options) : m.build_revert({}, options)}
+      busy={reverting}
+      onconfirm={revert}
       onclose={closeRevert}
     >
-        <h2 id="revert-h">{m.build_revert_question({}, options)}</h2>
-        <p id="revert-p">
-          {m.build_revert_explanation({}, options)}
-        </p>
-        <div class="actions">
-          <button class="btn" type="button" disabled={reverting} onclick={closeRevert}>{m.common_cancel({}, options)}</button>
-          <button class="btn btn-danger" type="button" disabled={reverting} onclick={revert}>
-            {reverting ? m.build_reverting({}, options) : m.build_revert({}, options)}
-          </button>
-        </div>
-    </Modal>
+      <p id="revert-p">
+        {m.build_revert_explanation({}, options)}
+      </p>
+    </ConfirmDialog>
   {/if}
 </div>
 {/if}

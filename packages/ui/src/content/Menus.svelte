@@ -44,7 +44,7 @@ import {
 import { capitalise, collectionName, formatLanguageName, messageOptions, type UiLocale } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
 import { dismiss } from '../shared/dismiss.js';
-import Modal from '../shared/Modal.svelte';
+import ConfirmDialog from '../shared/ConfirmDialog.svelte';
 import PagePicker from './PagePicker.svelte';
 
 let {
@@ -707,20 +707,18 @@ function walkTabs(event: KeyboardEvent) {
 </div>
 
 {#if removing}
-  <Modal
+  <ConfirmDialog
     labelledby={`${id}-rm-h`}
     describedby={`${id}-rm-d`}
-    role="alertdialog"
     returnTo={trigger}
+    title={m.menus_remove_with_children_title({ item: name(removing) }, options)}
+    cancel={m.common_cancel({}, options)}
+    confirm={m.menus_remove({}, options)}
+    onconfirm={() => removing && drop(pathOf(removing))}
     onclose={() => (removing = undefined)}
   >
-      <h2 id="{id}-rm-h">{m.menus_remove_with_children_title({ item: name(removing) }, options)}</h2>
-      <p id="{id}-rm-d">
-        {m.menus_remove_with_children({ count: removing.children?.length ?? 0 }, options)} {m.menus_remove_explanation({}, options)}
-      </p>
-      <div class="actions">
-        <button class="btn" type="button" onclick={() => (removing = undefined)}>{m.common_cancel({}, options)}</button>
-        <button class="btn btn-danger" type="button" onclick={() => removing && drop(pathOf(removing))}>{m.menus_remove({}, options)}</button>
-      </div>
-  </Modal>
+    <p id="{id}-rm-d">
+      {m.menus_remove_with_children({ count: removing.children?.length ?? 0 }, options)} {m.menus_remove_explanation({}, options)}
+    </p>
+  </ConfirmDialog>
 {/if}

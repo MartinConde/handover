@@ -11,6 +11,7 @@ import {
 } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
 import { request as fetch, sitePath } from '../request.js';
+import ConfirmDialog from '../shared/ConfirmDialog.svelte';
 import Modal from '../shared/Modal.svelte';
 import Skeleton from '../shared/Skeleton.svelte';
 
@@ -684,14 +685,17 @@ const mailerName = (provider: string) => {
     {#if removing}
       {@const name = keyName(removing.key)}
       {@const row = removing}
-      <Modal labelledby="remove-h" onclose={() => (removing = undefined)}>
-          <h2 id="remove-h">{m.diagnostics_remove_key_question({ name }, options)}</h2>
-          <p>{says(row)}</p>
-          <div class="actions">
-            <button class="btn" type="button" onclick={() => (removing = undefined)}>{m.common_cancel({}, options)}</button>
-            <button class="btn btn-danger" type="button" onclick={() => removeKey(row)}>{m.diagnostics_remove({}, options)}</button>
-          </div>
-      </Modal>
+      <ConfirmDialog
+        labelledby="remove-h"
+        role="dialog"
+        title={m.diagnostics_remove_key_question({ name }, options)}
+        cancel={m.common_cancel({}, options)}
+        confirm={m.diagnostics_remove({}, options)}
+        onconfirm={() => removeKey(row)}
+        onclose={() => (removing = undefined)}
+      >
+        <p>{says(row)}</p>
+      </ConfirmDialog>
     {/if}
     {#if typing}
       {@const name = keyName(typing.key)}
