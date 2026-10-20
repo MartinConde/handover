@@ -50,7 +50,7 @@ export const read = (root: unknown, path: readonly string[]) =>
     root,
   );
 
-/** Find the owning field and inherited translation mode for one resolved positional path. */
+// Find the owning field and inherited translation mode for one resolved positional path.
 export function fieldContext(
   form: Form,
   path: readonly string[],

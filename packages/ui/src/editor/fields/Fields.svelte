@@ -178,6 +178,7 @@ const when = (iso: string) => {
   const at = Date.parse(iso);
   return at ? formatFieldTime(at, uiLocale) : '';
 };
+// Read the marker before `opened` moves: closing is what takes the argument away.
 const close = (path: string, then: (path: string) => void) => {
   const marker = document.getElementById(`stale-${path}`);
   opened = '';
@@ -212,7 +213,7 @@ function directWrite(at: readonly string[], value: unknown) {
   else node[last] = value;
 }
 
-/** One widget action is one command even when it changes several stored properties. */
+// One widget action is one command even when it changes several stored properties.
 function writeMany(
   at: readonly string[],
   changes: readonly FieldChange[],
@@ -270,7 +271,7 @@ const src = (at: readonly string[]) => {
   const key = str([...at, 'src']);
   return key ? `${mediaBase}/${key}` : '';
 };
-/** This page's own dot, in percentages; the middle is what a page that set none crops around. */
+// This page's own dot, in percentages; the middle is what a page that set none crops around.
 const point = (at: readonly string[]): [number, number] => {
   const stored = read([...at, 'focal']);
   const [x, y] = Array.isArray(stored) ? (stored as unknown[]) : [];
@@ -391,7 +392,6 @@ const level: FieldLevel = {
           >{:else if part.mark !== 'del'}{part.text}{/if}{/each}
       </div>
     </div>
-    <!-- Read the address before `opened` moves: closing is what takes the argument away. -->
     <div class="actions">
       {#if onretranslate}
         <button class="btn btn-sm" type="button" onclick={() => close(stalePath, onretranslate)}>{m.translation_retranslate({}, options)}</button>

@@ -1,5 +1,4 @@
 <script lang="ts">
-// Form and the lazy Canvas surface share the tier extensions that sanitize prose input.
 import type { RichtextTier } from '@handover/core';
 import { richtextErrors } from '@handover/core';
 import { Editor, Extension } from '@tiptap/core';
@@ -11,6 +10,7 @@ import { messageOptions, type UiLocale } from '../../i18n.js';
 import * as m from '../../paraglide/messages.js';
 import type { FieldHistory, LogicalSelection } from '../entry-history.svelte';
 import type { EntrySession, FieldCommandResult } from '../entry-session.svelte';
+// Form and the lazy Canvas surface share the tier extensions that sanitize prose input.
 import { proseSelection, restoreProseSelection, richTextExtensions } from './rich-text-kit';
 
 let {

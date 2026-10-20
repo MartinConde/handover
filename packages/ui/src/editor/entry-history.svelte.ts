@@ -303,7 +303,6 @@ export function createEntryHistory({
     redo(): HistoryResult {
       return replayHistory(redoStack, undoStack, 'redo');
     },
-    /** Shallow history counts used to verify and profile value retention. */
     stats(): HistoryStats {
       const retainedFieldValues = [...undoStack, ...redoStack].reduce(
         (total, transaction) =>

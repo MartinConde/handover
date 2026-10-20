@@ -202,7 +202,6 @@ let canvasPane = $state<ReturnType<typeof CanvasWorkspace>>();
 let headerHeight = $state(0);
 
 type EditorMode = 'form' | 'split' | 'canvas';
-/** What sits beside the form: the page, the other language, or nothing. */
 type Beside = 'page' | 'language' | 'none';
 const BESIDE: Beside[] = ['page', 'language', 'none'];
 // svelte-ignore state_referenced_locally -- one authenticated editor instance owns one preference key
@@ -389,7 +388,7 @@ async function announceCommit(res: Response) {
   if (typeof body.commit_sha === 'string' && body.commit_sha) await oncommitted?.();
 }
 
-/** The turn-off this language can be brought back from, when the CMS is what turned it off. */
+// The turn-off this language can be brought back from, when the CMS is what turned it off.
 let putBack = $state<{ commit_sha: string; at: number }>();
 $effect(() => {
   const of = shown;
@@ -529,7 +528,7 @@ onMount(() => ontitle?.(() => title));
 onMount(() => ontopbar?.({ lead: topbarLead, actions: topbarActions }));
 // The SEO panel is its own tab, so the Content form omits the field; a global has no tabs.
 const seoField = $derived(!entry.singleton && entry.fields.some((f) => f.type === 'seo'));
-/** The key the seo field sits under, which is what a problem on it is named by. */
+// The key the seo field sits under, which is what a problem on it is named by.
 const seoAt = $derived(entry.fields.find((f) => f.type === 'seo')?.path[0]);
 // Named again when the interface language changes, without reading the entry again.
 const shownForm = $derived(
@@ -542,7 +541,7 @@ const fields = $derived(
       ? shownForm.fields.filter((f) => f.type === 'seo')
       : shownForm.fields.filter((f) => f.type !== 'seo'),
 );
-/** What one language's page would say with nothing typed: the build's own resolution. */
+// What one language's page would say with nothing typed: the build's own resolution.
 const inherited = (of: string, values: Data) =>
   entry.fields.some((f) => f.type === 'seo')
     ? resolveSeo(
@@ -926,7 +925,7 @@ async function selectForm(selection: CanvasSelection) {
   }
 }
 
-/** The pane's to-do jump: bring the field this source path names on screen and focus it. */
+// The pane's to-do jump: bring the field this source path names on screen and focus it.
 async function jumpTo(path: string): Promise<boolean> {
   const of = shown;
   if (!of || !entrySession.hasSnapshot(of)) return false;
@@ -1014,7 +1013,8 @@ async function leaving(change: () => void) {
   change();
 }
 
-// Five languages and up in the header, two others and up in the pane: a disclosure, not role="menu", as on the entry list rows.
+// Five languages and up in the header, two others and up in the pane:
+// a disclosure, not role="menu", as on the entry list rows.
 let languageMenu = $state<'header' | 'pane'>();
 let languageTrigger = $state<HTMLButtonElement>();
 // Rebound when the pane remounts on its new language, so focus returns to the pane on screen.
@@ -1468,7 +1468,6 @@ async function saveAddress() {
       }}
     />
   {:else}
-  <!-- Stands where the form would be: every field belongs to a structure not yet agreed on. -->
   <div
     class={[
       'entry-body',
@@ -1481,6 +1480,7 @@ async function saveAddress() {
     ]}
   >
     {#if drifted}
+      <!-- Stands where the form would be: every field belongs to a structure not yet agreed on. -->
       <DriftPanel
         {collection}
         {slug}

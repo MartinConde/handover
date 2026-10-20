@@ -235,7 +235,6 @@ const sourceTextChange = (context: FieldContext, changes: readonly { path: reado
     context.mode === true &&
     changes.every((change) => change.path.join('.') === 'label'));
 
-/** Whether this source change can alter the locale-owned value of this one field. */
 const localeFieldProjectionNeeded = (
   context: FieldContext,
   changes: readonly { path: readonly string[] }[],
@@ -471,7 +470,7 @@ export function createEntrySession({
     return rows ? { context, held, rows } : undefined;
   };
 
-  /** Capture only row-owned locale data; entry metadata and parent identities never enter seeds. */
+  // Capture only row-owned locale data; entry metadata and parent identities never enter seeds.
   const captureSeeds = (address: string): Record<string, LocaleSeed[]> => {
     const captured: Record<string, LocaleSeed[]> = {};
     for (const locale of locales()) {
@@ -546,7 +545,7 @@ export function createEntrySession({
     }
   };
 
-  /** Field edits cannot change row presence, so resolve and project only their stable owner. */
+  // Field edits cannot change row presence, so resolve and project only their stable owner.
   const projectFieldLocales = (address: string, context: FieldContext, source: EntryData) => {
     if (!form) return;
     const sourceValue = read(source, context.path);
@@ -760,7 +759,7 @@ export function createEntrySession({
     contentVersion(locale: string): number {
       return versionOf(locale);
     },
-    /** Materialize plain snapshot data only when a Canvas render is actually requested. */
+    // Materialize plain snapshot data only when a Canvas render is actually requested.
     renderSnapshots(): Record<string, EntryData> {
       return structuredClone($state.snapshot(snapshots));
     },
@@ -781,7 +780,7 @@ export function createEntrySession({
       if (!state) throw new Error(`The ${locale} locale is not loaded in this entry session.`);
       return state;
     },
-    /** Configure once so save scheduling survives locale-pane mount cycles. */
+    // Configure once so save scheduling survives locale-pane mount cycles.
     configureAutosave(
       write: (
         locale: string,
@@ -831,7 +830,7 @@ export function createEntrySession({
         );
       }
     },
-    /** Store wire-format errors by stable identity only when they describe the current version. */
+    // Store wire-format errors by stable identity only when they describe the current version.
     acceptProblems(
       locale: string,
       found: EntryProblem[],
@@ -843,7 +842,7 @@ export function createEntrySession({
       validation[locale] = normalize(JSON.parse(validatedSnapshot) as EntryData, found);
       return true;
     },
-    /** Missing required content pauses Canvas rendering, never draft persistence. */
+    // Missing required content pauses Canvas rendering, never draft persistence.
     incompleteFields(locale: string, uiLocale: UiLocale = 'en'): Record<string, string> {
       const named = form && formIn(form, uiLocale);
       return named
@@ -857,12 +856,11 @@ export function createEntrySession({
           )
         : {};
     },
-    /** Convert a validation path to a stable Canvas target, including missing values. */
     addressForPath(locale: string, path: string) {
       const current = snapshots[locale];
       return current && form ? fieldAddress('default', path.split('.'), current, form) : undefined;
     },
-    /** Form controls still consume the API's positional dotted-path shape. */
+    // Form controls still consume the API's positional dotted-path shape.
     positionalProblems(locale: string, uiLocale: UiLocale = 'en'): Record<string, string> {
       const current = snapshots[locale];
       if (!current) return {};
@@ -873,14 +871,12 @@ export function createEntrySession({
       }
       return positional;
     },
-    /** Whether the entry as loaded already holds a value at this field, found by row id. */
     heldWhenOpened(locale: string, address: string): boolean {
       const loaded = opened[locale];
       if (!loaded || !form) return false;
       const resolved = resolveFieldTarget('default', form, address, loaded);
       return resolved.ok && read(loaded, resolved.target.path) !== undefined;
     },
-    /** Resolve a command target against this session's current schema and locale data. */
     resolveField(locale: string, address: string): FieldTargetResult {
       const current = snapshots[locale];
       if (!current) throw new Error(`The ${locale} locale is not loaded in this entry session.`);
@@ -888,7 +884,6 @@ export function createEntrySession({
         ? resolveFieldTarget('default', form, address, current)
         : { ok: false, reason: 'schema' };
     },
-    /** Resolve the schema widget that owns an address, including a structured widget property. */
     inspectField(locale: string, address: string) {
       const current = snapshots[locale];
       if (!current || !form) return { ok: false as const, reason: 'schema' as const };
@@ -908,11 +903,9 @@ export function createEntrySession({
         },
       };
     },
-    /** Apply one schema-aware field action after re-resolving its stable target. */
     fieldCommand(locale: string, command: FieldCommand): FieldCommandResult {
       return runFieldCommand(locale, command);
     },
-    /** Apply one same-list structural action after re-resolving its stable container. */
     listCommand(locale: string, command: ListCommand): ListCommandResult {
       history.boundary();
       const current = snapshots[locale];
@@ -997,7 +990,7 @@ export function createEntrySession({
         history.redoable
       );
     },
-    /** Shallow history counts used to verify and profile value retention. */
+    // Shallow history counts used to verify and profile value retention.
     historyStats() {
       return history.stats();
     },
@@ -1007,22 +1000,22 @@ export function createEntrySession({
     redo() {
       return history.redo();
     },
-    /** A cursor move is not history, but it ends any typing transaction in progress. */
+    // A cursor move is not history, but it ends any typing transaction in progress.
     setHistorySelection(selection?: LogicalSelection): void {
       history.select(selection);
     },
-    /** The mounted editor matching this target restores it after session replay/reconciliation. */
+    // The mounted editor matching this target restores it after session replay/reconciliation.
     historySelection(): LogicalSelection | undefined {
       return history.selection();
     },
-    /** Blur, formatting, paste, and explicit editing transitions call this group boundary. */
+    // Blur, formatting, paste, and explicit editing transitions call this group boundary.
     historyBoundary(): void {
       history.boundary();
     },
     freezeHistory(): void {
       history.freeze();
     },
-    /** Drain every loaded locale, including dirty panes which are no longer mounted. */
+    // Drain every loaded locale, including dirty panes which are no longer mounted.
     async flush(): Promise<boolean> {
       // Navigation remains available while the reconciliation panel owns the screen.
       if (drifted) return !locales().some(dirty);
@@ -1065,7 +1058,7 @@ export function createEntrySession({
     machineTranslationPending(locale: string): boolean {
       return persistedAction?.kind === 'machine-translation' && persistedAction.locale === locale;
     },
-    /** Reserve the entry, drain every locale, then own checks and the final commit on the lane. */
+    // Reserve the entry, drain every locale, then own checks and the final commit on the lane.
     async finalPublish(
       request: () => Promise<boolean>,
       reload: (outcome: 'published' | 'uncertain') => void | Promise<void>,
@@ -1079,7 +1072,7 @@ export function createEntrySession({
         'published',
       );
     },
-    /** Drain local writes, run an outside replacement, then retire this session before reload. */
+    // Drain local writes, run an outside replacement, then retire this session before reload.
     async authoritativeChange(
       request: () => Promise<boolean>,
       reload: (outcome: 'changed' | 'uncertain') => void | Promise<void>,
@@ -1091,7 +1084,7 @@ export function createEntrySession({
         'changed',
       );
     },
-    /** Reserve the entry, drain old writes, then translate and acknowledge on the shared lane. */
+    // Reserve the entry, drain old writes, then translate and acknowledge on the shared lane.
     async machineTranslate(
       locale: string,
       request: () => Promise<MachineTranslationResponse | undefined>,
@@ -1160,14 +1153,14 @@ export function createEntrySession({
         if (persistedAction?.id === running.id) persistedAction = undefined;
       }
     },
-    /** Drain old writes, restore on the shared lane, then replace every in-memory locale. */
+    // Drain old writes, restore on the shared lane, then replace every in-memory locale.
     async historicalRestore(
       request: () => Promise<HistoricalRestoreResponse>,
       reload: (outcome: 'restored' | 'uncertain') => void | Promise<void>,
     ): Promise<ReplacementResult> {
       return replaceAuthoritatively('historical-restore', request, reload, 'restored');
     },
-    /** Keep the gate closed until the parent replaces this session with one fresh entry read. */
+    // Keep the gate closed until the parent replaces this session with one fresh entry read.
     async afterReconciliation(): Promise<void> {
       retire();
       await onreconciled?.();
