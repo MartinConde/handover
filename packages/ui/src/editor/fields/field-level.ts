@@ -27,6 +27,9 @@ export type FieldLevel = {
   // One picker open per level, by field id, and the files dropped on the field that opened it.
   picker: string;
   dropped: File[];
+  // The drag-only copy a list reorders while hovering; every reader of the level sees it.
+  projection: Data | undefined;
+  readonly view: Data;
   readonly uiLocale: UiLocale;
   readonly options: { readonly locale: UiLocale };
   readonly mediaBase: string;
