@@ -1,3 +1,7 @@
+import { object } from './required-fields';
+
+const AUTOSAVE_DELAY_MS = 2000;
+
 export type SaveState = { saved: string; phase: 'idle' | 'saving' | 'failed' };
 
 export type DraftSaveLock = {
@@ -10,9 +14,6 @@ export type DraftSaveRefusal =
   | { kind: 'lock'; lock: DraftSaveLock }
   | { kind: 'revision'; error?: string }
   | { kind: 'other' };
-
-const object = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 const lockRefusal = (value: unknown): value is DraftSaveLock => {
   if (!object(value) || value.mine !== false) return false;
@@ -103,7 +104,7 @@ export function saveCoordinator(options: {
   };
   const change = () => {
     cancel();
-    if (open && dirty()) timer = setTimeout(() => void flush(), 2000);
+    if (open && dirty()) timer = setTimeout(() => void flush(), AUTOSAVE_DELAY_MS);
     return cancel;
   };
   return {

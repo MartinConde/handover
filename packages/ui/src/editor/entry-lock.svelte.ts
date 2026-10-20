@@ -2,6 +2,11 @@ import { LOCK_TTL } from '@handover/core';
 import type { UiMessage } from '../errors.js';
 import { request as fetch } from '../request.js';
 
+export const TAB_KEY = 'handover-tab';
+// Beat cadence, and how stale the last beat must be before typing renews the lock.
+const POLL_MS = 15000;
+const RENEW_AFTER_MS = 45000;
+
 export type EntryLock = {
   held_by: { id: string; name: string | null } | null;
   mine: boolean;
@@ -33,10 +38,10 @@ export function createEntryLock({
   let renewing = false;
   const tab = (() => {
     try {
-      const kept = sessionStorage.getItem('handover-tab');
+      const kept = sessionStorage.getItem(TAB_KEY);
       if (kept) return kept;
       const made = crypto.randomUUID();
-      sessionStorage.setItem('handover-tab', made);
+      sessionStorage.setItem(TAB_KEY, made);
       return made;
     } catch {
       return crypto.randomUUID();
@@ -78,7 +83,7 @@ export function createEntryLock({
   // Polls on either side so a holder hears of a take-over without typing.
   $effect(() => {
     if (lost) return;
-    const timer = setInterval(() => beat(false), 15000);
+    const timer = setInterval(() => beat(false), POLL_MS);
     return () => clearInterval(timer);
   });
 
@@ -118,7 +123,7 @@ export function createEntryLock({
       if (lock?.mine && !lost && document.visibilityState === 'visible') void beat(false);
     },
     renew() {
-      if (!lock?.mine || lost || renewing || Date.now() - beatAt < 45000) return;
+      if (!lock?.mine || lost || renewing || Date.now() - beatAt < RENEW_AFTER_MS) return;
       renewing = true;
       void beat(true).finally(() => {
         renewing = false;

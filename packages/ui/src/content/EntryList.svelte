@@ -370,7 +370,7 @@ async function done() {
   <div class="list-toolbar">
     <h1>{capitalise(plural)} <span class="count">{filtered ? m.entry_list_count_filtered({ shown: shown.length, total: entries.length }, options) : entries.length}</span></h1>
     <span class="spacer"></span>
-    <button class="btn btn-primary" type="button" onclick={() => open('new')}>{newLabel(collection, uiLocale) ?? m.entry_list_new({ collection: collectionLabel }, options)}</button>
+    <button class="btn btn-primary" type="button" onclick={() => open('new')}>{newLabel(collection, uiLocale, m.entry_list_new({ collection: collectionLabel }, options))}</button>
   </div>
   <div class="tabs list-tabs" role="tablist" aria-label={m.entry_list_tabs_label({ collection: plural }, options)}>
     <button
@@ -645,7 +645,7 @@ async function done() {
         <h2>{m.entry_list_empty({ collection: plural }, options)}</h2>
         <p>{m.entry_list_empty_hint({ collection: collectionLabel }, options)}</p>
         <button class="btn btn-primary" type="button" onclick={() => open('new')}>
-          {newLabel(collection, uiLocale) ?? m.entry_list_new({ collection: collectionLabel }, options)}
+          {newLabel(collection, uiLocale, m.entry_list_new({ collection: collectionLabel }, options))}
         </button>
       </div>
     </div>

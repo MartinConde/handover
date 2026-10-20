@@ -43,8 +43,8 @@ export function collectionName(
 }
 
 /** The site's own wording for the new-entry button and heading; German needs the noun's gender. */
-export const newLabel = (name: string, locale: UiLocale) =>
-  labelIn(collectionLabels[name]?.newLabel, locale);
+export const newLabel = (name: string, locale: UiLocale, fallback: string) =>
+  labelIn(collectionLabels[name]?.newLabel, locale) ?? fallback;
 
 const relativeFormatters = new Map<UiLocale, Intl.RelativeTimeFormat>();
 const dateFormatters = new Map<UiLocale, Intl.DateTimeFormat>();

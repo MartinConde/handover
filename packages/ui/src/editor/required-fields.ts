@@ -3,7 +3,7 @@ import type { UiLocale } from '../i18n.js';
 import { messageOptions } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
 
-const object = (value: unknown): value is Record<string, unknown> =>
+export const object = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
 // Editing readiness only. The server remains authoritative for schema validation and publishing.

@@ -199,7 +199,7 @@ const oldest = $derived(Math.min(...pending.map((entry) => entry.updated_at)));
         {#if newMenuOpen}
           <div class="menu" id="dashboard-new-types">
             {#each collections as name (name)}
-              <button type="button" onclick={() => { newTrigger?.focus(); newMenuOpen = false; creating = name; }}>{newLabel(name, uiLocale) ?? m.dashboard_new_collection({ collection: collectionName(name, uiLocale, 'singular') }, options)}</button>
+              <button type="button" onclick={() => { newTrigger?.focus(); newMenuOpen = false; creating = name; }}>{newLabel(name, uiLocale, m.dashboard_new_collection({ collection: collectionName(name, uiLocale, 'singular') }, options))}</button>
             {/each}
           </div>
         {/if}

@@ -15,10 +15,13 @@ import {
 } from '@handover/core';
 import { problemText, type UiMessage } from '../errors.js';
 import type { UiLocale } from '../i18n.js';
-import { requiredFieldProblems } from './required-fields';
+import { object, requiredFieldProblems } from './required-fields';
 import { type SaveState, saveCoordinator, saveLane } from './save';
 
 type EntryData = Record<string, unknown>;
+
+const TYPING_GROUP_MS = 1000;
+
 export type EntryProblem = { path: string; message: string; descriptor?: UiMessage };
 
 export type EntrySession = ReturnType<typeof createEntrySession>;
@@ -183,9 +186,6 @@ type ActiveHistoryGroup = {
   locale: string;
   startedAt: number;
 };
-
-const object = (value: unknown): value is EntryData =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 const equal = (a: unknown, b: unknown): boolean => {
   if (Object.is(a, b)) return true;
@@ -720,7 +720,7 @@ export function createEntrySession({
       kind === 'typing' &&
       activeHistoryGroup?.kind === 'typing' &&
       sameTarget &&
-      now - activeHistoryGroup.startedAt <= 1000 &&
+      now - activeHistoryGroup.startedAt <= TYPING_GROUP_MS &&
       current?.type === 'field' &&
       sameSelection(current.after, before);
     const groupedComposition =

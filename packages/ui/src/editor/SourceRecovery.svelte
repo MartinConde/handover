@@ -3,6 +3,7 @@ import { messageText, responseMessage, type UiMessage } from '../errors.js';
 import { formatLanguageName, messageOptions, type UiLocale } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
 import { request as fetch, uncertainResponse } from '../request.js';
+import { TAB_KEY } from './entry-lock.svelte';
 
 /** The body of the 409 an entry answers when its files do not settle its source language. */
 export interface SourceProblem {
@@ -66,7 +67,7 @@ async function choose(event: SubmitEvent) {
   failure = undefined;
   let tab = '';
   try {
-    tab = sessionStorage.getItem('handover-tab') ?? '';
+    tab = sessionStorage.getItem(TAB_KEY) ?? '';
   } catch {
     // Without the token only a lock this person holds elsewhere can refuse, and it says so.
   }

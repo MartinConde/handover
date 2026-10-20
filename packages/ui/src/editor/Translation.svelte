@@ -11,6 +11,7 @@ import { messageDetail, messageText, responseMessage, type UiMessage } from '../
 import { formatLanguageName, messageOptions, type UiLocale } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
 import { request as fetch, uncertainResponse } from '../request.js';
+import AutosaveStatus from '../shared/AutosaveStatus.svelte';
 import { dismiss } from '../shared/dismiss.js';
 import type { EntrySession } from './entry-session.svelte';
 import Fields from './fields/Fields.svelte';
@@ -298,9 +299,11 @@ const failureDetail = $derived(fillFailure ? messageDetail(fillFailure, uiLocale
     {#if stale}
       <span class="mode">{behind.otherSource && behind.from ? m.translation_other_source({ language: named(behind.from), source: named(source) }, options) : m.translation_source_changed({ source: named(source) }, options)}</span>
     {/if}
-    <span class={['autosave', { 'is-saving': saving, 'is-offline': failed }]}>
-      {#if saving}{m.editor_save_saving({}, options)}{:else if failed}{m.editor_save_not_saved({}, options)} {#if fillFailure?.code === 'TRANSLATION_UNCONFIRMED'}<button type="button" class="btn-link" onclick={() => location.reload()}>{m.editor_lock_reload({}, options)}</button>{:else}<button type="button" class="btn-link" onclick={() => fillFailure ? fill(retryPaths) : flush()}>{fillFailure ? m.translation_retry({}, options) : m.editor_save_retry({}, options)}</button>{/if}{:else if isUnsaved}{m.editor_save_unsaved_changes({}, options)}{:else}{m.editor_save_saved({}, options)}{/if}
-    </span>
+    <AutosaveStatus {saving} {failed} unsaved={isUnsaved} {uiLocale}>
+      {#snippet failure()}
+        {#if fillFailure?.code === 'TRANSLATION_UNCONFIRMED'}<button type="button" class="btn-link" onclick={() => location.reload()}>{m.editor_lock_reload({}, options)}</button>{:else}<button type="button" class="btn-link" onclick={() => fillFailure ? fill(retryPaths) : flush()}>{fillFailure ? m.translation_retry({}, options) : m.editor_save_retry({}, options)}</button>{/if}
+      {/snippet}
+    </AutosaveStatus>
     <span class="spacer"></span>
     <span class="visually-hidden" role="status">{said}</span>
     {#if work}

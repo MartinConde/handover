@@ -160,7 +160,7 @@ async function create(event: Event) {
 </script>
 
 <Modal labelledby="new-entry-h" initialFocus="#new-title" dismissible={!busy} {onclose}>
-    <h2 id="new-entry-h">{newLabel(collection, uiLocale) ?? m.new_entry_heading({ collection: headingCollection }, options)}</h2>
+    <h2 id="new-entry-h">{newLabel(collection, uiLocale, m.new_entry_heading({ collection: headingCollection }, options))}</h2>
     <form onsubmit={create}>
       <div class="field">
         <div class="label-row"><label for="new-title">{m.new_entry_title({}, options)}</label></div>

@@ -49,6 +49,7 @@ import {
   uncertainResponse,
 } from '../request.js';
 import { when } from '../shared/activity-line';
+import AutosaveStatus from '../shared/AutosaveStatus.svelte';
 import Modal from '../shared/Modal.svelte';
 import PublishConfirmation from './PublishConfirmation.svelte';
 import {
@@ -623,6 +624,7 @@ const lost = $derived(entryLock.lost);
 const locked = $derived(entryLock.locked);
 const holderName = $derived(entryLock.holderName);
 const otherTab = $derived(entryLock.otherTab);
+const LOCK_IDLE_MS = 60000;
 const idle = $derived(entryLock.idle);
 const taking = $derived(entryLock.taking);
 const lockFailed = $derived(entryLock.takeFailure);
@@ -1510,21 +1512,14 @@ async function saveAddress() {
       <option value={of}>{of.toUpperCase()}{off(of) ? ` · ${m.editor_language_off({}, options)}` : untranslated(of) ? ` · ${m.editor_language_new({}, options)}` : entry.stale.includes(of) ? ` · ${m.editor_language_changed({}, options)}` : partial(of) ? ` · ${m.editor_language_partial({}, options)}` : ''}</option>
     {/each}
   </select>
-  <span class={[
-    'autosave',
-    {
-      'is-saving': entrySession.saveState(locale).phase === 'saving',
-      'is-offline': entrySession.saveState(locale).phase === 'failed',
-    },
-  ]} role="status">
-    {entrySession.saveState(locale).phase === 'saving'
-      ? m.editor_save_saving({}, options)
-      : entrySession.saveState(locale).phase === 'failed'
-        ? m.editor_save_not_saved({}, options)
-        : entrySession.unsaved(locale)
-          ? m.editor_save_unsaved({}, options)
-          : m.editor_save_saved({}, options)}
-  </span>
+  <AutosaveStatus
+    saving={entrySession.saveState(locale).phase === 'saving'}
+    failed={entrySession.saveState(locale).phase === 'failed'}
+    unsaved={entrySession.unsaved(locale)}
+    {uiLocale}
+    short
+    announce
+  />
 {/snippet}
 
 {#snippet canvasPublish()}
@@ -1590,9 +1585,7 @@ async function saveAddress() {
       {m.editor_problem_count({ count: missing.length }, options)}
     </button>
   {/if}
-  <span class={['autosave', { 'is-saving': saving, 'is-offline': saveFailed }]}>
-    {#if saving}{m.editor_save_saving({}, options)}{:else if saveFailed}{m.editor_save_not_saved({}, options)}{:else if sourceUnsaved}{m.editor_save_unsaved_changes({}, options)}{:else}{m.editor_save_saved({}, options)}{/if}
-  </span>
+  <AutosaveStatus {saving} failed={saveFailed} unsaved={sourceUnsaved} {uiLocale} />
   <div class="publish-split pop-anchor">
     <button
       class="btn btn-primary"
@@ -1685,7 +1678,7 @@ async function saveAddress() {
           {m.editor_lock_held_anonymous({}, options)}
         {/if}
         <span class="when">
-          {idle >= 60000
+          {idle >= LOCK_IDLE_MS
             ? m.editor_lock_idle({}, options)
             : m.editor_lock_active({}, options)}
         </span>
