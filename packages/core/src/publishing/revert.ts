@@ -3,7 +3,7 @@ import { entryKey } from '../content/entries.js';
 import { parseEntry, stringifyEntry, writtenEntry } from '../content/entry-format.js';
 import { REDIRECTS, type RedirectRule } from '../content/redirects.js';
 import { chunksOf, D1_MAX_BOUND_PARAMETERS, type Db, type Draft } from '../db.js';
-import { loadDraft, nextRevision } from '../drafts/drafts.js';
+import { committedAt, loadDraft, nextRevision } from '../drafts/drafts.js';
 import { keptSource } from '../drafts/entry-settings.js';
 import { drafts, locks } from '../tables.js';
 import { blobSha, type GitClient, type PublishFile } from './git.js';
@@ -171,10 +171,11 @@ export async function revertCommit(
         revision: row.revision,
         gone: row.contents === '' && Boolean(row.publishedSha) && restored !== null,
         blob: restored === null ? '' : await blobSha(restored),
+        published: committedAt(row.contents, restored, commit_sha),
       };
     }),
   );
-  const writes = rebased.map(({ path, revision, gone, blob }) => {
+  const writes = rebased.map(({ path, revision, gone, blob, published }) => {
     const where = and(eq(drafts.siteId, siteId), eq(drafts.path, path));
     return gone
       ? db.delete(drafts).where(and(where, eq(drafts.revision, revision)))
@@ -183,7 +184,7 @@ export async function revertCommit(
           .set({
             baseSha: commit_sha,
             baseBlob: blob,
-            publishedSha: null,
+            publishedSha: published,
             revision: nextRevision(revision),
           })
           .where(and(where, eq(drafts.revision, revision)));

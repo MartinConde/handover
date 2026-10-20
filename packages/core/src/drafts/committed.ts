@@ -4,7 +4,7 @@ import { offeredEntry, parseEntry, stringifyEntry, withSource } from '../content
 import { batchAll, chunksOf, D1_MAX_BOUND_PARAMETERS, type Db, type Draft } from '../db.js';
 import { blobSha, type GitClient } from '../publishing/git.js';
 import { drafts, pathReservations } from '../tables.js';
-import { isPending, loadDraft, nextRevision, stampOf } from './drafts.js';
+import { committedAt, isPending, loadDraft, nextRevision, stampOf } from './drafts.js';
 import type { PathReservation } from './paths.js';
 
 /** The index lags the build, so an empty row says the path has gone until the build is live. */
@@ -85,6 +85,12 @@ export async function recordRenames(
             path: to,
             baseSha: commitSha,
             baseBlob: hasFile ? blob : '',
+            // Decided on the row as written, so a save that lands first stays pending.
+            ...(hasFile
+              ? {
+                  publishedSha: sql`case when ${drafts.contents} = ${contents} and ${drafts.contents} <> '' then ${commitSha} else null end`,
+                }
+              : {}),
             ...stampOf(by),
           })
           .where(and(eq(drafts.siteId, siteId), eq(drafts.path, from)))
@@ -145,14 +151,18 @@ export async function recordOffer(
 ): Promise<void> {
   const open = await loadDraft(siteId, db, path);
   if (!open) return;
-  const entry = offeredEntry(siteId, parseEntry(siteId, open.contents), offer);
+  const contents = stringifyEntry(
+    siteId,
+    offeredEntry(siteId, parseEntry(siteId, open.contents), offer),
+  );
   await db
     .update(drafts)
     .set({
       revision: sql`case when ${drafts.revision} = ${open.revision} then ${nextRevision(open.revision)} else null end`,
-      contents: stringifyEntry(siteId, entry),
+      contents,
       baseSha: commitSha,
       baseBlob: await blobSha(committed),
+      publishedSha: committedAt(contents, committed, commitSha),
     })
     .where(and(eq(drafts.siteId, siteId), eq(drafts.path, path)));
 }
@@ -179,12 +189,19 @@ export async function recordSource(
       entry = now?._i18n === undefined ? rest : { ...entry, _i18n: now._i18n };
     }
   }
+  const contents = stringifyEntry(siteId, entry);
   await db
     .update(drafts)
     .set({
       revision: sql`case when ${drafts.revision} = ${open.revision} then ${nextRevision(open.revision)} else null end`,
-      contents: stringifyEntry(siteId, entry),
-      ...(commit ? { baseSha: commit.sha, baseBlob: await blobSha(commit.contents) } : {}),
+      contents,
+      ...(commit
+        ? {
+            baseSha: commit.sha,
+            baseBlob: await blobSha(commit.contents),
+            publishedSha: committedAt(contents, commit.contents, commit.sha),
+          }
+        : {}),
     })
     .where(and(eq(drafts.siteId, siteId), eq(drafts.path, path)));
 }

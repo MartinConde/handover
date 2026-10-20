@@ -115,6 +115,10 @@ export async function openDraft(
 export const isPending = async (row: Draft) =>
   !row.publishedSha && (await blobSha(row.contents)) !== row.baseBlob;
 
+/** The commit's own bytes: the row waits for that build like a published one, then goes. */
+export const committedAt = (contents: string, committed: string | null | undefined, sha: string) =>
+  contents && contents === committed ? sha : null;
+
 /** An unedited row holds nobody's work, so a file changed under it is read again on open. */
 export async function refreshUntouched(
   siteId: string,

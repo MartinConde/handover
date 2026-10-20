@@ -778,16 +778,16 @@ test('hide remains public during pending/failed builds, disappears when live, an
   }
 });
 
-// The build at head, with today's drafts over it, the way the preview route reads them.
-async function previewed() {
-  const tree = trees[head] ?? {};
+// The build of `sha`, with today's drafts over it, the way the preview route reads them.
+async function previewed(sha = head) {
+  const tree = trees[sha] ?? {};
   const built = indexFrom(
     'default',
     Object.entries(tree).map(([path, contents]) => ({ path, contents })),
   );
   const source = draftSource(
     'default',
-    snapshot(head),
+    snapshot(sha),
     await draftFiles('default', db, built),
     (_collection, data) => data,
   );
@@ -805,6 +805,22 @@ test('preview keeps the edits of a draft made before the file changed', async ()
   expect((await save('My title', entry.revisions.en ?? '')).status).toBe(200);
   push([{ path: PATH, contents: INITIAL.replace('Original body', 'Developer body') }]);
   expect(await previewed()).toMatchObject({ title: 'My title', body: 'Original body' });
+});
+
+test('a revert onto an unedited draft previews the reverted file until its build lands', async () => {
+  const entry = await opened();
+  expect((await save('Edited home', entry.revisions.en ?? '')).status).toBe(200);
+  const published = await call('POST', 'publish', { entries: ['pages/home'] });
+  const { commit_sha } = (await published.json()) as { commit_sha: string };
+  const live = head;
+  const row = await loadDraft('default', db, PATH);
+  expect((await save('Home', row?.revision ?? '')).status).toBe(200);
+  expect((await call('POST', 'revert', { commit_sha })).status).toBe(200);
+
+  expect(await previewed(live)).toMatchObject({ title: 'Home' });
+  deployed = head;
+  expect((await call('GET', 'build')).status).toBe(200);
+  expect(await loadDraft('default', db, PATH)).toBeUndefined();
 });
 
 // What a read after the open sees, e.g. a translation pre-fill or the SEO defaults.

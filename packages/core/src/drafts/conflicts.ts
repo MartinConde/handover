@@ -94,18 +94,24 @@ export async function resolveConflict(
 ): Promise<{ paths: string[] }> {
   const resolved = applyResolution(siteId, form, conflict.sides, answers);
   const updatedAt = Date.now();
-  const writes = Object.entries(conflict.conflicted).map(([locale, { path, blob, revision }]) =>
+  // Await the blobs first: a drizzle statement is thenable and would run outside the batch.
+  const written = await Promise.all(
+    Object.entries(conflict.conflicted).map(async ([locale, at]) => {
+      const contents = stringifyEntry(siteId, writtenEntry(siteId, resolved[locale], form.fields));
+      // Every answer "theirs" is the head file, which waits for its build like a published row.
+      const same = contents !== '' && (await blobSha(contents)) === at.blob;
+      return { ...at, contents, published: same ? conflict.head : null };
+    }),
+  );
+  const writes = written.map(({ path, blob, revision, contents, published }) =>
     db
       .update(drafts)
       .set({
         revision: sql`case when ${drafts.revision} = ${revision ?? ''} then ${nextRevision(revision)} else null end`,
-        contents: availableContents(
-          siteId,
-          stringifyEntry(siteId, writtenEntry(siteId, resolved[locale], form.fields)),
-        ),
+        contents: availableContents(siteId, contents),
         baseSha: conflict.head,
         baseBlob: blob,
-        publishedSha: null,
+        publishedSha: published,
         updatedAt,
       })
       .where(and(eq(drafts.siteId, siteId), eq(drafts.path, path))),

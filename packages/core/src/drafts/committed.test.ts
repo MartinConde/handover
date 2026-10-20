@@ -1,5 +1,6 @@
 import type { Miniflare } from 'miniflare';
 import { beforeAll, expect, test } from 'vitest';
+import { offeredEntry, parseEntry, stringifyEntry } from '../content/entry-format.js';
 import type { RedirectRule } from '../content/redirects.js';
 import {
   afterRead,
@@ -433,6 +434,24 @@ test('an unedited draft renamed before its build is listed under the new name', 
   await recordRenames('default', db, [{ from: PATH, to: RENAMED, contents: FILE }], 'commit-B');
 
   expect(await listed(db, indexOf({ [PATH]: FILE }))).toEqual([['the-old-mill', 'The Mill House']]);
+});
+
+test('an unedited draft moved onto an offer commit is previewed before that build', async () => {
+  const db = await fresh();
+  await openDraft('default', db, PATH, 'commit-A', {
+    contents: FILE,
+    blob_sha: await blobSha(FILE),
+  });
+  const offer = { offered: ['en'], locales: ['en', 'de'] };
+  const committed = stringifyEntry(
+    'default',
+    offeredEntry('default', parseEntry('default', FILE), offer),
+  );
+  await recordOffer('default', db, PATH, committed, offer, 'commit-B');
+
+  expect(await draftFiles('default', db, indexOf({ [PATH]: FILE }))).toEqual([
+    { path: PATH, contents: committed },
+  ]);
 });
 
 test('overlay cleanup cannot delete a recreated entry after reading its deletion marker', async () => {
