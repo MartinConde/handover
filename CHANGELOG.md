@@ -6,6 +6,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Internal: the admin drops unused and duplicate messages, dead exports and two unused CSS classes;
   the entry's "file contradicts its languages" banner is now a translated message.
+- Internal: the admin stylesheet drops about 50 selectors no screen uses, defines `--shadow-lg`, and
+  names its repeated raw colours as tokens.
 - Every refusal with a top-level `code` now carries it in the `x-handover-error-code` header; the
   media, settings, members, sources, history, publish and body-limit refusals sent only the JSON
   body before. Statuses and bodies are unchanged. A redirect rule that is not valid keeps its code
