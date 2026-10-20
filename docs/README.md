@@ -21,6 +21,7 @@
 - [Admin screens](admin-screens.md) — a page of your own inside the admin at `/admin/x/<key>`: the config key, the four props a screen is handed, its endpoint, what a screens site installs, and the variables to style it with.
 - [Canvas editing](canvas.md) — annotate page fields, blocks, nested and empty lists; guard site-side effects during editable renders.
 - [Rendering content](rendering.md) — `<Markdown />`, `<Embed />`, `<Seo />` and hidden entries.
+- [Rendering pictures](rendering-pictures.md) — an `image` field as `<img>` with its focal point, and through Astro's `<Picture>`.
 - [Rendering the menus](rendering-menus.md) — `menusAt()` in the loader, `<Nav />`, and the resolved tree for markup of your own.
 - [The language switcher](language-switcher.md) — `getEntryLocales()`, `<LocaleSwitcher />`, and a URL per language for a page that is not an entry.
 - [Drafts and publishing](publishing.md) — autosave into D1, what a draft holds, publishing an entry on its own, creating, renaming and deleting, the content index.
