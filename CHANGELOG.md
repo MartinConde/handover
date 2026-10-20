@@ -4,6 +4,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Better Auth refusals on the Account screen (invalid email, unknown account, email not verified, email change unavailable, update failed, password already set, expired session) and its rate limiter's `429` now read in the interface language (en, de) instead of showing Better Auth's English sentence. The Settings checks show a localized sentence first when the provider refuses or a check is not set up, and the provider's own sentence follows as technical detail. The responses are unchanged.
 - Upload refusals (too large, size or type mismatch, empty, timed out, no upload bucket), the
   media-being-deleted refusal on save, creating a language that exists or is not offered, stale
   drift answers, and a Canvas page with no address, a draft that cannot be rendered or a missing

@@ -421,6 +421,37 @@ test.each([
   expect(messageLine({ code, ...(detail ? { detail } : {}) }, 'de')).toBe(de);
 });
 
+test.each([
+  ['INVALID_EMAIL', 'Diese E-Mail-Adresse ist nicht gültig.'],
+  ['USER_NOT_FOUND', 'Dieses Konto wurde nicht gefunden. Melde dich ab und wieder an.'],
+  ['EMAIL_NOT_VERIFIED', 'Bestätige zuerst deine E-Mail-Adresse und versuche es dann erneut.'],
+  ['EMAIL_CAN_NOT_BE_UPDATED', 'Die E-Mail-Adresse lässt sich hier nicht ändern.'],
+  ['CHANGE_EMAIL_DISABLED', 'Die E-Mail-Adresse lässt sich hier nicht ändern.'],
+  ['FAILED_TO_UPDATE_USER', 'Dein Konto konnte nicht aktualisiert werden. Versuche es erneut.'],
+  ['PASSWORD_ALREADY_SET', 'Für dieses Konto ist schon ein Passwort festgelegt.'],
+  [
+    'SESSION_EXPIRED',
+    'Du hast dich vor mehr als einem Tag angemeldet. Melde dich ab und wieder an, dann lege dein Passwort fest.',
+  ],
+])('the Better Auth refusal %s reads in German without a technical detail', async (code, de) => {
+  const message = await responseMessage(
+    Response.json({ code, message: 'English from Better Auth' }, { status: 400 }),
+    'ACCOUNT_PASSWORD_FAILED',
+  );
+  expect(message).toEqual({ code, status: 400 });
+  expect(messageLine(message, 'de')).toBe(de);
+});
+
+test('a rate-limited answer without a code reads as too many requests, in German', async () => {
+  const message = await responseMessage(
+    Response.json({ message: 'Too many requests. Please try again later.' }, { status: 429 }),
+    'ACCOUNT_PASSWORD_FAILED',
+  );
+  expect(messageLine(message, 'de')).toBe(
+    'Gerade sind zu viele Anfragen unterwegs. Warte einen Moment und versuche es erneut.',
+  );
+});
+
 test('an unresolved source refusal reads the same for all three codes, in either language', async () => {
   for (const code of ['ENTRY_SOURCE_CONFLICT', 'ENTRY_SOURCE_UNDECLARED', 'ENTRY_SOURCE_MISSING']) {
     const message = await responseMessage(

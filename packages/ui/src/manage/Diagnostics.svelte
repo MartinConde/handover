@@ -133,12 +133,21 @@ const responseMessage = (
   ...(typeof body.entry === 'string' ? { entry: body.entry } : {}),
 });
 
+/** The provider's own sentence is English, so it follows the localized one as technical detail. */
+const withDetail = (generic: string, message: DiagnosticMessage) =>
+  message.detail
+    ? `${generic} ${m.common_technical_detail({ detail: message.detail }, options)}`
+    : generic;
+
 function messageText(message: DiagnosticMessage): string {
   switch (message.code) {
     case 'DIAGNOSTICS_LOAD_FAILED':
       return m.diagnostics_load_failed({ status: message.status ?? 0 }, options);
     case 'DIAGNOSTIC_CHECK_FAILED':
-      return message.detail ?? m.diagnostics_check_failed({ status: message.status ?? 0 }, options);
+      return withDetail(
+        m.diagnostics_check_failed({ status: message.status ?? 0 }, options),
+        message,
+      );
     case 'DIAGNOSTIC_EMAIL_SENT':
       return m.diagnostics_email_sent({ email: message.to ?? '' }, options);
     case 'DIAGNOSTIC_GITHUB_OK':
@@ -170,8 +179,9 @@ function messageText(message: DiagnosticMessage): string {
     case 'INTEGRATION_KEYS_LOAD_FAILED':
       return m.diagnostics_keys_load_failed({ status: message.status ?? 0 }, options);
     case 'INTEGRATION_KEY_SAVE_FAILED':
-      return (
-        message.detail ?? m.diagnostics_key_save_failed({ status: message.status ?? 0 }, options)
+      return withDetail(
+        m.diagnostics_key_save_failed({ status: message.status ?? 0 }, options),
+        message,
       );
     case 'INTEGRATION_KEY_REMOVE_FAILED':
       return m.diagnostics_key_remove_failed({ status: message.status ?? 0 }, options);
@@ -184,14 +194,21 @@ function messageText(message: DiagnosticMessage): string {
     case 'DIAGNOSTIC_CONFLICT_CREATED':
       return m.diagnostics_conflict_created({ entry: message.entry ?? '' }, options);
     case 'DIAGNOSTIC_CONFLICT_FAILED':
-      return (
-        message.detail ?? m.diagnostics_conflict_failed({ status: message.status ?? 0 }, options)
+      return withDetail(
+        m.diagnostics_conflict_failed({ status: message.status ?? 0 }, options),
+        message,
       );
+    case 'DIAGNOSTIC_DETAIL':
+      return message.detail ?? '';
     case 'DIAGNOSTIC_REFUSED':
+      return withDetail(m.diagnostics_refused({}, options), message);
     case 'DIAGNOSTIC_UNAVAILABLE':
-      return message.detail ?? m.diagnostics_check_failed({ status: message.status ?? 0 }, options);
+      return withDetail(m.diagnostics_unavailable({}, options), message);
     default:
-      return message.detail ?? m.diagnostics_check_failed({ status: message.status ?? 0 }, options);
+      return withDetail(
+        m.diagnostics_check_failed({ status: message.status ?? 0 }, options),
+        message,
+      );
   }
 }
 

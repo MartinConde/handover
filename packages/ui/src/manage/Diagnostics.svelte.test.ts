@@ -458,6 +458,31 @@ test('the screen and retained results switch to German without another request o
   expect(requests).toHaveLength(requestCount);
 });
 
+test('a refused or unset check reads in German first and keeps the provider sentence as technical detail', async () => {
+  const root = await show(
+    {
+      '/admin/api/checks/storage': Response.json(
+        { code: 'DIAGNOSTIC_REFUSED', error: 'R2 provider detail (403)' },
+        { status: 502 },
+      ),
+      '/admin/api/checks/github': Response.json(
+        { code: 'DIAGNOSTIC_UNAVAILABLE', error: 'No bucket is configured: set R2_BUCKET' },
+        { status: 503 },
+      ),
+    },
+    {},
+    NOTHING_SET,
+    'de',
+  );
+
+  expect(text(card(root, 'Bilder und Dateien'))).toContain(
+    'Der Dienst hat die Anfrage abgelehnt. Technisches Detail: R2 provider detail (403)',
+  );
+  expect(text(card(root, 'Veröffentlichen'))).toContain(
+    'Diese Prüfung ist für diese Website nicht eingerichtet. Technisches Detail: No bucket is configured: set R2_BUCKET',
+  );
+});
+
 test('About counts the entries without a recorded source and sends the owner to the Dashboard', async () => {
   await show({
     '/admin/api/sources': Response.json({

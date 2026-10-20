@@ -39,7 +39,9 @@ export async function responseMessage(response: Response, fallback: string): Pro
     body = undefined;
   }
   const responseCode = typeof body?.code === 'string' ? body.code : undefined;
-  const code = headerCode ?? responseCode ?? fallback;
+  // Better Auth's rate limiter answers 429 with a message and no code.
+  const code =
+    headerCode ?? responseCode ?? (response.status === 429 ? 'RESOURCE_LIMIT' : fallback);
   const known = KNOWN_CODES.has(code);
   const detailValue = typeof body?.error === 'string' ? body.error : body?.message;
   const heldBy = body?.held_by;
@@ -89,6 +91,16 @@ const KNOWN_CODES = new Set([
   'CREDENTIAL_ACCOUNT_NOT_FOUND',
   'INVALID_PASSWORD',
   'SESSION_NOT_FRESH',
+  'SESSION_EXPIRED',
+  'INVALID_EMAIL',
+  'USER_NOT_FOUND',
+  'USER_EMAIL_NOT_FOUND',
+  'INVALID_USER',
+  'EMAIL_NOT_VERIFIED',
+  'EMAIL_CAN_NOT_BE_UPDATED',
+  'CHANGE_EMAIL_DISABLED',
+  'FAILED_TO_UPDATE_USER',
+  'PASSWORD_ALREADY_SET',
   'PASSWORD_TOO_SHORT',
   'PASSWORD_TOO_LONG',
   'INVALID_TOKEN',
@@ -260,7 +272,23 @@ export function messageText(message: UiMessage, locale: UiLocale): string {
     case 'INVALID_PASSWORD':
       return m.account_current_password_wrong({}, options);
     case 'SESSION_NOT_FRESH':
+    case 'SESSION_EXPIRED':
       return m.account_password_sign_in_again({}, options);
+    case 'INVALID_EMAIL':
+      return m.account_email_invalid({}, options);
+    case 'USER_NOT_FOUND':
+    case 'USER_EMAIL_NOT_FOUND':
+    case 'INVALID_USER':
+      return m.account_user_not_found({}, options);
+    case 'EMAIL_NOT_VERIFIED':
+      return m.account_email_not_verified({}, options);
+    case 'EMAIL_CAN_NOT_BE_UPDATED':
+    case 'CHANGE_EMAIL_DISABLED':
+      return m.account_email_change_unavailable({}, options);
+    case 'FAILED_TO_UPDATE_USER':
+      return m.account_update_failed({}, options);
+    case 'PASSWORD_ALREADY_SET':
+      return m.account_password_already_set({}, options);
     case 'PASSWORD_TOO_SHORT':
     case 'AUTH_PASSWORD_TOO_SHORT':
       return m.auth_password_too_short({}, options);
