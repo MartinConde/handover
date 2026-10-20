@@ -111,7 +111,7 @@ must continue to use status, `paths`, `reason` and the request uncertainty signa
 not translated text or the descriptor alone.
 
 ```
-POST /admin/api/publish/checks   { "entries": ["listings/mill-house"], "without": [] }  →  { "results": [{ "check", "entry", "path", "fieldPath", "severity", "message" }], "readiness" }
+POST /admin/api/publish/checks   { "entries": ["listings/mill-house"], "without": [] }  →  { "results": [{ "check", "entry", "path", "fieldPath", "severity", "message", "code", "params" }], "readiness" }
 ```
 
 The [pre-publish checks](pending-changes.md#checks-before-a-publish) over the entries the body
@@ -121,7 +121,10 @@ laid over it and no others, so a link to a page that only an unselected or left-
 create is reported, and a left-out file is not checked at all. `severity`
 is `error`, `warn` or `info`; `entry` is the key the drawer groups under and `fieldPath`
 addresses the field the way `_machine` does (`blocks[_id=b1x2y3z4].link.ref`), so it survives a
-block being moved.
+block being moved. `message` is an English sentence. `code` names the sentence and `params`
+holds what it needs (counts, language codes, references, titles); a field's name there is its
+`{ en, de }` labels when the site gave them, else its one label. The admin phrases each `code`
+in the interface language and shows `message` for a code it does not know.
 
 With `entries`, the answer also carries `readiness`: per entry, per language with unpublished
 changes — a translation nobody has typed into included, and a left-out one too — what its

@@ -37,7 +37,7 @@ import {
 } from '../navigate';
 import { type OwedRow, owes, queueQuery, rowTitle, workFrom } from '../owed.js';
 import * as m from '../paraglide/messages.js';
-import { type CheckItem, localeOf, merged } from '../publishing/CheckLines.svelte';
+import { type CheckItem, checkText, localeOf, merged } from '../publishing/CheckLines.svelte';
 import DriftPanel from '../publishing/Drift.svelte';
 import History from '../publishing/History.svelte';
 import {
@@ -174,7 +174,7 @@ const checkProblems = $derived(
       .filter((c) => c.severity === 'error' && localeOf(c.path) === entry.sourceLocale)
       .flatMap((c) => {
         const at = fieldPosition('default', c.fieldPath, data);
-        return at ? [[at.join('.'), c.message]] : [];
+        return at ? [[at.join('.'), checkText(c, uiLocale)]] : [];
       }),
   ),
 );

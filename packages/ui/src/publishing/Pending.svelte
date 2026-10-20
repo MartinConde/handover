@@ -17,6 +17,7 @@ import Modal from '../shared/Modal.svelte';
 import CheckLines, {
   type CheckItem,
   type CheckLine,
+  checkText,
   merged,
   severityLabel,
   TINT,
@@ -640,7 +641,7 @@ function askDiscard(entry: PendingEntry) {
                   {#each elsewhere as item (item.path + item.fieldPath + item.check)}
                     <div class="notice notice-{TINT[item.severity]}">
                       <span class="sev">{severityLabel(item.severity, uiLocale)}</span>
-                      <span class="msg">{item.message}</span>
+                      <span class="msg">{checkText(item, uiLocale)}</span>
                     </div>
                   {/each}
                 </div>

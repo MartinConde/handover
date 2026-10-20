@@ -4,6 +4,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- The publish checks are now shown in the interface language (en, de) in the pending-changes
+  drawer, the publish confirmation and the editor, with field names taken from their `{ en, de }`
+  labels. Each result from `POST /admin/api/publish/checks` gains `code` and `params`; `message`
+  stays as the English sentence.
 - A select's options can be named with `.meta({ options: { value: 'Name' | { en, de } } })` and
   show in the interface language in the form, History, pending changes and conflicts. The
   History and conflict API values carry `beforeLabels` and `afterLabels` for them. The menu's

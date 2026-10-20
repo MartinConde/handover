@@ -676,6 +676,27 @@ const pictured = {
   pending: ['en'],
 };
 
+test('a check error is put to the field in the interface language', async () => {
+  vi.stubGlobal(
+    'fetch',
+    checking([
+      [
+        {
+          ...BROKEN,
+          code: 'media-gone',
+          params: { label: { en: 'Photo', de: 'Foto' }, key: 'media/9f3a2c7e.webp' },
+        },
+      ],
+    ]),
+  );
+  const root = show({ entry: pictured, uiLocale: 'de' });
+  await settle(2);
+
+  expect($(root, '#f-photo-err')?.textContent).toBe(
+    'Hinter Foto steckt keine Datei mehr — die Seite würde ein kaputtes Bild zeigen (media/9f3a2c7e.webp)',
+  );
+});
+
 test('a check error is counted as a problem and marks the widget its field is drawn in', async () => {
   vi.stubGlobal('fetch', checking([[BROKEN]]));
   const root = show({ entry: pictured });

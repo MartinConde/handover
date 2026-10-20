@@ -1647,6 +1647,37 @@
   "check_verdict_error": "{counted}. Der Fehler muss zuerst behoben werden.",
   "check_verdict_warning": "{counted}. Warnungen verhindern die Veröffentlichung nie.",
   "check_verdict_clear": "{counted} — nichts steht im Weg.",
+  "check_source_conflict": "Die Dateien dieses Eintrags sind sich uneinig, in welcher Sprache er geschrieben ist ({languages}) — er wird erst veröffentlicht, wenn _source in jeder Datei dieselbe Sprache nennt",
+  "check_source_undeclared": "Dieser Eintrag gibt an, in {languages} geschrieben zu sein, was die Website nicht festgelegt hat — er wird erst veröffentlicht, wenn _source eine der Sprachen der Website nennt",
+  "check_source_missing": "Dieser Eintrag gibt an, in {languages} geschrieben zu sein, wofür es keine Datei gibt — er wird erst veröffentlicht, wenn die Datei wieder da ist oder _source eine Sprache nennt, die er hat",
+  "check_translation_stale": "Diese Übersetzung wurde aus einer älteren Version der Datei in {from} erstellt — jemand hat den Text, aus dem sie übersetzt wurde, seitdem geändert",
+  "check_translation_source_moved": "Diese Übersetzung wurde aus der Datei in {from} erstellt, der Eintrag ist jetzt aber in {written} geschrieben — übersetze sie neu aus der Datei in {written}",
+  "check_hidden_long": [
+    {
+      "declarations": ["input title", "input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{title} ist seit über {count} Monat ausgeblendet — lange genug, um zu entscheiden, ob die Seite wiederkommt oder verschwindet",
+        "countPlural=other": "{title} ist seit über {count} Monaten ausgeblendet — lange genug, um zu entscheiden, ob die Seite wiederkommt oder verschwindet"
+      }
+    }
+  ],
+  "check_image_alt_missing": "{label} hat keinen Alternativtext — wer einen Screenreader nutzt, erfährt nichts über das Bild",
+  "check_translation_empty": "{label} ist in {language} leer — die Seite zeigt eine Lücke, wo die anderen Sprachen Text haben",
+  "check_seo_title_long": "Der Suchtitel hat {count} Zeichen — Google schneidet ihn bei etwa {limit} ab",
+  "check_seo_description_missing": "Keine Suchbeschreibung — eine Suchmaschine zitiert irgendeinen Satz der Seite",
+  "check_seo_image_missing": "Kein Social-Media-Bild — ein Link auf diese Seite erscheint überall als reiner Text",
+  "check_link_target_missing": "{label} verweist auf {ref}, das keine Seite dieser Website ist — der Link führt zu einem 404",
+  "check_link_locale_missing": "{label} verweist auf {title}, wofür es keine Seite in {language} gibt — wer in dieser Sprache liest, landet bei einem 404",
+  "check_link_href_missing": "{label} verlinkt auf {href}, wo diese Website keine Seite hat — der Link führt zu einem 404",
+  "check_link_href_locale_missing": "{label} verlinkt auf {href}, wo {title} in {language} nicht antwortet — der Link führt zu einem 404",
+  "check_menu_target_missing": "Im Menü {menu} zeigt ein Eintrag auf {ref}, das keine Seite dieser Website ist — der Eintrag wird im Menü weggelassen",
+  "check_menu_target_hidden": "Im Menü {menu} zeigt ein Eintrag auf {title}, das in keiner Sprache auf der Website steht — der Eintrag wird im Menü weggelassen",
+  "check_media_deleting": "{label} wird gerade gelöscht und kann nicht verwendet werden — wähle eine andere Datei",
+  "check_media_deleted": "{label} wurde gelöscht — die Seite würde ein kaputtes Bild zeigen ({key})",
+  "check_media_archived": "{label} wurde in der Medienbibliothek archiviert — die Datei wird weiter angezeigt, aber jemand hat sie weggelegt",
+  "check_media_gone": "Hinter {label} steckt keine Datei mehr — die Seite würde ein kaputtes Bild zeigen ({key})",
+  "check_machine_translated": "Wurde maschinell übersetzt und seitdem von niemandem gelesen — es geht so auf die Website, wie es ist",
   "publish_save_failed": "Nichts wurde veröffentlicht. Deine letzten Änderungen konnten nicht gespeichert werden. Prüfe die Verbindung und versuche es erneut.",
   "publish_checks_blocked": "Nichts wurde veröffentlicht. Die Prüfungen haben gerade ein Hindernis gefunden; es ist oben aufgeführt.",
   "publish_response_lost": "Die Antwort auf die Veröffentlichung ging verloren. Der geöffnete Eintrag wird neu geladen, bevor du fortfährst.",

@@ -865,6 +865,78 @@ test('a merged check line links to the default language, not the first it lists'
   expect(link?.getAttribute('href')).toBe('/admin/c/pages/home?field=photo.alt&locale=en');
 });
 
+test('a check line with a code is said in the interface language, with the field named in it', async () => {
+  uiLocale = 'de';
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () =>
+      Response.json({
+        results: [
+          {
+            check: 'image-alt',
+            entry: 'pages/home',
+            path: 'src/content/pages/de/home.yaml',
+            fieldPath: 'photo.alt',
+            severity: 'warn',
+            message: 'Photo has no alt text',
+            code: 'image-alt-missing',
+            params: { label: { en: 'Photo', de: 'Foto' } },
+          },
+        ],
+      }),
+    ),
+  );
+  const root = show();
+  await settle();
+
+  expect(messages(root)).toEqual([
+    'Foto hat keinen Alternativtext — wer einen Screenreader nutzt, erfährt nichts über das Bild',
+  ]);
+});
+
+test('checks on entries outside the selection are said in the interface language too', async () => {
+  uiLocale = 'de';
+  const elsewhere = {
+    entry: 'pages/other',
+    path: 'src/content/pages/en/other.yaml',
+    fieldPath: '',
+  };
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () =>
+      Response.json({
+        results: [
+          {
+            ...elsewhere,
+            check: 'link-locale',
+            severity: 'warn',
+            message: 'Link points at The Café Bar, which has no DE page',
+            code: 'link-locale-missing',
+            params: { label: 'Link', title: 'The Café Bar', locale: 'de' },
+          },
+          {
+            ...elsewhere,
+            check: 'hidden-long',
+            severity: 'info',
+            message: 'The Old Barn has been hidden for over 1 months',
+            code: 'hidden-long',
+            params: { title: 'The Old Barn', months: 1 },
+          },
+        ],
+      }),
+    ),
+  );
+  const root = show();
+  await settle();
+
+  expect(
+    Array.from(root.querySelectorAll('.check-group .notice .msg'), (n) => n.textContent),
+  ).toEqual([
+    'Link verweist auf The Café Bar, wofür es keine Seite in Deutsch gibt — wer in dieser Sprache liest, landet bei einem 404',
+    'The Old Barn ist seit über 1 Monat ausgeblendet — lange genug, um zu entscheiden, ob die Seite wiederkommt oder verschwindet',
+  ]);
+});
+
 test('the checks are grouped under the entry they are about, worst first', async () => {
   vi.stubGlobal('fetch', checking());
   const root = show();

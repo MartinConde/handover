@@ -412,6 +412,8 @@ test('an entry whose files disagree about their source is an error on the file g
       severity: 'error',
       message:
         'The files of this entry disagree about which language it is written in (en, de) — it is not published until every file’s _source names the same language',
+      code: 'source-conflict',
+      params: { locales: ['en', 'de'] },
     },
   ]);
 });
@@ -548,6 +550,137 @@ test('what the job found is a note naming the page, while the index still lists 
       severity: 'info',
       message:
         'The Old Barn has been hidden for over 4 months — long enough to decide whether it comes back or goes',
+      code: 'hidden-long',
+      params: { title: 'The Old Barn', months: 4 },
     },
   ]);
+});
+
+// code + params: what the admin phrases in its own language; `message` stays for old readers.
+
+test('a link with no page in this language carries the entry title, the language and the field name in both languages', async () => {
+  const named: Form = {
+    fields: [
+      {
+        path: ['cta'],
+        label: 'Call to action',
+        labels: { en: 'Call to action', de: 'Handlungsaufruf' },
+        type: 'link',
+        required: false,
+      },
+    ],
+    blocks: {},
+  };
+  const results = await run([
+    entryOf(
+      'listings/mill-house',
+      { de: `title: "Das Mühlenhaus"\ncta:\n  type: "entry"\n  ref: "listings/cafe-bar"\n` },
+      named,
+      ['de'],
+    ),
+  ]);
+  const found = results.find((r) => r.check === 'link-locale');
+  expect(found?.code).toBe('link-locale-missing');
+  expect(found?.params).toEqual({
+    label: { en: 'Call to action', de: 'Handlungsaufruf' },
+    title: 'The Café Bar',
+    locale: 'de',
+  });
+});
+
+test('a field without per-language labels sends its one label as a string', async () => {
+  const results = await run([
+    entryOf('listings/mill-house', {
+      en: `${title}cta:\n  type: "entry"\n  ref: "listings/gone"\n`,
+    }),
+  ]);
+  const found = results.find((r) => r.check === 'link-target');
+  expect(found?.code).toBe('link-target-missing');
+  expect(found?.params).toEqual({ label: 'Call to action', ref: 'listings/gone' });
+});
+
+test('a translation made from another language than the source says both languages', async () => {
+  const results = await run([
+    entryOf('listings/mill-house', {
+      en: title,
+      de: 'title: "Das Mühlenhaus"\n_i18n:\n  sourceLocale: "fr"\n  sourceBlob: "0000"\n  sourceHash: "0000"\n  translatedAt: "2026-08-01T10:00:00.000Z"\n',
+    }),
+  ]);
+  const found = results.find((r) => r.check === 'translation-stale');
+  expect(found?.code).toBe('translation-source-moved');
+  expect(found?.params).toEqual({ from: 'fr', written: 'en' });
+});
+
+test('an empty translation names its field and its language', async () => {
+  const results = await run([
+    entryOf('listings/mill-house', { de: 'title: ""\nsummary: "Ein Mühlenhaus"\n' }, listing, [
+      'de',
+    ]),
+  ]);
+  const found = results.find((r) => r.check === 'translation-empty');
+  expect(found?.code).toBe('translation-empty');
+  expect(found?.params).toEqual({ label: 'Title', locale: 'de' });
+});
+
+test('a long search title carries its length and the limit, and the sharing image is named in both languages', async () => {
+  const long = 'The Mill House, a converted watermill in the Derbyshire Dales, sleeps six';
+  const results = await run([
+    entryOf('listings/mill-house', { en: `${title}seo:\n  title: "${long}"\n` }),
+  ]);
+  const found = results.find((r) => r.check === 'seo-title');
+  expect(found?.code).toBe('seo-title-long');
+  expect(found?.params).toEqual({ count: 73, limit: 60 });
+  expect(results.find((r) => r.check === 'seo-image')?.code).toBe('seo-image-missing');
+  expect(results.find((r) => r.check === 'seo-description')?.code).toBe('seo-description-missing');
+
+  const hash = 'f'.repeat(64);
+  const missing = await run(
+    [
+      entryOf('listings/mill-house', {
+        en: `${title}seo:\n  image:\n    src: "media/${hash}.webp"\n    width: 1200\n    height: 630\n`,
+      }),
+    ],
+    { store },
+    { fetch: bucket([]).fetch },
+  );
+  expect(missing.find((r) => r.check === 'media-missing')?.params).toEqual({
+    label: { en: 'Social image', de: 'Social-Media-Bild' },
+    key: `media/${hash}.webp`,
+  });
+});
+
+test('a menu item pointing nowhere carries the menu key and the reference', async () => {
+  const menus = [
+    'menus:',
+    '  - _id: "m1a2b3c4"',
+    '    key: "header"',
+    '    items:',
+    '      - _id: "i1a2b3c4"',
+    '        link:',
+    '          type: "entry"',
+    '          ref: "listings/gone"',
+    '      - _id: "i2a2b3c4"',
+    '        link:',
+    '          type: "entry"',
+    '          ref: "listings/old-barn"',
+    '',
+  ].join('\n');
+  const results = await run([entryOf('globals/navigation', { en: menus }, navigation)]);
+  expect(results.map((r) => [r.code, r.params])).toEqual([
+    ['menu-target-missing', { menu: 'header', ref: 'listings/gone' }],
+    ['menu-target-hidden', { menu: 'header', title: 'The Old Barn' }],
+  ]);
+});
+
+test('a machine-filled value and a missing alt text have codes without extra detail', async () => {
+  const results = await run([
+    entryOf(
+      'listings/mill-house',
+      { de: 'title: "Das Mühlenhaus"\nphoto:\n  src: "media/x.webp"\n_machine:\n  - "summary"\n' },
+      listing,
+      ['de'],
+    ),
+  ]);
+  expect(results.find((r) => r.check === 'translation-machine')?.code).toBe('machine-translated');
+  expect(results.find((r) => r.check === 'image-alt')?.params).toEqual({ label: 'Photo' });
 });

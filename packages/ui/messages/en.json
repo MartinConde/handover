@@ -1650,6 +1650,37 @@
   "check_verdict_error": "{counted}. The error has to go first.",
   "check_verdict_warning": "{counted}. Warnings never stop a publish.",
   "check_verdict_clear": "{counted} — nothing is in the way.",
+  "check_source_conflict": "The files of this entry disagree about which language it is written in ({languages}) — it is not published until every file’s _source names the same language",
+  "check_source_undeclared": "This entry says it is written in {languages}, which the site does not declare — it is not published until its _source names one of the site’s languages",
+  "check_source_missing": "This entry says it is written in {languages}, which has no file — it is not published until that file is back or its _source names a language it has",
+  "check_translation_stale": "This translation was made from an older version of the {from} file — somebody has changed the words it was translated from since",
+  "check_translation_source_moved": "This translation was made from the {from} file, and the entry is now written in {written} — translate it again from {written}",
+  "check_hidden_long": [
+    {
+      "declarations": ["input title", "input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{title} has been hidden for over {count} month — long enough to decide whether it comes back or goes",
+        "countPlural=other": "{title} has been hidden for over {count} months — long enough to decide whether it comes back or goes"
+      }
+    }
+  ],
+  "check_image_alt_missing": "{label} has no alt text — a reader using a screen reader is told nothing about the picture",
+  "check_translation_empty": "{label} is empty in {language} — the page shows a blank where the other languages have words",
+  "check_seo_title_long": "The search title is {count} characters — Google cuts one off at about {limit}",
+  "check_seo_description_missing": "No search description — a search engine will quote whatever sentence of the page it likes",
+  "check_seo_image_missing": "No sharing image — a link to this page posted anywhere appears as plain text",
+  "check_link_target_missing": "{label} points at {ref}, which is not a page on this site — the link is a 404",
+  "check_link_locale_missing": "{label} points at {title}, which has no {language} page — a reader in this language follows it to a 404",
+  "check_link_href_missing": "{label} links to {href}, where this site has no page — the link is a 404",
+  "check_link_href_locale_missing": "{label} links to {href}, which {title} does not answer at in {language} — the link is a 404",
+  "check_menu_target_missing": "The {menu} menu has an item pointing at {ref}, which is not a page on this site — the item is left out of the menu",
+  "check_menu_target_hidden": "The {menu} menu has an item pointing at {title}, which is not on the site in any language — the item is left out of the menu",
+  "check_media_deleting": "{label} is being deleted and cannot be used — choose another asset",
+  "check_media_deleted": "{label} has been deleted — the page would show a broken image ({key})",
+  "check_media_archived": "{label} has been archived in the media library — it still renders, but somebody put it away",
+  "check_media_gone": "{label} has nothing behind it any more — the page would show a broken image ({key})",
+  "check_machine_translated": "Filled in by machine translation and not read by anybody since — it goes to the site as it stands",
   "publish_save_failed": "Nothing was published. Your latest changes could not be saved — check your connection and try again.",
   "publish_checks_blocked": "Nothing was published. The checks found something in the way just now — it is listed above.",
   "publish_response_lost": "The publish response was lost, so the open entry is being reloaded before you continue.",

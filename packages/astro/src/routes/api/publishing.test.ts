@@ -649,6 +649,8 @@ test('a link to a page this site has none of is reported, named by its entry', a
       severity: 'warn',
       message:
         'Cta links to /listings/no-such-house, where this site has no page — the link is a 404',
+      code: 'link-href-missing',
+      params: { label: 'Cta', href: '/listings/no-such-house' },
     },
   ]);
 });

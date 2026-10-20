@@ -134,8 +134,7 @@ Globals, fields and block types take the same shape through `.meta({ label })`, 
 of a select through `.meta({ options: { value: { en, de } } })`. See
 [Field types](field-types.md#labels) for fields, options and block types, and `globals` below. A
 description stays one string. Two places keep one name however the admin is set. The Canvas
-Structure list names a block by `_label` or its type, because the site renders it. The
-publish-check sentences are English and use the English label.
+Structure list names a block by `_label` or its type, because the site renders it.
 
 ## `globals`
 

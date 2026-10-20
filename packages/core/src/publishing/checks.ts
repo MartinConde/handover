@@ -13,6 +13,7 @@ import {
   type SeoDefaultsValue,
   type SeoValue,
 } from '../content/seo.js';
+import type { Labels } from '../content/ui-locale.js';
 import { chunksOf, D1_MAX_BOUND_PARAMETERS, type Db } from '../db.js';
 import { MEDIA_KEY, objectExists, type R2Store } from '../media/media.js';
 import { media } from '../tables.js';
@@ -46,8 +47,22 @@ export interface CheckResult {
   /** Addressed the way `_machine` addresses a field, so *Go to field* survives a move. */
   fieldPath: string;
   severity: CheckSeverity;
+  /** English, for readers that do not know `code`. */
   message: string;
+  /** The sentence the admin phrases in its own language, from `params`. */
+  code: string;
+  params: Record<string, CheckParam>;
 }
+
+/** A field's name is its per-language labels when the site gave them, else its one label. */
+export type CheckParam = string | number | string[] | Labels;
+
+type Named = { label: string; labels?: Labels };
+const nameOf = (named: Named): string | Labels => named.labels ?? named.label;
+const SHARING_IMAGE: Named = {
+  label: 'The sharing image',
+  labels: { en: 'Social image', de: 'Social-Media-Bild' },
+};
 
 export interface CheckSite {
   i18n: I18nRouting;
@@ -90,7 +105,7 @@ export async function runChecks(
 ): Promise<CheckResult[]> {
   const now = deps.now ?? Date.now();
   const found: CheckResult[] = [];
-  const assets: { key: string; path: string; fieldPath: string; label: string }[] = [];
+  const assets: Asset[] = [];
   for (const entry of input.entries) {
     const collection = entry.key.slice(0, entry.key.indexOf('/'));
     // `globals` is not a collection, and the miss is right: a global has no route or title field.
@@ -112,8 +127,16 @@ export async function runChecks(
         locale,
         route: of.route,
         title: typeof title === 'string' ? title : entry.key.slice(collection.length + 1),
-        say: (check, fieldPath, message) =>
-          found.push({ check, path: file.path, fieldPath, severity: CHECKS[check], message }),
+        say: (check, fieldPath, code, params, message) =>
+          found.push({
+            check,
+            path: file.path,
+            fieldPath,
+            severity: CHECKS[check],
+            message,
+            code,
+            params,
+          }),
         asset: (key, fieldPath, label) => assets.push({ key, path: file.path, fieldPath, label }),
       };
       fieldsIn(walk, entry.form.fields, data, '', true);
@@ -124,6 +147,8 @@ export async function runChecks(
           walk.say(
             'translation-machine',
             at,
+            'machine-translated',
+            {},
             'Filled in by machine translation and not read by anybody since — it goes to the site as it stands',
           );
     }
@@ -134,7 +159,7 @@ export async function runChecks(
         path: going.path,
         fieldPath: '',
         severity: CHECKS['source-unresolved'],
-        message: unresolved(source),
+        ...unresolved(source),
       });
     const written = source && 'locale' in source ? source.locale : undefined;
     const stale = written ? await staleLocales(siteId, entry.form, parsed, written) : [];
@@ -147,10 +172,17 @@ export async function runChecks(
         path: file.path,
         fieldPath: '',
         severity: CHECKS['translation-stale'],
-        message:
-          from === written
-            ? `This translation was made from an older version of the ${from.toUpperCase()} file — somebody has changed the words it was translated from since`
-            : `This translation was made from the ${from.toUpperCase()} file, and the entry is now written in ${written?.toUpperCase()} — translate it again from ${written?.toUpperCase()}`,
+        ...(from === written
+          ? {
+              code: 'translation-stale',
+              params: { from },
+              message: `This translation was made from an older version of the ${from.toUpperCase()} file — somebody has changed the words it was translated from since`,
+            }
+          : {
+              code: 'translation-source-moved',
+              params: { from, written: written ?? '' },
+              message: `This translation was made from the ${from.toUpperCase()} file, and the entry is now written in ${written?.toUpperCase()} — translate it again from ${written?.toUpperCase()}`,
+            }),
       });
     }
   }
@@ -161,12 +193,15 @@ export async function runChecks(
       : undefined;
     // The index is newer than the job's list: a page shown or deleted since is not mentioned.
     if (page?.status !== 'hidden') continue;
+    const months = Math.floor((now - Date.parse(since)) / (30 * DAY));
     found.push({
       check: 'hidden-long',
       path,
       fieldPath: '',
       severity: CHECKS['hidden-long'],
-      message: `${page.title} has been hidden for over ${Math.floor((now - Date.parse(since)) / (30 * DAY))} months — long enough to decide whether it comes back or goes`,
+      message: `${page.title} has been hidden for over ${months} months — long enough to decide whether it comes back or goes`,
+      code: 'hidden-long',
+      params: { title: page.title, months },
     });
   }
   found.push(...(await assetResults(siteId, db, input, assets, deps)));
@@ -179,14 +214,32 @@ export async function runChecks(
 
 const DAY = 24 * 60 * 60 * 1000;
 
+type Asset = { key: string; path: string; fieldPath: string; label: Named };
+
 // The entry's to settle, not one file's: it is reported once, on a file the publish carries.
-function unresolved(source: Extract<EntrySource, { problem: string }>): string {
-  const named = [...new Set(Object.values(source.marks))].join(', ');
+function unresolved(
+  source: Extract<EntrySource, { problem: string }>,
+): Pick<CheckResult, 'code' | 'params' | 'message'> {
+  const locales = [...new Set(Object.values(source.marks))];
+  const named = locales.join(', ');
+  const params = { locales };
   if (source.problem === 'conflict')
-    return `The files of this entry disagree about which language it is written in (${named}) — it is not published until every file’s _source names the same language`;
+    return {
+      code: 'source-conflict',
+      params,
+      message: `The files of this entry disagree about which language it is written in (${named}) — it is not published until every file’s _source names the same language`,
+    };
   if (source.problem === 'undeclared')
-    return `This entry says it is written in ${named}, which the site does not declare — it is not published until its _source names one of the site’s languages`;
-  return `This entry says it is written in ${named}, which has no file — it is not published until that file is back or its _source names a language it has`;
+    return {
+      code: 'source-undeclared',
+      params,
+      message: `This entry says it is written in ${named}, which the site does not declare — it is not published until its _source names one of the site’s languages`,
+    };
+  return {
+    code: 'source-missing',
+    params,
+    message: `This entry says it is written in ${named}, which has no file — it is not published until that file is back or its _source names a language it has`,
+  };
 }
 
 // Only a complete mark is ever stale, so there is always a language to name.
@@ -202,8 +255,14 @@ interface Walk {
   route: string | undefined;
   /** What a search title falls back to. */
   title: string;
-  say: (check: CheckName, fieldPath: string, message: string) => void;
-  asset: (key: string, fieldPath: string, label: string) => void;
+  say: (
+    check: CheckName,
+    fieldPath: string,
+    code: string,
+    params: Record<string, CheckParam>,
+    message: string,
+  ) => void;
+  asset: (key: string, fieldPath: string, label: Named) => void;
 }
 
 // The same descent the drift report makes, plus the menus the schema walker cannot see inside.
@@ -253,32 +312,34 @@ function valueIn(w: Walk, field: Field, value: unknown, path: string, mode: Tran
   switch (field.type) {
     case 'image': {
       if (!isObject(value)) break;
-      if (typeof value.src === 'string') w.asset(value.src, `${path}.src`, field.label);
+      if (typeof value.src === 'string') w.asset(value.src, `${path}.src`, field);
       if (!filled(value.alt))
         w.say(
           'image-alt',
           `${path}.alt`,
+          'image-alt-missing',
+          { label: nameOf(field) },
           `${field.label} has no alt text — a reader using a screen reader is told nothing about the picture`,
         );
       break;
     }
     case 'file':
       if (isObject(value) && typeof value.src === 'string')
-        w.asset(value.src, `${path}.src`, field.label);
+        w.asset(value.src, `${path}.src`, field);
       break;
     case 'seo': {
       // The fallback sharing picture belongs to the global that holds it, not to this entry.
       const image = (value as SeoValue | undefined)?.image?.src;
-      if (typeof image === 'string') w.asset(image, `${path}.image.src`, 'The sharing image');
+      if (typeof image === 'string') w.asset(image, `${path}.image.src`, SHARING_IMAGE);
       seoIn(w, value, path);
       break;
     }
     case 'link':
-      linkIn(w, value, path, field.label);
+      linkIn(w, value, path, field);
       break;
     case 'richtext':
       if (typeof value === 'string' && INTERNAL_LINK.test(value))
-        for (const url of richtextLinks(w.siteId, value)) urlIn(w, url, path, field.label);
+        for (const url of richtextLinks(w.siteId, value)) urlIn(w, url, path, field);
       emptyIn(w, field, value, path, mode);
       break;
     case 'text':
@@ -301,6 +362,8 @@ function emptyIn(
   w.say(
     'translation-empty',
     path,
+    'translation-empty',
+    { label: nameOf(field), locale: w.locale },
     `${field.label} is empty in ${w.locale.toUpperCase()} — the page shows a blank where the other languages have words`,
   );
 }
@@ -313,18 +376,24 @@ function seoIn(w: Walk, value: unknown, path: string): void {
     w.say(
       'seo-title',
       `${path}.title`,
+      'seo-title-long',
+      { count: seo.title.trim().length, limit: SEO_TITLE_LIMIT },
       `The search title is ${seo.title.trim().length} characters — Google cuts one off at about ${SEO_TITLE_LIMIT}`,
     );
   if (!filled(seo.description))
     w.say(
       'seo-description',
       `${path}.description`,
+      'seo-description-missing',
+      {},
       'No search description — a search engine will quote whatever sentence of the page it likes',
     );
   if (!seo.image?.src)
     w.say(
       'seo-image',
       `${path}.image`,
+      'seo-image-missing',
+      {},
       'No sharing image — a link to this page posted anywhere appears as plain text',
     );
 }
@@ -344,7 +413,8 @@ const liveIn = (entry: IndexEntry, locale: string) => {
 const named = (entry: IndexEntry, locale: string) =>
   entry.locales[locale]?.title ?? Object.values(entry.locales)[0]?.title ?? entry.id;
 
-function linkIn(w: Walk, value: unknown, path: string, label: string): void {
+function linkIn(w: Walk, value: unknown, path: string, name: Named): void {
+  const label = name.label;
   if (!isObject(value)) return;
   if (typeof value.ref === 'string') {
     const found = entryOf(w.input.index, value.ref);
@@ -352,21 +422,26 @@ function linkIn(w: Walk, value: unknown, path: string, label: string): void {
       w.say(
         'link-target',
         `${path}.ref`,
+        'link-target-missing',
+        { label: nameOf(name), ref: value.ref },
         `${label} points at ${value.ref}, which is not a page on this site — the link is a 404`,
       );
     else if (!liveIn(found, w.locale))
       w.say(
         'link-locale',
         `${path}.ref`,
+        'link-locale-missing',
+        { label: nameOf(name), title: named(found, w.locale), locale: w.locale },
         `${label} points at ${named(found, w.locale)}, which has no ${w.locale.toUpperCase()} page — a reader in this language follows it to a 404`,
       );
     return;
   }
-  if (typeof value.href === 'string') urlIn(w, value.href, `${path}.href`, label);
+  if (typeof value.href === 'string') urlIn(w, value.href, `${path}.href`, name);
 }
 
 /** A path no collection route could produce is left alone: a template may render it itself. */
-function urlIn(w: Walk, href: string, fieldPath: string, label: string): void {
+function urlIn(w: Walk, href: string, fieldPath: string, name: Named): void {
+  const label = name.label;
   if (!href.startsWith('/')) return;
   const target = previewTarget(
     w.siteId,
@@ -384,12 +459,21 @@ function urlIn(w: Walk, href: string, fieldPath: string, label: string): void {
     w.say(
       'link-target',
       fieldPath,
+      'link-href-missing',
+      { label: nameOf(name), href },
       `${label} links to ${href}, where this site has no page — the link is a 404`,
     );
   else if (!liveIn(found, target.locale))
     w.say(
       'link-locale',
       fieldPath,
+      'link-href-locale-missing',
+      {
+        label: nameOf(name),
+        href,
+        title: named(found, target.locale),
+        locale: target.locale,
+      },
       `${label} links to ${href}, which ${named(found, target.locale)} does not answer at in ${target.locale.toUpperCase()} — the link is a 404`,
     );
 }
@@ -416,12 +500,16 @@ function itemsIn(w: Walk, items: unknown, at: string, menu: string): void {
         w.say(
           'menu-target',
           `${path}.link`,
+          'menu-target-missing',
+          { menu, ref },
           `The ${menu} menu has an item pointing at ${ref}, which is not a page on this site — the item is left out of the menu`,
         );
       else if (!w.input.site.i18n.locales.some((locale) => liveIn(found, locale)))
         w.say(
           'menu-target',
           `${path}.link`,
+          'menu-target-hidden',
+          { menu, title: named(found, w.locale) },
           `The ${menu} menu has an item pointing at ${named(found, w.locale)}, which is not on the site in any language — the item is left out of the menu`,
         );
     }
@@ -434,7 +522,7 @@ async function assetResults(
   siteId: string,
   db: Db,
   input: CheckInput,
-  assets: { key: string; path: string; fieldPath: string; label: string }[],
+  assets: Asset[],
   deps: { fetch?: typeof globalThis.fetch },
 ): Promise<CheckResult[]> {
   if (!assets.length) return [];
@@ -459,29 +547,51 @@ async function assetResults(
   const gone = new Set(unknown.filter((_, i) => !there[i]));
   return assets.flatMap((asset) => {
     const row = known.get(MEDIA_KEY.exec(asset.key)?.[1] ?? '');
-    const said = (check: CheckName, message: string) => [
-      { check, path: asset.path, fieldPath: asset.fieldPath, severity: CHECKS[check], message },
+    const label = nameOf(asset.label);
+    const said = (
+      check: CheckName,
+      code: string,
+      params: Record<string, CheckParam>,
+      message: string,
+    ) => [
+      {
+        check,
+        path: asset.path,
+        fieldPath: asset.fieldPath,
+        severity: CHECKS[check],
+        message,
+        code,
+        params,
+      },
     ];
     if (row?.state === 'deleting')
       return said(
         'media-missing',
-        `${asset.label} is being deleted and cannot be used — choose another asset`,
+        'media-deleting',
+        { label },
+        `${asset.label.label} is being deleted and cannot be used — choose another asset`,
       );
     if (row?.state === 'deleted')
       return said(
         'media-missing',
-        `${asset.label} has been deleted — the page would show a broken image (${asset.key})`,
+        'media-deleted',
+        { label, key: asset.key },
+        `${asset.label.label} has been deleted — the page would show a broken image (${asset.key})`,
       );
     if (row?.archived)
       return said(
         'media-archived',
-        `${asset.label} has been archived in the media library — it still renders, but somebody put it away`,
+        'media-archived',
+        { label },
+        `${asset.label.label} has been archived in the media library — it still renders, but somebody put it away`,
       );
     // An object with no row renders fine and gets its row back from the reconciliation job.
     if (!row && gone.has(asset.key))
       return said(
         'media-missing',
-        `${asset.label} has nothing behind it any more — the page would show a broken image (${asset.key})`,
+        'media-gone',
+        { label, key: asset.key },
+        `${asset.label.label} has nothing behind it any more — the page would show a broken image (${asset.key})`,
       );
     return [];
   });
