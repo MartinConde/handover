@@ -16,7 +16,8 @@ import {
 import { createAuth, loginMethods, mailer } from '../../auth.js';
 import type { RequestContext } from '../../environment.js';
 import { missingMailer } from '../../environment.js';
-import { mailText, requestLocale } from '../../mail-text.js';
+import { requestLocale } from '../../locale.js';
+import { mailText } from '../../mail-text.js';
 import { readJson } from './body.js';
 import { entryTitle } from './content.js';
 import { codedError, forbidden, isOwner, notFound } from './respond.js';

@@ -343,3 +343,14 @@ export function canvasErrorDocument(manifest: CanvasErrorManifest): string {
   const message = escapeHtml(manifest.error.message);
   return `<!doctype html><html><head><meta charset="utf-8"><meta name="robots" content="noindex"><title>Canvas render failed</title></head><body><main><h1>Canvas render failed</h1><p>${message}</p></main><script type="application/json" data-handover-canvas-manifest>${serializeCanvasManifest(manifest)}</script></body></html>`;
 }
+
+export const canvasAnswer = (
+  status: number,
+  message: string,
+  request?: { requestId: string; epoch: string; contentVersion: number },
+  more?: { code?: string; detail?: string },
+) =>
+  new Response(canvasErrorDocument(errorManifest(status, message, request, more)), {
+    status,
+    headers: { ...GATE, 'content-type': 'text/html; charset=utf-8' },
+  });

@@ -16,7 +16,8 @@ import {
   type UiLocale,
 } from '@handover/core';
 import { db } from './environment.js';
-import { mailText, requestLocale } from './mail-text.js';
+import { requestLocale } from './locale.js';
+import { mailText } from './mail-text.js';
 
 /** Named here rather than from `workers-types`: `waitUntil` is all this package asks of it. */
 export interface CloudflareContext {

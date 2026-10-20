@@ -6,7 +6,7 @@ const base = siteBase(config.i18n);
 import { DEFAULT_UI_LOCALE, siteBase, type UiLocale } from '@handover/core';
 import type { APIRoute } from 'astro';
 import { loginMethods } from '../auth.js';
-import { acceptedLocale, cookieLocale } from '../mail-text.js';
+import { requestLocale } from '../locale.js';
 import { notFound } from './api/respond.js';
 
 const ASSET_PREFIX = '_assets/';
@@ -52,10 +52,7 @@ export const GET: APIRoute = ({ params, request }) => {
       },
     });
   }
-  const locale =
-    cookieLocale(request.headers.get('cookie')) ??
-    acceptedLocale(request.headers.get('accept-language')) ??
-    DEFAULT_UI_LOCALE;
+  const locale = requestLocale(request) ?? DEFAULT_UI_LOCALE;
   return new Response(shell(JSON.stringify(loginMethods()), locale), {
     headers: {
       'content-type': 'text/html; charset=utf-8',

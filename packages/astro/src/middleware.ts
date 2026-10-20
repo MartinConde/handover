@@ -2,7 +2,7 @@ import config from 'virtual:handover/config';
 import { AUTH_BASE_PATH, ContentError, roleOf, siteBase, type UiLocale } from '@handover/core';
 import type { MiddlewareHandler } from 'astro';
 import { createAuth } from './auth.js';
-import { canvasErrorDocument, errorManifest, GATE } from './canvas.js';
+import { canvasAnswer } from './canvas.js';
 
 // A draft page's links point at the live site, so clicking through a preview would leave it.
 const base = () => siteBase(config.i18n);
@@ -51,18 +51,10 @@ export const onRequest: MiddlewareHandler = async (
       const canvas = locals.handoverCanvas;
       if (!(error instanceof ContentError) || !canvas) throw error;
       const message = `This draft cannot be rendered:\n${error.message}`;
-      return new Response(
-        canvasErrorDocument(
-          errorManifest(422, message, canvas, {
-            code: 'CANVAS_DRAFT_UNRENDERABLE',
-            detail: error.message,
-          }),
-        ),
-        {
-          status: 422,
-          headers: { ...GATE, 'content-type': 'text/html; charset=utf-8' },
-        },
-      );
+      return canvasAnswer(422, message, canvas, {
+        code: 'CANVAS_DRAFT_UNRENDERABLE',
+        detail: error.message,
+      });
     }
     const headers = new Headers(res.headers);
     headers.delete('content-length');

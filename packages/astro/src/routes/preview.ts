@@ -19,8 +19,7 @@ import {
 import { createAuth } from '../auth.js';
 import {
   CANVAS_PROTOCOL,
-  canvasErrorDocument,
-  errorManifest,
+  canvasAnswer,
   GATE,
   type HandoverCanvas,
   renderedPolicy,
@@ -28,7 +27,7 @@ import {
   successManifest,
 } from '../canvas.js';
 import { db } from '../environment.js';
-import { requestLocale } from '../mail-text.js';
+import { requestLocale } from '../locale.js';
 
 const escapeHtml = (value: string) =>
   value.replace(/[&<>"']/g, (character) => {
@@ -89,17 +88,6 @@ const answer = (
     headers: { ...GATE, 'content-type': 'text/html; charset=utf-8' },
   });
 };
-
-const canvasAnswer = (
-  status: number,
-  message: string,
-  request?: Pick<CanvasSnapshot, 'requestId' | 'epoch' | 'contentVersion'>,
-  more?: { code?: string; detail?: string },
-) =>
-  new Response(canvasErrorDocument(errorManifest(status, message, request, more)), {
-    status,
-    headers: { ...GATE, 'content-type': 'text/html; charset=utf-8' },
-  });
 
 const CANVAS_BODY_LIMIT = 5 * 1024 * 1024;
 const NAME = /^[a-z0-9-]+$/;
