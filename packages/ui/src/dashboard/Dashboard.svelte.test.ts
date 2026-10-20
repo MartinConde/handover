@@ -239,21 +239,30 @@ test('a language owed in several collections gets a link per list', async () => 
   ]);
 });
 
-// The mockup's quick actions: the same New entry dialog the list opens, one button a collection.
-test('a quick action opens the New entry dialog for that collection', async () => {
+test('one New button offers collections and opens the selected entry dialog', async () => {
   const root = show(undefined, { collections: ['pages', 'listings'] });
   await settle();
 
-  expect(all(root, '.quick .btn').map((b) => b.textContent?.trim())).toEqual([
+  expect(all(root, '.quick .btn').map((b) => b.textContent?.trim())).toEqual(['New…']);
+  (all(root, '.quick .btn')[0] as HTMLButtonElement).click();
+  flushSync();
+  expect(all(root, '.quick .menu button').map((b) => b.textContent?.trim())).toEqual([
     'New page',
     'New listing',
   ]);
-  (all(root, '.quick .btn')[1] as HTMLButtonElement).click();
+  const choice = all(root, '.quick .menu button')[1] as HTMLButtonElement;
+  choice.focus();
+  choice.click();
   await settle();
 
+  expect(root.querySelector('.quick .menu')).toBeNull();
   expect(root.querySelector('.dialog h2')?.textContent).toBe('New listing');
   expect(root.querySelector<HTMLInputElement>('.dialog input#new-title')).not.toBeNull();
   expect(fetch).toHaveBeenCalledWith('/admin/api/entries/listings');
+
+  root.querySelector<HTMLButtonElement>('.dialog button[type="button"]')?.click();
+  flushSync();
+  expect(document.activeElement).toBe(root.querySelector('.quick .btn'));
 });
 
 // No list filter behind it, so the dashboard's dialog starts in the language the site declares.
@@ -265,6 +274,8 @@ test('a quick action creates in the site default language', async () => {
   await settle();
 
   (all(root, '.quick .btn')[0] as HTMLButtonElement).click();
+  flushSync();
+  root.querySelector<HTMLButtonElement>('.quick .menu button')?.click();
   await settle();
 
   expect(root.querySelector<HTMLSelectElement>('.dialog select#new-locale')?.value).toBe('de');
@@ -432,7 +443,10 @@ test('the dashboard switches its live chrome and dates without rereading data', 
   expect(tile(root, 'd-build')?.textContent?.replace(/\s+/g, ' ')).toContain(
     'Zuletzt veröffentlicht von Anna Berg vor 1 Std.',
   );
-  expect(root.querySelector('.quick .btn')?.textContent?.trim()).toBe('Neu: ferienhaeuser');
+  expect(root.querySelector('.quick .btn')?.textContent?.trim()).toBe('Neu…');
+  root.querySelector<HTMLButtonElement>('.quick .btn')?.click();
+  flushSync();
+  expect(root.querySelector('.quick .menu button')?.textContent?.trim()).toBe('Neu: ferienhaeuser');
   expect(root.textContent).toContain('The Mill House');
   expect(root.textContent).toContain('listings');
   expect(fetch).toHaveBeenCalledTimes(2);

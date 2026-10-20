@@ -104,6 +104,7 @@ a.btn { text-decoration: none; }
 .btn-primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); box-shadow: none; font-weight: 600; }
 .btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
 .btn-danger { background: var(--danger); border-color: var(--danger); color: var(--on-danger); }
+.btn-danger:hover { background: var(--danger-ink); border-color: var(--danger-ink); color: var(--on-danger); }
 .btn-ghost { border-color: transparent; background: transparent; color: var(--ink-2); box-shadow: none; }
 .btn-ghost:hover { background: var(--badge-bg); color: var(--ink); }
 .btn-sm { min-height: 30px; padding: 0 var(--s-3); font-size: var(--text-sm); }
@@ -298,10 +299,11 @@ a.btn { text-decoration: none; }
 
 /* Confirm dialog base (revert, delete, take-over) */
 .dialog.is-wide { width: min(520px, 100%); }
-.dialog { width: min(440px, 100%); padding: var(--s-6); background: var(--surface); border: 0; border-radius: var(--radius-lg); box-shadow: var(--shadow-menu); }
+.dialog { width: min(440px, 100%); min-width: 0; max-height: calc(100dvh - 48px); overflow: auto; overscroll-behavior: contain; overflow-wrap: anywhere; padding: var(--s-6); background: var(--surface); border: 0; border-radius: var(--radius-lg); box-shadow: var(--shadow-menu); }
 .dialog h2 { font-size: var(--text-lg); letter-spacing: var(--tracking-tight); margin-bottom: var(--s-2); }
 .dialog p { color: var(--ink-2); font-size: var(--text-sm); }
-.dialog .actions { display: flex; justify-content: flex-end; gap: var(--s-2); margin-top: var(--s-6); }
+.dialog .actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--s-2); margin-top: var(--s-6); }
+.dialog .actions .btn { max-width: 100%; white-space: normal; padding-block: var(--s-2); }
 
 /* Authentication. */
 .auth-page { min-height: 100vh; display: grid; place-items: center; padding: var(--s-6); background: var(--bg); }
@@ -336,9 +338,9 @@ a.btn { text-decoration: none; }
 .modal-host::backdrop { background: transparent; }
 .scrim { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; padding: var(--s-6); background: rgba(23, 26, 33, 0.38); }
 .scrim .dialog { box-shadow: var(--shadow-toast); }
-.dialog form { display: grid; gap: var(--s-5); }
+.dialog form { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-5); }
 .dialog form .actions { margin-top: 0; }
-.dialog fieldset { border: 0; padding: 0; margin: 0; display: grid; gap: var(--s-2); }
+.dialog fieldset { min-width: 0; border: 0; padding: 0; margin: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-2); }
 .dialog legend { padding: 0; margin-bottom: var(--s-2); font-size: var(--text-sm); font-weight: 500; }
 .choice { display: flex; align-items: center; gap: var(--s-3); min-height: 38px; padding: 0 var(--s-3); border: 1px solid var(--border); border-radius: var(--radius); font-size: var(--text-sm); color: var(--ink); cursor: pointer; background: var(--surface); }
 .choice:has(:checked) { border-color: var(--accent-ink); background: var(--accent-soft); }
@@ -1713,8 +1715,7 @@ input[type="date"].input { padding-right: var(--s-3); }
 /* Status, redirects, and page picker. */
 /* The picker is the nav builder's component (built at 3.26) and this is where it first ships. */
 .dialog .picker { margin-top: calc(var(--s-2) * -1); }
-/* Inside the dialog the list is the content, not a dropdown over it. */
-.dialog .picker-list { max-height: none; }
+.dialog .picker-list { max-height: min(280px, 35dvh); overscroll-behavior: contain; }
 .picker-list h4 { margin: 0; padding: var(--s-2) var(--s-3) var(--s-1); font-size: var(--text-xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); }
 /* Deleted view: a full-width row under the table for the refusal. */
 .table .row.row-note { grid-template-columns: 1fr; }
@@ -2193,6 +2194,7 @@ body:has(.is-canvas-fullscreen) .topbar, body:has(.is-canvas-fullscreen) .sideba
 .dashboard-heading h1 { margin-bottom: 6px; font-size: 28px; font-weight: 600; letter-spacing: -0.035em; }
 .dashboard-heading .list-note { margin: 0; }
 .dashboard-heading .quick { margin: 0; }
+.dashboard-heading .quick .menu { max-width: calc(100vw - 32px); max-height: min(400px, calc(100dvh - 120px)); overflow-y: auto; }
 .dashboard-heading .quick .btn { font-size: var(--text-sm); }
 .dashboard-heading .quick .btn::before { content: ""; width: 14px; height: 14px; background: currentColor; mask: var(--icon-plus) center / contain no-repeat; }
 .dashboard-page .dash { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 18px; }

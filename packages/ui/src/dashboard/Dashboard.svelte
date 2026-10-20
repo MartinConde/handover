@@ -76,6 +76,9 @@ const options = $derived(messageOptions(uiLocale));
 
 // The collection whose New entry dialog is open — the list's own dialog, opened from here.
 let creating = $state('');
+let newMenuOpen = $state(false);
+let newMenu = $state<HTMLDivElement>();
+let newTrigger = $state<HTMLButtonElement>();
 
 let recent = $state.raw<Recent[]>([]);
 let health = $state<Health | null>(null);
@@ -174,6 +177,18 @@ const held = $derived(pending.filter((entry) => entry.held_by).length);
 const oldest = $derived(Math.min(...pending.map((entry) => entry.updated_at)));
 </script>
 
+<svelte:window
+  onclick={(event) => {
+    if (newMenuOpen && event.target instanceof Node && !newMenu?.contains(event.target)) newMenuOpen = false;
+  }}
+  onkeydown={(event) => {
+    if (event.key === 'Escape' && newMenuOpen) {
+      newMenuOpen = false;
+      newTrigger?.focus();
+    }
+  }}
+/>
+
 <main class="main dashboard-page">
   <div class="dashboard-heading">
     <div>
@@ -181,10 +196,22 @@ const oldest = $derived(Math.min(...pending.map((entry) => entry.updated_at)));
       <p class="list-note">{m.dashboard_intro({}, options)}</p>
     </div>
     {#if collections.length}
-      <div class="quick">
-        {#each collections as name (name)}
-          <button class="btn" type="button" onclick={() => (creating = name)}>{newLabel(name, uiLocale) ?? m.dashboard_new_collection({ collection: collectionName(name, uiLocale, 'singular') }, options)}</button>
-        {/each}
+      <div class="quick row-menu" bind:this={newMenu}>
+        <button
+          class="btn"
+          type="button"
+          bind:this={newTrigger}
+          aria-expanded={newMenuOpen}
+          aria-controls="dashboard-new-types"
+          onclick={() => (newMenuOpen = !newMenuOpen)}>{m.dashboard_new({}, options)}</button
+        >
+        {#if newMenuOpen}
+          <div class="menu" id="dashboard-new-types">
+            {#each collections as name (name)}
+              <button type="button" onclick={() => { newTrigger?.focus(); newMenuOpen = false; creating = name; }}>{newLabel(name, uiLocale) ?? m.dashboard_new_collection({ collection: collectionName(name, uiLocale, 'singular') }, options)}</button>
+            {/each}
+          </div>
+        {/if}
       </div>
     {/if}
   </div>

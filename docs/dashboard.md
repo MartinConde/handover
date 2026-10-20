@@ -15,8 +15,8 @@ erase an already-known tile value or masquerade as an empty result.
 
 ## Quick actions
 
-Above the tiles, one button per collection — *New page*, *New listing* — opens the same New
-entry dialog the collection's list opens: a title, the file name it will be saved under, and
+Above the tiles, **New…** opens a menu of content types — *New page*, *New listing*.
+Choosing one opens the same New entry dialog the collection's list opens: a title, the file name it will be saved under, and
 the collection's starters beside Blank. Creating one lands on the new entry.
 
 ## The tiles

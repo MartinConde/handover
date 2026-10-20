@@ -405,6 +405,7 @@
   "build_revert": "Rückgängig machen",
   "dashboard_title": "Übersicht",
   "dashboard_intro": "Was geändert wurde und was auf die Veröffentlichung wartet.",
+  "dashboard_new": "Neu…",
   "dashboard_new_collection": "Neu: {collection}",
   "dashboard_review_publish": "Prüfen und veröffentlichen",
   "dashboard_everything_published": "Alles ist veröffentlicht",

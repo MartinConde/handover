@@ -402,6 +402,7 @@
   "build_revert": "Revert",
   "dashboard_title": "Dashboard",
   "dashboard_intro": "What changed, and what is waiting to go out.",
+  "dashboard_new": "New…",
   "dashboard_new_collection": "New {collection}",
   "dashboard_review_publish": "Review and publish",
   "dashboard_everything_published": "Everything is published",

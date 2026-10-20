@@ -31,6 +31,7 @@ let {
 } = $props();
 
 let modal = $state<HTMLDialogElement>();
+let startedOutside = false;
 
 const focusable =
   'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -48,6 +49,23 @@ function focusFirst() {
 
 function topmost() {
   return Array.from(document.querySelectorAll<HTMLDialogElement>('dialog.modal-host[open]')).at(-1);
+}
+
+function pointerdown(event: PointerEvent) {
+  startedOutside = event.target instanceof Node && !panel?.contains(event.target);
+}
+
+function click(event: MouseEvent) {
+  const outside = startedOutside;
+  startedOutside = false;
+  if (
+    outside &&
+    dismissible &&
+    topmost() === modal &&
+    event.target instanceof Node &&
+    !panel?.contains(event.target)
+  )
+    onclose();
 }
 
 function globalKeydown(event: KeyboardEvent) {
@@ -127,6 +145,9 @@ onMount(() => {
   aria-describedby={describedby}
   oncancel={cancel}
   onkeydown={keydown}
+  onpointerdowncapture={pointerdown}
+  onpointercancel={() => (startedOutside = false)}
+  onclick={click}
 >
   <div class="scrim modal-scrim {scrimClass}">
     <div class="modal-panel {panelClass}" tabindex="-1" bind:this={panel}>
