@@ -41,6 +41,31 @@ export const CHECKS = {
 
 export type CheckName = keyof typeof CHECKS;
 
+/** Every sentence the admin phrases itself; `CheckLines.svelte` switches on these. */
+export type CheckCode =
+  | 'source-conflict'
+  | 'source-undeclared'
+  | 'source-missing'
+  | 'translation-stale'
+  | 'translation-source-moved'
+  | 'translation-empty'
+  | 'machine-translated'
+  | 'hidden-long'
+  | 'image-alt-missing'
+  | 'seo-title-long'
+  | 'seo-description-missing'
+  | 'seo-image-missing'
+  | 'link-target-missing'
+  | 'link-locale-missing'
+  | 'link-href-missing'
+  | 'link-href-locale-missing'
+  | 'menu-target-missing'
+  | 'menu-target-hidden'
+  | 'media-deleting'
+  | 'media-deleted'
+  | 'media-archived'
+  | 'media-gone';
+
 export interface CheckResult {
   check: CheckName;
   path: string;
@@ -50,7 +75,7 @@ export interface CheckResult {
   /** English, for readers that do not know `code`. */
   message: string;
   /** The sentence the admin phrases in its own language, from `params`. */
-  code: string;
+  code: CheckCode;
   params: Record<string, CheckParam>;
 }
 
@@ -127,7 +152,7 @@ export async function runChecks(
         locale,
         route: of.route,
         title: typeof title === 'string' ? title : entry.key.slice(collection.length + 1),
-        say: (check, fieldPath, code, params, message) =>
+        say: ({ check, fieldPath, code, params, message }) =>
           found.push({
             check,
             path: file.path,
@@ -144,13 +169,14 @@ export async function runChecks(
       const machine = isObject(data) && Array.isArray(data._machine) ? data._machine : [];
       for (const at of machine as unknown[])
         if (typeof at === 'string')
-          walk.say(
-            'translation-machine',
-            at,
-            'machine-translated',
-            {},
-            'Filled in by machine translation and not read by anybody since — it goes to the site as it stands',
-          );
+          walk.say({
+            check: 'translation-machine',
+            fieldPath: at,
+            code: 'machine-translated',
+            params: {},
+            message:
+              'Filled in by machine translation and not read by anybody since — it goes to the site as it stands',
+          });
     }
     const going = entry.files[entry.publishing[0] ?? ''];
     if (source && 'problem' in source && going)
@@ -255,13 +281,7 @@ interface Walk {
   route: string | undefined;
   /** What a search title falls back to. */
   title: string;
-  say: (
-    check: CheckName,
-    fieldPath: string,
-    code: string,
-    params: Record<string, CheckParam>,
-    message: string,
-  ) => void;
+  say: (result: Omit<CheckResult, 'path' | 'severity'>) => void;
   asset: (key: string, fieldPath: string, label: Named) => void;
 }
 
@@ -314,13 +334,13 @@ function valueIn(w: Walk, field: Field, value: unknown, path: string, mode: Tran
       if (!isObject(value)) break;
       if (typeof value.src === 'string') w.asset(value.src, `${path}.src`, field);
       if (!filled(value.alt))
-        w.say(
-          'image-alt',
-          `${path}.alt`,
-          'image-alt-missing',
-          { label: nameOf(field) },
-          `${field.label} has no alt text — a reader using a screen reader is told nothing about the picture`,
-        );
+        w.say({
+          check: 'image-alt',
+          fieldPath: `${path}.alt`,
+          code: 'image-alt-missing',
+          params: { label: nameOf(field) },
+          message: `${field.label} has no alt text — a reader using a screen reader is told nothing about the picture`,
+        });
       break;
     }
     case 'file':
@@ -359,13 +379,13 @@ function emptyIn(
   if (!field.required || mode !== true) return;
   if (w.locale === w.input.site.i18n.defaultLocale) return;
   if (value === undefined || filled(value)) return;
-  w.say(
-    'translation-empty',
-    path,
-    'translation-empty',
-    { label: nameOf(field), locale: w.locale },
-    `${field.label} is empty in ${w.locale.toUpperCase()} — the page shows a blank where the other languages have words`,
-  );
+  w.say({
+    check: 'translation-empty',
+    fieldPath: path,
+    code: 'translation-empty',
+    params: { label: nameOf(field), locale: w.locale },
+    message: `${field.label} is empty in ${w.locale.toUpperCase()} — the page shows a blank where the other languages have words`,
+  });
 }
 
 /** Resolved the way `<Seo />` resolves it; a collection with no page has nothing to say. */
@@ -373,29 +393,30 @@ function seoIn(w: Walk, value: unknown, path: string): void {
   if (!w.route) return;
   const seo = resolveSeo(value as SeoValue | undefined, w.input.seoDefaults?.[w.locale], w.title);
   if (seo.title.trim().length > SEO_TITLE_LIMIT)
-    w.say(
-      'seo-title',
-      `${path}.title`,
-      'seo-title-long',
-      { count: seo.title.trim().length, limit: SEO_TITLE_LIMIT },
-      `The search title is ${seo.title.trim().length} characters — Google cuts one off at about ${SEO_TITLE_LIMIT}`,
-    );
+    w.say({
+      check: 'seo-title',
+      fieldPath: `${path}.title`,
+      code: 'seo-title-long',
+      params: { count: seo.title.trim().length, limit: SEO_TITLE_LIMIT },
+      message: `The search title is ${seo.title.trim().length} characters — Google cuts one off at about ${SEO_TITLE_LIMIT}`,
+    });
   if (!filled(seo.description))
-    w.say(
-      'seo-description',
-      `${path}.description`,
-      'seo-description-missing',
-      {},
-      'No search description — a search engine will quote whatever sentence of the page it likes',
-    );
+    w.say({
+      check: 'seo-description',
+      fieldPath: `${path}.description`,
+      code: 'seo-description-missing',
+      params: {},
+      message:
+        'No search description — a search engine will quote whatever sentence of the page it likes',
+    });
   if (!seo.image?.src)
-    w.say(
-      'seo-image',
-      `${path}.image`,
-      'seo-image-missing',
-      {},
-      'No sharing image — a link to this page posted anywhere appears as plain text',
-    );
+    w.say({
+      check: 'seo-image',
+      fieldPath: `${path}.image`,
+      code: 'seo-image-missing',
+      params: {},
+      message: 'No sharing image — a link to this page posted anywhere appears as plain text',
+    });
 }
 
 function entryOf(index: ContentIndex, ref: string): IndexEntry | undefined {
@@ -419,21 +440,21 @@ function linkIn(w: Walk, value: unknown, path: string, name: Named): void {
   if (typeof value.ref === 'string') {
     const found = entryOf(w.input.index, value.ref);
     if (!found)
-      w.say(
-        'link-target',
-        `${path}.ref`,
-        'link-target-missing',
-        { label: nameOf(name), ref: value.ref },
-        `${label} points at ${value.ref}, which is not a page on this site — the link is a 404`,
-      );
+      w.say({
+        check: 'link-target',
+        fieldPath: `${path}.ref`,
+        code: 'link-target-missing',
+        params: { label: nameOf(name), ref: value.ref },
+        message: `${label} points at ${value.ref}, which is not a page on this site — the link is a 404`,
+      });
     else if (!liveIn(found, w.locale))
-      w.say(
-        'link-locale',
-        `${path}.ref`,
-        'link-locale-missing',
-        { label: nameOf(name), title: named(found, w.locale), locale: w.locale },
-        `${label} points at ${named(found, w.locale)}, which has no ${w.locale.toUpperCase()} page — a reader in this language follows it to a 404`,
-      );
+      w.say({
+        check: 'link-locale',
+        fieldPath: `${path}.ref`,
+        code: 'link-locale-missing',
+        params: { label: nameOf(name), title: named(found, w.locale), locale: w.locale },
+        message: `${label} points at ${named(found, w.locale)}, which has no ${w.locale.toUpperCase()} page — a reader in this language follows it to a 404`,
+      });
     return;
   }
   if (typeof value.href === 'string') urlIn(w, value.href, `${path}.href`, name);
@@ -456,26 +477,26 @@ function urlIn(w: Walk, href: string, fieldPath: string, name: Named): void {
     (e) => (localized ? (e.locales[target.locale]?.slug ?? e.id) : e.id) === target.address,
   );
   if (!found)
-    w.say(
-      'link-target',
+    w.say({
+      check: 'link-target',
       fieldPath,
-      'link-href-missing',
-      { label: nameOf(name), href },
-      `${label} links to ${href}, where this site has no page — the link is a 404`,
-    );
+      code: 'link-href-missing',
+      params: { label: nameOf(name), href },
+      message: `${label} links to ${href}, where this site has no page — the link is a 404`,
+    });
   else if (!liveIn(found, target.locale))
-    w.say(
-      'link-locale',
+    w.say({
+      check: 'link-locale',
       fieldPath,
-      'link-href-locale-missing',
-      {
+      code: 'link-href-locale-missing',
+      params: {
         label: nameOf(name),
         href,
         title: named(found, target.locale),
         locale: target.locale,
       },
-      `${label} links to ${href}, which ${named(found, target.locale)} does not answer at in ${target.locale.toUpperCase()} — the link is a 404`,
-    );
+      message: `${label} links to ${href}, which ${named(found, target.locale)} does not answer at in ${target.locale.toUpperCase()} — the link is a 404`,
+    });
 }
 
 /** The renderer drops a dead item silently, which is exactly what nobody notices. */
@@ -497,21 +518,21 @@ function itemsIn(w: Walk, items: unknown, at: string, menu: string): void {
     if (ref) {
       const found = entryOf(w.input.index, ref);
       if (!found)
-        w.say(
-          'menu-target',
-          `${path}.link`,
-          'menu-target-missing',
-          { menu, ref },
-          `The ${menu} menu has an item pointing at ${ref}, which is not a page on this site — the item is left out of the menu`,
-        );
+        w.say({
+          check: 'menu-target',
+          fieldPath: `${path}.link`,
+          code: 'menu-target-missing',
+          params: { menu, ref },
+          message: `The ${menu} menu has an item pointing at ${ref}, which is not a page on this site — the item is left out of the menu`,
+        });
       else if (!w.input.site.i18n.locales.some((locale) => liveIn(found, locale)))
-        w.say(
-          'menu-target',
-          `${path}.link`,
-          'menu-target-hidden',
-          { menu, title: named(found, w.locale) },
-          `The ${menu} menu has an item pointing at ${named(found, w.locale)}, which is not on the site in any language — the item is left out of the menu`,
-        );
+        w.say({
+          check: 'menu-target',
+          fieldPath: `${path}.link`,
+          code: 'menu-target-hidden',
+          params: { menu, title: named(found, w.locale) },
+          message: `The ${menu} menu has an item pointing at ${named(found, w.locale)}, which is not on the site in any language — the item is left out of the menu`,
+        });
     }
     itemsIn(w, item.children, `${path}.children`, menu);
   }
@@ -550,7 +571,7 @@ async function assetResults(
     const label = nameOf(asset.label);
     const said = (
       check: CheckName,
-      code: string,
+      code: CheckCode,
       params: Record<string, CheckParam>,
       message: string,
     ) => [
