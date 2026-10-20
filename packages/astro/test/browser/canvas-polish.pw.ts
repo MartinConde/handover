@@ -135,12 +135,25 @@ test('Canvas fills the viewport and keeps Structure beside a contained media ins
       if (!thumb || !content) throw new Error('Image field preview is missing');
       const preview = thumb.getBoundingClientRect();
       const meta = content.getBoundingClientRect();
-      return preview.bottom <= meta.top && !card.querySelector('.sub');
+      const bounds = card.getBoundingClientRect();
+      return (
+        preview.right <= meta.left &&
+        [preview, meta].every(
+          (rect) =>
+            rect.left >= bounds.left &&
+            rect.right <= bounds.right &&
+            rect.top >= bounds.top &&
+            rect.bottom <= bounds.bottom,
+        ) &&
+        !card.querySelector('.sub')
+      );
     }),
   ).toBe(true);
   await expect(page.locator('#canvas-structure')).toBeVisible();
   await expect(page.getByLabel('Alt text')).toHaveValue('Harbour at dusk');
-  await inspector.getByRole('button', { name: 'Set focal point' }).click();
+  await inspector
+    .getByRole('button', { name: 'Set focal point', description: 'Set focal point' })
+    .click();
   const focal = page.getByRole('dialog', { name: 'Focal point — Hero image' });
   await expect(focal).toBeVisible();
   await expect(focal.locator('p')).toHaveCount(1);
@@ -420,7 +433,9 @@ test('image clicks open shared controls in a floating panel and preserve edits a
   await expect(page.locator('.canvas-inspector-slot')).toHaveAttribute('aria-hidden', 'true');
   await expect(popover.getByLabel('Alt text')).toHaveValue('Harbour at dusk');
   await popover.getByLabel('Alt text').fill('Evening on the harbour');
-  await popover.getByRole('button', { name: 'Set focal point' }).click();
+  await popover
+    .getByRole('button', { name: 'Set focal point', description: 'Set focal point' })
+    .click();
   const focal = page.getByRole('dialog', { name: 'Focal point — Hero image' });
   await expect(focal).toBeVisible();
   await focal.locator('.focal-handle').focus();

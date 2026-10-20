@@ -4,6 +4,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Add block opens a dialog so choices stay accessible in nested forms. Open section
+  headers keep their tint without the left-hand accent. The wider block chooser uses
+  spacious cards in a responsive grid, with its heading and Cancel action always visible.
+
+- Refreshed entry forms with clearer section cards, lighter nested groups, larger controls
+  and full-width list actions. Compact image cards show filenames and dimensions; clicking
+  the preview opens focal-point editing.
+
 - Translated blocks and list items keep their disclosure buttons and text fields enabled.
 
 - Live preview connects to the form: opening a section scrolls the page to it, and selecting

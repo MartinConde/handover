@@ -32,6 +32,7 @@ import Media from '../../media/Media.svelte';
 import { fileSize, type MediaItem } from '../../media/upload.js';
 import * as m from '../../paraglide/messages.js';
 import MediaImage from '../../shared/MediaImage.svelte';
+import Modal from '../../shared/Modal.svelte';
 import type {
   EntrySession,
   FieldChange,
@@ -906,15 +907,19 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
         </DragDropProvider>
         {#if !translating}
         <div class="pop-anchor">
-          <button class="btn btn-sm add" type="button" disabled={structureLocked} aria-expanded={picker === id} onclick={() => (picker = picker === id ? '' : id)}>{m.field_add_block({}, messageOptions(uiLocale))}</button>
+          <button class="btn btn-sm add" type="button" disabled={structureLocked} aria-haspopup="dialog" aria-expanded={picker === id} onclick={() => (picker = id)}>{m.field_add_block({}, messageOptions(uiLocale))}</button>
           {#if picker === id}
-            <div class="popover block-picker">
+            <Modal labelledby="{id}-picker-h" panelClass="dialog block-picker" initialFocus=".type-card" onclose={() => (picker = '')}>
+              <header><h2 id="{id}-picker-h">{m.field_add_block({}, options)}</h2></header>
               <div class="types">
                 {#each field.types as type (type)}
                   <button class="type-card" type="button" value={type} disabled={structureLocked} onclick={() => { add(at, { _type: type, _id: newId('default') }); picker = ''; }}>{labelIn(blockLabels?.[type], uiLocale) ?? type}</button>
                 {/each}
               </div>
-            </div>
+              <div class="actions">
+                <button class="btn" type="button" onclick={() => (picker = '')}>{m.common_cancel({}, options)}</button>
+              </div>
+            </Modal>
           {/if}
         </div>
         {/if}
@@ -925,6 +930,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
       <div class="media-card is-image" {id} role="group" tabindex="-1" aria-labelledby="{id}-l">
         <span class="thumb" style="aspect-ratio: {aspect(field.preset)}"><MediaImage src={src(at)} alt="" style="object-position: {dot(at)[0]}% {dot(at)[1]}%" {uiLocale} /><span class="focal" style="left: {dot(at)[0]}%; top: {dot(at)[1]}%" aria-hidden="true"></span></span>
         <div class="meta">
+          <div class="field-image-name"><span title={str([...at, 'src'])}>{str([...at, 'src']).split('/').pop()}</span>{#if num([...at, 'width']) && num([...at, 'height'])}<small>{num([...at, 'width'])} × {num([...at, 'height'])}</small>{/if}</div>
           {@render altField(id, at)}
           <p class="hint">{m.field_picture_same({}, messageOptions(uiLocale))}</p>
         </div>
@@ -932,8 +938,9 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
     {:else if field.type === 'image' && read(at) !== undefined}
       {@render groupLabel(id, field, text, at)}
       <div class="media-card is-image" {id} role="group" tabindex="-1" aria-labelledby="{id}-l">
-        <span class="thumb" style="aspect-ratio: {aspect(field.preset)}"><MediaImage src={src(at)} alt="" style="object-position: {dot(at)[0]}% {dot(at)[1]}%" {uiLocale} /><span class="focal" style="left: {dot(at)[0]}%; top: {dot(at)[1]}%" aria-hidden="true"></span></span>
+        <button class="thumb field-image-preview" type="button" aria-label={m.field_picture_set_focal({}, messageOptions(uiLocale))} title={m.field_picture_set_focal({}, messageOptions(uiLocale))} onclick={() => (framing = id)} style="aspect-ratio: {aspect(field.preset)}"><MediaImage src={src(at)} alt="" style="object-position: {dot(at)[0]}% {dot(at)[1]}%" {uiLocale} /><span class="focal" style="left: {dot(at)[0]}%; top: {dot(at)[1]}%" aria-hidden="true"></span></button>
         <div class="meta">
+          <div class="field-image-name"><span title={str([...at, 'src'])}>{str([...at, 'src']).split('/').pop()}</span>{#if num([...at, 'width']) && num([...at, 'height'])}<small>{num([...at, 'width'])} × {num([...at, 'height'])}</small>{/if}</div>
           {@render altField(id, at)}
           <div class="actions">
             <button class="btn btn-sm" type="button" onclick={() => (framing = id)}>{m.field_picture_set_focal({}, messageOptions(uiLocale))}</button>

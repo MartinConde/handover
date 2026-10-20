@@ -129,7 +129,9 @@ settings — and the `_ref` itself is written by hand, in the starter content.
 up / down buttons — the first row's up and the last row's down are disabled. Every row
 keeps its `_id` across moves; a new row gets a fresh one. A `blocks` field is the same list
 of cards, each headed by its `_label` or `_type`, and Add block offers one button per type
-in your registry. Reordering never rewrites an `_id`, so translations and `_machine` paths
+in your registry in a wide, responsive dialog, including inside nested lists. The choices
+scroll independently, keeping the heading and Cancel action visible. Cancel or Escape closes it
+without adding a block and returns focus to Add block. Reordering never rewrites an `_id`, so translations and `_machine` paths
 keep pointing at the same block.
 
 Existing blocks and object-list items start collapsed, with a content summary so editors
@@ -137,6 +139,9 @@ can scan the page before choosing a section. Open any number of cards independen
 simple lists such as paragraphs stay directly editable. New and duplicated items open
 for editing. Cards with validation problems open automatically, and field links and
 translation jumps reveal the nested field before focusing it.
+
+Open cards use a tinted header and larger field controls. Nested groups use a light
+divider, and list Add buttons span the available width.
 
 Group counts, list empty states, row actions, block controls, references, link controls, embed
 guidance and the SEO panel follow the account's interface language. Switching English/Deutsch
@@ -171,7 +176,9 @@ language causes no image processing, content write or geometry reset. Crop sourc
 upload failures keep separate recovery identities and safe diagnostics.
 
 `image` and `file` are a card: the picture at the field's own ratio, or the file's type and
-size, with the translatable half beside it and Replace and Remove under it. An empty one is a
+size, with the translatable half beside it and Replace and Remove under it. Image controls
+stack below the preview in narrow panes; clicking the preview opens focal-point editing.
+An empty one is a
 drop zone that takes a file dropped on it and opens the
 [picker](media-fields.md#choosing-a-picture) otherwise. A language that is being translated gets the alt or the display name and nothing
 else — the picture itself is the same in every language.

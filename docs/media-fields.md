@@ -59,6 +59,10 @@ the order they will go in, and each ticked picture becomes a row of its own.
 
 ## The focal point on a field
 
+A selected image appears in a compact card with its filename, dimensions and alt text.
+Click the preview or **Set focal point** to open the larger framing dialog.
+The card stacks its controls beneath the preview in a narrow editing pane.
+
 A picture inserted into a field brings the library's dot with it, and *Set focal point* on the
 card moves it for this page alone — over this field's own shape, previewed as the site will crop
 it. It is written as `focal` on the value and wins over the picture's own default wherever that

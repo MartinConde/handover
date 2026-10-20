@@ -1362,8 +1362,12 @@ test('blocks: a collapsed block keeps its header, shows its first words and stay
 test('blocks: the picker lists the registry types and adds one with a fresh _id', () => {
   show(pageFields, { _version: 1, title: 'Home' }, registry);
   expect(document.querySelector('.block-picker')).toBeNull();
+  q<HTMLButtonElement>('#f-blocks .add').focus();
   click('#f-blocks .add');
   expect(q('#f-blocks .add').getAttribute('aria-expanded')).toBe('true');
+  expect(document.querySelector('[role="dialog"]')?.getAttribute('aria-labelledby')).toBe(
+    'f-blocks-picker-h',
+  );
   expect(document.querySelectorAll('.block-picker .type-card')).toHaveLength(4);
   click('.type-card[value="cta"]');
   const added = (snap() as unknown as { blocks: { _type: string; _id: string }[] }).blocks;
@@ -1371,9 +1375,35 @@ test('blocks: the picker lists the registry types and adds one with a fresh _id'
   expect(added[0]?._type).toBe('cta');
   expect(added[0]?._id).toMatch(/^[0-9a-z]{8}$/);
   expect(document.querySelector('.block-picker')).toBeNull();
+  expect(document.activeElement).toBe(q('#f-blocks .add'));
   type('input#f-blocks\\.0\\.heading', 'Call us');
   expect(q('#f-blocks\\.0 header .label').textContent).toBe('Cta');
 });
+
+test.each(['cancel', 'Escape'])(
+  'blocks: dismissing the picker with %s keeps content and returns focus',
+  (action) => {
+    show(pageFields, { _version: 1, title: 'Home' }, registry);
+    const before = stringifyEntry('default', snap());
+    const trigger = q<HTMLButtonElement>('#f-blocks .add');
+    trigger.focus();
+    click('#f-blocks .add');
+    expect(document.querySelector('[role="dialog"]')?.getAttribute('aria-labelledby')).toBe(
+      'f-blocks-picker-h',
+    );
+    expect(document.activeElement).toBe(q('.block-picker .type-card'));
+    if (action === 'cancel') click('.block-picker .actions button');
+    else {
+      document.activeElement?.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+      );
+      flushSync();
+    }
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(stringifyEntry('default', snap())).toBe(before);
+    expect(document.activeElement).toBe(trigger);
+  },
+);
 
 test('blocks: removing a block drops it and its children', () => {
   show(pageFields, blocksData(), registry);
@@ -2035,6 +2065,17 @@ test('a translator gets the words and not the picture', () => {
 });
 
 // The focal point on the field
+
+test('the image preview opens focal editing without changing the stored picture', async () => {
+  show([heroField], imageData());
+  const before = stringifyEntry('default', snap());
+  const preview = document.querySelector<HTMLButtonElement>('.media-card button.thumb');
+  expect(preview?.getAttribute('aria-label')).toBe('Set focal point');
+  preview?.click();
+  await settle();
+  expect(q('.focal-handle').getAttribute('aria-label')).toBe('Focal point, 50% across, 35% down');
+  expect(stringifyEntry('default', snap())).toBe(before);
+});
 
 // The page's dot wins over the library's; the middle is not a choice, so it takes the key out.
 test('the dot a page moves is written after the numbers, and centring it takes the key out', async () => {
