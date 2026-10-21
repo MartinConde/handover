@@ -1,10 +1,6 @@
 import { messageOptions, type UiLocale } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
-import {
-  type CanvasParentBridgeOptions,
-  createCanvasParentBridge,
-  readCanvasResultManifest,
-} from './canvas-bridge';
+import { type CanvasParentBridgeOptions, createCanvasParentBridge } from './canvas-bridge';
 import {
   CANVAS_PROTOCOL,
   type CanvasBridgeRejection,
@@ -19,6 +15,7 @@ import {
   type CanvasSuccessManifest,
   type CanvasTarget,
   type CanvasTextField,
+  readCanvasResultManifest,
 } from './canvas-protocol';
 import { sameCanvasDocument, sameCanvasSelection, sameCanvasTarget } from './canvas-target';
 

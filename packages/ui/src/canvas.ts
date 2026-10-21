@@ -1,6 +1,7 @@
 // Own entry so the Canvas runtime never executes in the admin shell or on a public page.
-import { createCanvasChildBridge, readCanvasManifest } from './canvas/canvas-bridge';
+import { readCanvasManifest } from './canvas/canvas-protocol';
 import { sameCanvasTarget } from './canvas/canvas-target';
+import { createCanvasChildBridge } from './canvas/runtime/canvas-child-bridge';
 import { createCanvasLinkRuntime } from './canvas/runtime/canvas-link-field';
 import { createCanvasNavigationRuntime } from './canvas/runtime/canvas-navigation';
 import { createCanvasPlainTextRuntime } from './canvas/runtime/canvas-plain-text';

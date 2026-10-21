@@ -1,17 +1,16 @@
 import { afterEach, expect, test, vi } from 'vitest';
+import { type CanvasParentBridgeOptions, createCanvasParentBridge } from './canvas-bridge';
+import {
+  type CanvasCommandMessage,
+  type CanvasStructureNode,
+  type CanvasSuccessManifest,
+  type CanvasTarget,
+  readCanvasResultManifest,
+} from './canvas-protocol';
 import {
   type CanvasChildBridgeOptions,
-  type CanvasParentBridgeOptions,
   createCanvasChildBridge,
-  createCanvasParentBridge,
-  readCanvasResultManifest,
-} from './canvas-bridge';
-import type {
-  CanvasCommandMessage,
-  CanvasStructureNode,
-  CanvasSuccessManifest,
-  CanvasTarget,
-} from './canvas-protocol';
+} from './runtime/canvas-child-bridge';
 
 const manifest: CanvasSuccessManifest = {
   mode: 'canvas',

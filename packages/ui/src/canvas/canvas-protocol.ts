@@ -658,3 +658,59 @@ export const stale = (
   if (message.locale !== manifest.locale) return 'stale-locale';
   if (message.contentVersion !== version) return 'stale-version';
 };
+
+export function readCanvasManifest(root: Document = document): CanvasSuccessManifest | undefined {
+  const value = readCanvasResultManifest(root);
+  return value?.status === 'success' ? value : undefined;
+}
+
+export function readCanvasResultManifest(
+  root: Document = document,
+): CanvasResultManifest | undefined {
+  const element = root.querySelector('[data-handover-canvas-manifest]');
+  try {
+    const value = JSON.parse(element?.textContent ?? '') as unknown;
+    if (!record(value) || value.mode !== 'canvas' || value.protocol !== CANVAS_PROTOCOL) return;
+    const successKeys =
+      value.entryDirectory === undefined
+        ? ['mode', 'status', ...BASE]
+        : ['mode', 'status', ...BASE, 'entryDirectory'];
+    if (
+      value.status === 'success' &&
+      keys(value, successKeys) &&
+      identity(value) &&
+      (value.entryDirectory === undefined ||
+        (typeof value.entryDirectory === 'string' &&
+          /^\/(?!\/)/.test(value.entryDirectory) &&
+          value.entryDirectory.endsWith('/admin/api/entries')))
+    )
+      return value as unknown as CanvasSuccessManifest;
+    if (value.status !== 'error' || !record(value.error)) return;
+    const correlated =
+      value.requestId !== undefined ||
+      value.epoch !== undefined ||
+      value.contentVersion !== undefined;
+    const expected = correlated
+      ? ['mode', 'status', 'protocol', 'requestId', 'epoch', 'contentVersion', 'error']
+      : ['mode', 'status', 'protocol', 'error'];
+    if (
+      !keys(value, expected) ||
+      (correlated &&
+        (!id(value.requestId) ||
+          !id(value.epoch) ||
+          !Number.isSafeInteger(value.contentVersion) ||
+          (value.contentVersion as number) < 0)) ||
+      !keys(value.error, ['status', 'message'], ['code', 'detail']) ||
+      !Number.isSafeInteger(value.error.status) ||
+      (value.error.status as number) < 400 ||
+      (value.error.status as number) > 599 ||
+      typeof value.error.message !== 'string' ||
+      (value.error.code !== undefined && typeof value.error.code !== 'string') ||
+      (value.error.detail !== undefined && typeof value.error.detail !== 'string')
+    )
+      return;
+    return value as unknown as CanvasErrorManifest;
+  } catch {
+    return undefined;
+  }
+}
