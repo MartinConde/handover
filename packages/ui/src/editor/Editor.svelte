@@ -488,21 +488,6 @@ async function createAll(fill: boolean) {
     createAllFailure = { code: 'CREATE_ALL_RELOAD_FAILED' };
   else createAllFailure = { code: 'ENTRY_ACTION_FAILED' };
 }
-function createdLine(of: string, report: CreatedAll) {
-  const named = { language: language(of) };
-  const failed = report.failed?.locale === of ? report.failed : undefined;
-  if (failed?.step === 'fill')
-    return failed.unconfirmed
-      ? m.editor_created_all_fill_unconfirmed(named, options)
-      : m.editor_created_all_not_filled(named, options);
-  if (failed?.unconfirmed && reportedHere) return m.editor_created_all_unconfirmed(named, options);
-  if (failed?.unconfirmed && entrySession.hasSnapshot(of))
-    return m.editor_created_all_created(named, options);
-  if (failed) return m.editor_created_all_not_created(named, options);
-  if (report.done[of] === 'filled') return m.editor_created_all_filled(named, options);
-  if (report.done[of]) return m.editor_created_all_created(named, options);
-  return m.editor_created_all_not_attempted(named, options);
-}
 // Through `act`: a refused turn-off answers with a sentence the screen shows.
 async function offer(of: string, on: boolean, redirect?: Target) {
   const res = await act(`/admin/api/entries/${collection}/${slug}/locales`, {
