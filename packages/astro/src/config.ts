@@ -25,14 +25,14 @@ export const richtext = (tier: RichtextTier = 'basic') =>
   z
     .string()
     .superRefine((md, ctx) => {
-      const [message] = richtextErrors('default', md, tier);
+      const [message] = richtextErrors(md, tier);
       if (message) ctx.addIssue({ code: 'custom', message });
     })
     .meta({ handover: 'richtext', tier });
 
 // The same allow-list as a richtext link: never a scheme that runs code.
 const href = z.string().superRefine((url, ctx) => {
-  const scheme = unsafeLinkScheme('default', url);
+  const scheme = unsafeLinkScheme(url);
   if (scheme) ctx.addIssue({ code: 'custom', message: `${scheme}: links are not allowed` });
 });
 const toUrl = z.object({ type: z.literal('url'), href });
@@ -333,15 +333,13 @@ export function formSchema(schema: z.ZodType): JsonSchema {
 
 export function defineConfig(config: HandoverConfig): HandoverConfig {
   const errors = [
-    ...checkI18n('default', config.i18n),
-    ...checkCollections('default', config.collections, config.globals),
+    ...checkI18n(config.i18n),
+    ...checkCollections(config.collections, config.globals),
   ];
   // A titleField naming no text field would drop the name typed into New entry in silence.
   for (const [name, c] of Object.entries(config.collections)) {
     if (!c.titleField) continue;
-    const found = fieldsFrom('default', formSchema(c.schema)).find(
-      (f) => f.path[0] === c.titleField,
-    );
+    const found = fieldsFrom(formSchema(c.schema)).find((f) => f.path[0] === c.titleField);
     if (found?.type !== 'text')
       errors.push(
         `cms.config.ts › collections.${name}.titleField: ${JSON.stringify(c.titleField)} is not a text field of this collection's schema`,
@@ -355,7 +353,7 @@ export function defineConfig(config: HandoverConfig): HandoverConfig {
       errors.push(
         `${at}this collection has no route, so an address has nothing to be a segment of — give it a route, or drop localizedSlugs`,
       );
-    const found = fieldsFrom('default', formSchema(c.schema)).find((f) => f.path[0] === 'slug');
+    const found = fieldsFrom(formSchema(c.schema)).find((f) => f.path[0] === 'slug');
     if (found?.type !== 'text')
       errors.push(
         `${at}this collection's schema has no optional "slug" text field — add slug: z.string().optional() to it, since the site's own route reads it`,

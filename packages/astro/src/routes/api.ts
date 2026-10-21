@@ -152,7 +152,7 @@ export const GET: APIRoute = async ({ params, request, url, locals }) => {
         [
           ...Object.values(config.collections).map((c) => c.schema),
           ...Object.values(config.globals ?? {}),
-        ].map((schema) => formOf('default', formSchema(schema))),
+        ].map((schema) => formOf(formSchema(schema))),
       ),
       // `/_preview` does not exist without the flag, so the editor asks before framing a 404.
       preview,

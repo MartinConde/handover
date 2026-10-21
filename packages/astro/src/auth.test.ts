@@ -222,7 +222,7 @@ test('the session cookie is Secure on an https site even when the request arrive
 /** The same endpoint the login uses, on the instance that mints a longer-lived link. */
 function sendInvite(email: string, host = 'https://demo.example') {
   const url = new URL(`${host}${AUTH_BASE_PATH}/sign-in/magic-link`);
-  return memberApi('default', createAuth(url, undefined, { invite: true })).signInMagicLink({
+  return memberApi(createAuth(url, undefined, { invite: true })).signInMagicLink({
     body: { email, callbackURL: '/admin/account' },
     headers: new Headers({
       'content-type': 'application/json',
@@ -264,10 +264,7 @@ test("an invite is phrased in the inviting owner's language", async () => {
   await seedUser('lea@example.com');
   const url = new URL(`https://demo.example${AUTH_BASE_PATH}/sign-in/magic-link`);
 
-  await memberApi(
-    'default',
-    createAuth(url, undefined, { invite: true, locale: 'de' }),
-  ).signInMagicLink({
+  await memberApi(createAuth(url, undefined, { invite: true, locale: 'de' })).signInMagicLink({
     body: { email: 'lea@example.com', callbackURL: '/admin/account' },
     headers: new Headers({ origin: 'https://demo.example', 'cf-connecting-ip': '203.0.113.8' }),
   });
@@ -461,7 +458,7 @@ async function signInByLink(email: string) {
 
 const setFirstPassword = (cookie: string) =>
   setPassword(
-    { db: () => openDb('default', binding) } as never,
+    { db: () => openDb(binding) } as never,
     new Request('https://demo.example/admin/api/account/set-password', {
       method: 'POST',
       headers: { cookie, 'content-type': 'application/json', origin: 'https://demo.example' },
@@ -547,7 +544,7 @@ test("a password reset is phrased in the account's saved language", async () => 
 
 const { removeMember, resendInvite } = await import('./routes/api/members.js');
 
-const routeCtx = { db: () => openDb('default', binding) } as never;
+const routeCtx = { db: () => openDb(binding) } as never;
 const ownerSession = { user: { id: 'usr_owner@example.com' }, role: 'owner' } as never;
 
 /** Whether opening the link signs anybody in. */

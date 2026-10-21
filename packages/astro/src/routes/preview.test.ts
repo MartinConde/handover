@@ -124,23 +124,17 @@ const globalsBuilt: Record<string, unknown> = {
 const pageLoader = {
   Page,
   load: async (source: ContentSource, { locale, slug }: { locale: string; slug: string }) => {
-    const entry = await entryAt('default', source, pageSite, 'pages', locale, slug);
+    const entry = await entryAt(source, pageSite, 'pages', locale, slug);
     if (!entry) return undefined;
-    const globals = await globalsAt('default', source, locale, {
+    const globals = await globalsAt(source, locale, {
       required: ['site', 'navigation'],
       blocks: (entry.data as { blocks?: unknown }).blocks,
     });
     return {
       globals,
       data: entry.data,
-      locales: await getEntryLocales(
-        'default',
-        source,
-        pageSite,
-        'pages',
-        entry.id.slice(locale.length + 1),
-      ),
-      menus: await menusAt('default', source, pageSite, globals.navigation, locale),
+      locales: await getEntryLocales(source, pageSite, 'pages', entry.id.slice(locale.length + 1)),
+      menus: await menusAt(source, pageSite, globals.navigation, locale),
     };
   },
 };

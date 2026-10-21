@@ -26,7 +26,7 @@ function sitePages(entries: Awaited<ReturnType<typeof pickable>>): Record<string
   const pages: Record<string, string> = {};
   for (const [collection, collected] of Object.entries(config.collections))
     for (const locale of config.i18n.locales) {
-      const url = entryUrl('default', config.i18n, collected.index, '', locale);
+      const url = entryUrl(config.i18n, collected.index, '', locale);
       // An entry beats an index at the same address, being the more specific thing to name.
       if (url) pages[url] = `the ${collection} index`;
     }
@@ -39,7 +39,7 @@ function sitePages(entries: Awaited<ReturnType<typeof pickable>>): Record<string
 export async function redirectList(ctx: RequestContext): Promise<Response> {
   const database = ctx.db();
   const [committed, waiting, entries] = await Promise.all([
-    readRedirects('default', ctx.git()),
+    readRedirects(ctx.git()),
     pendingDrafts('default', database),
     pickable(ctx),
   ]);
@@ -97,7 +97,7 @@ export async function addRedirect(
   const git = ctx.git();
   const database = ctx.db();
   const head = await git.getHead();
-  const current = await readRedirects('default', git, head);
+  const current = await readRedirects(git, head);
   const prior = (await recentOperations('default', database, 'redirect-added')).find(
     (operation) => {
       const rule = ruleDetail(operation.detail);
@@ -112,18 +112,17 @@ export async function addRedirect(
   );
   const baseSha = prior?.baseSha ?? head;
   const [rules, entries] = await Promise.all([
-    prior ? readRedirects('default', git, baseSha) : current,
+    prior ? readRedirects(git, baseSha) : current,
     pickable(ctx),
   ]);
-  const bad = redirectError('default', typed, {
+  const bad = redirectError(typed, {
     pages: sitePages(entries),
     rules,
     base: config.i18n.base,
   });
   if (bad) return Response.json(bad, { status: 422 });
   const typed_ =
-    ruleDetail(prior?.detail) ??
-    redirectRule('default', { ...typed, reason: 'manual' }, Date.now());
+    ruleDetail(prior?.detail) ?? redirectRule({ ...typed, reason: 'manual' }, Date.now());
   const operation =
     prior ??
     (await beginOperation('default', database, {
@@ -144,7 +143,6 @@ export async function addRedirect(
   if (!commit_sha) commit_sha = await recoverOperationCommit('default', database, git, operation);
   if (!commit_sha) {
     const committed = await editRedirects(
-      'default',
       git,
       `Add redirect ${rule.from}`,
       (all) => {
@@ -157,9 +155,8 @@ export async function addRedirect(
     commit_sha = committed.commit_sha;
   } else {
     rule =
-      (await readRedirects('default', git, commit_sha)).find(
-        (candidate) => candidate._id === typed_._id,
-      ) ?? typed_;
+      (await readRedirects(git, commit_sha)).find((candidate) => candidate._id === typed_._id) ??
+      typed_;
   }
   await markOperationCommitted('default', database, operation.id, commit_sha, { commit_sha, rule });
   try {
@@ -188,7 +185,7 @@ export async function changeRedirect(
   const git = ctx.git();
   const database = ctx.db();
   const head = await git.getHead();
-  const current = await readRedirects('default', git, head);
+  const current = await readRedirects(git, head);
   const prior = (await recentOperations('default', database, 'redirect-changed')).find(
     (operation) =>
       operation.subject === id &&
@@ -198,14 +195,13 @@ export async function changeRedirect(
   );
   const baseSha = prior?.baseSha ?? head;
   const [rules, entries] = await Promise.all([
-    prior ? readRedirects('default', git, baseSha) : current,
+    prior ? readRedirects(git, baseSha) : current,
     pickable(ctx),
   ]);
   const found = rules.find((rule) => rule._id === id);
   if (!found) return codedError(404, 'REDIRECT_NOT_FOUND', 'Not found');
   if (found.reason === 'hidden') return codedError(409, 'REDIRECT_MANAGED', MANAGED);
   const bad = redirectError(
-    'default',
     typed,
     { pages: sitePages(entries), rules, base: config.i18n.base },
     id,
@@ -227,7 +223,6 @@ export async function changeRedirect(
   if (!commit_sha) commit_sha = await recoverOperationCommit('default', database, git, operation);
   if (!commit_sha) {
     const committed = await editRedirects(
-      'default',
       git,
       `Edit redirect ${found.from}`,
       (all) => collapseRedirects(all, [{ ...found, ...typed }]),
@@ -260,7 +255,7 @@ export async function removeRedirect(
   const git = ctx.git();
   const database = ctx.db();
   const head = await git.getHead();
-  const current = await readRedirects('default', git, head);
+  const current = await readRedirects(git, head);
   const prior = (await recentOperations('default', database, 'redirect-deleted')).find(
     (operation) =>
       operation.subject === id &&
@@ -268,7 +263,7 @@ export async function removeRedirect(
   );
   if (prior?.state === 'finalized') return Response.json({ deleted: id });
   const baseSha = prior?.baseSha ?? head;
-  const rules = prior ? await readRedirects('default', git, baseSha) : current;
+  const rules = prior ? await readRedirects(git, baseSha) : current;
   const found = rules.find((rule) => rule._id === id);
   if (!found) return codedError(404, 'REDIRECT_NOT_FOUND', 'Not found');
   if (found.reason === 'hidden') return codedError(409, 'REDIRECT_MANAGED', MANAGED);
@@ -287,7 +282,6 @@ export async function removeRedirect(
   if (!commit_sha) commit_sha = await recoverOperationCommit('default', database, git, operation);
   if (!commit_sha) {
     const committed = await editRedirects(
-      'default',
       git,
       `Delete redirect ${found.from}`,
       (all) => all.filter((rule) => rule._id !== id),

@@ -41,30 +41,23 @@ export async function listEntries(ctx: RequestContext, collection: string): Prom
   const edits = lastEdits(waiting, published, editors);
   const summaries = textsNow(rows, collection);
   // The same reading of `_locales` the editor makes, so list and form agree on chips.
-  const entries = collectionEntries('default', index, collection, rows, collected.titleField).map(
-    (entry) => {
-      const { offered } = entryOffer(
-        'default',
-        config.i18n.locales,
-        entry.offered,
-        Object.keys(entry.locales),
-      );
-      // Absent when that is every language the site declares, as the built index has it.
-      return {
-        ...entry,
-        offered: offered.length === config.i18n.locales.length ? undefined : offered,
-        pending: Object.values(entry.locales).some((l) => unpublished.has(l.path)) || undefined,
-        editing: editing[`${collection}/${entry.id}`],
-        // Goes as far back as the log does; an untouched row has nothing rather than a guess.
-        edited: edits.get(`${collection}/${entry.id}`) ?? null,
-        // The last build's mark, the same one the dashboard counts, for the language filter.
-        stale: stale[`${collection}/${entry.id}`]?.length
-          ? stale[`${collection}/${entry.id}`]
-          : undefined,
-        ...summaries[`${collection}/${entry.id}`],
-      };
-    },
-  );
+  const entries = collectionEntries(index, collection, rows, collected.titleField).map((entry) => {
+    const { offered } = entryOffer(config.i18n.locales, entry.offered, Object.keys(entry.locales));
+    // Absent when that is every language the site declares, as the built index has it.
+    return {
+      ...entry,
+      offered: offered.length === config.i18n.locales.length ? undefined : offered,
+      pending: Object.values(entry.locales).some((l) => unpublished.has(l.path)) || undefined,
+      editing: editing[`${collection}/${entry.id}`],
+      // Goes as far back as the log does; an untouched row has nothing rather than a guess.
+      edited: edits.get(`${collection}/${entry.id}`) ?? null,
+      // The last build's mark, the same one the dashboard counts, for the language filter.
+      stale: stale[`${collection}/${entry.id}`]?.length
+        ? stale[`${collection}/${entry.id}`]
+        : undefined,
+      ...summaries[`${collection}/${entry.id}`],
+    };
+  });
   return Response.json({
     entries,
     // Which languages the list draws a column for, and in which order — one language, no column.
@@ -83,7 +76,6 @@ function textsNow(overlay: readonly { path: string; contents: string }[], collec
   // A list parses only its own drafts; the dashboard needs every entry, globals too.
   const within = (key = '') => !collection || key.startsWith(`${collection}/`);
   return textSummaries(
-    'default',
     config.i18n,
     Object.fromEntries(Object.entries(texts).filter(([key]) => within(key))),
     overlay.filter((row) => within(entryKey(row.path))),
@@ -110,7 +102,7 @@ export async function pickList(ctx: RequestContext): Promise<Response> {
       const labels = typeof label === 'string' && label ? { en: label } : labelsOf(label);
       const urls: Record<string, string> = {};
       for (const locale of config.i18n.locales) {
-        const url = entryUrl('default', config.i18n, page, '', locale);
+        const url = entryUrl(config.i18n, page, '', locale);
         if (url) urls[locale] = url;
       }
       return [
@@ -157,7 +149,7 @@ export async function globalsList(ctx: RequestContext): Promise<Response> {
   ]);
   const pending = new Set(waiting.map((row) => row.path));
   const edits = lastEdits(waiting, published, editors);
-  const entries = collectionEntries('default', index, 'globals', rows);
+  const entries = collectionEntries(index, 'globals', rows);
   return Response.json({
     globals: Object.entries(config.globals ?? {}).map(([key, schema]) => {
       const found = entries.find((entry) => entry.id === key);
@@ -265,13 +257,12 @@ function translationHealth(overlay: readonly { path: string; contents: string }[
   };
   for (const collection of [...Object.keys(config.collections), 'globals'])
     for (const entry of collectionEntries(
-      'default',
       index,
       collection,
       overlay,
       config.collections[collection]?.titleField,
     )) {
-      const { offered } = entryOffer('default', locales, entry.offered, Object.keys(entry.locales));
+      const { offered } = entryOffer(locales, entry.offered, Object.keys(entry.locales));
       // A language the entry is not offered in is a decision somebody made, not a gap to fill.
       for (const locale of offered)
         if (!entry.locales[locale]) {
@@ -308,7 +299,6 @@ export function entryTitles(
   const titles = new Map<string, string>();
   for (const collection of new Set([...keys].map((key) => key.split('/')[0] ?? '')))
     for (const entry of collectionEntries(
-      'default',
       index,
       collection,
       overlay,

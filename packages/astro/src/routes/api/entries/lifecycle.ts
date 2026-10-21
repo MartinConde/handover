@@ -58,7 +58,7 @@ export async function rename(
   const database = ctx.db();
   const git = ctx.git();
   const taken = (await takenNames(collection, database)).filter((id) => id !== slug);
-  const to = entryName('default', typeof body?.to === 'string' ? body.to : '', taken);
+  const to = entryName(typeof body?.to === 'string' ? body.to : '', taken);
   if (to === slug) return Response.json({ slug });
   const retryKey = `entry-rename:${collection}/${slug}:${to}`;
   const existing = await findOperation('default', database, retryKey);
@@ -119,7 +119,7 @@ export async function rename(
     if (!commit_sha) {
       let committed: Awaited<ReturnType<typeof renameEntry>>;
       try {
-        committed = await renameEntry('default', git, locationOf(collection), slug, to, {
+        committed = await renameEntry(git, locationOf(collection), slug, to, {
           baseSha: operation.baseSha,
           operationId: operation.id,
         });
@@ -206,20 +206,20 @@ export async function duplicate(
       'Publish this entry before duplicating it',
     );
   const wanted = typeof body?.to === 'string' && body.to ? body.to : `${slug}-copy`;
-  const to = entryName('default', wanted, await takenNames(collection, database));
+  const to = entryName(wanted, await takenNames(collection, database));
   const drafted: Record<string, string> = {};
   if (body?.drafts === true)
     for (const { locale, path } of files) {
       const row = await loadDraft('default', database, path);
       if (row?.contents) drafted[locale] = row.contents;
     }
-  const copies = await duplicateEntry('default', git, locationOf(collection), slug, to, drafted);
+  const copies = await duplicateEntry(git, locationOf(collection), slug, to, drafted);
   await createDrafts(
     'default',
     database,
     git,
     copies.map((copy) => {
-      const values = parseEntry('default', copy.contents) as Record<string, unknown>;
+      const values = parseEntry(copy.contents) as Record<string, unknown>;
       delete values._i18n;
       values._status = 'hidden';
       return { path: copy.path, values };
@@ -292,7 +292,6 @@ export async function remove(
   const picked =
     answer.kind === 'entry'
       ? collectionEntries(
-          'default',
           index,
           String(answer.value ?? '').split('/')[0] ?? '',
           await overlayRows('default', database, index),
@@ -302,7 +301,6 @@ export async function remove(
   if (!commit_sha) commit_sha = await recoverOperationCommit('default', database, git, operation);
   if (!commit_sha) {
     const committed = await deleteEntry(
-      'default',
       git,
       locationOf(collection),
       slug,

@@ -42,9 +42,9 @@ async function startedFrom(
   const built = templates[collection]?.find((t) => t.name === name)?.data;
   const file =
     built === undefined ? await ctx.git().getFile(templatePath(collection, name)) : undefined;
-  const data = built ?? (file && parseEntry('default', file.contents));
+  const data = built ?? (file && parseEntry(file.contents));
   if (data === undefined) return undefined;
-  const values = regenerateIds('default', data) as Record<string, unknown>;
+  const values = regenerateIds(data) as Record<string, unknown>;
   for (const key of ['_i18n', '_locales', '_source', '_status', 'slug']) delete values[key];
   return values;
 }
@@ -84,10 +84,9 @@ export async function saveTemplate(
   const files = await entryFiles(git, collection, slug);
   // The language it is written in, judged by what is published; the baseline order where files disagree.
   const answer = entrySource(
-    'default',
     config.i18n,
     Object.fromEntries(
-      files.flatMap((f) => (f.file ? [[f.locale, parseEntry('default', f.file.contents)]] : [])),
+      files.flatMap((f) => (f.file ? [[f.locale, parseEntry(f.file.contents)]] : [])),
     ),
   );
   const from = [...(answer && 'locale' in answer ? [answer.locale] : []), ...sourceOrder()]
@@ -100,7 +99,7 @@ export async function saveTemplate(
       'Publish this entry before saving it as a template',
     );
   const wanted = typeof body?.to === 'string' && body.to ? body.to : slug;
-  const name = entryName('default', wanted, await templateNames(collection, database));
+  const name = entryName(wanted, await templateNames(collection, database));
   const retryKey = `template-saved:${collection}/${slug}:${name}`;
   const existing = await findOperation('default', database, retryKey);
   const completed = existing?.result as { commit_sha?: unknown; name?: unknown } | null;
@@ -110,7 +109,7 @@ export async function saveTemplate(
     completed.name === name
   )
     return Response.json({ name });
-  const values = withoutIds(parseEntry('default', from.file.contents)) as Record<string, unknown>;
+  const values = withoutIds(parseEntry(from.file.contents)) as Record<string, unknown>;
   for (const key of ['_i18n', '_locales', '_source', '_status', '_machine', 'slug'])
     delete values[key];
   const baseSha = existing?.baseSha ?? (await git.getHead());
@@ -130,7 +129,7 @@ export async function saveTemplate(
   if (!commit_sha) commit_sha = await recoverOperationCommit('default', database, git, operation);
   if (!commit_sha)
     ({ commit_sha } = await git.publish(
-      [{ path: templatePath(collection, name), contents: stringifyEntry('default', values) }],
+      [{ path: templatePath(collection, name), contents: stringifyEntry(values) }],
       {
         base_sha: operation.baseSha,
         message: operationMessage(
@@ -182,8 +181,8 @@ export async function createEntry(
     return new Response('No such template', { status: 404 });
   const starter = template ? await startedFrom(ctx, collection, template) : {};
   if (!starter) return new Response('No such template', { status: 404 });
-  const slug = entryName('default', title, await takenNames(collection, database));
-  const { fields } = formOf('default', formSchema(collected.schema));
+  const slug = entryName(title, await takenNames(collection, database));
+  const { fields } = formOf(formSchema(collected.schema));
   // The field the collection lists by is the one the title typed into the dialog belongs in.
   const named = collected.titleField ?? 'title';
   const values: Record<string, unknown> = { ...starter, _version: FORMAT_VERSION };
@@ -195,7 +194,7 @@ export async function createEntry(
     database,
     ctx.git(),
     path,
-    locales.length > 1 ? withSource('default', values, first) : values,
+    locales.length > 1 ? withSource(values, first) : values,
   );
   return Response.json({ slug });
 }

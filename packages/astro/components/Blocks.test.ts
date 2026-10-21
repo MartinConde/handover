@@ -17,7 +17,7 @@ const golden = readFileSync(
 const components = { hero: Hero, textSection: TextSection, columns: Columns, cta: Cta };
 const en = { 'cta-newsletter': { heading: 'Ready to move?', href: '/contact' } };
 const de = { 'cta-newsletter': { heading: 'Bereit umzuziehen?', href: '/de/kontakt' } };
-const blocksOf = (source: string) => (parseEntry('default', source) as { blocks: Block[] }).blocks;
+const blocksOf = (source: string) => (parseEntry(source) as { blocks: Block[] }).blocks;
 const canvas = {
   protocol: 1 as const,
   requestId: 'render-22',

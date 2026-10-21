@@ -62,10 +62,9 @@ export async function entryDiff(
     }),
   );
   const found = read.filter((f) => f !== undefined);
-  const parsed = (contents: string | undefined) => parseEntry('default', contents ?? '');
+  const parsed = (contents: string | undefined) => parseEntry(contents ?? '');
   return Response.json({
     groups: diffEntry(
-      'default',
       formFor(collection, slug),
       Object.fromEntries(found.map((f) => [f.locale, parsed(f.file?.contents)])),
       Object.fromEntries(found.map((f) => [f.locale, parsed(f.row?.contents ?? f.file?.contents)])),
@@ -99,12 +98,7 @@ export async function translatedFromView(
   return Response.json({
     from,
     translatedAt: typeof mark?.translatedAt === 'string' ? mark.translatedAt : undefined,
-    changed: sourceChanges(
-      'default',
-      formFor(collection, slug),
-      parseEntry('default', was),
-      loaded[from]?.data,
-    ),
+    changed: sourceChanges(formFor(collection, slug), parseEntry(was), loaded[from]?.data),
   });
 }
 
@@ -141,7 +135,7 @@ async function commitsUnder(
     found.push({ locale, ...read, ...(name !== slug ? { name } : {}) });
     const was = read.more
       ? undefined
-      : renamedFrom('default', read.commits.at(-1)?.message ?? '', collection, name);
+      : renamedFrom(read.commits.at(-1)?.message ?? '', collection, name);
     if (!was) break;
     name = was;
   }
@@ -213,7 +207,7 @@ export async function versionDiff(
     entryAt(git, collection, slug, from, fromName),
     entryAt(git, collection, slug, to, name),
   ]);
-  return Response.json({ groups: diffEntry('default', formFor(collection, slug), before, after) });
+  return Response.json({ groups: diffEntry(formFor(collection, slug), before, after) });
 }
 
 // `name` is what the files were called at that commit, where a rename has moved them since.
@@ -221,7 +215,7 @@ async function entryAt(git: GitClient, collection: string, slug: string, ref: st
   const read = await Promise.all(
     Object.entries(entryPaths(collection, name)).map(async ([locale, path]) => {
       const file = await git.getFile(path, ref);
-      return file ? ([locale, parseEntry('default', file.contents)] as const) : undefined;
+      return file ? ([locale, parseEntry(file.contents)] as const) : undefined;
     }),
   );
   return Object.fromEntries(read.filter((f) => f !== undefined));
@@ -253,7 +247,7 @@ export async function activityDiff(
         commit.parent ? entryAt(git, collection, slug, commit.parent) : {},
         entryAt(git, collection, slug, sha),
       ]);
-      return { key, groups: diffEntry('default', formFor(collection, slug), before, after) };
+      return { key, groups: diffEntry(formFor(collection, slug), before, after) };
     }),
   );
   return Response.json({ entries, more: keys.length - shown.length });
@@ -281,7 +275,7 @@ export async function restoreVersion(
   const read = await Promise.all(
     config.i18n.locales.map(async (locale) => {
       const file = await git.getFile(entryPath(collection, name, locale), sha);
-      const entry = file ? parseEntry('default', file.contents) : undefined;
+      const entry = file ? parseEntry(file.contents) : undefined;
       // An empty file at that commit parses to nothing, which is not a version of anything.
       return object(entry) ? { path: entryPath(collection, slug, locale), entry } : undefined;
     }),
@@ -291,7 +285,7 @@ export async function restoreVersion(
     return codedError(409, 'HISTORY_RESTORE_NO_FILE', 'That version has no file of this entry');
   let files: typeof found;
   try {
-    files = found.map((f) => ({ ...f, entry: migrateDocument('default', f.entry) }));
+    files = found.map((f) => ({ ...f, entry: migrateDocument(f.entry) }));
   } catch (err) {
     return codedError(
       409,
@@ -300,7 +294,7 @@ export async function restoreVersion(
     );
   }
   // The whole form, `slug` included: `formFor` strips the address but the file writes it.
-  const form = formOf('default', formSchema(schema));
+  const form = formOf(formSchema(schema));
   const database = ctx.db();
   const pending = await pendingLocales(collection, slug, database);
   const { paths } = await restoreDraft('default', database, git, form, files, session?.user.id);
@@ -459,7 +453,6 @@ export async function restore(
       const loaded = await entryLocales(ctx, collection, slug, config.i18n.locales);
       const written = Object.entries(loaded).filter(([, l]) => l.live);
       const { offered } = entryOffer(
-        'default',
         config.i18n.locales,
         (written[0]?.[1].data as { _locales?: unknown } | undefined)?._locales,
         written.map(([locale]) => locale),

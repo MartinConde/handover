@@ -279,17 +279,16 @@ test('a publish names the language each translation it commits was made from', a
 // The two ends of the done-when: the state an answer leaves behind is one that publishes.
 const resolved = (locales: string[]) => {
   drifted();
-  const form = formOf('default', formSchema(page));
+  const form = formOf(formSchema(page));
   const applied = applyDrift(
-    'default',
     form,
     ['en', 'de'],
-    { en: parseEntry('default', home.en), de: parseEntry('default', home.de) },
+    { en: parseEntry(home.en), de: parseEntry(home.de) },
     [{ path: 'blocks[_id=z9y8x7w6]', locales }],
   );
   const written = Object.entries(applied).map(([locale, data]) => ({
     path: `src/content/pages/${locale}/home.yaml`,
-    contents: stringifyEntry('default', data),
+    contents: stringifyEntry(data),
     updatedAt: 1755864000000,
   }));
   for (const row of written) files[row.path] = row.contents;

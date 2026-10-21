@@ -269,7 +269,7 @@ export async function preview(ctx: Ctx, astro: AstroContent<string>): Promise<Re
       : answer(ctx.url, 401, PREVIEW_TEXT[locale].signIn, locale);
   let snapshot: CanvasSnapshot | undefined;
   if (ctx.request.method === 'POST') {
-    if (!new Set(['editor', 'owner']).has(roleOf('default', session.user)))
+    if (!new Set(['editor', 'owner']).has(roleOf(session.user)))
       return canvasAnswer(403, 'This account cannot edit content.');
     const parsed = await canvasRequest(ctx.request);
     if (parsed instanceof Response) return parsed;
@@ -282,12 +282,12 @@ export async function preview(ctx: Ctx, astro: AstroContent<string>): Promise<Re
       ? canvasAnswer(status, message, snapshot, more)
       : answer(ctx.url, status, message, locale, more);
   const path = `${siteBase(config.i18n)}/${ctx.params.path ?? ''}`;
-  let target = previewTarget('default', config.i18n, config.collections, path);
+  let target = previewTarget(config.i18n, config.collections, path);
   // An entry served where another collection has its index is still that entry's page in Canvas.
   const own = snapshot?.entry.collection;
   if (own && target?.address === undefined && Object.hasOwn(config.collections, own)) {
     const route = config.collections[own]?.route;
-    target = previewTarget('default', config.i18n, { [own]: { route } }, path) ?? target;
+    target = previewTarget(config.i18n, { [own]: { route } }, path) ?? target;
   }
   const loaderMissing = (message: string) =>
     fail(500, message, { code: 'CANVAS_LOADER_MISSING', detail: message });
@@ -310,8 +310,7 @@ export async function preview(ctx: Ctx, astro: AstroContent<string>): Promise<Re
 
   const transient = snapshot ? snapshotFiles(snapshot) : [];
   const source = draftSource(
-    'default',
-    staticSource('default', astro),
+    staticSource(astro),
     [...transient, ...(await draftFiles('default', db(), built))],
     validate,
   );
@@ -326,7 +325,6 @@ export async function preview(ctx: Ctx, astro: AstroContent<string>): Promise<Re
       const resolved =
         matchesRoute && !index
           ? await entryAt(
-              'default',
               source,
               config,
               target.collection,

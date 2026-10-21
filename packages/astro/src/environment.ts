@@ -11,7 +11,7 @@ export function gitClient(): GitClient {
       'GitHub App is not configured: set GITHUB_APP_ID, GITHUB_INSTALLATION_ID, GITHUB_PRIVATE_KEY and GITHUB_REPO (owner/repo) with `wrangler secret put`',
     );
   }
-  return createGitClient('default', {
+  return createGitClient({
     appId: e.GITHUB_APP_ID,
     installationId: e.GITHUB_INSTALLATION_ID,
     privateKey: e.GITHUB_PRIVATE_KEY.replace(/\\n/g, '\n'),
@@ -47,7 +47,7 @@ export const NO_BUCKET =
   'No bucket is configured: set R2_ACCOUNT_ID and R2_BUCKET in wrangler.jsonc, and R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY with `wrangler secret put`';
 
 export function db(): Db {
-  return openDb('default', (env as { DB?: Parameters<typeof openDb>[1] }).DB);
+  return openDb((env as { DB?: Parameters<typeof openDb>[0] }).DB);
 }
 
 /** Names the half of the wiring that is missing rather than saying email is off. */

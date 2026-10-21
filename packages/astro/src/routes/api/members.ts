@@ -29,7 +29,7 @@ export async function account(
   session: App.Locals['handover'],
 ): Promise<Response> {
   if (!session) return new Response('Unauthorized', { status: 401 });
-  const facts = await accountFacts('default', ctx.db(), session.user.id, session.sessionId);
+  const facts = await accountFacts(ctx.db(), session.user.id, session.sessionId);
   // The same condition that mounts the email change, so the page offers no form that can only fail.
   return Response.json({ ...facts, canChangeEmail: loginMethods().emailLink });
 }
@@ -153,7 +153,7 @@ export async function invite(
   let email: string;
   try {
     // Three named values: a spread body could reach the `data` record that writes user columns.
-    const created = await memberApi('default', auth).createUser({
+    const created = await memberApi(auth).createUser({
       body: { email: body.email.trim(), name: '', role },
       headers: request.headers,
     });
@@ -170,7 +170,7 @@ export async function invite(
     return refused(err);
   }
   try {
-    await memberApi('default', auth).signInMagicLink({
+    await memberApi(auth).signInMagicLink({
       body: { email, callbackURL: `${siteBase(config.i18n)}/admin/account` },
       headers: request.headers,
     });
@@ -199,10 +199,9 @@ export async function resendInvite(
   const send = mailer();
   if (!send) return Response.json({ error: missingMailer() }, { status: 503 });
   // Resending is how an owner takes back an invite sent to the wrong mailbox.
-  await dropEmailLinks('default', ctx.db(), member.email);
+  await dropEmailLinks(ctx.db(), member.email);
   try {
     await memberApi(
-      'default',
       createAuth(url, cfContext, {
         invite: true,
         request,
@@ -240,11 +239,11 @@ export async function setMemberRole(
   if (!member) return notFound();
   // Demoting an owner runs in the statement that holds the rule, not `setRole` behind a count.
   if (role === 'editor' && member.role === 'owner') {
-    if (!(await demoteOwner('default', database, id)))
+    if (!(await demoteOwner(database, id)))
       return codedError(400, 'MEMBER_LAST_OWNER', 'There must be at least one owner');
   } else {
     try {
-      await memberApi('default', createAuth(url, cfContext)).setRole({
+      await memberApi(createAuth(url, cfContext)).setRole({
         body: { userId: id, role },
         headers: request.headers,
       });
@@ -278,10 +277,10 @@ export async function removeMember(
   const member = (await memberList('default', database)).find((row) => row.id === id);
   if (!member) return notFound();
   // An owner leaves the count before the table, so two owners removing each other can't both win.
-  if (member.role === 'owner' && !(await demoteOwner('default', database, id)))
+  if (member.role === 'owner' && !(await demoteOwner(database, id)))
     return codedError(400, 'MEMBER_LAST_OWNER', 'There must be at least one owner');
   try {
-    await memberApi('default', createAuth(url, cfContext)).removeUser({
+    await memberApi(createAuth(url, cfContext)).removeUser({
       body: { userId: id },
       headers: request.headers,
     });
@@ -291,7 +290,7 @@ export async function removeMember(
   // Their sessions went with the row; release their entries so nobody waits on them.
   await releaseLocks('default', database, id);
   // An unopened link would sign in whoever is invited again under the address.
-  await dropEmailLinks('default', database, member.email);
+  await dropEmailLinks(database, member.email);
   // The `user` row is gone by the time anybody reads this, so the address lives in the event.
   await logActivity('default', database, {
     userId: session.user.id,

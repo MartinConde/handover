@@ -82,9 +82,9 @@ async function refusedPaths(ctx: RequestContext, paths: string[]) {
     if (!schema) continue;
     const form = formFor(collection, slug);
     const locales = localeData(await entryLocales(ctx, collection, slug, config.i18n.locales));
-    const source = entrySource('default', config.i18n, locales);
+    const source = entrySource(config.i18n, locales);
     if (source && 'problem' in source) unresolved.push(...files);
-    else if (driftReport('default', form, locales).length) drifted.push(...files);
+    else if (driftReport(form, locales).length) drifted.push(...files);
   }
   return { drifted, unresolved };
 }
@@ -146,14 +146,14 @@ async function entryAt(ctx: RequestContext, head: string, key: string, pending: 
         draft,
         file,
         published: Boolean(file),
-        data: contents === undefined ? undefined : contents ? parseEntry('default', contents) : {},
+        data: contents === undefined ? undefined : contents ? parseEntry(contents) : {},
       };
     }),
   );
   const effective = Object.fromEntries(
     files.flatMap(({ locale, data }) => (data === undefined ? [] : [[locale, data]])),
   );
-  const source = entrySource('default', config.i18n, effective);
+  const source = entrySource(config.i18n, effective);
   return { files, source: source && 'locale' in source ? source.locale : undefined };
 }
 
@@ -175,12 +175,12 @@ const schemaFor = (path: string) => {
 const problemsOf = (row: Pick<Draft, 'path' | 'contents'>) => {
   if (!row.contents) return [];
   const unbuildable = [
-    ...yamlErrors('default', row.path, row.contents),
-    ...refErrors('default', row.path, row.contents, Object.keys(config.globals ?? {})),
+    ...yamlErrors(row.path, row.contents),
+    ...refErrors(row.path, row.contents, Object.keys(config.globals ?? {})),
   ].map((message) => ({ path: '', message }));
   const schema = schemaFor(row.path);
   return schema
-    ? [...unbuildable, ...entryProblems(schema, parseEntry('default', row.contents))]
+    ? [...unbuildable, ...entryProblems(schema, parseEntry(row.contents))]
     : unbuildable;
 };
 
@@ -282,7 +282,7 @@ export async function prepublishChecks(ctx: RequestContext, request: Request): P
   const overlaid: ContentIndex = Object.fromEntries(
     Object.keys(config.collections).map((name) => [
       name,
-      collectionEntries('default', index, name, overlay, config.collections[name]?.titleField),
+      collectionEntries(index, name, overlay, config.collections[name]?.titleField),
     ]),
   );
   const going = new Map<string, Record<string, string>>();

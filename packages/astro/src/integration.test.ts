@@ -527,7 +527,7 @@ test('a _templates/ file is not in the built collection', async () => {
         '.yaml',
         {
           getEntryInfo: async ({ contents }: { contents: string }) => ({
-            data: parseEntry('default', contents),
+            data: parseEntry(contents),
             body: '',
           }),
         },

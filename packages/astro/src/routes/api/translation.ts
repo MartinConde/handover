@@ -56,11 +56,7 @@ export async function createTranslation(
     return codedError(409, 'ENTRY_SOURCE_TARGET_OFF', `This entry is not offered in ${locale}`);
   const form = formFor(collection, slug);
   // Stamped even on an unrecorded entry: adding a language must never move the source.
-  const made = withSource(
-    'default',
-    syncLocale('default', form, locale, { before: data, after: data }, {}),
-    source,
-  );
+  const made = withSource(syncLocale(form, locale, { before: data, after: data }, {}), source);
   if (offered.length < config.i18n.locales.length) made._locales = offered;
   try {
     await createDraft(
@@ -113,11 +109,9 @@ export async function machineTranslate(
   const named = Array.isArray(body?.paths) ? body.paths.map(String) : undefined;
   const form = formFor(collection, slug);
   // A pre-fill is for the gaps; a Translate button names its field whether filled or not.
-  const written = new Set(
-    translatableText('default', form, loaded[locale].data).map((v) => v.path),
-  );
-  const wanted = translatableText('default', form, parseEntry('default', source.contents)).filter(
-    (v) => (named ? named.includes(v.path) : !written.has(v.path)),
+  const written = new Set(translatableText(form, loaded[locale].data).map((v) => v.path));
+  const wanted = translatableText(form, parseEntry(source.contents)).filter((v) =>
+    named ? named.includes(v.path) : !written.has(v.path),
   );
   if (wanted.length) {
     const database = ctx.db();

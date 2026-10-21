@@ -13,7 +13,7 @@ const golden = readFileSync(
 test('<Markdown /> renders the richtext golden without warnings', async () => {
   const warn = vi.spyOn(console, 'warn');
   const container = await AstroContainer.create();
-  const { body } = parseEntry('default', golden) as { body: string };
+  const { body } = parseEntry(golden) as { body: string };
   const html = await container.renderToString(Markdown, { props: { content: body } });
 
   expect(html).toContain('<h2 id="the-house">The house</h2>');

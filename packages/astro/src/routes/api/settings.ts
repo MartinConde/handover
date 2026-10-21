@@ -128,7 +128,7 @@ export async function setIntegration(
     // A one-language site has nothing to translate into, so the key is stored untried.
     if (to) {
       try {
-        await deeplTranslate('default', value)(['Hello'], config.i18n.defaultLocale, to);
+        await deeplTranslate(value)(['Hello'], config.i18n.defaultLocale, to);
         detail = `It translated "Hello" into ${to}.`;
       } catch (err) {
         return codedError(502, 'DIAGNOSTIC_REFUSED', (err as Error).message);
@@ -243,8 +243,7 @@ export async function connection(
       // A stored key that cannot be opened means the secret changed under it.
       return unset((err as Error).message);
     }
-    const translate =
-      config.i18n.translate ?? (stored ? deeplTranslate('default', stored) : undefined);
+    const translate = config.i18n.translate ?? (stored ? deeplTranslate(stored) : undefined);
     if (!translate)
       return off(
         'DIAGNOSTIC_TRANSLATION_OFF',
@@ -322,7 +321,6 @@ export async function simulateConflict(
     // The index lags a build, so a fixed name would collide with the last run's entry.
     const head = await git.getHead();
     const slug = entryName(
-      'default',
       `${SCRATCH} ${head.slice(0, 7)}`,
       await takenNames(collection, database),
     );
@@ -344,7 +342,7 @@ export async function simulateConflict(
     if (fourth) ours[fourth] = 'Changed by you, and only you';
     await saveDraft('default', database, git, path, ours);
     const { commit_sha } = await git.publish(
-      [{ path, contents: stringifyEntry('default', { _version: FORMAT_VERSION, ...theirs }) }],
+      [{ path, contents: stringifyEntry({ _version: FORMAT_VERSION, ...theirs }) }],
       { base_sha: seeded.commit_sha, message: `Edit ${slug} in code` },
     );
     return Response.json({ entry: `${collection}/${slug}`, path, commit_sha });

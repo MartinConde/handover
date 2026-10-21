@@ -31,7 +31,7 @@ test('the scalar field types are detected from real Zod output', () => {
     button: link.optional(),
   });
   const json = z.toJSONSchema(schema, { unrepresentable: 'any' }) as JsonSchema;
-  expect(fieldsFrom('default', json).map((f) => [f.path.join('.'), f.type])).toEqual([
+  expect(fieldsFrom(json).map((f) => [f.path.join('.'), f.type])).toEqual([
     ['title', 'text'],
     ['area', 'number'],
     ['sold', 'boolean'],
@@ -71,7 +71,7 @@ test('the structured field types are detected from real Zod output', () => {
     agent: reference('agents'),
   });
   const json = z.toJSONSchema(schema, { unrepresentable: 'any' }) as JsonSchema;
-  expect(fieldsFrom('default', json)).toEqual([
+  expect(fieldsFrom(json)).toEqual([
     {
       path: ['hero'],
       label: 'Hero',
@@ -144,7 +144,7 @@ test('the 1.5 golden parses through the registry, three levels deep', async () =
     new URL('../../core/test/golden/blocks.yaml', import.meta.url),
     'utf8',
   );
-  const data = parseEntry('default', yaml);
+  const data = parseEntry(yaml);
   expect(page.safeParse(data).success).toBe(true);
 });
 
@@ -173,7 +173,7 @@ test('group, array and blocks are detected from real Zod output', () => {
     blocks: blocks(() => registry),
   });
   const json = z.toJSONSchema(schema, { unrepresentable: 'any' }) as JsonSchema;
-  expect(fieldsFrom('default', json)).toEqual([
+  expect(fieldsFrom(json)).toEqual([
     {
       path: ['address'],
       label: 'Address',
@@ -221,7 +221,7 @@ test('a cms.config.ts without an i18n block is refused before the build', () => 
 
 test('richtext is detected with its tier, basic by default', () => {
   const schema = z.object({ body: richtext('full'), note: richtext().optional() });
-  expect(fieldsFrom('default', z.toJSONSchema(schema) as JsonSchema)).toEqual([
+  expect(fieldsFrom(z.toJSONSchema(schema) as JsonSchema)).toEqual([
     { path: ['body'], label: 'Body', type: 'richtext', required: true, tier: 'full' },
     { path: ['note'], label: 'Note', type: 'richtext', required: false, tier: 'basic' },
   ]);
@@ -317,7 +317,7 @@ test('defineConfig returns a valid config unchanged', () => {
 
 const golden = (name: string) =>
   readFile(new URL(`../../core/test/golden/${name}.yaml`, import.meta.url), 'utf8').then((y) =>
-    parseEntry('default', y),
+    parseEntry(y),
   );
 
 test('the navigation golden parses: menus[].items[] nest through children', async () => {
@@ -327,7 +327,7 @@ test('the navigation golden parses: menus[].items[] nest through children', asyn
 });
 
 test('the navigation global is one menus field: the walker stops at the shape it owns', () => {
-  const { fields } = formOf('default', formSchema(navigation));
+  const { fields } = formOf(formSchema(navigation));
   expect(fields).toEqual([
     { path: ['menus'], label: 'Menus', type: 'menus', required: true, i18n: 'duplicate' },
   ]);
@@ -335,7 +335,7 @@ test('the navigation global is one menus field: the walker stops at the shape it
 
 // Labels are per language, so a row reaches a language before anybody typed its word for it.
 test('an item synced into another language before it is translated is a valid file', () => {
-  const form = formOf('default', formSchema(navigation));
+  const form = formOf(formSchema(navigation));
   const en = {
     menus: [
       {
@@ -346,7 +346,7 @@ test('an item synced into another language before it is translated is a valid fi
     ],
   };
 
-  const de = syncLocale('default', form, 'de', { before: { menus: [] }, after: en }, {});
+  const de = syncLocale(form, 'de', { before: { menus: [] }, after: en }, {});
 
   expect(de.menus).toEqual([
     {
@@ -362,7 +362,7 @@ test('an item synced into another language before it is translated is a valid fi
 
 // The form is JSON on its way to the browser, and a cycle in it has no end.
 test('the form a browser is handed carries no cycle', () => {
-  expect(() => JSON.stringify(formOf('default', formSchema(navigation)))).not.toThrow();
+  expect(() => JSON.stringify(formOf(formSchema(navigation)))).not.toThrow();
 });
 
 test('a menu item link is a bare target: no label or newTab inside it', () => {
@@ -408,7 +408,7 @@ test('defineNavigation takes the variants it declares and refuses any other', ()
   expect(declared.safeParse(withVariant('wide')).success).toBe(false);
   expect(navigation.safeParse(withVariant('mega')).success).toBe(false);
   // The admin offers them by their labels, so the form carries them.
-  expect(formOf('default', formSchema(declared)).fields).toEqual([
+  expect(formOf(formSchema(declared)).fields).toEqual([
     {
       path: ['menus'],
       label: 'Menus',
@@ -422,10 +422,10 @@ test('defineNavigation takes the variants it declares and refuses any other', ()
 
 // A variant is how the item looks, not a word, so every language has the same one.
 test("an item's variant reaches another language with the item", () => {
-  const form = formOf('default', formSchema(defineNavigation({ variants: wide })));
+  const form = formOf(formSchema(defineNavigation({ variants: wide })));
   const en = withVariant('mega');
 
-  const de = syncLocale('default', form, 'de', { before: { menus: [] }, after: en }, {});
+  const de = syncLocale(form, 'de', { before: { menus: [] }, after: en }, {});
 
   expect(de.menus).toEqual([
     {
@@ -452,10 +452,10 @@ test('only an index item can list its entries', () => {
 });
 
 test('listing its entries reaches another language with the item', () => {
-  const form = formOf('default', formSchema(navigation));
+  const form = formOf(formSchema(navigation));
   const en = listing({ type: 'index', collection: 'fields' });
 
-  const de = syncLocale('default', form, 'de', { before: { menus: [] }, after: en }, {});
+  const de = syncLocale(form, 'de', { before: { menus: [] }, after: en }, {});
 
   expect(de.menus).toEqual([
     {
@@ -498,7 +498,7 @@ test('formSchema maps z.date() to a date field and a transform to its input type
     slug: z.string().transform((s) => s.toLowerCase()),
     tag: z.custom<string>(() => true).meta({ handover: 'text' }),
   });
-  expect(fieldsFrom('default', formSchema(schema))).toEqual([
+  expect(fieldsFrom(formSchema(schema))).toEqual([
     { path: ['when'], label: 'When', type: 'date', required: true },
     { path: ['slug'], label: 'Slug', type: 'text', required: true },
     { path: ['tag'], label: 'Tag', type: 'text', required: true },
@@ -510,7 +510,7 @@ test('a label names the field, on a plain type and on top of a helper', () => {
     availableFrom: z.iso.date(),
     seo: seo.meta({ label: 'SEO' }).optional(),
   });
-  expect(fieldsFrom('default', formSchema(schema)).map((f) => [f.type, f.label])).toEqual([
+  expect(fieldsFrom(formSchema(schema)).map((f) => [f.type, f.label])).toEqual([
     ['date', 'Available from'],
     ['seo', 'SEO'],
   ]);
@@ -522,7 +522,7 @@ test('an enum names its options through .meta({ options })', () => {
       .enum(['sale', 'rent'])
       .meta({ options: { sale: { en: 'For sale', de: 'Zu verkaufen' } } }),
   });
-  expect(fieldsFrom('default', formSchema(schema))).toMatchObject([
+  expect(fieldsFrom(formSchema(schema))).toMatchObject([
     { type: 'select', optionLabels: { sale: { en: 'For sale', de: 'Zu verkaufen' } } },
   ]);
 });
@@ -532,7 +532,7 @@ test('a field marked advanced says so in the form', () => {
     title: z.string(),
     padded: z.boolean().optional().meta({ label: 'Space below', advanced: true }),
   });
-  expect(fieldsFrom('default', formSchema(schema))).toEqual([
+  expect(fieldsFrom(formSchema(schema))).toEqual([
     { path: ['title'], label: 'Title', type: 'text', required: true },
     { path: ['padded'], label: 'Space below', type: 'boolean', required: false, advanced: true },
   ]);
@@ -563,8 +563,8 @@ test('the demo schema produces a full descriptor tree', () => {
     internalNote: z.string().optional().meta({ i18n: false }),
   });
   const form = {
-    listings: formOf('default', formSchema(listing)),
-    pages: formOf('default', formSchema(page)),
+    listings: formOf(formSchema(listing)),
+    pages: formOf(formSchema(page)),
   };
   expect(JSON.stringify(form)).not.toContain('unsupported');
 });
@@ -576,7 +576,7 @@ test('a field says how it translates through .meta({ i18n })', () => {
     notes: z.string().optional().meta({ i18n: false }),
     hero: image({ ratio: '16:9' }).meta({ i18n: 'duplicate' }).optional(),
   });
-  expect(fieldsFrom('default', formSchema(schema)).map((f) => [f.path[0], f.i18n])).toEqual([
+  expect(fieldsFrom(formSchema(schema)).map((f) => [f.path[0], f.i18n])).toEqual([
     ['title', undefined],
     ['price', 'duplicate'],
     ['notes', false],

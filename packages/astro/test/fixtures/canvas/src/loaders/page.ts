@@ -13,17 +13,17 @@ export { default as Page } from '../components/FixturePage.astro';
 type Page = z.infer<typeof page>;
 type Source = ContentSource<{ pages: Page; globals: unknown }>;
 
-export const staticSource: Source = createStaticSource('default', {
+export const staticSource: Source = createStaticSource({
   getEntry: async (collection, id) => getEntry(collection, id),
   getCollection: (collection) => getCollection(collection),
 });
 
 export async function load(source: Source, { locale, slug }: { locale: string; slug: string }) {
-  const entry = await entryAt('default', source, cms, 'pages', locale, slug);
+  const entry = await entryAt(source, cms, 'pages', locale, slug);
   if (!entry) return undefined;
   return {
     data: entry.data,
     locale,
-    globals: await globalsAt('default', source, locale, { blocks: entry.data.blocks }),
+    globals: await globalsAt(source, locale, { blocks: entry.data.blocks }),
   };
 }

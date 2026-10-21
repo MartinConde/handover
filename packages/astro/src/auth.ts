@@ -51,7 +51,7 @@ function smtpMailer(host: string, port: number, user: string, pass: string, from
       },
       {
         to,
-        from: senderAddress('default', from),
+        from: senderAddress(from),
         subject,
         text,
         ...(html ? { html } : {}),
@@ -84,12 +84,10 @@ export function mailer(): Mailer | undefined {
   }
   if (configured.provider === 'cloudflare') {
     const binding = (env as { EMAIL?: EmailSender }).EMAIL;
-    return binding ? cloudflareMailer('default', binding, configured.from) : undefined;
+    return binding ? cloudflareMailer(binding, configured.from) : undefined;
   }
   if (configured.provider === 'resend')
-    return e.RESEND_API_KEY
-      ? resendMailer('default', e.RESEND_API_KEY, configured.from)
-      : undefined;
+    return e.RESEND_API_KEY ? resendMailer(e.RESEND_API_KEY, configured.from) : undefined;
   return undefined;
 }
 

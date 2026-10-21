@@ -184,7 +184,7 @@ export async function emitRedirects(
   const path = 'src/content/redirects.yaml';
   const source = await readFile(new URL(path, root), 'utf8').catch(() => undefined);
   if (source === undefined) return 0;
-  const parsed = redirects.safeParse(parseEntry('default', source));
+  const parsed = redirects.safeParse(parseEntry(source));
   if (!parsed.success) {
     const at = (p: PropertyKey[]) =>
       p
@@ -195,10 +195,7 @@ export async function emitRedirects(
     );
   }
   await mkdir(clientDir, { recursive: true });
-  await appendFile(
-    new URL('_redirects', clientDir),
-    redirectsText('default', parsed.data.rules, slash, base),
-  );
+  await appendFile(new URL('_redirects', clientDir), redirectsText(parsed.data.rules, slash, base));
   return parsed.data.rules.length;
 }
 
@@ -214,28 +211,19 @@ export async function emitSitemap(
   const at = (name: string) =>
     site ? new URL(`${site.i18n.base ?? ''}/${name}`, site.base).href : undefined;
   if (site) {
-    const pages = sitemapFrom('default', await contentFiles(root), site, await modifiedAt(root));
+    const pages = sitemapFrom(await contentFiles(root), site, await modifiedAt(root));
     for (const locale of site.i18n.locales) {
       const name = `sitemap-${locale}.xml`;
-      await writeFile(new URL(name, clientDir), sitemapXml('default', pages[locale] ?? []));
+      await writeFile(new URL(name, clientDir), sitemapXml(pages[locale] ?? []));
       written.push(name);
     }
     const index = new URL('sitemap-index.xml', clientDir);
-    await writeFile(
-      index,
-      sitemapIndexXml(
-        'default',
-        written.map((name) => at(name) ?? name),
-      ),
-    );
+    await writeFile(index, sitemapIndexXml(written.map((name) => at(name) ?? name)));
     written.push('sitemap-index.xml');
   }
   const own = await readFile(new URL('robots.txt', clientDir), 'utf8').catch(() => undefined);
   if (own === undefined) {
-    await writeFile(
-      new URL('robots.txt', clientDir),
-      robotsText('default', at('sitemap-index.xml')),
-    );
+    await writeFile(new URL('robots.txt', clientDir), robotsText(at('sitemap-index.xml')));
     written.push('robots.txt');
   }
   return written;
@@ -251,7 +239,7 @@ export async function modifiedAt(root: URL): Promise<Map<string, string>> {
   const shallow = await git('rev-parse', '--is-shallow-repository').catch(() => 'true');
   if (shallow.trim() === 'true') return new Map();
   const log = await git('log', '--format=%cI', '--name-only', '--relative', '--', 'src/content');
-  return modifiedFrom('default', log);
+  return modifiedFrom(log);
 }
 
 /** Every `.yaml` under `src/content/`, so a misplaced file is named by the build, not missed. */
@@ -302,16 +290,16 @@ export async function contentErrors(
   const files = await contentFiles(root);
   const paths = new Set(files.map((f) => f.path));
   return [
-    ...contentPathErrors('default', paths),
+    ...contentPathErrors(paths),
     ...files.flatMap((f) => {
       const name = GLOBAL_FILE.exec(f.path)?.[1];
       const schema = name && Object.hasOwn(globals, name) ? globals[name] : undefined;
       return [
-        ...timestampErrors('default', f.path, f.contents),
-        ...refErrors('default', f.path, f.contents, Object.keys(globals)),
+        ...timestampErrors(f.path, f.contents),
+        ...refErrors(f.path, f.contents, Object.keys(globals)),
         // Astro's own schema for globals cannot tell one file from another.
         ...(schema
-          ? entryProblems(schema, loadedEntry('default', f.contents)).map(
+          ? entryProblems(schema, loadedEntry(f.contents)).map(
               (p) => `${f.path} › ${p.path}: ${p.message}`,
             )
           : []),
@@ -335,12 +323,9 @@ export async function buildIndex(
   files: ContentFile[],
   titleFields: TitleFields = {},
 ): Promise<ContentIndex> {
-  const errors = contentPathErrors(
-    'default',
-    files.map((f) => f.path),
-  );
+  const errors = contentPathErrors(files.map((f) => f.path));
   if (errors.length) throw new Error(errors.join('\n'));
-  return indexFrom('default', files, titleFields);
+  return indexFrom(files, titleFields);
 }
 
 /** Built the same way in the build and the Worker; a localized `slug` stays out of the hash. */
@@ -349,7 +334,7 @@ export function entryForm(cms: HandoverConfig, collection: string, name: string)
     (collection === 'globals' ? cms.globals?.[name] : undefined) ??
     cms.collections[collection]?.schema;
   if (!schema) return undefined;
-  const form = formOf('default', formSchema(schema));
+  const form = formOf(formSchema(schema));
   if (!cms.collections[collection]?.localizedSlugs) return form;
   return { ...form, fields: form.fields.filter((f) => f.path[0] !== 'slug') };
 }
@@ -554,12 +539,12 @@ export default function handover(cms: HandoverConfig): AstroIntegration {
                   const files = await contentFiles(config.root);
                   const index = await buildIndex(files, titleFields);
                   // Read here so the admin never lists or reads the repository per page load.
-                  const templates = templatesFrom('default', files);
-                  const uses = mediaUsesFrom('default', files);
+                  const templates = templatesFrom(files);
+                  const uses = mediaUsesFrom(files);
                   const formFor = (collection: string, name: string) =>
                     entryForm(cms, collection, name);
-                  const stale = await staleFrom('default', cms.i18n, files, formFor);
-                  const texts = textsFrom('default', cms.i18n, files, formFor);
+                  const stale = await staleFrom(cms.i18n, files, formFor);
+                  const texts = textsFrom(cms.i18n, files, formFor);
                   const scripts = await inlineScripts(config.root);
                   return `export default JSON.parse(${JSON.stringify(JSON.stringify(index))});
 export const preview = ${preview};

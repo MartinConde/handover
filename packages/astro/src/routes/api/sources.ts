@@ -45,7 +45,7 @@ interface Unrecorded {
 
 type Data = Record<string, unknown>;
 const asData = (contents: string): Data => {
-  const data = parseEntry('default', contents);
+  const data = parseEntry(contents);
   return object(data) ? data : {};
 };
 // Only a complete mark is judged stale, as in core's `staleLocales`.
@@ -102,7 +102,7 @@ async function unrecorded(
     const effective = Object.fromEntries(
       present.map((l) => [l, asData(entry.drafted[l] || entry.published[l] || '')]),
     );
-    const answer = entrySource('default', config.i18n, effective);
+    const answer = entrySource(config.i18n, effective);
     if (present.length < 2 || !answer || 'problem' in answer || answer.recorded) continue;
     const source = answer.locale;
     // A source that is only a draft is recorded when it publishes, or the commit would name a missing file.
@@ -110,17 +110,14 @@ async function unrecorded(
     const committed = present.filter((l) => l in entry.published);
     const data = Object.fromEntries(committed.map((l) => [l, asData(entry.published[l] ?? '')]));
     // The source is written without a mark of its own, as `provenance` clears the one it moves to.
-    const stamped = stringifyEntry(
-      'default',
-      withMark(withSource('default', data[source], source), undefined),
-    );
+    const stamped = stringifyEntry(withMark(withSource(data[source], source), undefined));
     const blob = await blobSha(stamped);
     const form = formFor(collection, slug);
     const marks: Record<string, unknown> = {};
     const others = committed.filter((l) => l !== source);
     for (const from of new Set(others.map((l) => namedSource(data[l])))) {
       if (!from || from === source) continue;
-      const out = await provenance('default', form, data, { from, to: source, blob, at });
+      const out = await provenance(form, data, { from, to: source, blob, at });
       for (const l of others) if (namedSource(data[l]) === from) marks[l] = out[l];
     }
     const next = Object.fromEntries(
@@ -148,10 +145,7 @@ async function unrecorded(
       files: committed.map((l) => ({
         path: entryPath(collection, slug, l),
         was: entry.published[l] ?? '',
-        contents:
-          l === source
-            ? stamped
-            : stringifyEntry('default', withSource('default', next[l], source)),
+        contents: l === source ? stamped : stringifyEntry(withSource(next[l], source)),
       })),
     });
   }

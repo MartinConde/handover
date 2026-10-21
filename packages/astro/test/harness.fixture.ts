@@ -746,7 +746,7 @@ export function coreMock(original: Record<string, unknown>) {
     openDraft: async (_site: string, _db: unknown, path: string) => rows[path] ?? state.draft,
     memberList: async () => state.memberRows,
     // The real UPDATE holds the rule and is core's; the route must ask it before removing anybody.
-    demoteOwner: async (_site: string, _db: unknown, id: string) => {
+    demoteOwner: async (_db: unknown, id: string) => {
       const memberRows = state.memberRows;
       const target = memberRows.find((row) => row.id === id);
       if (target?.role !== 'owner') return false;
@@ -769,7 +769,7 @@ export function coreMock(original: Record<string, unknown>) {
     },
     accountLocale: async () => null,
     accountFacts: async (..._args: unknown[]) => {
-      state.asked = _args.slice(2);
+      state.asked = _args.slice(1);
       return { hasPassword: true, sessions: [] };
     },
     claimLock: async (_site: string, _db: unknown, entry: string, userId: string, tab: string) => {

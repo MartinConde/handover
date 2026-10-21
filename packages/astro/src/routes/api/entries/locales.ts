@@ -96,10 +96,10 @@ export async function offering(
   const effective = Object.fromEntries(
     capturedFiles.flatMap(({ locale, file }, index) => {
       const contents = capturedRows[index]?.contents || file?.contents;
-      return contents || file ? [[locale, parseEntry('default', contents ?? '') ?? {}]] : [];
+      return contents || file ? [[locale, parseEntry(contents ?? '') ?? {}]] : [];
     }),
   );
-  const resolved = entrySource('default', config.i18n, effective);
+  const resolved = entrySource(config.i18n, effective);
   if (resolved && 'problem' in resolved) return sourceRefusal(resolved, effective);
   // A change to the set of files is when an inferred source must be frozen into the ones kept.
   const stamp =
@@ -138,7 +138,6 @@ export async function offering(
     const picked =
       answer.kind === 'entry'
         ? collectionEntries(
-            'default',
             index,
             String(answer.value ?? '').split('/')[0] ?? '',
             await overlayRows('default', database, index),
@@ -164,7 +163,6 @@ export async function offering(
     let kept: { path: string; contents: string }[];
     if (!commit_sha) {
       const committed = await deleteLocales(
-        'default',
         git,
         locationOf(collection),
         slug,
@@ -248,7 +246,7 @@ async function takenAddresses(
   slug: string,
 ): Promise<string[]> {
   const rows = await overlayRows('default', ctx.db(), index);
-  return collectionEntries('default', index, collection, rows)
+  return collectionEntries(index, collection, rows)
     .filter((entry) => entry.id !== slug)
     .flatMap((entry) => [entry.id, entry.locales[locale]?.slug ?? '']);
 }
@@ -266,7 +264,7 @@ export async function address(
   if (!collected?.localizedSlugs || !config.i18n.locales.includes(locale)) return notFound();
   const body = (await readJson(request)) as { address?: unknown } | undefined;
   const wanted = typeof body?.address === 'string' ? body.address.trim() : '';
-  const bad = addressError('default', wanted);
+  const bad = addressError(wanted);
   if (bad)
     return codedError(
       422,
@@ -290,15 +288,15 @@ export async function address(
       { address: after, collection, locale },
     );
   // Only a published address can have been followed, and only via the collection's route.
-  const was = file ? entryAddress('default', parseEntry('default', file.contents), slug) : after;
-  const from = entryUrl('default', config.i18n, collected.route, was, locale);
-  const to = entryUrl('default', config.i18n, collected.route, after, locale);
+  const was = file ? entryAddress(parseEntry(file.contents), slug) : after;
+  const from = entryUrl(config.i18n, collected.route, was, locale);
+  const to = entryUrl(config.i18n, collected.route, after, locale);
   await setEntryAddress(
     'default',
     ctx.db(),
     git,
     // The whole form, `slug` included: the file writes it where the schema says.
-    formOf('default', formSchema(collected.schema)),
+    formOf(formSchema(collected.schema)),
     path,
     wanted,
     from && to && from !== to ? { from, to, entry: `${collection}/${slug}` } : undefined,
@@ -337,14 +335,13 @@ export async function setStatus(
   const picked =
     hidden && body?.redirect?.kind === 'entry'
       ? collectionEntries(
-          'default',
           index,
           String(body.redirect.value ?? '').split('/')[0] ?? '',
           await overlayRows('default', database, index),
         )
       : undefined;
   // The whole form, `slug` included: the rewrite must leave it where the schema puts it.
-  const form = formOf('default', formSchema(collected.schema));
+  const form = formOf(formSchema(collected.schema));
   for (const slug of slugs) {
     const files = await entryFiles(git, collection, slug);
     await setEntryStatus(
@@ -356,10 +353,9 @@ export async function setStatus(
         // A language with no committed file owes no redirect: nobody could have followed it.
         const was = file
           ? entryUrl(
-              'default',
               config.i18n,
               collected.route,
-              entryAddress('default', parseEntry('default', file.contents), slug),
+              entryAddress(parseEntry(file.contents), slug),
               locale,
             )
           : undefined;
@@ -391,9 +387,9 @@ export async function reconcile(
   );
   const form = formFor(collection, slug);
   const locales = localeData(await entryLocales(ctx, collection, slug, config.i18n.locales));
-  const source = entrySource('default', config.i18n, locales);
+  const source = entrySource(config.i18n, locales);
   if (source && 'problem' in source) return sourceRefusal(source, locales);
-  const drift = new Set(driftReport('default', form, locales).map((row) => row.path));
+  const drift = new Set(driftReport(form, locales).map((row) => row.path));
   // A row the languages agree about has nothing to answer: the report moved on under the tab.
   if (!choices.length || choices.some((choice) => !drift.has(choice.path)))
     return codedError(
@@ -487,7 +483,7 @@ export async function changeEntrySource(
   )
     return moved();
   const form = formFor(collection, slug);
-  if (from !== undefined && driftReport('default', form, files).length)
+  if (from !== undefined && driftReport(form, files).length)
     return codedError(
       409,
       'ENTRY_SOURCE_DRIFT',
@@ -501,7 +497,7 @@ export async function changeEntrySource(
       `The ${to} file has its own values in fields only the source keeps: clear them first`,
       { paths },
     );
-  const changed = await changeSource('default', form, files, {
+  const changed = await changeSource(form, files, {
     from,
     to,
     at: new Date().toISOString(),
@@ -522,7 +518,7 @@ export async function changeEntrySource(
       Object.entries(changed).map(([locale, data]) => ({
         path: entryPath(collection, slug, locale),
         revision: loaded[locale]?.revision,
-        contents: stringifyEntry('default', data),
+        contents: stringifyEntry(data),
         preserveProvenance: true,
       })),
       session.user.id,

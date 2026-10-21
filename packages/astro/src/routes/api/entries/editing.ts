@@ -158,7 +158,7 @@ function structuralSave(
   )
     return undefined;
   for (const address of containers) {
-    const resolved = resolveFieldTarget('default', form, address, data);
+    const resolved = resolveFieldTarget(form, address, data);
     if (
       !resolved.ok ||
       resolved.target.address !== address ||
@@ -212,7 +212,7 @@ function structuralSave(
       const container = candidate.address.endsWith(suffix)
         ? candidate.address.slice(0, -suffix.length)
         : undefined;
-      const resolved = resolveFieldTarget('default', form, candidate.address, data);
+      const resolved = resolveFieldTarget(form, candidate.address, data);
       if (
         !container ||
         !containers.includes(container) ||
@@ -300,7 +300,7 @@ export async function autosave(
   if (!translation && read) {
     // Read at dispatch: a tab may have opened before external drift appeared.
     // Intentional locale-only rows and entries with one file produce no report and keep saving.
-    if (driftReport('default', formFor(collection, slug), localeData(read.loaded)).length)
+    if (driftReport(formFor(collection, slug), localeData(read.loaded)).length)
       return Response.json(
         {
           error:

@@ -181,9 +181,9 @@ const crawl = {
 const entryFile = (contents: string) => [
   { path: 'src/content/listings/en/seaview-cottage.yaml', contents },
 ];
-const seoOf = (contents: string) => (parseEntry('default', contents) as { seo?: SeoValue }).seo;
+const seoOf = (contents: string) => (parseEntry(contents) as { seo?: SeoValue }).seo;
 const listed = (contents: string) =>
-  (sitemapFrom('default', entryFile(contents), crawl).en ?? []).map((p) => p.loc);
+  (sitemapFrom(entryFile(contents), crawl).en ?? []).map((p) => p.loc);
 
 test('the page <Seo /> marks noindex is the page the sitemap leaves out', async () => {
   const hidden = 'title: "Seaview Cottage"\nseo:\n  noindex: true\n';

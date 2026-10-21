@@ -92,7 +92,7 @@ export const onRequest: MiddlewareHandler = async (
         email: user.email,
         uiLocale: user.uiLocale,
       },
-      role: roleOf('default', user),
+      role: roleOf(user),
       sessionId: session.session.id,
     };
     return next();

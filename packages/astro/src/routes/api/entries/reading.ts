@@ -35,7 +35,7 @@ async function hideTargets(
   loaded: Awaited<ReturnType<typeof entryLocales>>,
 ): Promise<Record<string, string>> {
   // Read at the branch tip `entryLocales` read from, so both sides of the match are one commit.
-  const committed = await readRedirects('default', ctx.git());
+  const committed = await readRedirects(ctx.git());
   const key = `${collection}/${slug}`;
   const rules = [...committed, ...Object.values(loaded).flatMap((l) => l.redirects)].filter(
     (rule) => rule.reason === 'hidden' && rule.entry === key,
@@ -65,7 +65,7 @@ export async function getEntry(
   if ('problem' in answer) return sourceRefusal(answer, localeData(loaded));
   const source = answer.locale;
   const data = loaded[source]?.data;
-  const hidden = !isLive('default', data);
+  const hidden = !isLive(data);
   const form = formFor(collection, slug);
   const offer = offeredIn(data, Object.keys(loaded));
   const languages = localeData(loaded);
@@ -111,9 +111,9 @@ export async function getEntry(
     offered: offer.offered,
     // Reported rather than acted on, so the list and the form read the same thing.
     offerProblems: offer.problems,
-    drift: driftReport('default', form, languages),
+    drift: driftReport(form, languages),
     // A warning next to the language, never a reason to refuse anything.
-    stale: await staleLocales('default', form, languages, source),
+    stale: await staleLocales(form, languages, source),
     // With nothing configured the Translate buttons are not drawn.
     translator: (await translator(ctx)) !== undefined,
     // The languages the repository has a file for; the rest only the preview can show.
@@ -144,7 +144,7 @@ export async function deletedList(ctx: RequestContext, collection: string): Prom
   const events = await deletedEntries('default', database, collection);
   const rows = await overlayRows('default', database, index);
   const here = new Set(
-    collectionEntries('default', index, collection, rows).flatMap((e) =>
+    collectionEntries(index, collection, rows).flatMap((e) =>
       Object.values(e.locales).map((l) => l.path),
     ),
   );

@@ -97,7 +97,7 @@ export async function library(ctx: RequestContext, url: URL): Promise<Response> 
     }),
     draftFiles('default', database, index),
   ]);
-  const used = mediaUsage('default', uses, drafts);
+  const used = mediaUsage(uses, drafts);
   return Response.json({ media: rows.map((row) => libraryItem(row, used[row.r2Key])) });
 }
 
@@ -150,7 +150,7 @@ export async function describeMedia(
       detail: { archived, name: row.filename },
     });
   const drafts = await draftFiles('default', database, index);
-  const used = mediaUsage('default', uses, drafts);
+  const used = mediaUsage(uses, drafts);
   return Response.json({ media: libraryItem(row, used[row.r2Key]) });
 }
 
@@ -176,10 +176,7 @@ export async function deleteAsset(
   const drafted = new Set(drafts.map((d) => d.path));
   const now = namedBy(row.r2Key, [...tree.filter((f) => !drafted.has(f.path)), ...drafts]);
   const live = [
-    ...new Set([
-      ...namedBy(row.r2Key, tree),
-      ...(mediaUsage('default', uses, [])[row.r2Key] ?? []),
-    ]),
+    ...new Set([...namedBy(row.r2Key, tree), ...(mediaUsage(uses, [])[row.r2Key] ?? [])]),
   ].sort();
   if (now.length)
     return codedError(

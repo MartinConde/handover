@@ -6,7 +6,7 @@ interface Props {
 }
 
 // The HTML is built from the validated tree, so `set:html` cannot emit what a tier disallows.
-const html = renderRichtext('default', Astro.props.content);
+const html = renderRichtext(Astro.props.content);
 ---
 
 <Fragment set:html={html} />

@@ -112,7 +112,6 @@ let trees: Record<string, Record<string, string>>;
 let head: string;
 let writes: PublishFile[][];
 const form = formOf(
-  'default',
   formSchema(z.object({ title: z.string().min(1), body: z.string().optional() })),
 );
 const path = (locale: string, slug = 'home') => `src/content/pages/${locale}/${slug}.yaml`;
@@ -171,7 +170,7 @@ async function signIn(id: string, role: 'owner' | 'editor') {
 beforeAll(async () => {
   const binding = await mf.getD1Database('DB');
   boundary.binding = binding;
-  db = openDb('default', binding);
+  db = openDb(binding);
   await migrateTestD1(binding);
   owner = await signIn('owner', 'owner');
   editor = await signIn('editor', 'editor');
@@ -251,14 +250,13 @@ const record = async (base: string) => call('POST', 'sources', { base });
 // A translation marked against the source bytes it was made from, the way a save marks it.
 const marked = async (contents: string, from: string, source: string) =>
   markTranslation(
-    'default',
     form,
     { locale: from, contents: source, blob_sha: await blobSha(source) },
     contents,
     undefined,
   );
 const markOf = (contents: string | undefined) =>
-  (parseEntry('default', contents ?? '') as { _i18n?: Record<string, string> })._i18n;
+  (parseEntry(contents ?? '') as { _i18n?: Record<string, string> })._i18n;
 
 test('records every file of an unmarked two-language entry and leaves the rest alone', async () => {
   const done = '_version: 1\n_source: en\ntitle: "Done"\n';
@@ -328,14 +326,14 @@ test('an open draft is rebased onto the commit and publishes without a conflict'
   const draft = await loadDraft('default', db, path('de'));
   expect(draft?.baseSha).toBe(head);
   expect(draft?.baseBlob).toBe(await blobSha(trees[head]?.[path('de')] ?? ''));
-  expect(parseEntry('default', draft?.contents ?? '')).toMatchObject({
+  expect(parseEntry(draft?.contents ?? '')).toMatchObject({
     _source: 'en',
     title: 'Neue Startseite',
   });
 
   const published = await call('POST', 'publish', { entries: ['pages/home'] });
   expect(published.status).toBe(200);
-  expect(parseEntry('default', trees[head]?.[path('de')] ?? '')).toMatchObject({
+  expect(parseEntry(trees[head]?.[path('de')] ?? '')).toMatchObject({
     _source: 'en',
     title: 'Neue Startseite',
   });
@@ -368,7 +366,7 @@ test('the file that becomes the source is written without a mark of its own', as
   expect(await (await record(found.base)).json()).toMatchObject({ entries: 1 });
 
   expect(markOf(trees[head]?.[path('en')])).toBeUndefined();
-  expect(parseEntry('default', trees[head]?.[path('de')] ?? '')).toMatchObject({ _source: 'en' });
+  expect(parseEntry(trees[head]?.[path('de')] ?? '')).toMatchObject({ _source: 'en' });
 });
 
 test('a French mark made from German moves to English only while German is in sync', async () => {
@@ -463,7 +461,7 @@ test('an entry whose source exists only as a draft waits for it to publish', asy
 
 // What the entry routes read and write once `entrySource` decides the source.
 const drafted = async (locale: string, slug = 'home') =>
-  parseEntry('default', (await loadDraft('default', db, path(locale, slug)))?.contents ?? '') as
+  parseEntry((await loadDraft('default', db, path(locale, slug)))?.contents ?? '') as
     | Record<string, unknown>
     | undefined;
 const opened = async (slug = 'home') =>
@@ -488,7 +486,7 @@ test('a German-first entry stays German-sourced while English and French are cre
     ['de', 'fr'],
   ]);
   expect((await call('POST', 'publish', { entries: ['pages/home'] })).status).toBe(200);
-  expect(parseEntry('default', trees[head]?.[path('en')] ?? '')).toMatchObject({
+  expect(parseEntry(trees[head]?.[path('en')] ?? '')).toMatchObject({
     _source: 'de',
     title: '[en] Startseite',
     _i18n: { sourceLocale: 'de' },
@@ -542,7 +540,7 @@ test('turning off English, the only marked file, writes the source into the Germ
 
   expect(res.status).toBe(200);
   expect(trees[head]?.[path('en')]).toBeUndefined();
-  expect(parseEntry('default', trees[head]?.[path('de')] ?? '')).toMatchObject({
+  expect(parseEntry(trees[head]?.[path('de')] ?? '')).toMatchObject({
     _source: 'de',
     _locales: ['de', 'fr'],
     title: 'Startseite',
@@ -636,7 +634,6 @@ test('a German-first entry published with English still opens in German', async 
 const FR = '_version: 1\n_source: en\ntitle: "Accueil"\nbody: "Bienvenue"\n';
 const fromFrench = async () =>
   markTranslation(
-    'default',
     form,
     { locale: 'fr', contents: FR, blob_sha: await blobSha(FR) },
     '_version: 1\n_source: en\ntitle: "Startseite"\nbody: "Willkommen"\n',
@@ -654,7 +651,7 @@ test('a translation made from a language that is turned off keeps its mark and s
     200,
   );
 
-  expect(parseEntry('default', trees[head]?.[path('de')] ?? '')).toMatchObject({
+  expect(parseEntry(trees[head]?.[path('de')] ?? '')).toMatchObject({
     _i18n: { sourceLocale: 'fr' },
   });
   const entry = (await (await call('GET', 'entries/pages/home')).json()) as { stale: string[] };
@@ -737,7 +734,7 @@ test('a rename keeps the language the entry is written in', async () => {
 
   expect((await call('POST', 'entries/pages/home/rename', { to: 'start' })).status).toBe(200);
 
-  expect(parseEntry('default', trees[head]?.[path('en', 'start')] ?? '')).toMatchObject({
+  expect(parseEntry(trees[head]?.[path('en', 'start')] ?? '')).toMatchObject({
     _source: 'de',
   });
   expect((await opened('start')).sourceLocale).toBe('de');
@@ -955,12 +952,12 @@ test('changing the source to German and publishing commits every file with Germa
   const german = trees[head]?.[path('de')] ?? '';
   expect(german).toBe('_version: 1\n_source: "de"\ntitle: "Startseite"\nbody: "Willkommen"\n');
   const fromGerman = { sourceLocale: 'de', sourceBlob: await blobSha(german) };
-  expect(parseEntry('default', trees[head]?.[path('en')] ?? '')).toMatchObject({
+  expect(parseEntry(trees[head]?.[path('en')] ?? '')).toMatchObject({
     _source: 'de',
     title: 'Home',
     _i18n: fromGerman,
   });
-  expect(parseEntry('default', trees[head]?.[path('fr')] ?? '')).toMatchObject({
+  expect(parseEntry(trees[head]?.[path('fr')] ?? '')).toMatchObject({
     _source: 'de',
     _i18n: fromGerman,
   });
@@ -1204,7 +1201,7 @@ test('publishing a stale language promoted to source preserves deliberately abse
 
   expect((await call('POST', 'publish', { entries: ['pages/home'] })).status).toBe(200);
 
-  expect(parseEntry('default', trees[head]?.[path('en')] ?? '')).not.toHaveProperty('_i18n');
+  expect(parseEntry(trees[head]?.[path('en')] ?? '')).not.toHaveProperty('_i18n');
 });
 
 test('a no-op save after stale source promotion keeps the old source deliberately unmarked', async () => {
@@ -1230,7 +1227,7 @@ test('a no-op save after stale source promotion keeps the old source deliberatel
   ).toBe(200);
 
   expect((await call('POST', 'publish', { entries: ['pages/home'] })).status).toBe(200);
-  expect(parseEntry('default', trees[head]?.[path('en')] ?? '')).not.toHaveProperty('_i18n');
+  expect(parseEntry(trees[head]?.[path('en')] ?? '')).not.toHaveProperty('_i18n');
 });
 
 test('a genuine translation edit after stale source promotion receives fresh provenance', async () => {
@@ -1257,7 +1254,7 @@ test('a genuine translation edit after stale source promotion receives fresh pro
 
   expect((await call('POST', 'publish', { entries: ['pages/home'] })).status).toBe(200);
   const german = trees[head]?.[path('de')] ?? '';
-  expect(parseEntry('default', trees[head]?.[path('en')] ?? '')).toMatchObject({
+  expect(parseEntry(trees[head]?.[path('en')] ?? '')).toMatchObject({
     _i18n: {
       sourceLocale: 'de',
       sourceBlob: await blobSha(german),
@@ -1273,14 +1270,14 @@ test('an unpublished legacy source change preserves absent provenance on first p
     db,
     boundary.repo as never,
     path('en'),
-    parseEntry('default', EN) as Record<string, unknown>,
+    parseEntry(EN) as Record<string, unknown>,
   );
   await createDraft(
     'default',
     db,
     boundary.repo as never,
     path('de'),
-    parseEntry('default', DE) as Record<string, unknown>,
+    parseEntry(DE) as Record<string, unknown>,
   );
   const before = await opened();
   expect(before.sourceLocale).toBe('en');
@@ -1288,7 +1285,7 @@ test('an unpublished legacy source change preserves absent provenance on first p
   expect((await makeSource('de', before.revisions)).status).toBe(200);
   expect((await call('POST', 'publish', { entries: ['pages/home'] })).status).toBe(200);
 
-  expect(parseEntry('default', trees[head]?.[path('en')] ?? '')).not.toHaveProperty('_i18n');
+  expect(parseEntry(trees[head]?.[path('en')] ?? '')).not.toHaveProperty('_i18n');
 });
 
 test('changing a stale source back again does not manufacture provenance in either direction', async () => {
@@ -1308,5 +1305,5 @@ test('changing a stale source back again does not manufacture provenance in eith
   expect((await makeSource('en', (await opened()).revisions)).status).toBe(200);
   expect((await call('POST', 'publish', { entries: ['pages/home'] })).status).toBe(200);
 
-  expect(parseEntry('default', trees[head]?.[path('de')] ?? '')).not.toHaveProperty('_i18n');
+  expect(parseEntry(trees[head]?.[path('de')] ?? '')).not.toHaveProperty('_i18n');
 });

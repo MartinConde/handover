@@ -111,7 +111,7 @@ function push(files: PublishFile[], message = 'Developer change') {
 beforeAll(async () => {
   binding = await mf.getD1Database('DB');
   boundary.binding = binding;
-  db = openDb('default', binding);
+  db = openDb(binding);
   await migrateTestD1(binding);
   // Invitations seed users server-side; authOptions intentionally disables public signup.
   await db
@@ -328,16 +328,14 @@ test('S01 open → save → publish → cleanup → revert preserves the publish
   const publish = await call('POST', 'publish', { entries: ['pages/home'] });
   expect(publish.status).toBe(200);
   const { commit_sha } = (await publish.json()) as { commit_sha: string };
-  expect(parseEntry('default', trees[head]?.[PATH] ?? '')).toMatchObject({ title: 'Edited home' });
+  expect(parseEntry(trees[head]?.[PATH] ?? '')).toMatchObject({ title: 'Edited home' });
   deployed = commit_sha;
   expect((await call('GET', 'build')).status).toBe(200);
   expect(await loadDraft('default', db, PATH)).toBeUndefined();
   const reverted = await call('POST', 'revert', { commit_sha });
   expect(reverted.status).toBe(200);
   expect(trees[head]?.[PATH]).toBe(INITIAL);
-  expect(
-    parseEntry('default', (await loadDraft('default', db, PATH))?.contents ?? ''),
-  ).toMatchObject({
+  expect(parseEntry((await loadDraft('default', db, PATH))?.contents ?? '')).toMatchObject({
     title: 'Edited home',
   });
   expect((await loadDraft('default', db, PATH))?.publishedSha).toBeNull();
@@ -350,7 +348,7 @@ test('autosave stores editable fields in D1 without changing the repository', as
     data: { title: 'Edited draft', body: 'Draft body', _status: 'hidden' },
   });
   expect(response.status).toBe(200);
-  expect(parseEntry('default', (await loadDraft('default', db, PATH))?.contents ?? '')).toEqual({
+  expect(parseEntry((await loadDraft('default', db, PATH))?.contents ?? '')).toEqual({
     _version: 1,
     title: 'Edited draft',
     body: 'Draft body',
@@ -372,9 +370,7 @@ test('autosave keeps an incomplete draft and reports its missing title', async (
     pending: true,
     problems: [{ path: 'title', descriptor: { code: 'FIELD_TEXT_TOO_SMALL' } }],
   });
-  expect(
-    parseEntry('default', (await loadDraft('default', db, PATH))?.contents ?? ''),
-  ).toMatchObject({
+  expect(parseEntry((await loadDraft('default', db, PATH))?.contents ?? '')).toMatchObject({
     title: '',
   });
 });
@@ -396,12 +392,12 @@ test('S01 a save during publication keeps newer bytes pending and commits the va
   expect((await save('', saved.revision)).status).toBe(200);
   finish.release();
   expect((await publishing).status).toBe(200);
-  expect(parseEntry('default', trees[head]?.[PATH] ?? '')).toMatchObject({
+  expect(parseEntry(trees[head]?.[PATH] ?? '')).toMatchObject({
     title: 'Publishing this',
   });
   const row = await loadDraft('default', db, PATH);
   if (!row) throw new Error('The newer draft disappeared');
-  expect(parseEntry('default', row.contents)).toMatchObject({ title: '' });
+  expect(parseEntry(row.contents)).toMatchObject({ title: '' });
   expect(row.publishedSha).toBeNull();
   expect(row.baseSha).toBe(head);
   expect(row.baseBlob).toBe(await blobSha(trees[head]?.[PATH] ?? ''));
@@ -592,7 +588,7 @@ test('rename moves a draft-only translation and preserves its unpublished state'
   expect(res.status).toBe(200);
   expect(await loadDraft('default', db, from)).toBeUndefined();
   const moved = await loadDraft('default', db, to);
-  expect(parseEntry('default', moved?.contents ?? '')).toMatchObject({
+  expect(parseEntry(moved?.contents ?? '')).toMatchObject({
     _i18n: { sourceLocale: 'en' },
     title: 'Startseite',
   });
@@ -716,9 +712,9 @@ test('a write between route validation and publication cannot replace the valida
   expect((await save('', saved.revision)).status).toBe(200);
   finish.release();
   expect((await publishing).status).toBe(200);
-  expect(parseEntry('default', trees[head]?.[PATH] ?? '')).toMatchObject({ title: 'Validated' });
+  expect(parseEntry(trees[head]?.[PATH] ?? '')).toMatchObject({ title: 'Validated' });
   const row = await loadDraft('default', db, PATH);
-  expect(parseEntry('default', row?.contents ?? '')).toMatchObject({ title: '' });
+  expect(parseEntry(row?.contents ?? '')).toMatchObject({ title: '' });
   expect(row?.publishedSha).toBeNull();
 });
 
@@ -727,17 +723,17 @@ const PUBLIC_SITE = {
   collections: { pages: { route: '/[slug]' } },
 };
 const snapshot = (sha: string) =>
-  staticSource('default', {
+  staticSource({
     getCollection: async () =>
       Object.entries(trees[sha] ?? {})
         .filter(([path]) => path.startsWith('src/content/pages/'))
         .map(([path, contents]) => ({
           id: path.slice('src/content/pages/'.length, -5),
-          data: parseEntry('default', contents),
+          data: parseEntry(contents),
         })),
     getEntry: async (_collection, id) => {
       const contents = trees[sha]?.[`src/content/pages/${id}.yaml`];
-      return contents === undefined ? undefined : { id, data: parseEntry('default', contents) };
+      return contents === undefined ? undefined : { id, data: parseEntry(contents) };
     },
   });
 
@@ -754,15 +750,14 @@ test('hide remains public during pending/failed builds, disappears when live, an
     ).status,
   ).toBe(200);
   const preview = draftSource(
-    'default',
     snapshot(oldDeployment),
     await draftFiles('default', db, {}),
     (_collection, data) => data,
   );
   for (const locale of ['en', 'de'])
-    expect(
-      (await entryAt('default', preview, PUBLIC_SITE, 'pages', locale, 'home'))?.data,
-    ).toMatchObject({ _status: 'hidden' });
+    expect((await entryAt(preview, PUBLIC_SITE, 'pages', locale, 'home'))?.data).toMatchObject({
+      _status: 'hidden',
+    });
   const published = await call('POST', 'publish', { entries: ['pages/home'] });
   expect(published.status).toBe(200);
   const { commit_sha } = (await published.json()) as { commit_sha: string };
@@ -772,7 +767,7 @@ test('hide remains public during pending/failed builds, disappears when live, an
     expect(((await (await call('GET', 'build')).json()) as { state: string }).state).toBe(state);
     const publicSource = snapshot(state === 'live' ? commit_sha : oldDeployment);
     for (const locale of ['en', 'de']) {
-      const page = await entryAt('default', publicSource, PUBLIC_SITE, 'pages', locale, 'home');
+      const page = await entryAt(publicSource, PUBLIC_SITE, 'pages', locale, 'home');
       expect(Boolean(page)).toBe(state !== 'live');
     }
   }
@@ -781,17 +776,13 @@ test('hide remains public during pending/failed builds, disappears when live, an
 // The build of `sha`, with today's drafts over it, the way the preview route reads them.
 async function previewed(sha = head) {
   const tree = trees[sha] ?? {};
-  const built = indexFrom(
-    'default',
-    Object.entries(tree).map(([path, contents]) => ({ path, contents })),
-  );
+  const built = indexFrom(Object.entries(tree).map(([path, contents]) => ({ path, contents })));
   const source = draftSource(
-    'default',
     snapshot(sha),
     await draftFiles('default', db, built),
     (_collection, data) => data,
   );
-  return (await entryAt('default', source, PUBLIC_SITE, 'pages', 'en', 'home'))?.data;
+  return (await entryAt(source, PUBLIC_SITE, 'pages', 'en', 'home'))?.data;
 }
 
 test('preview shows the built file over an unedited draft of an older one', async () => {
@@ -931,7 +922,7 @@ test.each(['building', 'failed', 'live'] as const)(
     expect((await call('POST', 'revert', { commit_sha })).status).toBe(200);
     expect(trees[head]?.[PATH]).toBe(INITIAL);
     expect(trees[head]?.['src/content/pages/en/moved.yaml']).toBeUndefined();
-    expect(parseEntry('default', trees[head]?.[redirects] ?? '')).toMatchObject({
+    expect(parseEntry(trees[head]?.[redirects] ?? '')).toMatchObject({
       rules: [original],
     });
   },
@@ -953,7 +944,7 @@ test.each(['building', 'failed', 'live'] as const)(
     expect((await call('POST', 'revert', { commit_sha })).status).toBe(200);
     expect(trees[head]?.[PATH]).toBe(INITIAL);
     const row = await loadDraft('default', db, PATH);
-    expect(parseEntry('default', row?.contents ?? '')).toMatchObject({ title: 'Newer work' });
+    expect(parseEntry(row?.contents ?? '')).toMatchObject({ title: 'Newer work' });
     expect(row?.publishedSha).toBeNull();
   },
 );
@@ -970,9 +961,9 @@ test('reverting invalidates an open edit revision while keeping the newer draft'
   };
   expect((await call('POST', 'revert', { commit_sha })).status).toBe(200);
   expect((await save('Stale form', saved.revision)).status).toBe(409);
-  expect(
-    parseEntry('default', (await loadDraft('default', db, PATH))?.contents ?? ''),
-  ).toMatchObject({ title: 'Newer work' });
+  expect(parseEntry((await loadDraft('default', db, PATH))?.contents ?? '')).toMatchObject({
+    title: 'Newer work',
+  });
 });
 
 test.each(['repository', 'draft'])(

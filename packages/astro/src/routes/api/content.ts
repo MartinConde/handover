@@ -51,7 +51,7 @@ export async function deeplKey(ctx: RequestContext): Promise<string | undefined>
 export async function translator(ctx: RequestContext): Promise<Translate | undefined> {
   if (config.i18n.translate) return config.i18n.translate;
   const key = await deeplKey(ctx).catch(() => undefined);
-  return key ? deeplTranslate('default', key) : undefined;
+  return key ? deeplTranslate(key) : undefined;
 }
 
 // Falls back to the file name: a lock outlives the commit that removed its entry.
@@ -73,7 +73,7 @@ export async function entrySourceFor(
   capture = false,
 ) {
   // A refused open captures nothing, or its rows would hide the fix somebody pushes next.
-  const resolved = (data: Record<string, unknown>) => entrySource('default', config.i18n, data);
+  const resolved = (data: Record<string, unknown>) => entrySource(config.i18n, data);
   const loaded = await entryLocales(
     ctx,
     collection,
@@ -186,17 +186,12 @@ export function formFor(collection: string, slug: string): Form {
 
 // `written` is the languages it has a file in, which the mark has to agree with.
 export const offeredIn = (data: unknown, written: string[]) =>
-  entryOffer(
-    'default',
-    config.i18n.locales,
-    (data as { _locales?: unknown } | null)?._locales,
-    written,
-  );
+  entryOffer(config.i18n.locales, (data as { _locales?: unknown } | null)?._locales, written);
 
 /** Found by the `defaultSeo` key; read per open, not on `ping`, since another tab may edit it. */
 export async function siteSeoDefaults(ctx: RequestContext): Promise<Record<string, unknown>> {
   const key = Object.entries(config.globals ?? {}).find(([, schema]) =>
-    formOf('default', formSchema(schema)).fields.some((f) => f.path[0] === 'defaultSeo'),
+    formOf(formSchema(schema)).fields.some((f) => f.path[0] === 'defaultSeo'),
   )?.[0];
   if (!key) return {};
   const loaded = await entryLocales(ctx, 'globals', key, config.i18n.locales);
@@ -253,7 +248,7 @@ export async function entryLocales(
   );
   // An empty file is still the language's file, so it opens as an empty entry.
   const dataOf = (contents: string | undefined, file: unknown) =>
-    contents ? parseEntry('default', contents) : file ? {} : undefined;
+    contents ? parseEntry(contents) : file ? {} : undefined;
   const parsed = read.map(({ file, row, stale }) =>
     dataOf((!stale && row?.contents) || file?.contents, file),
   );
@@ -288,11 +283,10 @@ export async function entryLocales(
           // What a redirect's `from` is: an address only a draft has was never followed.
           url: file
             ? entryPageUrl(
-                'default',
                 config.i18n,
                 config.collections[collection],
                 slug,
-                entryAddress('default', parseEntry('default', file.contents), slug),
+                entryAddress(parseEntry(file.contents), slug),
                 locale,
               )
             : undefined,
@@ -353,7 +347,7 @@ export function neverPublished(
     collection !== 'globals' &&
     drafts.filter((row) => entryKey(row.path) === key).every((row) => row.baseBlob === '') &&
     // The build index says no language of it exists.
-    !collectionEntries('default', index, collection, []).some((e) => e.id === slug)
+    !collectionEntries(index, collection, []).some((e) => e.id === slug)
   );
 }
 
@@ -363,12 +357,12 @@ export async function pickable(ctx: RequestContext) {
     pendingDrafts('default', ctx.db()),
   ]);
   return Object.entries(config.collections).flatMap(([collection, collected]) =>
-    collectionEntries('default', index, collection, rows, collected.titleField).map((entry) => {
+    collectionEntries(index, collection, rows, collected.titleField).map((entry) => {
       const urls: Record<string, string> = {};
       for (const [locale, info] of Object.entries(entry.locales)) {
         // Its `slug` where the collection has localized slugs, its file name where not.
         const address = collected.localizedSlugs ? (info.slug ?? entry.id) : entry.id;
-        const url = entryPageUrl('default', config.i18n, collected, entry.id, address, locale);
+        const url = entryPageUrl(config.i18n, collected, entry.id, address, locale);
         if (url) urls[locale] = url;
       }
       const locales = Object.keys(entry.locales);
@@ -396,7 +390,7 @@ export async function pickable(ctx: RequestContext) {
 /** Every name the collection already uses, published or only drafted. */
 export async function takenNames(collection: string, database: Db): Promise<string[]> {
   const rows = await overlayRows('default', database, index);
-  return collectionEntries('default', index, collection, rows).map((e) => e.id);
+  return collectionEntries(index, collection, rows).map((e) => e.id);
 }
 
 /** Per person, not per tab: the same person's other tab is not "somebody else". */
@@ -486,8 +480,7 @@ export function redirectTarget(
 ): string | undefined {
   const value = typeof target?.value === 'string' ? target.value : '';
   if (target?.kind === 'url') return value || undefined;
-  if (target?.kind === 'index')
-    return entryUrl('default', config.i18n, collected.index, '', locale);
+  if (target?.kind === 'index') return entryUrl(config.i18n, collected.index, '', locale);
   if (target?.kind !== 'entry') return undefined;
   const [name = '', id = ''] = value.split('/');
   const picked = config.collections[name];
@@ -495,9 +488,9 @@ export function redirectTarget(
   const found = entries?.find((e) => e.id === id);
   const address = picked.localizedSlugs ? (found?.locales[locale]?.slug ?? id) : id;
   return (
-    (found?.locales[locale] && entryPageUrl('default', config.i18n, picked, id, address, locale)) ||
-    entryUrl('default', config.i18n, picked.index, '', locale) ||
-    entryUrl('default', config.i18n, '/', '', locale)
+    (found?.locales[locale] && entryPageUrl(config.i18n, picked, id, address, locale)) ||
+    entryUrl(config.i18n, picked.index, '', locale) ||
+    entryUrl(config.i18n, '/', '', locale)
   );
 }
 

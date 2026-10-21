@@ -33,7 +33,6 @@ const yamlRule = (id: string, from: string, to: string, reason = 'manual', entry
   `  - _id: "${id}"\n    from: "${from}"\n    to: "${to}"\n    status: 301\n    reason: "${reason}"\n${entry ? `    entry: "${entry}"\n` : ''}    createdAt: "2026-01-01T00:00:00Z"\n`;
 const committed = () =>
   parseEntry(
-    'default',
     ((publish.mock.calls.at(-1)?.[0] ?? []) as { path: string; contents: string }[]).find(
       (f) => f.path === 'src/content/redirects.yaml',
     )?.contents ?? '',
