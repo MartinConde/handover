@@ -17,7 +17,6 @@ import {
   type CollectionLabels,
   capitalise,
   collectionName,
-  formatRelativeTime,
   type UiLocale as InterfaceLocale,
   isUiLocale,
   messageOptions,
@@ -27,6 +26,7 @@ import {
   showUiLocale,
   useCollectionLabels,
 } from './i18n.js';
+import { createLocaleSaver } from './locale-save.svelte';
 import Activity from './manage/Activity.svelte';
 import Diagnostics from './manage/Diagnostics.svelte';
 import Members from './manage/Members.svelte';
@@ -36,8 +36,8 @@ import * as m from './paraglide/messages.js';
 import Pending from './publishing/Pending.svelte';
 import RevertDialog from './publishing/RevertDialog.svelte';
 import { request as fetch, localPath, postJson, sitePath, uncertainResponse } from './request.js';
+import Sidebar from './Sidebar.svelte';
 import type { ScreenProps } from './screen.js';
-import BuildPill from './shared/BuildPill.svelte';
 import Skeleton from './shared/Skeleton.svelte';
 import { createShellStatus } from './shell-status.svelte';
 
@@ -81,8 +81,6 @@ useCollectionLabels(signedIn?.collectionLabels);
 let sessionBusy = $state(false);
 // svelte-ignore state_referenced_locally -- bootstrap resolves this before the first mount
 let uiLocale = $state(initialUiLocale);
-let localeBusy = $state(false);
-let localeError = $state(false);
 const options = $derived(messageOptions(uiLocale));
 type ShellMessage = {
   code:
@@ -153,6 +151,11 @@ function useLocale(locale: InterfaceLocale, remember = false) {
 function useDeviceLocale(locale: InterfaceLocale) {
   useLocale(locale, true);
 }
+const locale = createLocaleSaver(
+  () => session,
+  () => uiLocale,
+  useLocale,
+);
 
 const entryRoute = $derived(path.match(/^\/admin\/c\/([\w-]+)\/([\w-]+)(?:\/(history|seo))?$/));
 const listRoute = $derived(path.match(/^\/admin\/c\/([\w-]+)$/));
@@ -191,20 +194,11 @@ const openEntry = $derived.by(() => {
   if (!editingAt) return undefined;
   if (preparedEntry?.entry === editingAt && preparedEntry.reload === at) {
     const outcome = preparedEntry.outcome;
-    preparedEntry = undefined;
     return outcome.error ? Promise.reject(outcome.error) : Promise.resolve(outcome.value);
   }
   const [collection = '', slug = ''] = editingAt.split('/');
   return loadEntry(collection, slug);
 });
-
-const MANAGE = [
-  { path: '/admin/media', icon: 'media', label: 'media', ownerOnly: false },
-  { path: '/admin/activity', icon: 'activity', label: 'activity', ownerOnly: false },
-  { path: '/admin/members', icon: 'members', label: 'members', ownerOnly: true },
-  { path: '/admin/settings', icon: 'settings', label: 'settings', ownerOnly: true },
-] as const;
-const manage = $derived(MANAGE.filter((item) => !item.ownerOnly || session?.role === 'owner'));
 
 const screenLabel = (screen: { key: string; label: string | Labels }) =>
   labelIn(screen.label, uiLocale) ?? screen.key;
@@ -282,6 +276,8 @@ $effect(() => {
 
 // A plain click on an admin route swaps the screen in place; anything else is the browser's.
 const moved = () => {
+  // Reload only ever counts up, so leaving the entry is the one way back to a prepared pair.
+  preparedEntry = undefined;
   path = localPath(location.pathname);
   if (session) status.loadPending();
 };
@@ -335,49 +331,6 @@ async function loadSession() {
   }
   if (!session) session = undefined;
   sessionError = { code: 'SESSION_CHECK_FAILED' };
-}
-
-async function saveLocale(next: InterfaceLocale) {
-  if (!session || localeBusy || next === uiLocale) return;
-  const userId = session.user.id;
-  localeBusy = true;
-  localeError = false;
-  try {
-    const res = await postJson('/admin/api/auth/update-user', { uiLocale: next });
-    const confirmed =
-      res.ok &&
-      ((await res.json().catch(() => null)) as { status?: unknown } | null)?.status === true;
-    if (confirmed && session?.user.id === userId) {
-      session.user.uiLocale = next;
-      useLocale(next, true);
-    } else if (uncertainResponse(res)) {
-      const ping = await fetch('/admin/api/ping');
-      const body = ping.ok ? await ping.json().catch(() => undefined) : undefined;
-      const user =
-        body &&
-        typeof body === 'object' &&
-        'user' in body &&
-        body.user &&
-        typeof body.user === 'object'
-          ? body.user
-          : undefined;
-      const reconciledId = user && 'id' in user ? user.id : undefined;
-      const reconciledLocale = user && 'uiLocale' in user ? user.uiLocale : undefined;
-      if (
-        session?.user.id === userId &&
-        reconciledId === userId &&
-        (reconciledLocale === null || isUiLocale(reconciledLocale))
-      ) {
-        session.user.uiLocale = reconciledLocale;
-        if (isUiLocale(reconciledLocale)) useLocale(reconciledLocale, true);
-        localeError = reconciledLocale !== next;
-      } else if (session?.user.id === userId) localeError = true;
-    } else if (session?.user.id === userId) localeError = true;
-  } catch {
-    if (session?.user.id === userId) localeError = true;
-  } finally {
-    localeBusy = false;
-  }
 }
 
 // Without the content type Better Auth answers 415 and the session outlives the click.
@@ -456,19 +409,6 @@ const entryFailure = (error: unknown): ShellMessage =>
         ...(error instanceof Error ? { detail: error.message } : {}),
       };
 
-const manageLabel = (label: (typeof MANAGE)[number]['label']) =>
-  label === 'media'
-    ? m.shell_media({}, options)
-    : label === 'activity'
-      ? m.shell_activity({}, options)
-      : label === 'members'
-        ? m.shell_members({}, options)
-        : m.shell_settings({}, options);
-
-// `oldest`, not "started": a draft row carries when it was last written, not when it began.
-const oldest = $derived(Math.min(...status.pending.map((e) => e.updated_at)));
-const held = $derived(status.pending.filter((e) => e.held_by).length);
-
 // The editor's title getter, tied to its entry so the next one never shows the last name.
 let titled = $state<{ entry: string; read: () => string }>();
 // The open entry's address and actions, drawn in the top bar while that entry is open.
@@ -495,9 +435,6 @@ const crumb = $derived(
             current: titled?.entry === editingAt ? titled.read() : '',
           }
         : undefined,
-);
-const initial = $derived(
-  (session?.user.name || session?.user.email || '?').charAt(0).toUpperCase(),
 );
 </script>
 
@@ -545,214 +482,22 @@ const initial = $derived(
           >{/if}
       </div>
     {/if}
-    <aside
-      class={['sidebar', { 'is-open': menu }]}
-      aria-label={m.shell_main_navigation({}, options)}
-      inert={drawer}
-    >
-      <!-- Site-wide state heads the site's navigation rather than sitting among one entry's controls. -->
-      <div class="sidebar-status">
-        <!-- Always in the DOM so the first state is announced; the ticking clock stays out of it. -->
-        <span class="build-status" role="status">
-          {#if status.build}
-            <BuildPill build={status.build} {uiLocale}>
-              <!-- Only over the admin's own commit; otherwise the pill is the developer's deploy. -->
-              {#if status.build.state === 'failed' && status.build.commit_sha}
-                <span class="sep" aria-hidden="true">·</span>
-                <button
-                  class="btn-link"
-                  type="button"
-                  onclick={() => askRevert(status.build?.commit_sha ?? '')}
-                >
-                  {m.build_revert_last({}, options)}
-                </button>
-              {/if}
-            </BuildPill>
-          {/if}
-        </span>
-        {#if status.buildStatus === 'error'}
-          <span class="build-read-error" role="alert">
-            {status.build
-              ? m.build_status_stale({}, options)
-              : m.build_status_unavailable({}, options)}
-            <button class="btn-link" type="button" onclick={status.loadBuild}
-              >{m.common_retry({}, options)}</button
-            >
-          </span>
-        {/if}
-        <button
-          class={['indicator', { 'is-lit': status.pending.length && status.pendingKnown }]}
-          type="button"
-          aria-haspopup="dialog"
-          aria-expanded={drawer}
-          disabled={status.pendingStatus !== 'ready'}
-          onclick={() => (drawer = true)}
-          title={status.pendingStatus === 'loading' && !status.pendingKnown
-            ? m.shell_pending_checking({}, options)
-            : status.pendingStatus === 'error' && !status.pendingKnown
-              ? m.shell_pending_unavailable({}, options)
-              : status.pending.length
-                ? m.shell_pending_count({ count: status.pending.length }, options)
-                : m.shell_no_pending({}, options)}
-          bind:this={indicator}
-        >
-          <span class="dot" aria-hidden="true"></span>
-          {#if status.pendingStatus === 'loading' && !status.pendingKnown}
-            {m.shell_pending_checking({}, options)}
-          {:else if status.pendingStatus === 'error' && !status.pending.length}
-            {m.shell_pending_unavailable({}, options)}
-          {:else}
-            <!-- Collapsed, the sidebar clips the words and shows the count alone. -->
-            <span class="count" aria-hidden="true"
-              >{status.pendingKnown ? status.pending.length : '…'}</span
-            >
-            <span class="nav-text"
-              >{status.pending.length
-                ? m.shell_pending_count({ count: status.pending.length }, options)
-                : m.shell_no_pending({}, options)}</span
-            >
-          {/if}
-          {#if status.pending.length && status.pendingKnown}
-            <span class="detail">
-              <span class="sep" aria-hidden="true">·</span>
-              {m.shell_oldest({ when: formatRelativeTime(oldest, uiLocale) }, options)}
-              {#if held}<span class="sep" aria-hidden="true">·</span>
-                {m.shell_on_hold({ count: held }, options)}{/if}
-            </span>
-          {/if}
-          <svg
-            class="indicator-chevron"
-            viewBox="0 0 20 20"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.6"
-            aria-hidden="true"><path d="m8 5 5 5-5 5" /></svg
-          >
-        </button>
-        {#if status.pendingStatus === 'error'}
-          <span class="pending-read-error" role="alert">
-            {status.pendingKnown
-              ? m.shell_pending_stale({}, options)
-              : m.shell_pending_failed({}, options)}
-            <button class="btn-link" type="button" onclick={status.loadPending}
-              >{m.common_retry({}, options)}</button
-            >
-          </span>
-        {/if}
-      </div>
-      <nav class="nav">
-        <div class="nav-group">
-          <a
-            href={sitePath(`/admin`)}
-            data-icon="dashboard"
-            aria-current={path === '/admin' ? 'page' : undefined}
-            ><span class="nav-text">{m.dashboard_title({}, options)}</span></a
-          >
-        </div>
-      </nav>
-      <!-- Always there, even with no globals: every site has redirects, listed on that screen. -->
-      <nav class="nav" aria-labelledby="nav-site">
-        <div class="nav-label" id="nav-site">{m.shell_site({}, options)}</div>
-        <div class="nav-group">
-          <a
-            href={sitePath(`/admin/site`)}
-            data-icon="site"
-            aria-current={path.startsWith('/admin/site') ? 'page' : undefined}
-            ><span class="nav-text">{m.shell_site_settings({}, options)}</span></a
-          >
-          {#each siteScreens as screen (screen.key)}
-            <a
-              href={sitePath(`/admin/x/${screen.key}`)}
-              data-icon="screen"
-              aria-current={path === `/admin/x/${screen.key}` ? 'page' : undefined}
-              ><span class="nav-text">{screenLabel(screen)}</span></a
-            >
-          {/each}
-        </div>
-      </nav>
-      <nav class="nav" aria-labelledby="nav-content">
-        <div class="nav-label" id="nav-content">{m.shell_content({}, options)}</div>
-        <div class="nav-group">
-          {#each collections as name (name)}
-            <a
-              href={sitePath(`/admin/c/${name}`)}
-              data-icon={['listings', 'pages', 'team', 'blog'].includes(name) ? name : 'collection'}
-              aria-current={(listRoute ?? entryRoute)?.[1] === name ? 'page' : undefined}
-              ><span class="nav-text">{capitalise(collectionName(name, uiLocale))}</span></a
-            >
-          {/each}
-        </div>
-      </nav>
-      <nav class="nav" aria-labelledby="nav-manage">
-        <div class="nav-label" id="nav-manage">{m.shell_manage({}, options)}</div>
-        <div class="nav-group">
-          {#each manage as item (item.path)}
-            <a
-              href={sitePath(item.path)}
-              data-icon={item.icon}
-              aria-current={path === item.path ? 'page' : undefined}
-              ><span class="nav-text">{manageLabel(item.label)}</span></a
-            >
-          {/each}
-        </div>
-      </nav>
-      <div class="sidebar-footer">
-        {#if session.site}<a class="site-link" href={session.site} target="_blank" rel="noreferrer"
-            ><span class="nav-text">{m.shell_view_website({}, options)}</span>
-            <span aria-hidden="true">↗</span></a
-          >{/if}
-        <div class="user-menu">
-          <button
-            class="btn"
-            type="button"
-            aria-expanded={account}
-            aria-label={m.shell_account_menu(
-              {
-                name: session.user.name || session.user.email,
-                role:
-                  session.role === 'owner'
-                    ? m.account_role_owner({}, options)
-                    : m.account_role_editor({}, options),
-              },
-              options,
-            )}
-            onclick={() => (account = !account)}
-          >
-            <span class="avatar" aria-hidden="true">{initial}</span>
-            <span class="label">
-              <span class="name">{session.user.name || session.user.email}</span>
-              <span class="role"
-                >{session.role === 'owner'
-                  ? m.account_role_owner({}, options)
-                  : m.account_role_editor({}, options)}</span
-              >
-            </span>
-          </button>
-          {#if account}
-            <div class="menu">
-              <!-- Context, not actions: the role is changed on the members screen, never here. -->
-              <div class="who">
-                <span class="name">
-                  {session.user.name || session.user.email}
-                  <span class="badge"
-                    >{session.role === 'owner'
-                      ? m.account_role_owner({}, options)
-                      : m.account_role_editor({}, options)}</span
-                  >
-                </span>
-                <span class="email">{session.user.email}</span>
-              </div>
-              <a
-                href={sitePath(`/admin/account`)}
-                aria-current={path === '/admin/account' ? 'page' : undefined}
-                >{m.account_title({}, options)}</a
-              >
-              <button type="button" onclick={signOut}>{m.shell_sign_out({}, options)}</button>
-            </div>
-          {/if}
-        </div>
-      </div>
-    </aside>
+    <Sidebar
+      {session}
+      {status}
+      {uiLocale}
+      {path}
+      {menu}
+      {drawer}
+      bind:account
+      bind:indicator
+      {siteScreens}
+      {collections}
+      collection={(listRoute ?? entryRoute)?.[1]}
+      onreview={() => (drawer = true)}
+      onrevert={askRevert}
+      onsignout={signOut}
+    />
     <div
       class="shell-body"
       id="workspace"
@@ -906,9 +651,9 @@ const initial = $derived(
             role={session.role}
             {query}
             {uiLocale}
-            {localeBusy}
-            {localeError}
-            onlocale={saveLocale}
+            localeBusy={locale.busy}
+            localeError={locale.error}
+            onlocale={locale.save}
             onname={loadSession}
           />
         {:else if path === '/admin/members' && session.role === 'owner'}
