@@ -251,17 +251,18 @@ export { default as Page } from '../layouts/Page.astro';
 
 type Source = ContentSource<{ pages: Page; globals: unknown }>;
 
-export const staticSource: Source = createStaticSource('default', {
+export const staticSource: Source = createStaticSource({
   getEntry: async (collection, id) => getEntry(collection, id),
   getCollection: (collection) => getCollection(collection),
 });
 
 // A miss is a value and not an error: the page answers 404 with it.
 export async function load(source: Source, { locale, slug }: { locale: string; slug: string }) {
-  const entry = await entryAt('default', source, cms, 'pages', locale, slug);
+  const entry = await entryAt(source, cms, 'pages', locale, slug);
   if (!entry) return undefined;
   const globals = await globalsAt(
-    'default', source, locale,
+    source,
+    locale,
     source.preview ? { required: ['site'], blocks: entry.data.blocks } : undefined,
   );
   return { data: entry.data, locale, globals, site: globals.site as Site };
@@ -288,10 +289,10 @@ const HOME = () => `_version: ${FORMAT_VERSION}
 title: "Home"
 blocks:
   - _type: "hero"
-    _id: "${newId('default')}"
+    _id: "${newId()}"
     heading: "A site your client can edit"
   - _type: "textSection"
-    _id: "${newId('default')}"
+    _id: "${newId()}"
     body: |-
       Open /admin, change this paragraph and publish it. The edit is a commit on your
       repository and the build that follows puts it live.

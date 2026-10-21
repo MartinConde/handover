@@ -30,11 +30,11 @@ export function migrate(env: Env, dryRun: boolean): number {
   const width = Math.max(0, ...paths.map((p) => p.length));
   const files = paths.map((path) => {
     const text = readFileSync(join(env.cwd, path), 'utf8');
-    const doc = parseEntry('default', text) as Record<string, unknown> | null;
+    const doc = parseEntry(text) as Record<string, unknown> | null;
     if (!doc || typeof doc !== 'object') throw new Error(`${path}: not a YAML mapping`);
     let out: Record<string, unknown>;
     try {
-      out = migrateDocument('default', doc);
+      out = migrateDocument(doc);
     } catch (e) {
       throw new Error(`${path}: ${e instanceof Error ? e.message : e}`);
     }
@@ -47,12 +47,11 @@ export function migrate(env: Env, dryRun: boolean): number {
       changed: out !== doc,
       missing: from === 'none',
       version: versionOf(doc),
-      dates: timestampErrors('default', path, text),
+      dates: timestampErrors(path, text),
     };
   });
   const changed = files.filter((f) => f.changed);
-  if (!dryRun)
-    for (const f of changed) writeFileSync(join(env.cwd, f.path), stringifyEntry('default', f.out));
+  if (!dryRun) for (const f of changed) writeFileSync(join(env.cwd, f.path), stringifyEntry(f.out));
   const counts = new Map<number, number>();
   for (const f of files.filter((f) => !f.missing))
     counts.set(f.version, (counts.get(f.version) ?? 0) + 1);
