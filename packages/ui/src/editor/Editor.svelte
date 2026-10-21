@@ -46,7 +46,6 @@ import {
   previewPath,
   siteBase,
   sitePath,
-  uncertainResponse,
 } from '../request.js';
 import AutosaveStatus from '../shared/AutosaveStatus.svelte';
 import Modal from '../shared/Modal.svelte';
@@ -62,6 +61,7 @@ import type { EditorEntry } from './entry-payload';
 import SourceChange from './SourceChange.svelte';
 import { classifyDraftSaveRefusal } from './save';
 import { createEntryActions } from './entry-actions.svelte';
+import { createEntryCreate } from './entry-create.svelte';
 import { createEntryLock } from './entry-lock.svelte';
 import { createEntryPublish } from './entry-publish.svelte';
 import { drawn, focusField, land, revealField } from './field-reveal';
@@ -393,76 +393,6 @@ async function findRestore(of: string) {
   if (found && of === shown) putBack = found;
 }
 
-let localeFailure = $state<{ locale: string; message: UiMessage }>();
-const CREATE_FAILED = { create: 'TRANSLATION_CREATE_FAILED', fill: 'TRANSLATION_CREATED_FILL_FAILED' };
-const CREATE_UNCONFIRMED = {
-  create: 'TRANSLATION_CREATE_UNCONFIRMED',
-  fill: 'TRANSLATION_CREATED_FILL_UNCONFIRMED',
-};
-// The file has to exist before a machine's draft can be written into it.
-async function createLanguage(of: string, fill: boolean) {
-  const made = await fetch(`/admin/api/drafts/${collection}/${slug}/${of}`, { method: 'POST' });
-  if (!made.ok || !fill) return { made, refused: made.ok ? undefined : made, step: 'create' as const };
-  const filled = await postJson(`/admin/api/translate/${collection}/${slug}/${of}`, {});
-  return { made, refused: filled.ok ? undefined : filled, step: 'fill' as const };
-}
-async function createInPane(of: string, fill: boolean) {
-  if (!(await flush())) return;
-  entryActions.busy = true;
-  localeFailure = undefined;
-  const { made, refused, step } = await createLanguage(of, fill);
-  entryActions.busy = false;
-  if (refused) {
-    localeFailure = {
-      locale: of,
-      message: uncertainResponse(refused)
-        ? { code: CREATE_UNCONFIRMED[step], status: refused.status }
-        : await retainedFailure(refused, CREATE_FAILED[step]),
-    };
-    return;
-  }
-  if (!fill) await entryActions.announceCommit(made);
-  onchanged();
-}
-// Offered languages with no file, in configured order; the source always has one.
-const missingTargets = $derived(entry.locales.filter((of) => untranslated(of) && !off(of)));
-let creatingAll = $state<string>();
-let createAllFailure = $state<UiMessage>();
-// A report this mount did not make comes from before the reload, so the files now answer it.
-let reportedHere = $state(false);
-async function createAll(fill: boolean) {
-  const targets = [...missingTargets];
-  const report: CreatedAll = { targets, done: {} };
-  createAllFailure = undefined;
-  const outcome = await entrySession.authoritativeChange(
-    async () => {
-      for (const of of targets) {
-        creatingAll = of;
-        const { made, refused, step } = await createLanguage(of, fill);
-        // A file made and then left unfilled still counts: the reload has to show it.
-        if (made.ok) report.done[of] = fill && !refused ? 'filled' : 'created';
-        if (refused) {
-          const unconfirmed = uncertainResponse(refused);
-          report.failed = { locale: of, step, unconfirmed, message: await retainedFailure(refused, CREATE_FAILED[step]) };
-          break;
-        }
-      }
-      creatingAll = undefined;
-      reportedHere = true;
-      oncreatedall?.(report);
-      // Not replayed: the reload is what says whether an unanswered request landed.
-      if (report.failed?.unconfirmed) throw new TypeError('A language was not confirmed.');
-      return Object.keys(report.done).length > 0;
-    },
-    reload,
-  );
-  creatingAll = undefined;
-  if (outcome.ok || outcome.reason === 'refused') return;
-  if (outcome.reason === 'save') createAllFailure = { code: 'CREATE_ALL_SAVE_FAILED' };
-  else if (outcome.reason === 'reload' || outcome.reason === 'uncertain')
-    createAllFailure = { code: 'CREATE_ALL_RELOAD_FAILED' };
-  else createAllFailure = { code: 'ENTRY_ACTION_FAILED' };
-}
 
 const sourceUnsaved = $derived(entrySession.unsaved(entry.sourceLocale));
 const missing = $derived(Object.keys(problems));
@@ -542,6 +472,19 @@ const entryActions = untrack(() =>
   }),
 );
 const actionBusy = $derived(entryActions.busy || entrySession.persistedActionPending());
+const entryCreate = untrack(() =>
+  createEntryCreate({
+    collection,
+    slug,
+    entry: () => entry,
+    session: entrySession,
+    actions: entryActions,
+    untranslated,
+    reload,
+    onchanged: () => onchanged(),
+    oncreatedall: (report) => oncreatedall?.(report),
+  }),
+);
 let takeTrigger = $state<HTMLButtonElement>();
 const canPublish = $derived(dirty && !saving && !missing.length && !drifted && !entryLock.locked && !actionBusy);
 
@@ -1251,7 +1194,7 @@ async function saveAddress() {
     {restored}
     {sourceChanged}
     {createdAll}
-    {reportedHere}
+    reportedHere={entryCreate.reportedHere}
     hasSnapshot={entrySession.hasSnapshot}
     bind:takeTrigger
     {reload}
@@ -1556,7 +1499,7 @@ async function saveAddress() {
                     class="btn btn-primary btn-create"
                     type="button"
                     disabled={actionBusy || entryLock.locked}
-                    onclick={() => createInPane(shown, false)}
+                    onclick={() => entryCreate.createInPane(shown, false)}
                   >
                     {m.editor_create_from({ language: language(entry.sourceLocale) }, options)}
                   </button>
@@ -1565,36 +1508,36 @@ async function saveAddress() {
                       class="btn btn-fill"
                       type="button"
                       disabled={actionBusy || entryLock.locked}
-                      onclick={() => createInPane(shown, true)}
+                      onclick={() => entryCreate.createInPane(shown, true)}
                     >
                       {m.editor_create_prefill({}, options)}
                     </button>
                   {/if}
-                  {#if missingTargets.length > 1}
+                  {#if entryCreate.missingTargets.length > 1}
                     <p>
                       <button
                         class="btn btn-create-all"
                         type="button"
                         disabled={actionBusy || entryLock.locked}
-                        onclick={() => createAll(false)}
+                        onclick={() => entryCreate.createAll(false)}
                       >
-                        {m.editor_create_all({ count: missingTargets.length }, options)}
+                        {m.editor_create_all({ count: entryCreate.missingTargets.length }, options)}
                       </button>
                       {#if entry.translator}
                         <button
                           class="btn btn-fill-all"
                           type="button"
                           disabled={actionBusy || entryLock.locked}
-                          onclick={() => createAll(true)}
+                          onclick={() => entryCreate.createAll(true)}
                         >
-                          {m.editor_create_all_prefill({ count: missingTargets.length }, options)}
+                          {m.editor_create_all_prefill({ count: entryCreate.missingTargets.length }, options)}
                         </button>
                       {/if}
                     </p>
                   {/if}
-                  {#if creatingAll}
+                  {#if entryCreate.creatingAll}
                     <p role="status"
-                      >{m.editor_creating_language({ language: language(creatingAll) }, options)}</p
+                      >{m.editor_creating_language({ language: language(entryCreate.creatingAll) }, options)}</p
                     >
                   {/if}
                   {#if !entry.singleton}
@@ -1616,19 +1559,19 @@ async function saveAddress() {
                 <div class="notice notice-danger" role="alert">{@render feedback(entryActions.actionFailed)}</div
                 >
               {/if}
-              {#if createAllFailure}
+              {#if entryCreate.createAllFailure}
                 <div class="notice notice-danger" role="alert">
-                  {feedbackText(createAllFailure)}
-                  {#if createAllFailure.code === 'CREATE_ALL_RELOAD_FAILED'}
+                  {feedbackText(entryCreate.createAllFailure)}
+                  {#if entryCreate.createAllFailure.code === 'CREATE_ALL_RELOAD_FAILED'}
                     <button class="btn-link" type="button" onclick={() => void reload()}
                       >{m.editor_lock_reload({}, options)}</button
                     >
                   {/if}
                 </div>
               {/if}
-              {#if localeFailure?.locale === shown}
+              {#if entryCreate.localeFailure?.locale === shown}
                 <div class="notice notice-danger" role="alert"
-                  >{@render feedback(localeFailure.message)}</div
+                  >{@render feedback(entryCreate.localeFailure.message)}</div
                 >
               {/if}
             </div>
