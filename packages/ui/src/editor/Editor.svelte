@@ -28,7 +28,7 @@ import type { CanvasRenderRequest } from '../canvas/canvas-renderer';
 import OffsiteDialog, { type Target } from '../content/Offsite.svelte';
 import { invalidateEntryDirectory } from '../entry-directory.js';
 import { messageDetail, messageText, retainedFailure } from '../errors.js';
-import { formatExactTime, formatLanguageName, messageOptions, type UiLocale } from '../i18n.js';
+import { formatLanguageName, messageOptions, type UiLocale } from '../i18n.js';
 import {
   guardEntryActions,
   guardNavigation,
@@ -67,6 +67,7 @@ import { createEntryLock } from './entry-lock.svelte';
 import { createEntryPublish } from './entry-publish.svelte';
 import { drawn, focusField, land, revealField } from './field-reveal';
 import Translation from './Translation.svelte';
+import UntranslatedPane from './UntranslatedPane.svelte';
 
 type Data = Record<string, unknown>;
 let {
@@ -1394,145 +1395,32 @@ function navigateCanvasEntry(target: {
         <!-- Split replaces a comparison pane rather than adding a third column. -->
         {#if mode !== 'canvas' && !(mode === 'split' && !alone) && shown && untranslated(shown)}
           <!-- An empty form here would autosave a file nobody asked for. -->
-          <section
-            class={[
-              'pane is-locale',
-              {
-                'is-mobile-hidden':
-                  (mode === 'split' && mobilePane === 'page') ||
-                  (side && !alone && mobilePane === 'form'),
-              },
-            ]}
-            aria-labelledby="pane-{shown}"
+          <UntranslatedPane
+            {entry}
+            locale={shown}
+            {uiLocale}
+            off={off(shown)}
+            {putBack}
+            blocked={actionBusy || entryLock.locked}
+            missing={entryCreate.missingTargets.length}
+            creatingAll={entryCreate.creatingAll}
+            actionFailed={entryActions.actionFailed}
+            createAllFailure={entryCreate.createAllFailure}
+            localeFailure={entryCreate.localeFailure?.locale === shown
+              ? entryCreate.localeFailure.message
+              : undefined}
+            mobileHidden={(mode === 'split' && mobilePane === 'page') ||
+              (side && !alone && mobilePane === 'form')}
+            heading={paneHeading}
+            next={queueNext}
+            {feedback}
             onfocusout={canvasCompleted}
-          >
-            <div class="pane-head"
-              >{@render paneHeading(shown)}<span class="spacer"></span>{@render queueNext()}</div
-            >
-            <div class="empty">
-              {#if off(shown)}
-                <div class="is-wide">
-                  <p>{m.editor_not_offered({ language: language(shown) }, options)}</p>
-                  {#if putBack}
-                    <p>
-                      {m.editor_turned_off_before({}, options)}
-                      <time datetime={new Date(putBack.at).toISOString()}
-                        >{formatExactTime(putBack.at, uiLocale)}</time
-                      >{m.editor_turned_off_after({ language: language(shown) }, options)}
-                    </p>
-                    <button
-                      class="btn btn-primary"
-                      type="button"
-                      disabled={actionBusy || entryLock.locked}
-                      onclick={() => entryActions.ask('/admin/api/restore', { commit_sha: putBack?.commit_sha })}
-                    >
-                      {m.editor_restore_words({ language: language(shown) }, options)}
-                    </button>
-                    <p>
-                      {m.editor_or({}, options)}
-                      <button
-                        class="btn-link"
-                        type="button"
-                        disabled={actionBusy || entryLock.locked}
-                        onclick={() => entryActions.offer(shown, true)}
-                        >{m.editor_restore_empty({ language: language(shown) }, options)}</button
-                      >.
-                    </p>
-                  {:else}
-                    <button
-                      class="btn"
-                      type="button"
-                      disabled={actionBusy || entryLock.locked}
-                      onclick={() => entryActions.offer(shown, true)}
-                    >
-                      {m.editor_turn_back_on({ language: language(shown) }, options)}
-                    </button>
-                  {/if}
-                </div>
-              {:else}
-                <div class="is-wide">
-                  <p>{m.editor_create_translation_intro({}, options)}</p>
-                  <button
-                    class="btn btn-primary btn-create"
-                    type="button"
-                    disabled={actionBusy || entryLock.locked}
-                    onclick={() => entryCreate.createInPane(shown, false)}
-                  >
-                    {m.editor_create_from({ language: language(entry.sourceLocale) }, options)}
-                  </button>
-                  {#if entry.translator}
-                    <button
-                      class="btn btn-fill"
-                      type="button"
-                      disabled={actionBusy || entryLock.locked}
-                      onclick={() => entryCreate.createInPane(shown, true)}
-                    >
-                      {m.editor_create_prefill({}, options)}
-                    </button>
-                  {/if}
-                  {#if entryCreate.missingTargets.length > 1}
-                    <p>
-                      <button
-                        class="btn btn-create-all"
-                        type="button"
-                        disabled={actionBusy || entryLock.locked}
-                        onclick={() => entryCreate.createAll(false)}
-                      >
-                        {m.editor_create_all({ count: entryCreate.missingTargets.length }, options)}
-                      </button>
-                      {#if entry.translator}
-                        <button
-                          class="btn btn-fill-all"
-                          type="button"
-                          disabled={actionBusy || entryLock.locked}
-                          onclick={() => entryCreate.createAll(true)}
-                        >
-                          {m.editor_create_all_prefill({ count: entryCreate.missingTargets.length }, options)}
-                        </button>
-                      {/if}
-                    </p>
-                  {/if}
-                  {#if entryCreate.creatingAll}
-                    <p role="status"
-                      >{m.editor_creating_language({ language: language(entryCreate.creatingAll) }, options)}</p
-                    >
-                  {/if}
-                  {#if !entry.singleton}
-                    <p>
-                      {m.editor_or({}, options)}
-                      <button
-                        class="btn-link"
-                        type="button"
-                        disabled={actionBusy || entryLock.locked}
-                        onclick={() => entryActions.offer(shown, false)}
-                        >{m.editor_do_not_offer({ language: language(shown) }, options)}</button
-                      >
-                      {m.editor_no_file_written({}, options)}
-                    </p>
-                  {/if}
-                </div>
-              {/if}
-              {#if entryActions.actionFailed}
-                <div class="notice notice-danger" role="alert">{@render feedback(entryActions.actionFailed)}</div
-                >
-              {/if}
-              {#if entryCreate.createAllFailure}
-                <div class="notice notice-danger" role="alert">
-                  {feedbackText(entryCreate.createAllFailure)}
-                  {#if entryCreate.createAllFailure.code === 'CREATE_ALL_RELOAD_FAILED'}
-                    <button class="btn-link" type="button" onclick={() => void reload()}
-                      >{m.editor_lock_reload({}, options)}</button
-                    >
-                  {/if}
-                </div>
-              {/if}
-              {#if entryCreate.localeFailure?.locale === shown}
-                <div class="notice notice-danger" role="alert"
-                  >{@render feedback(entryCreate.localeFailure.message)}</div
-                >
-              {/if}
-            </div>
-          </section>
+            onrestore={() => entryActions.ask('/admin/api/restore', { commit_sha: putBack?.commit_sha })}
+            onoffer={(on) => entryActions.offer(shown, on)}
+            oncreate={(fill) => entryCreate.createInPane(shown, fill)}
+            oncreateall={(fill) => entryCreate.createAll(fill)}
+            onreload={() => void reload()}
+          />
         {:else if mode !== 'canvas' && !(mode === 'split' && !alone) && shown}
           <!-- Keyed: another language is another file, not the same one under a new name. -->
           {#key shown}
