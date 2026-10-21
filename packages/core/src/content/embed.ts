@@ -39,7 +39,14 @@ function seconds(raw: string | null | undefined): number | undefined {
 }
 
 // Google writes spaces as `+`, restored before percent decoding so a real `%2B` survives.
-const place = (segment: string) => decodeURIComponent(segment.replace(/\+/g, '%20'));
+// Broken percent-encoding yields no place, which ends in the normal refusal.
+function place(segment: string): string {
+  try {
+    return decodeURIComponent(segment.replace(/\+/g, '%20'));
+  } catch {
+    return '';
+  }
+}
 
 const video = (
   provider: 'youtube' | 'vimeo',

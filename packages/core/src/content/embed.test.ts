@@ -86,6 +86,13 @@ test.each([
   expect(parseEmbedUrl(url)).toEqual({ refused: UNKNOWN, reason: 'unknown' });
 });
 
+test('a map place with broken percent-encoding is refused, not thrown', () => {
+  expect(parseEmbedUrl('https://www.google.com/maps/place/%ZZ')).toEqual({
+    refused: UNKNOWN,
+    reason: 'unknown',
+  });
+});
+
 // The two things Google's own Share dialog hands over: each says what to do next instead.
 test('a shortened map link says to open it first', () => {
   expect(parseEmbedUrl('https://maps.app.goo.gl/AbCdEf123')).toEqual({

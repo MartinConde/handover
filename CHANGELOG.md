@@ -4,6 +4,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- The "Restored the version from …" banner in the editor now shows its date in the admin's language
+  instead of always in English.
+- A Google Maps place link with broken percent-encoding (such as `/maps/place/%ZZ`) is now refused
+  like any other unrecognised link instead of leaving the embed field blank.
 - `astro-handover/schema` and `astro-handover/cron` can now be loaded with `require`, so a
   `drizzle-kit` schema file that re-exports `astro-handover/schema` no longer fails with
   `ERR_PACKAGE_PATH_NOT_EXPORTED`.
