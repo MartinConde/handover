@@ -1,7 +1,7 @@
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
 import { deferred, q } from '../test-helpers.fixture.js';
-import Media from './Media.svelte';
+import Media from './MediaPicker.svelte';
 import { type MediaItem, uploadImage } from './upload.js';
 
 // jsdom has no canvas, so the upload result is the one boundary faked; upload.ts is tested alone.

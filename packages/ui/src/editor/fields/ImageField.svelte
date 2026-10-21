@@ -1,7 +1,7 @@
 <script lang="ts">
 import type { Field } from '@handover/core';
 import Focal from '../../media/Focal.svelte';
-import Media from '../../media/Media.svelte';
+import MediaPicker from '../../media/MediaPicker.svelte';
 import * as m from '../../paraglide/messages.js';
 import { aspect, centred, type FieldLevel } from './field-level.js';
 import ImageCard from './ImageCard.svelte';
@@ -77,7 +77,7 @@ let framing = $state(false);
   />
 {/if}
 {#if level.picker === id}
-  <Media
+  <MediaPicker
     kind="images"
     label={text}
     preset={field.preset}

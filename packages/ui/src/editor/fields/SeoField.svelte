@@ -7,7 +7,7 @@ import {
   unsafeLinkScheme,
 } from '@handover/core';
 import Focal from '../../media/Focal.svelte';
-import Media from '../../media/Media.svelte';
+import MediaPicker from '../../media/MediaPicker.svelte';
 import type { MediaItem } from '../../media/upload.js';
 import * as m from '../../paraglide/messages.js';
 import MediaImage from '../../shared/MediaImage.svelte';
@@ -317,7 +317,7 @@ function put(key: string, value: unknown) {
   />
 {/if}
 {#if level.picker === `${id}.image`}
-  <Media
+  <MediaPicker
     kind="images"
     label={m.field_seo_social_image({}, options)}
     preset={SOCIAL_CARD}

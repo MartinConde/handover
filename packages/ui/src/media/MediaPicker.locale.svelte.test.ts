@@ -2,7 +2,7 @@ import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
 import type { UiLocale } from '../i18n.js';
 import { deferred, q } from '../test-helpers.fixture.js';
-import Media from './Media.svelte';
+import Media from './MediaPicker.svelte';
 import type { MediaItem } from './upload.js';
 
 const item = (id: string, filename: string): MediaItem => ({

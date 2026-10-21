@@ -7,7 +7,15 @@ import * as m from '../paraglide/messages.js';
 import { request as fetch, sitePath } from '../request.js';
 import MediaImage from '../shared/MediaImage.svelte';
 import Modal from '../shared/Modal.svelte';
-import { fileSize, type MediaItem, MediaUploadError, uploadFile, uploadImage } from './upload.js';
+import {
+  droppedFiles,
+  fileSize,
+  type MediaItem,
+  name,
+  uploadFile,
+  uploadImage,
+  uploadMessage,
+} from './upload.js';
 
 let {
   kind,
@@ -118,14 +126,6 @@ const queueText = (state: QueueState) => {
   if (state === 'reused') return m.media_upload_reused({}, options);
   return m.media_upload_uploaded({}, options);
 };
-const uploadMessage = (error: unknown): UiMessage =>
-  error instanceof MediaUploadError
-    ? error.descriptor
-    : error instanceof Error
-      ? { code: 'MEDIA_UPLOAD_FAILED', detail: error.message }
-      : { code: 'MEDIA_UPLOAD_FAILED' };
-
-const name = (item: MediaItem) => item.filename ?? item.src.replace(/^\w+\//, '');
 const extensions = $derived(
   accept.map((mime) => (mime.split('/').pop() ?? '').toUpperCase()).join(', '),
 );
@@ -175,9 +175,8 @@ function choose(item: MediaItem) {
 }
 
 function drop(e: DragEvent) {
-  e.preventDefault();
   over = false;
-  take(Array.from(e.dataTransfer?.files ?? []));
+  take(droppedFiles(e));
 }
 </script>
 

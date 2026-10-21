@@ -1,6 +1,6 @@
 <script lang="ts">
 import type { Field } from '@handover/core';
-import Media from '../../media/Media.svelte';
+import MediaPicker from '../../media/MediaPicker.svelte';
 import { fileSize } from '../../media/upload.js';
 import * as m from '../../paraglide/messages.js';
 import type { FieldLevel } from './field-level.js';
@@ -63,7 +63,7 @@ const kind = $derived(
   </div>
 {/if}
 {#if level.picker === id}
-  <Media
+  <MediaPicker
     kind="files"
     label={text}
     preset={{}}

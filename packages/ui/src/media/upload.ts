@@ -57,6 +57,21 @@ export class MediaUploadError extends Error {
   }
 }
 
+export const uploadMessage = (error: unknown): UiMessage =>
+  error instanceof MediaUploadError
+    ? error.descriptor
+    : error instanceof Error
+      ? { code: 'MEDIA_UPLOAD_FAILED', detail: error.message }
+      : { code: 'MEDIA_UPLOAD_FAILED' };
+
+export const name = (item: Pick<MediaItem, 'filename' | 'src'>) =>
+  item.filename ?? item.src.replace(/^\w+\//, '');
+
+export const droppedFiles = (e: DragEvent) => {
+  e.preventDefault();
+  return Array.from(e.dataTransfer?.files ?? []);
+};
+
 const detailOf = (error: unknown) => (error instanceof Error ? error.message : undefined);
 const failure = (code: string, error?: unknown, status?: number, message?: string) =>
   new MediaUploadError(

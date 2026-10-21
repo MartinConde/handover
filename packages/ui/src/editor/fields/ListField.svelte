@@ -6,7 +6,7 @@ import { type Field, type Form, labelIn, newId, type Translation } from '@handov
 import type { Snippet } from 'svelte';
 import { capitalise } from '../../i18n.js';
 import Focal from '../../media/Focal.svelte';
-import Media from '../../media/Media.svelte';
+import MediaPicker from '../../media/MediaPicker.svelte';
 import type { MediaItem } from '../../media/upload.js';
 import * as m from '../../paraglide/messages.js';
 import MediaImage from '../../shared/MediaImage.svelte';
@@ -362,7 +362,7 @@ function pickedInto(items: MediaItem[]) {
     >
   </div>
   {#if level.picker === id}
-    <Media
+    <MediaPicker
       kind="images"
       label={text}
       {preset}
@@ -422,7 +422,7 @@ function pickedInto(items: MediaItem[]) {
       />
     {/if}
     {#if level.picker === cellId}
-      <Media
+      <MediaPicker
         kind="images"
         label={text}
         {preset}

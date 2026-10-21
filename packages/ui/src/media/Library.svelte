@@ -10,7 +10,15 @@ import ConfirmDialog from '../shared/ConfirmDialog.svelte';
 import MediaImage from '../shared/MediaImage.svelte';
 import Crop from './Crop.svelte';
 import Focal from './Focal.svelte';
-import { fileSize, type LibraryItem, MediaUploadError, uploadFile, uploadImage } from './upload.js';
+import {
+  droppedFiles,
+  fileSize,
+  type LibraryItem,
+  name,
+  uploadFile,
+  uploadImage,
+  uploadMessage,
+} from './upload.js';
 
 let {
   base = '',
@@ -177,7 +185,6 @@ function retryRead(reconcileSelection = false) {
   void load(kind, query, epoch, reconcileSelection);
 }
 
-const name = (item: LibraryItem) => item.filename ?? item.src.replace(/^\w+\//, '');
 const extension = (item: LibraryItem) => (item.mime?.split('/').pop() ?? '').toUpperCase();
 const count = (item: LibraryItem) => {
   const n = item.uses?.length ?? 0;
@@ -422,12 +429,7 @@ async function take(files: File[]) {
       known.add(media.id);
       row.state = held ? 'reused' : 'uploaded';
     } catch (err) {
-      row.state =
-        err instanceof MediaUploadError
-          ? err.descriptor
-          : err instanceof Error
-            ? { code: 'MEDIA_UPLOAD_FAILED', detail: err.message }
-            : { code: 'MEDIA_UPLOAD_FAILED' };
+      row.state = uploadMessage(err);
       row.failed = true;
     }
   }
@@ -438,9 +440,8 @@ async function take(files: File[]) {
 }
 
 function drop(e: DragEvent) {
-  e.preventDefault();
   over = false;
-  take(Array.from(e.dataTransfer?.files ?? []));
+  take(droppedFiles(e));
 }
 
 function show(next: 'images' | 'files') {
