@@ -7,7 +7,7 @@ import {
   type WordPart,
 } from '@handover/core';
 import { type Snippet, untrack } from 'svelte';
-import { messageDetail, messageText, responseMessage, type UiMessage } from '../errors.js';
+import { messageDetail, messageText, retainedFailure, type UiMessage } from '../errors.js';
 import { formatLanguageName, messageOptions, type UiLocale } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
 import { request as fetch, postJson, uncertainResponse } from '../request.js';
@@ -170,7 +170,7 @@ async function fill(paths?: string[]) {
     if (!res.ok) {
       refusal = uncertainResponse(res)
         ? { code: 'TRANSLATION_UNCONFIRMED', status: res.status }
-        : await translationFailure(res);
+        : await retainedFailure(res, 'TRANSLATION_FAILED');
       return undefined;
     }
     return (await res.json()) as { data: Data; pending: boolean; revision?: string };
@@ -184,18 +184,6 @@ async function fill(paths?: string[]) {
   base = structuredClone(body.data);
   data = session.snapshot(locale);
   onsaved?.(body.pending, body.data);
-}
-
-async function translationFailure(response: Response): Promise<UiMessage> {
-  const message = await responseMessage(response, 'TRANSLATION_FAILED');
-  if (
-    message.detail ||
-    (response.status !== 409 && response.status !== 503) ||
-    !response.headers.get('content-type')?.startsWith('text/plain')
-  )
-    return message;
-  const detail = (await response.clone().text()).trim();
-  return detail ? { ...message, detail } : message;
 }
 
 const named = (of: string) => formatLanguageName(of, uiLocale);

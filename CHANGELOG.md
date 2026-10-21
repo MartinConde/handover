@@ -13,6 +13,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - An unexpected admin API error is logged (`admin api: <method> <path> failed`) before the 500.
 - The admin sidebar shows one icon for every collection, and global cards share one colour,
   instead of special cases for the demo's collection names and card positions.
+- A refused machine translation shows the server's plain-text reason as technical detail
+  whatever its status, as other editor actions do, not only for `409` and `503`.
 
 ## 0.1.0 — first release
 

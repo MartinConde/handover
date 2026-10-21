@@ -227,6 +227,46 @@ test('a refused machine translation releases the target and shows the existing f
   vi.unstubAllGlobals();
 });
 
+test("a plain-text refusal of any status keeps the server's words as technical detail", async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => new Response('Not found', { status: 404 })),
+  );
+  const fields = [
+    { path: ['title'], label: 'Title', type: 'text', required: false },
+  ] satisfies Field[];
+  const session = createEntrySession({
+    sourceLocale: 'en',
+    data: { title: 'Seaview Cottage' },
+    translations: { de: {} },
+    revisions: { en: 'source-revision', de: 'translation-revision' },
+    form: { fields, blocks: {} },
+  });
+  session.configureAutosave(async () => true);
+  localeApp = mount(Translation, {
+    target: document.body,
+    props: {
+      collection: 'listings',
+      slug: 'seaview-cottage',
+      locale: 'de',
+      fields,
+      blocks: {},
+      session,
+      data: session.snapshot('de'),
+      source: 'en',
+      translator: true,
+    },
+  });
+
+  document.querySelector<HTMLButtonElement>('button.btn-fill')?.click();
+  await vi.waitFor(() => expect(document.querySelector('[role="alert"]')).not.toBeNull());
+
+  expect(document.querySelector('[role="alert"]')?.textContent).toContain(
+    'Technical detail: Not found',
+  );
+  session.closeSaveGate();
+});
+
 test('a reply after the session closes does not replace the mounted target snapshot', async () => {
   const reply = deferred<Response>();
   const fetchMock = vi.fn(() => reply.promise);
