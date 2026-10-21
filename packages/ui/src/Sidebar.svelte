@@ -203,7 +203,7 @@ const initial = $derived((session.user.name || session.user.email || '?').charAt
       {#each collections as name (name)}
         <a
           href={sitePath(`/admin/c/${name}`)}
-          data-icon={['listings', 'pages', 'team', 'blog'].includes(name) ? name : 'collection'}
+          data-icon="collection"
           aria-current={collection === name ? 'page' : undefined}
           ><span class="nav-text">{capitalise(collectionName(name, uiLocale))}</span></a
         >

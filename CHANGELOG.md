@@ -11,6 +11,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   answering `{ commitSha }`, `BuildStatus`, and the results of `publishDrafts`, `revertCommit`,
   `restoreCommit`, `renameEntry` and `deleteEntry`. The admin API's JSON keys are unchanged.
 - An unexpected admin API error is logged (`admin api: <method> <path> failed`) before the 500.
+- The admin sidebar shows one icon for every collection, and global cards share one colour,
+  instead of special cases for the demo's collection names and card positions.
 
 ## 0.1.0 — first release
 
