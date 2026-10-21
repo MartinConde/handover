@@ -4,6 +4,7 @@ import { messageDetail, messageText, responseMessage, type UiMessage } from '../
 import { formatRelativeTime, messageOptions, type UiLocale } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
 import { request as fetch, postJson, sitePath, uncertainResponse } from '../request.js';
+import { initials } from '../shared/activity-line';
 import ConfirmDialog from '../shared/ConfirmDialog.svelte';
 import { dismiss } from '../shared/dismiss.js';
 import Modal from '../shared/Modal.svelte';
@@ -61,13 +62,6 @@ let trigger = $state<HTMLElement>();
 $effect(() => {
   load();
 });
-
-const initials = (member: Member) =>
-  (member.name || member.email)
-    .split(/[\s@.]+/)
-    .slice(0, 2)
-    .map((part) => part.charAt(0).toUpperCase())
-    .join('');
 
 const methodName = (method: NonNullable<Member['method']>) => {
   if (method === 'github') return 'GitHub';
@@ -232,7 +226,7 @@ async function remove() {
         <div class="row" role="row">
           <div class="td title" role="cell">
             <span class={['avatar avatar-sm', { 'is-pending': member.pending }]} aria-hidden="true"
-              >{initials(member)}</span
+              >{initials(member.name || member.email)}</span
             >
             <span class="who">
               <span class="name">

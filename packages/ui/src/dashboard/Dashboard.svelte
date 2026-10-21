@@ -419,7 +419,7 @@ const oldest = $derived(Math.min(...pending.map((entry) => entry.updated_at)));
             <li>
               <div class="activity-row">
                 <span class={['avatar avatar-sm', { 'is-system': !event.user }]} aria-hidden="true"
-                  >{event.user ? initials(event) || '?' : '⚙'}</span
+                  >{event.user ? initials(event.user?.name || event.user?.email || '') || '?' : '⚙'}</span
                 >
                 <p class="said">
                   {line.lead}{#if line.link}<a href={sitePath(line.link.href)}>{line.link.label}</a>{' '}<span class="sub">{line.link.locale.toUpperCase()}</span>{line.tail ?? ''}{/if}

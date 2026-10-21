@@ -228,7 +228,7 @@ const RESTORABLE = ['entry-delete', 'locale-off'];
                 'avatar avatar-sm',
                 { 'is-system': !event.user, 'is-gone': event.user && !event.user.name && !event.user.email },
               ]}
-              aria-hidden="true">{event.user ? initials(event) || '?' : '⚙'}</span
+              aria-hidden="true">{event.user ? initials(event.user?.name || event.user?.email || '') || '?' : '⚙'}</span
             >
             <p class="said">
               {line.lead}{#if line.link}<a href={sitePath(line.link.href)}>{line.link.label}</a>{' '}<span class="sub">{line.link.locale.toUpperCase()}</span>{line.tail ?? ''}{/if}

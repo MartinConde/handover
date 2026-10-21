@@ -12,6 +12,7 @@ import {
 } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
 import { request as fetch, sitePath, uncertainResponse } from '../request.js';
+import { initials } from '../shared/activity-line';
 import Modal from '../shared/Modal.svelte';
 import Diff from './Diff.svelte';
 
@@ -229,13 +230,6 @@ const spoken = (of: string[]) =>
   of.length > 1
     ? m.history_languages_spoken({ languages: formatLanguageList(of, uiLocale) }, options)
     : '';
-
-const initials = (name: string) =>
-  name
-    .split(/[\s@.]+/)
-    .slice(0, 2)
-    .map((part) => part.charAt(0).toUpperCase())
-    .join('');
 </script>
 
 <div class="history">

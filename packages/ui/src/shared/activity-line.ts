@@ -382,8 +382,8 @@ export function said(event: ActivityEvent, people: Person[] = [], locale: UiLoca
     : { lead: m.activity_unknown({ actor, kind: event.kind }, options) };
 }
 
-export const initials = (event: ActivityEvent) =>
-  (event.user?.name || event.user?.email || '')
+export const initials = (name: string) =>
+  name
     .split(/[\s@.]+/)
     .slice(0, 2)
     .map((part) => part.charAt(0).toUpperCase())
