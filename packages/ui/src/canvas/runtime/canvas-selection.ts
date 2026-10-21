@@ -290,77 +290,12 @@ export function createCanvasSelectionRuntime(options: CanvasSelectionRuntimeOpti
     announce,
     redraw: () => scheduleDraw(),
   });
-  const draw = () => {
-    geometryFrame = 0;
-    if (disposed) return;
-    const step = drag.step();
-    if (step === 'restoring') {
-      dropPreview.hidden = true;
-      scheduleDraw();
-      return;
-    }
-    if (step === 'finished') rebuild();
-    else if (step) {
-      dropPreview.hidden = !step.placeholder;
-      if (step.placeholder) {
-        const bounds = step.placeholder.getBoundingClientRect();
-        Object.assign(dropPreview.style, {
-          left: `${bounds.left}px`,
-          top: `${bounds.top}px`,
-          width: `${bounds.width}px`,
-          height: `${bounds.height}px`,
-        });
-      }
-      boxes.replaceChildren();
-      path.hidden = true;
-      hoverPath.hidden = true;
-      actions.style.opacity = '0';
-      scheduleDraw();
-      return;
-    }
-    actions.style.opacity = '';
-    dropPreview.hidden = true;
-    const focused = shadow.activeElement instanceof HTMLElement ? shadow.activeElement : undefined;
-    const focusedAncestor = focused?.dataset.canvasAncestor;
-    const focusedLabel = focused?.closest('.path');
-    const focusedAction = focused?.dataset.canvasAction;
-    const restoreActionFocus = () => {
-      if (mode === 'select' && !root.hasFocus()) return;
-      const replacement = focusedAction
-        ? actions.querySelector<HTMLElement>(`[data-canvas-action="${focusedAction}"]`)
-        : undefined;
-      replacement?.focus({ preventScroll: true });
-      if (focusedAncestor && focusedLabel instanceof HTMLElement && !focusedLabel.hidden) {
-        const ancestorButton = Array.from(
-          focusedLabel.querySelectorAll<HTMLElement>('[data-canvas-ancestor]'),
-        ).find((button) => button.dataset.canvasAncestor === focusedAncestor);
-        (ancestorButton ?? focusedLabel).focus({ preventScroll: true });
-      }
-    };
-    boxes.replaceChildren();
-    actions.replaceChildren();
-    hoverPath.hidden = true;
-    sharedPanel.hidden = !sharedOpen || !enabled;
-    if (!enabled) {
-      drag.clear();
-      path.hidden = true;
-      restoreActionFocus();
-      return;
-    }
-    const measured = new Map<Element, DOMRect>();
-    const boundsOf = (element: Element) => {
-      const found = measured.get(element);
-      if (found) return found;
-      const bounds = element.getBoundingClientRect();
-      measured.set(element, bounds);
-      return bounds;
-    };
-    path.style.maxWidth = '';
-    const selectedNode = nodeForSelection(selected);
-    const hoveredNode = nodeForElement(hoveredElement);
-    const wantsSortables =
-      selectedNode?.kind === 'block' && allowedActions.includes('move') && !options.isEditing?.();
-    if (!wantsSortables) drag.clear();
+  // Returns makeBox because the hover box is added later, from the path builder.
+  const buildBoxes = (
+    selectedNode: ReturnType<typeof nodeForSelection>,
+    hoveredNode: ReturnType<typeof nodeForSelection>,
+    boundsOf: (element: Element) => DOMRect,
+  ) => {
     const makeBox = (element: Element, state: 'selected' | 'hover' | 'invalid') => {
       if (visible.get(element) === false) return;
       const bounds = boundsOf(element);
@@ -398,7 +333,15 @@ export function createCanvasSelectionRuntime(options: CanvasSelectionRuntimeOpti
     }
     for (const node of invalidNodes)
       for (const element of node.elements) makeBox(element, 'invalid');
-
+    return makeBox;
+  };
+  // Returns false when there is nothing to label, so the action bar is skipped.
+  const buildPath = (
+    selectedNode: ReturnType<typeof nodeForSelection>,
+    hoveredNode: ReturnType<typeof nodeForSelection>,
+    makeBox: ReturnType<typeof buildBoxes>,
+    boundsOf: (element: Element) => DOMRect,
+  ) => {
     const breadcrumb = (label: HTMLElement, node: InternalNode, element: Element, details = '') => {
       label.replaceChildren();
       label.tabIndex = -1;
@@ -474,8 +417,7 @@ export function createCanvasSelectionRuntime(options: CanvasSelectionRuntimeOpti
     const anchor = selectedElement ?? hoveredElement ?? labelled?.elements[0];
     if (!labelled || !anchor) {
       path.hidden = true;
-      restoreActionFocus();
-      return;
+      return false;
     }
     const bounds = boundsOf(anchor);
     path.hidden = bounds.bottom < 0 || bounds.top > owner.innerHeight;
@@ -514,17 +456,20 @@ export function createCanvasSelectionRuntime(options: CanvasSelectionRuntimeOpti
       )
         hoverPath.style.top = `${selectedLabel.bottom + 2}px`;
     }
-    if (!selectedNode || !selectedElement || mode !== 'edit') {
-      restoreActionFocus();
-      return;
-    }
+    return true;
+  };
+  // Every return path ends in restoreActionFocus() in draw.
+  const buildActionBar = (
+    selectedNode: ReturnType<typeof nodeForSelection>,
+    boundsOf: (element: Element) => DOMRect,
+  ) => {
+    if (!selectedNode || !selectedElement || mode !== 'edit') return;
     const selectedBounds = boundsOf(selectedElement);
     if (sharedOpen) {
       sharedPanel.style.left = `${Math.max(8, Math.min(selectedBounds.left, owner.innerWidth - sharedPanel.offsetWidth - 8))}px`;
       sharedPanel.style.top = `${Math.max(8, Math.min(selectedBounds.bottom + 8, owner.innerHeight - sharedPanel.offsetHeight - 8))}px`;
     }
     if (selectedBounds.bottom < 0 || selectedBounds.top > owner.innerHeight) {
-      restoreActionFocus();
       return;
     }
     const addAction = (
@@ -610,7 +555,6 @@ export function createCanvasSelectionRuntime(options: CanvasSelectionRuntimeOpti
       );
     if (options.isEditing?.()) {
       placeActionRow();
-      restoreActionFocus();
       return;
     }
     if (selectedNode.kind === 'block') {
@@ -691,6 +635,84 @@ export function createCanvasSelectionRuntime(options: CanvasSelectionRuntimeOpti
       );
     }
     placeActionRow();
+  };
+  const draw = () => {
+    geometryFrame = 0;
+    if (disposed) return;
+    const step = drag.step();
+    if (step === 'restoring') {
+      dropPreview.hidden = true;
+      scheduleDraw();
+      return;
+    }
+    if (step === 'finished') rebuild();
+    else if (step) {
+      dropPreview.hidden = !step.placeholder;
+      if (step.placeholder) {
+        const bounds = step.placeholder.getBoundingClientRect();
+        Object.assign(dropPreview.style, {
+          left: `${bounds.left}px`,
+          top: `${bounds.top}px`,
+          width: `${bounds.width}px`,
+          height: `${bounds.height}px`,
+        });
+      }
+      boxes.replaceChildren();
+      path.hidden = true;
+      hoverPath.hidden = true;
+      actions.style.opacity = '0';
+      scheduleDraw();
+      return;
+    }
+    actions.style.opacity = '';
+    dropPreview.hidden = true;
+    const focused = shadow.activeElement instanceof HTMLElement ? shadow.activeElement : undefined;
+    const focusedAncestor = focused?.dataset.canvasAncestor;
+    const focusedLabel = focused?.closest('.path');
+    const focusedAction = focused?.dataset.canvasAction;
+    const restoreActionFocus = () => {
+      if (mode === 'select' && !root.hasFocus()) return;
+      const replacement = focusedAction
+        ? actions.querySelector<HTMLElement>(`[data-canvas-action="${focusedAction}"]`)
+        : undefined;
+      replacement?.focus({ preventScroll: true });
+      if (focusedAncestor && focusedLabel instanceof HTMLElement && !focusedLabel.hidden) {
+        const ancestorButton = Array.from(
+          focusedLabel.querySelectorAll<HTMLElement>('[data-canvas-ancestor]'),
+        ).find((button) => button.dataset.canvasAncestor === focusedAncestor);
+        (ancestorButton ?? focusedLabel).focus({ preventScroll: true });
+      }
+    };
+    boxes.replaceChildren();
+    actions.replaceChildren();
+    hoverPath.hidden = true;
+    sharedPanel.hidden = !sharedOpen || !enabled;
+    if (!enabled) {
+      drag.clear();
+      path.hidden = true;
+      restoreActionFocus();
+      return;
+    }
+    const measured = new Map<Element, DOMRect>();
+    const boundsOf = (element: Element) => {
+      const found = measured.get(element);
+      if (found) return found;
+      const bounds = element.getBoundingClientRect();
+      measured.set(element, bounds);
+      return bounds;
+    };
+    path.style.maxWidth = '';
+    const selectedNode = nodeForSelection(selected);
+    const hoveredNode = nodeForElement(hoveredElement);
+    const wantsSortables =
+      selectedNode?.kind === 'block' && allowedActions.includes('move') && !options.isEditing?.();
+    if (!wantsSortables) drag.clear();
+    const makeBox = buildBoxes(selectedNode, hoveredNode, boundsOf);
+    if (!buildPath(selectedNode, hoveredNode, makeBox, boundsOf)) {
+      restoreActionFocus();
+      return;
+    }
+    buildActionBar(selectedNode, boundsOf);
     restoreActionFocus();
   };
   const scheduleDraw = () => {
