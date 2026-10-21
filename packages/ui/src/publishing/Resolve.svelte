@@ -1,6 +1,6 @@
 <script lang="ts">
 import type { Change, MergedChange, Question } from '@handover/core';
-import { messageLine, responseMessage, type UiMessage } from '../errors.js';
+import { messageDetail, messageText, responseMessage, type UiMessage } from '../errors.js';
 import { formatExactTime, messageOptions, type UiLocale } from '../i18n.js';
 import { coordinateEntryReplacement } from '../navigate';
 import * as m from '../paraglide/messages.js';
@@ -35,7 +35,7 @@ let answers = $state<Record<string, 'ours' | 'theirs'>>({});
 let loading = $state(true);
 let busy = $state(false);
 let error = $state<UiMessage>();
-const errorText = $derived(error ? messageLine(error, uiLocale) : '');
+const errorText = $derived(error ? messageText(error, uiLocale) : '');
 let reportKnown = $state(false);
 let reportCurrent = $state(false);
 
@@ -261,7 +261,7 @@ const said = (change: Change): string => {
     </details>
   {/if}
 
-  {#if error}<div class="notice notice-danger" role="alert">{errorText}</div><button type="button" class="btn" disabled={busy} onclick={load}>{m.conflict_reload({}, options)}</button>{/if}
+  {#if error}<div class="notice notice-danger" role="alert">{errorText}{#if error.detail}<span class="technical-detail">{messageDetail(error, uiLocale)}</span>{/if}</div><button type="button" class="btn" disabled={busy} onclick={load}>{m.conflict_reload({}, options)}</button>{/if}
 
   <div class="actions">
     <button class="btn" type="button" disabled={busy} onclick={onclose}>{m.common_cancel({}, options)}</button>

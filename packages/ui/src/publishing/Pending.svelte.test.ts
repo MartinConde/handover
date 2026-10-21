@@ -332,8 +332,11 @@ test('a branch that moved under the publish gets stable recovery with diagnostic
   const root = show();
   await refused(root);
 
-  expect(q(root, '[role="alert"]')?.textContent).toBe(
-    'Nothing was published because the repository changed while the publish was being prepared. Try again. Technical detail: main moved past abc123',
+  expect(q(root, '[role="alert"]')?.textContent).toContain(
+    'Nothing was published because the repository changed while the publish was being prepared. Try again.',
+  );
+  expect(q(root, '[role="alert"] .technical-detail')?.textContent).toBe(
+    'Technical detail: main moved past abc123',
   );
   // Nothing was named, so nothing unchecked itself and the same set is what a retry sends.
   const button = q<HTMLButtonElement>(root, '.drawer-foot .btn-primary');

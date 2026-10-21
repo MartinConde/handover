@@ -1,6 +1,6 @@
 <script lang="ts">
 import { ACTIVITY_GROUPS, type ActivityEvent, type DiffGroup } from '@handover/core';
-import { messageDetail, messageText, retainedFailure, type UiMessage } from '../errors.js';
+import { holderText, messageText, retainedFailure, type UiMessage } from '../errors.js';
 import { formatExactTime, formatRelativeTime, messageOptions, type UiLocale } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
 import Diff from '../publishing/Diff.svelte';
@@ -57,7 +57,7 @@ const FALLBACK = 'HISTORY_RESTORE_FAILED';
 const refusedDetail = $derived.by(() => {
   const message = refused?.message;
   if (!message) return undefined;
-  if (message.holder !== undefined) return messageDetail(message, uiLocale);
+  if (message.holder !== undefined) return holderText(message, uiLocale);
   return message.code === FALLBACK ? message.detail : messageText(message, uiLocale);
 });
 /** Which row is open — one at a time, the way the log reads. */

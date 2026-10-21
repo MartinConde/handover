@@ -1,5 +1,5 @@
 import { expect, test, vi } from 'vitest';
-import { messageLine, type UiMessage } from '../errors.js';
+import { messageText, type UiMessage } from '../errors.js';
 import * as m from '../paraglide/messages.js';
 import { fileSize, MediaUploadError, uploadBlob, uploadFile, uploadImage } from './upload.js';
 
@@ -327,5 +327,5 @@ test('a file over the limit reaches the caller as a code and a number, in German
     uploadBlob(blob(), { filename: 'huge.webp' }, { fetch }),
   )) as UiMessage;
 
-  expect(messageLine(descriptor, 'de')).toBe('Diese Datei ist größer als 10 MB.');
+  expect(messageText(descriptor, 'de')).toBe('Diese Datei ist größer als 10 MB.');
 });

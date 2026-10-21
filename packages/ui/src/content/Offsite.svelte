@@ -1,7 +1,7 @@
 <script lang="ts">
 import { untrack } from 'svelte';
 import type { PickEntry } from '../entry-directory.js';
-import { messageLine, type UiMessage } from '../errors.js';
+import { messageDetail, messageText, type UiMessage } from '../errors.js';
 import { collectionName, messageOptions, type UiLocale } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
 import Modal from '../shared/Modal.svelte';
@@ -52,8 +52,9 @@ let {
 } = $props();
 const options = $derived(messageOptions(uiLocale));
 const errorText = $derived(
-  typeof error === 'string' ? error : error ? messageLine(error, uiLocale) : '',
+  typeof error === 'string' ? error : error ? messageText(error, uiLocale) : '',
 );
+const errorDetail = $derived(typeof error === 'object' ? messageDetail(error, uiLocale) : '');
 
 const singular = $derived(collectionName(collection, uiLocale, 'singular'));
 
@@ -159,7 +160,7 @@ const ready = $derived(kind === 'entry' ? Boolean(picked) : kind !== 'url' || ur
             options,
           )}{#if action !== 'off'}{m.offsite_rule_each_language({}, options)}{/if}
     </p>
-    {#if errorText}<div class="notice notice-danger" role="alert">{errorText}</div>{/if}
+    {#if errorText}<div class="notice notice-danger" role="alert">{errorText}{#if errorDetail}<span class="technical-detail">{errorDetail}</span>{/if}</div>{/if}
     <div class="actions">
       <button class="btn" type="button" disabled={busy} onclick={onclose}
         >{m.common_cancel({}, options)}</button

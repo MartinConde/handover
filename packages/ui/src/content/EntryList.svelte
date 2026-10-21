@@ -1,13 +1,7 @@
 <script lang="ts">
 import { entryName } from '@handover/core';
 import { invalidateEntryDirectory } from '../entry-directory.js';
-import {
-  messageDetail,
-  messageLine,
-  messageText,
-  responseMessage,
-  type UiMessage,
-} from '../errors.js';
+import { messageDetail, messageText, responseMessage, type UiMessage } from '../errors.js';
 import {
   capitalise,
   collectionName,
@@ -156,7 +150,6 @@ const preview = $derived(
   ),
 );
 const textOf = (message: UiMessage) => messageText(message, uiLocale);
-const dialogError = $derived(error ? messageLine(error, uiLocale) : '');
 
 async function loadDeleted(name: string) {
   deletedLoading = true;
@@ -706,7 +699,7 @@ async function done() {
     {index}
     {busy}
     {uiLocale}
-    error={dialogError}
+    {error}
     returnTo={trigger}
     onconfirm={(target) =>
       action === 'delete' ? remove(ids[0] ?? '', target) : status(ids, true, target)}

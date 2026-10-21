@@ -1,7 +1,13 @@
 <script lang="ts">
 import type { DiffGroup, Labels } from '@handover/core';
 import { onDestroy, untrack } from 'svelte';
-import { messageLine, responseMessage, retainedFailure, type UiMessage } from '../errors.js';
+import {
+  messageDetail,
+  messageText,
+  responseMessage,
+  retainedFailure,
+  type UiMessage,
+} from '../errors.js';
 import {
   capitalise,
   collectionName,
@@ -113,7 +119,7 @@ onDestroy(() => {
 
 let busy = $state(false);
 let error = $state<UiMessage>();
-const errorText = $derived(error ? messageLine(error, uiLocale) : '');
+const errorText = $derived(error ? messageText(error, uiLocale) : '');
 let published = $state(0);
 // The commit this drawer made: what Revert is of.
 let committed = $state('');
@@ -705,7 +711,7 @@ function askDiscard(entry: PendingEntry) {
   </div>
   {#if entries.length}
     <footer class="drawer-foot">
-      {#if error}<div class="notice notice-danger" role="alert">{errorText}</div>{/if}
+      {#if error}<div class="notice notice-danger" role="alert">{errorText}{#if error.detail}<span class="technical-detail">{messageDetail(error, uiLocale)}</span>{/if}</div>{/if}
       {#if busy}<div class="notice notice-info" role="status">
           {m.pending_publishing_count({ count: selected.length }, options)}
         </div>{/if}

@@ -18,7 +18,7 @@ export interface Rule {
 
 <script lang="ts">
 import { type Pickable, readEntryDirectory } from '../entry-directory.js';
-import { messageLine, responseMessage, type UiMessage } from '../errors.js';
+import { messageDetail, messageText, responseMessage, type UiMessage } from '../errors.js';
 import { languageTag, messageOptions, type UiLocale } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
 import { request as fetch, sitePath } from '../request.js';
@@ -254,12 +254,12 @@ async function remove() {
   </div>
   <p class="list-note">{m.redirect_intro({}, options)}</p>
   <div class="redirects">
-    {#if error}<p class="notice notice-danger" role="alert">{messageLine(error, uiLocale)}</p>{/if}
+    {#if error}<p class="notice notice-danger" role="alert">{messageText(error, uiLocale)}{#if error.detail}<span class="technical-detail">{messageDetail(error, uiLocale)}</span>{/if}</p>{/if}
     {#if readError}
       <div class="notice notice-danger redirects-read-error" role="alert">
-        {messageLine(readError, uiLocale)}{rulesKnown
+        {messageText(readError, uiLocale)}{rulesKnown
           ? ` ${m.redirect_last_result({}, options)}`
-          : ''}
+          : ''}{#if readError.detail}<span class="technical-detail">{messageDetail(readError, uiLocale)}</span>{/if}
         <button class="btn-link" type="button" onclick={load}>{m.common_retry({}, options)}</button>
       </div>
     {/if}

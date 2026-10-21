@@ -122,7 +122,7 @@ const warnings = $derived(lines.filter((c) => c.severity === 'warn'));
   <p class="rebuild-note">
     {m.pending_entry_publish_explanation({}, options)}
   </p>
-  {#if failed}<div class="notice notice-danger" role="alert">{feedbackText(failed)}{#if messageDetail(failed, uiLocale)} {messageDetail(failed, uiLocale)}{/if}</div>{/if}
+  {#if failed}<div class="notice notice-danger" role="alert">{feedbackText(failed)}{#if failed.detail}<span class="technical-detail">{messageDetail(failed, uiLocale)}</span>{/if}</div>{/if}
   <div class="actions">
     <button class="btn" type="button" disabled={sending} onclick={onclose}>{m.common_cancel({}, options)}</button>
     <button

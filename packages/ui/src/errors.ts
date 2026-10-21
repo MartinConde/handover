@@ -451,24 +451,30 @@ const LOCAL_TEXT: Record<string, Render> = {
 
 const TEXT = { ...SERVER_TEXT, ...LOCAL_TEXT };
 
-export function messageText(message: UiMessage, locale: UiLocale): string {
-  const validation = validationText(message, locale);
-  if (validation) return validation;
-  const options = messageOptions(locale);
-  const render = Object.hasOwn(TEXT, message.code) ? TEXT[message.code] : undefined;
-  return render ? render({ message, locale, options }) : m.common_unknown_error({}, options);
-}
-
-export function messageDetail(message: Pick<UiMessage, 'detail' | 'holder'>, locale: UiLocale) {
+export function holderText(message: Pick<UiMessage, 'holder'>, locale: UiLocale): string {
   const options = messageOptions(locale);
   if (message.holder === null) return m.editor_lock_held_anonymous({}, options);
   if (message.holder !== undefined)
     return m.editor_lock_held_by({ holder: message.holder }, options);
-  return message.detail ? m.common_technical_detail({ detail: message.detail }, options) : '';
+  return '';
 }
 
-export const messageLine = (message: UiMessage, locale: UiLocale) =>
-  [messageText(message, locale), messageDetail(message, locale)].filter(Boolean).join(' ');
+export function messageText(message: UiMessage, locale: UiLocale): string {
+  const validation = validationText(message, locale);
+  const options = messageOptions(locale);
+  const render = Object.hasOwn(TEXT, message.code) ? TEXT[message.code] : undefined;
+  const text =
+    validation ||
+    (render ? render({ message, locale, options }) : m.common_unknown_error({}, options));
+  const holder = holderText(message, locale);
+  return holder ? `${text} ${holder}` : text;
+}
+
+export function messageDetail(message: Pick<UiMessage, 'detail'>, locale: UiLocale) {
+  return message.detail
+    ? m.common_technical_detail({ detail: message.detail }, messageOptions(locale))
+    : '';
+}
 
 /** A descriptor marks Handover-owned validation; unmarked schema prose stays authored. */
 export function problemText(problem: UiProblem, locale: UiLocale): string {

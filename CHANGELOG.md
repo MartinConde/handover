@@ -15,6 +15,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   instead of special cases for the demo's collection names and card positions.
 - A refused machine translation shows the server's plain-text reason as technical detail
   whatever its status, as other editor actions do, not only for `409` and `503`.
+- Error notices show the technical detail on its own line in every screen, and who holds an
+  entry as part of the sentence.
 
 ## 0.1.0 — first release
 

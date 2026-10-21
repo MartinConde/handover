@@ -348,7 +348,7 @@ const failureDetail = $derived(fillFailure ? messageDetail(fillFailure, uiLocale
     {/if}
   </div>
   {#if fillFailure}
-    <div class="notice notice-danger" role="alert">{failureText} {failureDetail}</div>
+    <div class="notice notice-danger" role="alert">{failureText}{#if failureDetail}<span class="technical-detail">{failureDetail}</span>{/if}</div>
   {/if}
   {#if stale && behindState === 'failed'}
     <div class="notice notice-danger marker-load-failure" role="alert">

@@ -691,7 +691,7 @@ function navigateCanvasEntry(target: {
 />
 <svelte:document onvisibilitychange={entryLock.recheck} />
 
-{#snippet feedback(message: UiMessage)}{feedbackText(message)} {messageDetail(message, uiLocale)}{/snippet}
+{#snippet feedback(message: UiMessage)}{feedbackText(message)}{#if message.detail}<span class="technical-detail">{messageDetail(message, uiLocale)}</span>{/if}{/snippet}
 
 {#snippet languageMark(of: string)}
   {#if off(of)}

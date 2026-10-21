@@ -1,7 +1,7 @@
 import { z } from 'astro/zod';
 import { expect, test } from 'vitest';
 import { entryProblems } from '../../astro/src/problems.js';
-import { messageDetail, messageLine, messageText, problemText, responseMessage } from './errors.js';
+import { holderText, messageDetail, messageText, problemText, responseMessage } from './errors.js';
 
 test('integer and ordinary number problems render distinct remedies', () => {
   const problems = entryProblems(z.object({ whole: z.number().int(), amount: z.number() }), {
@@ -401,24 +401,29 @@ test.each([
     Response.json({ code, error: 'the API’s own sentence', ...more }, { status: 409 }),
     'EDITOR_SAVE_REFUSED',
   );
-  expect(messageLine(message, 'de')).toBe(de);
+  expect(messageText(message, 'de')).toBe(de);
+  expect(messageDetail(message, 'de')).toBe('');
 });
 
 test.each([
-  ['CANVAS_NO_PAGE', undefined, 'Diese Website liefert unter dieser Adresse keine Seite aus.'],
+  ['CANVAS_NO_PAGE', undefined, 'Diese Website liefert unter dieser Adresse keine Seite aus.', ''],
   [
     'CANVAS_DRAFT_UNRENDERABLE',
     'field x is wrong',
-    'Dieser Entwurf kann nicht gerendert werden. Technisches Detail: field x is wrong',
+    'Dieser Entwurf kann nicht gerendert werden.',
+    'Technisches Detail: field x is wrong',
   ],
   [
     'CANVAS_LOADER_MISSING',
     'src/loaders/a.ts',
-    'Die Website hat für diesen Eintrag keinen Seiten-Loader. Technisches Detail: src/loaders/a.ts',
+    'Die Website hat für diesen Eintrag keinen Seiten-Loader.',
+    'Technisches Detail: src/loaders/a.ts',
   ],
-  ['CANVAS_POST_FAILED', undefined, 'Die Seitenanfrage konnte nicht gesendet werden.'],
-])('the Canvas failure %s reads in German', (code, detail, de) => {
-  expect(messageLine({ code, ...(detail ? { detail } : {}) }, 'de')).toBe(de);
+  ['CANVAS_POST_FAILED', undefined, 'Die Seitenanfrage konnte nicht gesendet werden.', ''],
+])('the Canvas failure %s reads in German', (code, detail, de, deDetail) => {
+  const message = { code, ...(detail ? { detail } : {}) };
+  expect(messageText(message, 'de')).toBe(de);
+  expect(messageDetail(message, 'de')).toBe(deDetail);
 });
 
 test.each([
@@ -439,7 +444,8 @@ test.each([
     'ACCOUNT_PASSWORD_FAILED',
   );
   expect(message).toEqual({ code, status: 400 });
-  expect(messageLine(message, 'de')).toBe(de);
+  expect(messageText(message, 'de')).toBe(de);
+  expect(messageDetail(message, 'de')).toBe('');
 });
 
 test('a rate-limited answer without a code reads as too many requests, in German', async () => {
@@ -447,9 +453,10 @@ test('a rate-limited answer without a code reads as too many requests, in German
     Response.json({ message: 'Too many requests. Please try again later.' }, { status: 429 }),
     'ACCOUNT_PASSWORD_FAILED',
   );
-  expect(messageLine(message, 'de')).toBe(
+  expect(messageText(message, 'de')).toBe(
     'Gerade sind zu viele Anfragen unterwegs. Warte einen Moment und versuche es erneut.',
   );
+  expect(messageDetail(message, 'de')).toBe('');
 });
 
 test('an unresolved source refusal reads the same for all three codes, in either language', async () => {
@@ -468,13 +475,11 @@ test('an unresolved source refusal reads the same for all three codes, in either
   }
 });
 
-test('a message line carries the technical detail only when there is one', () => {
-  expect(
-    messageLine({ code: 'MEMBER_LIST_FAILED', status: 503, detail: 'database diagnostic' }, 'en'),
-  ).toBe('Could not load the members (503). Technical detail: database diagnostic');
-  expect(messageLine({ code: 'MEMBER_LIST_FAILED', status: 0 }, 'en')).toBe(
-    'Could not load the members.',
-  );
+test('the technical detail is its own string and only present when there is one', () => {
+  const withDetail = { code: 'MEMBER_LIST_FAILED', status: 503, detail: 'database diagnostic' };
+  expect(messageText(withDetail, 'en')).toBe('Could not load the members (503).');
+  expect(messageDetail(withDetail, 'en')).toBe('Technical detail: database diagnostic');
+  expect(messageDetail({}, 'en')).toBe('');
 });
 
 test('a refusal naming who holds the entry is phrased in the interface language', async () => {
@@ -490,6 +495,10 @@ test('a refusal naming who holds the entry is phrased in the interface language'
     'ENTRY_ACTION_FAILED',
   );
 
-  expect(messageDetail(named, 'de')).toBe('Wird von Anna bearbeitet');
-  expect(messageDetail(anonymous, 'de')).toBe('Eine andere Person bearbeitet diesen Eintrag');
+  expect(holderText(named, 'de')).toBe('Wird von Anna bearbeitet');
+  expect(holderText(anonymous, 'de')).toBe('Eine andere Person bearbeitet diesen Eintrag');
+  expect(holderText({}, 'de')).toBe('');
+  expect(messageText(named, 'de')).toMatch(/ Wird von Anna bearbeitet$/);
+  expect(messageText(anonymous, 'de')).toMatch(/ Eine andere Person bearbeitet diesen Eintrag$/);
+  expect(messageDetail(named, 'de')).toBe('');
 });
