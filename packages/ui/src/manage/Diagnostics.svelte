@@ -14,6 +14,15 @@ import { request as fetch, postJson, sitePath } from '../request.js';
 import ConfirmDialog from '../shared/ConfirmDialog.svelte';
 import Modal from '../shared/Modal.svelte';
 import Skeleton from '../shared/Skeleton.svelte';
+import {
+  checkName,
+  checkStops,
+  checkWhat,
+  type DiagnosticMessage,
+  diagnosticText,
+  provider,
+  responseMessage,
+} from './diagnostics-text.js';
 
 let {
   uiLocale = 'en',
@@ -47,22 +56,6 @@ interface Result {
   state: State;
   message?: DiagnosticMessage;
   at?: number;
-}
-
-interface DiagnosticMessage {
-  code: string;
-  status?: number;
-  detail?: string;
-  to?: string;
-  locale?: string;
-  repository?: string;
-  revision?: string;
-  bucket?: string;
-  duration?: number;
-  worker?: string;
-  version?: number;
-  entry?: string;
-  name?: string;
 }
 
 /** `sends` marks the one check with a side effect: it never runs on open. */
@@ -109,142 +102,6 @@ async function load(): Promise<Config> {
   const res = await fetch('/admin/api/diagnostics');
   if (!res.ok) throw { code: 'DIAGNOSTICS_LOAD_FAILED', status: res.status };
   return res.json();
-}
-
-const responseMessage = (
-  body: Record<string, unknown>,
-  fallback: string,
-  status?: number,
-): DiagnosticMessage => ({
-  code: typeof body.code === 'string' ? body.code : fallback,
-  ...(status ? { status } : {}),
-  ...(typeof body.error === 'string'
-    ? { detail: body.error }
-    : typeof body.detail === 'string'
-      ? { detail: body.detail }
-      : {}),
-  ...(typeof body.to === 'string' ? { to: body.to } : {}),
-  ...(typeof body.locale === 'string' ? { locale: body.locale } : {}),
-  ...(typeof body.repository === 'string' ? { repository: body.repository } : {}),
-  ...(typeof body.revision === 'string' ? { revision: body.revision } : {}),
-  ...(typeof body.bucket === 'string' ? { bucket: body.bucket } : {}),
-  ...(typeof body.duration === 'number' ? { duration: body.duration } : {}),
-  ...(typeof body.worker === 'string' ? { worker: body.worker } : {}),
-  ...(typeof body.version === 'number' ? { version: body.version } : {}),
-  ...(typeof body.entry === 'string' ? { entry: body.entry } : {}),
-});
-
-/** The provider's own sentence is English, so it follows the localized one as technical detail. */
-const withDetail = (generic: string, message: DiagnosticMessage) =>
-  message.detail
-    ? `${generic} ${m.common_technical_detail({ detail: message.detail }, options)}`
-    : generic;
-
-function messageText(message: DiagnosticMessage): string {
-  switch (message.code) {
-    case 'DIAGNOSTICS_LOAD_FAILED':
-      return m.diagnostics_load_failed({ status: message.status ?? 0 }, options);
-    case 'DIAGNOSTIC_CHECK_FAILED':
-      return withDetail(
-        m.diagnostics_check_failed({ status: message.status ?? 0 }, options),
-        message,
-      );
-    case 'DIAGNOSTIC_EMAIL_SENT':
-      return m.diagnostics_email_sent({ email: message.to ?? '' }, options);
-    case 'DIAGNOSTIC_GITHUB_OK':
-      return m.diagnostics_github_ok(
-        { repository: message.repository ?? '', revision: message.revision ?? '' },
-        options,
-      );
-    case 'DIAGNOSTIC_STORAGE_OK':
-      return m.diagnostics_storage_ok(
-        { bucket: message.bucket ?? '', duration: message.duration ?? 0 },
-        options,
-      );
-    case 'DIAGNOSTIC_TRANSLATION_OK':
-    case 'INTEGRATION_KEY_TESTED':
-      return m.diagnostics_translation_ok(
-        { locale: message.locale ? formatLanguageName(message.locale, uiLocale) : '' },
-        options,
-      );
-    case 'DIAGNOSTIC_TRANSLATION_OFF':
-      return m.diagnostics_translation_off({}, options);
-    case 'DIAGNOSTIC_TRANSLATION_SINGLE_LANGUAGE':
-      return m.diagnostics_translation_single_language({}, options);
-    case 'DIAGNOSTIC_BUILD_OK':
-      return m.diagnostics_build_ok({ worker: message.worker ?? '' }, options);
-    case 'DIAGNOSTIC_BUILD_OFF':
-      return m.diagnostics_build_off({}, options);
-    case 'DIAGNOSTIC_DATABASE_OK':
-      return m.diagnostics_database_ok({ version: message.version ?? 0 }, options);
-    case 'INTEGRATION_KEYS_LOAD_FAILED':
-      return m.diagnostics_keys_load_failed({ status: message.status ?? 0 }, options);
-    case 'INTEGRATION_KEY_SAVE_FAILED':
-      return withDetail(
-        m.diagnostics_key_save_failed({ status: message.status ?? 0 }, options),
-        message,
-      );
-    case 'INTEGRATION_KEY_REMOVE_FAILED':
-      return m.diagnostics_key_remove_failed({ status: message.status ?? 0 }, options);
-    case 'INTEGRATION_KEY_REQUIRED':
-      return m.diagnostics_key_required({}, options);
-    case 'INTEGRATION_KEY_STORED':
-      return m.diagnostics_key_stored({ name: message.name ?? '' }, options);
-    case 'INTEGRATION_KEY_REMOVED':
-      return m.diagnostics_key_removed({ name: message.name ?? '' }, options);
-    case 'DIAGNOSTIC_CONFLICT_CREATED':
-      return m.diagnostics_conflict_created({ entry: message.entry ?? '' }, options);
-    case 'DIAGNOSTIC_CONFLICT_FAILED':
-      return withDetail(
-        m.diagnostics_conflict_failed({ status: message.status ?? 0 }, options),
-        message,
-      );
-    case 'DIAGNOSTIC_DETAIL':
-      return message.detail ?? '';
-    case 'DIAGNOSTIC_REFUSED':
-      return withDetail(m.diagnostics_refused({}, options), message);
-    case 'DIAGNOSTIC_UNAVAILABLE':
-      return withDetail(m.diagnostics_unavailable({}, options), message);
-    default:
-      return withDetail(
-        m.diagnostics_check_failed({ status: message.status ?? 0 }, options),
-        message,
-      );
-  }
-}
-
-function checkName(key: string): string {
-  if (key === 'github') return m.diagnostics_github_name({}, options);
-  if (key === 'storage') return m.diagnostics_storage_name({}, options);
-  if (key === 'email') return m.diagnostics_email_name({}, options);
-  if (key === 'build') return m.diagnostics_build_name({}, options);
-  return m.diagnostics_database_name({}, options);
-}
-
-function checkWhat(key: string): string {
-  if (key === 'github') return m.diagnostics_github_what({}, options);
-  if (key === 'storage') return m.diagnostics_storage_what({}, options);
-  if (key === 'email') return m.diagnostics_email_what({}, options);
-  if (key === 'build') return m.diagnostics_build_what({}, options);
-  return m.diagnostics_database_what({}, options);
-}
-
-/** Brand names, so they stay as they are in every interface language. */
-function provider(key: string, config: Config): string | undefined {
-  if (key === 'github') return 'GitHub';
-  if (key === 'storage') return 'Cloudflare R2';
-  if (key === 'email') return config.mailer ? mailerName(config.mailer.provider) : undefined;
-  if (key === 'build') return 'Cloudflare Workers Builds';
-  return 'Cloudflare D1';
-}
-
-function checkStops(key: string): string {
-  if (key === 'github') return m.diagnostics_github_stops({}, options);
-  if (key === 'storage') return m.diagnostics_storage_stops({}, options);
-  if (key === 'email') return m.diagnostics_email_stops({}, options);
-  if (key === 'translation') return m.diagnostics_translation_stops({}, options);
-  if (key === 'build') return m.diagnostics_build_stops({}, options);
-  return m.diagnostics_database_stops({}, options);
 }
 
 const badgeClass = (state: State) =>
@@ -378,7 +235,7 @@ const consequence = $derived.by(() => {
   const list = new Intl.ListFormat(languageTag(uiLocale), {
     style: 'long',
     type: 'conjunction',
-  }).format(failing.map((check) => checkStops(check.key)));
+  }).format(failing.map((check) => checkStops(check.key, uiLocale)));
   const sentenceList = list.charAt(0).toLocaleUpperCase(uiLocale) + list.slice(1);
   return failing.length === 1
     ? m.diagnostics_consequence_one({ things: sentenceList }, options)
@@ -429,14 +286,6 @@ function says(row: Key): string {
     ? m.diagnostics_key_deepl_off({}, options)
     : m.diagnostics_key_assist_off({}, options);
 }
-
-const mailerName = (provider: string) => {
-  if (provider === 'resend') return 'Resend';
-  if (provider === 'smtp') return 'SMTP';
-  if (provider === 'cloudflare') return 'Cloudflare Email Sending';
-  if (provider === 'custom') return m.diagnostics_custom_mailer({}, options);
-  return provider;
-};
 </script>
 
 <main class="main diagnostics-page">
@@ -477,8 +326,8 @@ const mailerName = (provider: string) => {
           <h2 id="integ">{m.diagnostics_keys_title({}, options)}</h2>
           <p>{m.diagnostics_keys_hint({}, options)}</p>
         </header>
-        {#if keysError}<p class="notice notice-danger" role="alert">{messageText(keysError)}</p>{/if}
-        {#if keySaid}<p class="notice notice-info" role="status">{messageText(keySaid)}</p>{/if}
+        {#if keysError}<p class="notice notice-danger" role="alert">{diagnosticText(keysError, uiLocale)}</p>{/if}
+        {#if keySaid}<p class="notice notice-info" role="status">{diagnosticText(keySaid, uiLocale)}</p>{/if}
         <ul class="check-list">
           {#each keys as row (row.key)}
             {@const translation = row.key === 'deepl' ? results.translation : undefined}
@@ -489,11 +338,11 @@ const mailerName = (provider: string) => {
               </div>
               <p class="what">{says(row)}</p>
               {#if translation?.state === 'failed'}
-                <p class="result is-failed" role="status">{translation.message ? messageText(translation.message) : ''}</p>
+                <p class="result is-failed" role="status">{translation.message ? diagnosticText(translation.message, uiLocale) : ''}</p>
               {:else if translation?.state === 'ok' && translation.message}
-                <p class="result is-ok" role="status">{messageText(translation.message)}</p>
+                <p class="result is-ok" role="status">{diagnosticText(translation.message, uiLocale)}</p>
               {:else if translation?.message?.code === 'DIAGNOSTIC_TRANSLATION_SINGLE_LANGUAGE'}
-                <p class="result" role="status">{messageText(translation.message)}</p>
+                <p class="result" role="status">{diagnosticText(translation.message, uiLocale)}</p>
               {/if}
               <div class="actions">
                 <!-- No button where the site's code is in charge: it could change nothing. -->
@@ -528,13 +377,13 @@ const mailerName = (provider: string) => {
           {#each SERVICES as check (check.key)}
             {@const result = results[check.key]}
             {@const state = result?.state ?? 'unchecked'}
-            {@const name = provider(check.key, config)}
+            {@const name = provider(check.key, config.mailer, uiLocale)}
             <li class={['check-card', `service-row is-${state}`, { 'has-action': check.sends }]}>
               <details bind:open={expanded[check.key]}>
                 <summary>
                   <svg class="chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 4l4 4-4 4" /></svg>
-                  <span class="name">{checkName(check.key)}</span>
-                  <span class="what">{checkWhat(check.key)}</span>
+                  <span class="name">{checkName(check.key, uiLocale)}</span>
+                  <span class="what">{checkWhat(check.key, uiLocale)}</span>
                   <span class="state">
                     {#if result}
                       <span class="badge {badgeClass(result.state)}">{badgeLabel(result.state)}</span>
@@ -581,7 +430,7 @@ const mailerName = (provider: string) => {
                           {#if result.state === 'running'}
                             {m.diagnostics_checking({}, options)}
                           {:else if result.message}
-                            {messageText(result.message)}
+                            {diagnosticText(result.message, uiLocale)}
                           {/if}
                         </span>
                         {#if result.at}<span class="sub">{when(result.at)}</span>{/if}
@@ -672,7 +521,7 @@ const mailerName = (provider: string) => {
                 {simulating ? m.diagnostics_making_conflict({}, options) : m.diagnostics_simulate_conflict({}, options)}
               </button>
             </div>
-            {#if conflict}<p class="notice notice-info" role="status">{messageText(conflict)}</p>{/if}
+            {#if conflict}<p class="notice notice-info" role="status">{diagnosticText(conflict, uiLocale)}</p>{/if}
           </section>
         {/if}
       </details>
@@ -736,7 +585,7 @@ const mailerName = (provider: string) => {
             {/if}
           </div>
           {#if keyError}<div class="notice notice-danger" role="alert">
-              {messageText(keyError)}
+              {diagnosticText(keyError, uiLocale)}
             </div>{/if}
           <div class="actions">
             <button class="btn" type="button" disabled={saving} onclick={close}
@@ -754,6 +603,6 @@ const mailerName = (provider: string) => {
       </Modal>
     {/if}
   {:catch error}
-    <p class="notice notice-danger" role="alert">{messageText(error as DiagnosticMessage)}</p>
+    <p class="notice notice-danger" role="alert">{diagnosticText(error as DiagnosticMessage, uiLocale)}</p>
   {/await}
 </main>
