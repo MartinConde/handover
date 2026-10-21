@@ -233,26 +233,24 @@ export {
   settingFacts,
   writeSetting,
 } from './identity/settings.js';
-export type { MediaQuery, MediaRow, MediaUses, R2Store, Upload } from './media/media.js';
+export type { MediaQuery, MediaRow, MediaUses } from './media/media.js';
 export {
-  checkStore,
   confirmUpload,
   cropWidth,
   deleteMedia,
   findMedia,
-  MAX_UPLOAD_BYTES,
   MediaInUseError,
   MediaUnavailableError,
-  mediaKey,
   mediaList,
   mediaUsage,
   mediaUsesFrom,
-  mimeForMediaKey,
   namedBy,
   ratioOf,
   SOCIAL_CARD,
   setMediaDetails,
 } from './media/media.js';
+export type { R2Store, Upload } from './media/store.js';
+export { checkStore, MAX_UPLOAD_BYTES, mediaKey, mimeForMediaKey } from './media/store.js';
 export { UploadRefusedError } from './media/upload-bytes.js';
 export {
   claimUploadIntent,

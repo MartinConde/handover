@@ -16,7 +16,7 @@ import {
 import type { Labels } from '../content/ui-locale.js';
 import { SOCIAL_IMAGE } from '../content/ui-text.js';
 import { chunksOf, D1_MAX_BOUND_PARAMETERS, type Db } from '../db.js';
-import { MEDIA_KEY, objectExists, type R2Store } from '../media/media.js';
+import { MEDIA_KEY, objectExists, type R2Store } from '../media/store.js';
 import { media } from '../tables.js';
 import type { HiddenLong } from './cron.js';
 

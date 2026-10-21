@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { beforeAll, beforeEach, expect, test } from 'vitest';
 import { newTestD1, resetTestD1 } from '../db.fixture.js';
 import { type Db, openDb } from '../db.js';
-import type { R2Store } from '../media/media.js';
+import type { R2Store } from '../media/store.js';
 import * as tables from '../tables.js';
 import { findHiddenLong, lastHiddenLong, runDue } from './cron.js';
 

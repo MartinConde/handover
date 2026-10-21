@@ -3,7 +3,7 @@ import type { ContentIndex } from '../content/entries.js';
 import type { Form } from '../content/schema.js';
 import { migrateTestD1, newTestD1 } from '../db.fixture.js';
 import { type Db, openDb } from '../db.js';
-import type { R2Store } from '../media/media.js';
+import type { R2Store } from '../media/store.js';
 import * as tables from '../tables.js';
 import {
   type CheckEntry,
