@@ -18,7 +18,7 @@ export {
   refErrors,
   staticSource,
 } from './content/content.js';
-export type { Change, DiffGroup, RowAt, WordPart } from './content/diff.js';
+export type { Change, DiffGroup, RowAt } from './content/diff.js';
 export { diffEntry, sourceChanges } from './content/diff.js';
 export type { EmbedParse, EmbedProvider, EmbedRefusalReason, EmbedValue } from './content/embed.js';
 export { EMBED_LABELS, embedSrc, embedThumb, parseEmbedUrl } from './content/embed.js';
@@ -137,6 +137,7 @@ export {
   sitemapIndexXml,
   sitemapXml,
 } from './content/sitemap.js';
+export type { WordPart } from './content/text-diff.js';
 export type {
   FieldTarget,
   FieldTargetFailure,
