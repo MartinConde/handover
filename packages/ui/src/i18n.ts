@@ -9,6 +9,7 @@ import {
 import type { Locale } from './paraglide/runtime.js';
 import { siteBase } from './request.js';
 
+// Fails to compile if core lists a UI locale the message compiler has no catalog for.
 const compilerLocales: readonly Locale[] = UI_LOCALES;
 void compilerLocales;
 
