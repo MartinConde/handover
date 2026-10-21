@@ -26,7 +26,6 @@ import CanvasWorkspace from '../canvas/CanvasWorkspace.svelte';
 import type { CanvasSelection } from '../canvas/canvas-protocol';
 import type { CanvasRenderRequest } from '../canvas/canvas-renderer';
 import OffsiteDialog, { type Target } from '../content/Offsite.svelte';
-import { invalidateEntryDirectory } from '../entry-directory.js';
 import { messageDetail, messageText, retainedFailure } from '../errors.js';
 import { formatLanguageName, messageOptions, type UiLocale } from '../i18n.js';
 import {
@@ -42,7 +41,6 @@ import DriftPanel from '../publishing/Drift.svelte';
 import History from '../publishing/History.svelte';
 import {
   request as fetch,
-  postJson,
   previewPath,
   siteBase,
   sitePath,
@@ -51,21 +49,17 @@ import AutosaveStatus from '../shared/AutosaveStatus.svelte';
 import ConfirmDialog from '../shared/ConfirmDialog.svelte';
 import Modal from '../shared/Modal.svelte';
 import PublishConfirmation from './PublishConfirmation.svelte';
-import {
-  createEntrySession,
-  type EntryProblem,
-  type StructuralSaveEnvelope,
-} from './entry-session.svelte';
+import { createEntrySession } from './entry-session.svelte';
 import EntryBanners from './EntryBanners.svelte';
 import Fields from './fields/Fields.svelte';
 import type { EditorEntry } from './entry-payload';
 import SourceChange from './SourceChange.svelte';
-import { classifyDraftSaveRefusal } from './save';
 import { createEntryActions } from './entry-actions.svelte';
 import { createEntryAddress } from './entry-address.svelte';
 import { createEntryCreate } from './entry-create.svelte';
 import { createEntryLock } from './entry-lock.svelte';
 import { createEntryPublish } from './entry-publish.svelte';
+import { createEntrySaves } from './entry-saves.svelte';
 import { drawn, focusField, land, revealField } from './field-reveal';
 import Translation from './Translation.svelte';
 import UntranslatedPane from './UntranslatedPane.svelte';
@@ -166,19 +160,25 @@ const entrySession = untrack(() =>
 );
 const data = $derived(entrySession.snapshot(entry.sourceLocale));
 const saveState = $derived(entrySession.saveState(entry.sourceLocale));
-// The loaded entry seeds each file's live draft state.
-const pendingByLocale = $state<Record<string, boolean>>(
-  untrack(() => Object.fromEntries(entry.locales.map((of) => [of, entry.pending.includes(of)]))),
+const entrySaves = untrack(() =>
+  createEntrySaves({
+    collection,
+    slug,
+    entry: () => entry,
+    session: entrySession,
+    lock: () => entryLock,
+    publish: () => entryPublish,
+    onpending: () => onpending?.(),
+  }),
 );
 const saving = $derived(saveState.phase === 'saving');
 const saveFailed = $derived(saveState.phase === 'failed');
-let saveError = $state<UiMessage>();
 const schemaProblems = $derived(entrySession.positionalProblems(entry.sourceLocale, uiLocale));
 const entryPublish = untrack(() =>
   createEntryPublish({
     key: `${collection}/${slug}`,
     session: entrySession,
-    pending: () => entry.locales.filter((of) => pendingByLocale[of]),
+    pending: (): string[] => entry.locales.filter((of) => entrySaves.pendingByLocale[of]),
     many: () => many,
     reload,
     onpublished: () => onpublished?.(title),
@@ -429,15 +429,7 @@ const inherited = (of: string, values: Data) =>
         String(values[entry.titleField ?? 'title'] ?? ''),
       )
     : undefined;
-const hasPending = () => Object.values(pendingByLocale).some(Boolean);
-// The shell counts pending entries, while this editor owns the live state of every loaded file.
-function setPending(of: string, pending: boolean) {
-  if (pendingByLocale[of] === pending) return;
-  const hadPending = hasPending();
-  pendingByLocale[of] = pending;
-  if (hadPending !== hasPending()) onpending?.();
-}
-const dirty = $derived(hasPending() || entrySession.unsaved());
+const dirty = $derived(entrySaves.hasPending() || entrySession.unsaved());
 const language = (of: string) => formatLanguageName(of, uiLocale);
 // A stale mark naming another language: there is no change of the source to point at.
 const otherSource = (of: string) => {
@@ -491,88 +483,7 @@ const entryCreate = untrack(() =>
 let takeTrigger = $state<HTMLButtonElement>();
 const canPublish = $derived(dirty && !saving && !missing.length && !drifted && !entryLock.locked && !actionBusy);
 
-entrySession.configureAutosave((of, snapshot, revision, contentVersion, structure) =>
-  of === entry.sourceLocale
-    ? writeSourceSave(snapshot, revision, contentVersion, structure)
-    : writeTranslationSave(of, snapshot, revision, contentVersion),
-);
-
-async function writeSourceSave(
-  sent: string,
-  revision: string | undefined,
-  contentVersion: number,
-  structure?: StructuralSaveEnvelope,
-): Promise<boolean> {
-  saveError = undefined;
-  try {
-    const res = await postJson(`/admin/api/drafts/${collection}/${slug}`, {
-      data: JSON.parse(sent),
-      tab: entryLock.tab,
-      revision,
-      ...(structure ? { structure } : {}),
-    }, 'PUT');
-    if (!res.ok) {
-      saveError = await retainedFailure(res, 'EDITOR_SAVE_REFUSED');
-      const refusal = await classifyDraftSaveRefusal(res.clone());
-      if (refusal.kind === 'lock') entryLock.lose(refusal.lock);
-      else if (refusal.kind === 'revision') {
-        entrySession.freezeHistory();
-        // No server detail: its sentence repeats this one.
-        saveError = { code: 'EDITOR_SAVE_REVISION', status: res.status };
-      }
-      return false;
-    }
-    const body = (await res.json()) as {
-      pending: boolean;
-      problems: EntryProblem[];
-      revisions?: Record<string, string>;
-    };
-    entrySession.mergeRevisions(body.revisions);
-    entryLock.renew();
-    setPending(entry.sourceLocale, body.pending);
-    invalidateEntryDirectory();
-    entrySession.acceptProblems(entry.sourceLocale, body.problems, sent, contentVersion);
-    // The checks read the draft rows, so a save that left nothing pending has nothing to lint.
-    if (body.pending) void entryPublish.lint();
-    else entryPublish.clear();
-    return true;
-  } catch {
-    saveError = { code: 'EDITOR_SAVE_CONNECTION' };
-    return false;
-  }
-}
-
-async function writeTranslationSave(
-  of: string,
-  sent: string,
-  revision: string | undefined,
-  contentVersion: number,
-): Promise<boolean> {
-  try {
-    const res = await postJson(`/admin/api/drafts/${collection}/${slug}/${of}`, { data: JSON.parse(sent), tab: entryLock.tab, revision }, 'PUT');
-    if (!res.ok) {
-      const refusal = await classifyDraftSaveRefusal(res);
-      if (refusal.kind === 'lock') entryLock.lose(refusal.lock);
-      else if (refusal.kind === 'revision') entrySession.freezeHistory();
-      return false;
-    }
-    const body = (await res.json()) as {
-      pending: boolean;
-      problems: EntryProblem[];
-      revision?: string;
-    };
-    if (body.revision) entrySession.setRevision(of, body.revision);
-    entrySession.acceptProblems(of, body.problems, sent, contentVersion);
-    entryLock.renew();
-    setPending(of, body.pending);
-    invalidateEntryDirectory();
-    // A new revision makes an open dialog's readiness stale.
-    if (entryPublish.confirming) void entryPublish.lint();
-    return true;
-  } catch {
-    return false;
-  }
-}
+entrySession.configureAutosave(entrySaves.write);
 
 function flush(): Promise<boolean> {
   return entrySession.flush();
@@ -1100,7 +1011,7 @@ function navigateCanvasEntry(target: {
             {entryActions.hidden ? m.editor_show_on_site({}, options) : m.editor_hide_from_site({}, options)}
           </button>
         {/if}
-        {#if hasPending()}
+        {#if entrySaves.hasPending()}
           <button type="button" role="menuitem" onclick={() => { publishMenu = false; entryActions.startDiscarding(); }}>
             <span class="check" aria-hidden="true"></span>
             {m.editor_discard_changes({}, options)}
@@ -1139,8 +1050,8 @@ function navigateCanvasEntry(target: {
   {#if entryActions.holdFailed}<p class="notice notice-danger" role="alert">
       {@render feedback(entryActions.holdFailed)}
     </p>{/if}
-  {#if saveError}<p class="notice notice-danger" role="alert">
-      {@render feedback(saveError)}
+  {#if entrySaves.saveError}<p class="notice notice-danger" role="alert">
+      {@render feedback(entrySaves.saveError)}
       <button class="btn-link" type="button" onclick={() => flush()}
         >{m.editor_save_retry({}, options)}</button
       >
@@ -1461,7 +1372,7 @@ function navigateCanvasEntry(target: {
                 {uiLocale}
                 onsaved={(pending) => {
                   entryLock.renew();
-                  setPending(shown, pending);
+                  entrySaves.setPending(shown, pending);
                 }}
                 {mediaBase}
                 heading={paneHeading}
