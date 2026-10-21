@@ -650,9 +650,8 @@ async function writeTranslationSave(
 function flush(): Promise<boolean> {
   return entrySession.flush();
 }
-const unsaved = () => entrySession.unsaved();
 const warn = (event: BeforeUnloadEvent) => {
-  if (unsaved()) {
+  if (entrySession.unsaved()) {
     event.preventDefault();
     event.returnValue = '';
   }
@@ -994,7 +993,7 @@ let publishPanel = $state<HTMLElement>();
 
 // Keep the pane mounted until all its changes have been saved.
 async function leaving(change: () => void) {
-  if (unsaved() && !(await flush())) return;
+  if (entrySession.unsaved() && !(await flush())) return;
   change();
 }
 
@@ -1400,13 +1399,9 @@ async function saveAddress() {
             type="button"
             role="menuitem"
             onclick={() => {
-              if (hidden) {
-                publishMenu = false;
-                setStatus(false);
-              } else {
-                publishMenu = false;
-                startHiding();
-              }
+              publishMenu = false;
+              if (hidden) setStatus(false);
+              else startHiding();
             }}
           >
             <span class="check" aria-hidden="true"></span>
