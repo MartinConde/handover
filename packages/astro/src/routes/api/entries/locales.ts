@@ -482,6 +482,24 @@ export async function reconcile(
   return Response.json({});
 }
 
+type Found = {
+  userId: string;
+  schema: NonNullable<ReturnType<typeof schemaOf>>;
+  revisions: unknown;
+  loaded: Awaited<ReturnType<typeof entryLocales>>;
+  files: ReturnType<typeof localeData>;
+  from: string | undefined;
+  to: string;
+};
+
+type SourceChange = {
+  userId: string;
+  loaded: Awaited<ReturnType<typeof entryLocales>>;
+  from: string | undefined;
+  to: string;
+  changed: Awaited<ReturnType<typeof changeSource>>;
+};
+
 /** Drafts only: the site and the build keep the old source until the entry publishes whole. */
 export async function changeEntrySource(
   ctx: RequestContext,
@@ -490,6 +508,30 @@ export async function changeEntrySource(
   request: Request,
   session: App.Locals['handover'],
 ): Promise<Response> {
+  const found = await validateSourceChange(ctx, collection, slug, request, session);
+  if (found instanceof Response) return found;
+  const change = await checkSourceChange(collection, slug, found);
+  if (change instanceof Response) return change;
+  const refused = await commitSourceChange(ctx, collection, slug, change);
+  if (refused) return refused;
+  return recordSourceChange(ctx, collection, slug, change);
+}
+
+const sourceMoved = () =>
+  codedError(
+    409,
+    'ENTRY_SOURCE_REVISION',
+    'This entry changed since it was opened. Reload it and choose again.',
+  );
+
+// Reads only: every refusal returns before a draft is written.
+async function validateSourceChange(
+  ctx: RequestContext,
+  collection: string,
+  slug: string,
+  request: Request,
+  session: App.Locals['handover'],
+): Promise<Found | Response> {
   if (!session) return new Response('Unauthorized', { status: 401 });
   const body = (await readJson(request)) as
     | { locale?: unknown; tab?: unknown; revisions?: unknown }
@@ -537,23 +579,27 @@ export async function changeEntrySource(
       'ENTRY_SOURCE_TARGET_MISSING',
       `This entry has no ${to} file yet: create it before making it the source`,
     );
+  return { userId: session.user.id, schema, revisions, loaded, files, from, to };
+}
+
+// Whether the entry as loaded may take `to` as its source.
+async function checkSourceChange(
+  collection: string,
+  slug: string,
+  found: Found,
+): Promise<SourceChange | Response> {
+  const { userId, schema, revisions, loaded, files, from, to } = found;
   // A recovery has no revisions to send, as the entry never opened; the write still asserts them.
   const expected = (revisions ?? (from === undefined ? undefined : {})) as
     | Record<string, string>
     | undefined;
-  const moved = () =>
-    codedError(
-      409,
-      'ENTRY_SOURCE_REVISION',
-      'This entry changed since it was opened. Reload it and choose again.',
-    );
   if (
     expected &&
     [...new Set([...Object.keys(expected), ...Object.keys(loaded)])].some(
       (locale) => expected[locale] !== loaded[locale]?.revision,
     )
   )
-    return moved();
+    return sourceMoved();
   const form = formFor(collection, slug);
   if (from !== undefined && driftReport(form, files).length)
     return codedError(
@@ -582,6 +628,16 @@ export async function changeEntrySource(
       `The ${to} file would not pass the site's checks as the source: fix it first`,
       { problems },
     );
+  return { userId, loaded, from, to, changed };
+}
+
+async function commitSourceChange(
+  ctx: RequestContext,
+  collection: string,
+  slug: string,
+  change: SourceChange,
+): Promise<Response | undefined> {
+  const { userId, loaded, changed } = change;
   try {
     await rewriteDrafts(
       'default',
@@ -593,18 +649,28 @@ export async function changeEntrySource(
         contents: stringifyEntry(data),
         preserveProvenance: true,
       })),
-      session.user.id,
+      userId,
       config.i18n.locales.map((locale) => ({
         path: entryPath(collection, slug, locale),
         revision: loaded[locale]?.revision,
       })),
     );
   } catch (err) {
-    if (err instanceof DraftRevisionError || isDraftRace(err)) return moved();
+    if (err instanceof DraftRevisionError || isDraftRace(err)) return sourceMoved();
     throw err;
   }
+  return undefined;
+}
+
+async function recordSourceChange(
+  ctx: RequestContext,
+  collection: string,
+  slug: string,
+  change: SourceChange,
+): Promise<Response> {
+  const { userId, from, to } = change;
   await logActivity('default', ctx.db(), {
-    userId: session.user.id,
+    userId,
     kind: 'entry-source',
     subject: entryPath(collection, slug, to),
     detail: { from: from ?? null, to },
