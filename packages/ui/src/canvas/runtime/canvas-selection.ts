@@ -6,7 +6,7 @@ import type {
   CanvasSelection,
   CanvasStructureNode,
   CanvasTarget,
-} from '../canvas-bridge';
+} from '../canvas-protocol';
 import {
   canvasSelectionKey,
   editableTarget,

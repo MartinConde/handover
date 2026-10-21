@@ -19,7 +19,7 @@ import type {
   CanvasTextField,
   CanvasTextHistory,
   CanvasTextSelection,
-} from '../canvas-bridge';
+} from '../canvas-protocol';
 import { sameCanvasTarget } from '../canvas-target';
 import { type CanvasLinkEditorFeedback, createCanvasLinkEditor } from './canvas-link-editor';
 import { pinWrapping, readWrapping } from './canvas-plain-text';

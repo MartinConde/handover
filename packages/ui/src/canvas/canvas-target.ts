@@ -1,4 +1,4 @@
-import type { CanvasDocumentIdentity, CanvasSelection, CanvasTarget } from './canvas-bridge';
+import type { CanvasDocumentIdentity, CanvasSelection, CanvasTarget } from './canvas-protocol';
 
 type CanvasLocation = Omit<CanvasTarget, 'occurrence'>;
 

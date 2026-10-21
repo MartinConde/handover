@@ -10,7 +10,7 @@ import type {
   CanvasTarget,
   CanvasTextField,
   CanvasTextSelection,
-} from './canvas-bridge';
+} from './canvas-protocol';
 
 type CanvasCommandDeps = {
   session: () => EntrySession;

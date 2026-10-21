@@ -9,7 +9,7 @@ import type {
   CanvasTextField,
   CanvasTextHistory,
   CanvasTextSelection,
-} from '../canvas-bridge';
+} from '../canvas-protocol';
 import { historyDirection, sameCanvasTarget } from '../canvas-target';
 import type { CanvasUiLocaleState } from './canvas-ui-locale';
 

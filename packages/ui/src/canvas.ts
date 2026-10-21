@@ -30,11 +30,11 @@ if (typeof window !== 'undefined' && window.parent !== window) {
       | ReturnType<typeof import('./canvas/runtime/canvas-rich-text').createCanvasRichTextRuntime>
       | undefined;
     let richTextLoad: ReturnType<typeof loadCanvasRichTextEditor> | undefined;
-    let field: import('./canvas/canvas-bridge').CanvasTextField | undefined;
-    let mode: import('./canvas/canvas-bridge').CanvasInteractionMode = 'edit';
+    let field: import('./canvas/canvas-protocol').CanvasTextField | undefined;
+    let mode: import('./canvas/canvas-protocol').CanvasInteractionMode = 'edit';
     let requested:
       | {
-          selection: import('./canvas/canvas-bridge').CanvasSelection;
+          selection: import('./canvas/canvas-protocol').CanvasSelection;
           element: Element;
           trigger?: Element;
           caret?: number;
@@ -77,13 +77,15 @@ if (typeof window !== 'undefined' && window.parent !== window) {
       }
     };
     const interaction = (
-      target: import('./canvas/canvas-bridge').CanvasTarget,
-      state: import('./canvas/canvas-bridge').CanvasEditingState,
+      target: import('./canvas/canvas-protocol').CanvasTarget,
+      state: import('./canvas/canvas-protocol').CanvasEditingState,
     ) => {
       bridge.interaction(target, state);
       if (!state.inlineEditing) queueMicrotask(activateRequested);
     };
-    const configureField = (next: import('./canvas/canvas-bridge').CanvasTextField | undefined) => {
+    const configureField = (
+      next: import('./canvas/canvas-protocol').CanvasTextField | undefined,
+    ) => {
       if (mode !== 'edit') next = undefined;
       if (next?.kind !== 'richtext') loadFailure.remove();
       field = next;

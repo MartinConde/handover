@@ -2,7 +2,7 @@ import { unsafeLinkScheme } from '@handover/core';
 import { createEntryDirectoryReader, type Pickable, type PickEntry } from '../../entry-directory';
 import { messageOptions, type UiLocale } from '../../i18n';
 import * as m from '../../paraglide/messages.js';
-import type { CanvasLinkValue } from '../canvas-bridge';
+import type { CanvasLinkValue } from '../canvas-protocol';
 import type { CanvasUiLocaleState } from './canvas-ui-locale';
 
 type CloseReason = 'applied' | 'cancel' | 'outside' | 'removed';

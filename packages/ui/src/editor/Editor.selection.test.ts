@@ -1,7 +1,7 @@
 import type { Field } from '@handover/core';
 import { flushSync } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
-import type { CanvasSelection } from '../canvas/canvas-bridge';
+import type { CanvasSelection } from '../canvas/canvas-protocol';
 import { $, autosaved, bilingual, settle, show, useEditorSetup } from './editor.fixture';
 import type { EditorEntry } from './entry-payload';
 

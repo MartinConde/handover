@@ -1,6 +1,6 @@
 <script lang="ts">
 import { onMount, type Snippet, tick } from 'svelte';
-import type { CanvasAnchor } from './canvas-bridge';
+import type { CanvasAnchor } from './canvas-protocol';
 
 let {
   anchor,

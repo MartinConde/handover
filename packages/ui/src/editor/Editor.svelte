@@ -24,7 +24,7 @@ import {
 } from '@handover/core';
 import { onMount, type Snippet, tick } from 'svelte';
 import CanvasWorkspace from '../canvas/CanvasWorkspace.svelte';
-import type { CanvasSelection } from '../canvas/canvas-bridge';
+import type { CanvasSelection } from '../canvas/canvas-protocol';
 import type { CanvasRenderRequest } from '../canvas/canvas-renderer';
 import OffsiteDialog, { type Target } from '../content/Offsite.svelte';
 import { invalidateEntryDirectory } from '../entry-directory.js';

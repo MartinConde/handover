@@ -75,12 +75,12 @@ test('trimming a label to its bound never splits a surrogate pair', () => {
 // has no built entry point for a plain Node test to resolve, in CI or otherwise.
 test('protocol and address-limit constants match the browser bridge exactly', () => {
   const bridgePath = fileURLToPath(
-    new URL('../../ui/src/canvas/canvas-bridge.ts', import.meta.url),
+    new URL('../../ui/src/canvas/canvas-protocol.ts', import.meta.url),
   );
   const source = readFileSync(bridgePath, 'utf8');
   const constant = (name: string) => {
     const match = source.match(new RegExp(`export const ${name} = ([\\d_]+)`));
-    if (!match?.[1]) throw new Error(`${name} not found in canvas-bridge.ts`);
+    if (!match?.[1]) throw new Error(`${name} not found in canvas-protocol.ts`);
     return Number(match[1].replace(/_/g, ''));
   };
   expect(constant('CANVAS_PROTOCOL')).toBe(CANVAS_PROTOCOL);

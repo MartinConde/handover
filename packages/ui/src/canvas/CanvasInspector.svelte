@@ -12,7 +12,7 @@ import { formatLanguageName, messageOptions, type UiLocale } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
 import { sitePath } from '../request';
 import CanvasIcon from './CanvasIcon.svelte';
-import type { CanvasDocumentIdentity, CanvasSelection } from './canvas-bridge';
+import type { CanvasDocumentIdentity, CanvasSelection } from './canvas-protocol';
 
 let {
   selection,

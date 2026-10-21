@@ -3,7 +3,7 @@ import {
   type CanvasStructureNode,
   type CanvasTarget,
   isCanvasTarget,
-} from '../canvas-bridge';
+} from '../canvas-protocol';
 import { canvasSelectionKey } from '../canvas-target';
 
 export const MARKERS = [

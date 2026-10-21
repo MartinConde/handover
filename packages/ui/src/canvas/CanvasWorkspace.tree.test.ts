@@ -1,7 +1,7 @@
 import type { Field } from '@handover/core';
 import { flushSync, type mount, tick, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
-import type { CanvasStructureNode } from './canvas-bridge';
+import type { CanvasStructureNode } from './canvas-protocol';
 import { canvasNodeKey, visibleCanvasNodes } from './canvas-structure';
 import { session as entrySession, mockRenderer, mountWorkspace } from './workspace.fixture';
 

@@ -4,7 +4,7 @@ import type {
   CanvasMutation,
   CanvasSelection,
   CanvasTarget,
-} from '../canvas-bridge';
+} from '../canvas-protocol';
 import { createCanvasPlainTextRuntime } from './canvas-plain-text';
 import { createCanvasUiLocaleState } from './canvas-ui-locale';
 

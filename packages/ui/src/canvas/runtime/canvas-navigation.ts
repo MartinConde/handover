@@ -1,5 +1,5 @@
 import type { Pickable } from '../../entry-directory';
-import type { CanvasInteractionMode, CanvasNavigationRequest } from '../canvas-bridge';
+import type { CanvasInteractionMode, CanvasNavigationRequest } from '../canvas-protocol';
 
 export type CanvasNavigationDestination =
   | {

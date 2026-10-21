@@ -3,7 +3,7 @@ import { flushSync, mount, tick, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
 import { createEntrySession } from '../editor/entry-session.svelte';
 import CanvasInspector from './CanvasInspector.svelte';
-import type { CanvasSelection } from './canvas-bridge';
+import type { CanvasSelection } from './canvas-protocol';
 
 const fields = [
   {

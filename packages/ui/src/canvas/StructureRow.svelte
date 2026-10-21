@@ -4,7 +4,7 @@ import type { Snippet } from 'svelte';
 import type { messageOptions } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
 import CanvasIcon from './CanvasIcon.svelte';
-import type { CanvasBlockAction, CanvasStructureNode } from './canvas-bridge';
+import type { CanvasBlockAction, CanvasStructureNode } from './canvas-protocol';
 import { canvasNodeKey } from './canvas-structure';
 
 let {

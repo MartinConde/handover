@@ -1,6 +1,11 @@
 import { messageOptions, type UiLocale } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
 import {
+  type CanvasParentBridgeOptions,
+  createCanvasParentBridge,
+  readCanvasResultManifest,
+} from './canvas-bridge';
+import {
   CANVAS_PROTOCOL,
   type CanvasBridgeRejection,
   type CanvasCommandMessage,
@@ -9,15 +14,12 @@ import {
   type CanvasEditingState,
   type CanvasInteractionMode,
   type CanvasNavigationMessage,
-  type CanvasParentBridgeOptions,
   type CanvasSelection,
   type CanvasStructureNode,
   type CanvasSuccessManifest,
   type CanvasTarget,
   type CanvasTextField,
-  createCanvasParentBridge,
-  readCanvasResultManifest,
-} from './canvas-bridge';
+} from './canvas-protocol';
 import { sameCanvasDocument, sameCanvasSelection, sameCanvasTarget } from './canvas-target';
 
 interface CanvasRenderSnapshot {
@@ -630,7 +632,7 @@ export function createCanvasRenderer(options: CanvasRendererOptions) {
       if (!active) return false;
       return active.bridge.textField(value);
     },
-    actions(value: CanvasSelection, actions: import('./canvas-bridge').CanvasBlockAction[]) {
+    actions(value: CanvasSelection, actions: import('./canvas-protocol').CanvasBlockAction[]) {
       if (!active) return false;
       return active.bridge.actions(value, actions);
     },

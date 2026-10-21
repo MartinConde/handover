@@ -1,5 +1,5 @@
 import { afterEach, expect, test, vi } from 'vitest';
-import type { CanvasTarget } from '../canvas-bridge';
+import type { CanvasTarget } from '../canvas-protocol';
 import { createCanvasSelectionRuntime } from './canvas-selection';
 import { createCanvasUiLocaleState } from './canvas-ui-locale';
 

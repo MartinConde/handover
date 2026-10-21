@@ -11,6 +11,13 @@ import CanvasBlockEditor from './CanvasBlockEditor.svelte';
 import CanvasIcon from './CanvasIcon.svelte';
 import CanvasImagePopover from './CanvasImagePopover.svelte';
 import CanvasInspector from './CanvasInspector.svelte';
+import {
+  createCanvasCommands,
+  read,
+  resolveStagedBlockIndex,
+  type StagedBlockTarget,
+} from './canvas-commands.svelte';
+import { createCanvasPanels, PANEL_WIDTHS } from './canvas-panels.svelte';
 import type {
   CanvasActionMessage,
   CanvasAnchor,
@@ -20,14 +27,7 @@ import type {
   CanvasNavigationMessage,
   CanvasSelection,
   CanvasStructureNode,
-} from './canvas-bridge';
-import {
-  createCanvasCommands,
-  read,
-  resolveStagedBlockIndex,
-  type StagedBlockTarget,
-} from './canvas-commands.svelte';
-import { createCanvasPanels, PANEL_WIDTHS } from './canvas-panels.svelte';
+} from './canvas-protocol';
 import type {
   CanvasRendererState,
   CanvasRenderRequest,

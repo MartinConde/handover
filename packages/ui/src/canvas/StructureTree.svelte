@@ -11,7 +11,7 @@ import type {
   CanvasInteractionMode,
   CanvasSelection,
   CanvasStructureNode,
-} from './canvas-bridge';
+} from './canvas-protocol';
 import type { CanvasStructureIndex } from './canvas-structure';
 import { canvasNodeKey, visibleCanvasNodes } from './canvas-structure';
 import { sameCanvasSelection } from './canvas-target';

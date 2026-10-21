@@ -1,6 +1,6 @@
 // Its own module, not part of canvas-selection: the admin shell reads the tree, and importing
 // that module would pull the whole in-page selection runtime into the editor's bundle.
-import type { CanvasStructureNode } from './canvas-bridge';
+import type { CanvasStructureNode } from './canvas-protocol';
 import { canvasSelectionKey } from './canvas-target';
 
 // Node ids are renumbered on every render, so a collapsed branch is remembered by its target.

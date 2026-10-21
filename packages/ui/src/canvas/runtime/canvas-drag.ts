@@ -1,7 +1,7 @@
 import { defaultCollisionDetection } from '@dnd-kit/collision';
 import { Accessibility, DragDropManager, type Draggable } from '@dnd-kit/dom';
 import { isSortable, Sortable } from '@dnd-kit/dom/sortable';
-import type { CanvasBlockAction, CanvasSelection } from '../canvas-bridge';
+import type { CanvasBlockAction, CanvasSelection } from '../canvas-protocol';
 import type { InternalNode } from './canvas-scan';
 
 export type DragAnnouncement =

@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import type { CanvasSelection, CanvasTarget } from './canvas-bridge';
+import type { CanvasSelection, CanvasTarget } from './canvas-protocol';
 import {
   canvasSelectionKey,
   sameCanvasLocation,

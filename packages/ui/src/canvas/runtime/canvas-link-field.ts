@@ -8,7 +8,7 @@ import type {
   CanvasSelection,
   CanvasTarget,
   CanvasTextField,
-} from '../canvas-bridge';
+} from '../canvas-protocol';
 import { sameCanvasTarget } from '../canvas-target';
 import { type CanvasLinkEditorFeedback, createCanvasLinkEditor } from './canvas-link-editor';
 import type { CanvasUiLocaleState } from './canvas-ui-locale';
