@@ -59,6 +59,21 @@ import { entryProblems } from '../../../problems.js';
 import { readJson } from '../body.js';
 import { codedError, entryNotFound, notFound } from '../respond.js';
 
+type Plan = {
+  collected: NonNullable<(typeof config.collections)[string]>;
+  offered: string[];
+  answer: { kind?: unknown; value?: unknown };
+  retryKey: string;
+  existing: Awaited<ReturnType<typeof findOperation>>;
+  baseSha: string;
+  files: Awaited<ReturnType<typeof entryFiles>>;
+  revisions: Record<string, string>;
+  going: string[];
+  staying: string[];
+  stamp: string | undefined;
+  committing: boolean;
+};
+
 /** The mark lives in the files, so turning off a published language commits a delete. */
 export async function offering(
   ctx: RequestContext,
@@ -67,6 +82,19 @@ export async function offering(
   request: Request,
   session: App.Locals['handover'],
 ): Promise<Response> {
+  const plan = await validateOffering(ctx, collection, slug, request);
+  if (plan instanceof Response) return plan;
+  const committed = await commitOffering(ctx, collection, slug, session, plan);
+  return recordOffering(ctx, collection, slug, session, plan, committed);
+}
+
+// Reads only: every refusal and the already-finalized replay return before git or D1 is written.
+async function validateOffering(
+  ctx: RequestContext,
+  collection: string,
+  slug: string,
+  request: Request,
+): Promise<Plan | Response> {
   const collected = config.collections[collection];
   if (!collected) return notFound();
   const body = (await readJson(request)) as
@@ -132,60 +160,104 @@ export async function offering(
       `${resolved.locale} is the language this entry is written in, so it cannot be turned off`,
       { locale: resolved.locale },
     );
-  const pathsOf = (locales: string[]) => locales.map((l) => entryPath(collection, slug, l));
-  if (published.some((locale) => going.includes(locale))) {
-    // The same question a hide asks, resolved the same way per language.
-    const picked =
-      answer.kind === 'entry'
-        ? collectionEntries(
-            index,
-            String(answer.value ?? '').split('/')[0] ?? '',
-            await overlayRows('default', database, index),
-          )
-        : undefined;
-    const revisions = Object.fromEntries(
-      files.map(({ path }, index) => [path, capturedRows[index]?.revision ?? '']),
-    );
-    const operation =
-      existing ??
-      (await beginOperation('default', database, {
-        retryKey,
-        kind: 'locale-off',
-        paths: [...files.map((file) => file.path), 'src/content/redirects.yaml'],
-        revisions,
-        baseSha,
-        userId: session?.user.id,
-        subject: files.find((file) => file.file)?.path ?? files[0]?.path ?? null,
-        detail: { locales: going },
-      }));
-    let commitSha: string | undefined = operation.commitSha ?? undefined;
-    if (!commitSha) commitSha = await recoverOperationCommit('default', database, git, operation);
-    let kept: { path: string; contents: string }[];
-    if (!commitSha) {
-      const committed = await deleteLocales(
-        git,
-        locationOf(collection),
-        slug,
-        going,
-        offered,
-        (locale) => redirectTarget(answer, collected, picked, locale),
-        { baseSha: operation.baseSha, operationId: operation.id, source: stamp },
-      );
-      commitSha = committed.commitSha;
-      kept = committed.kept;
-    } else {
-      kept = (
-        await Promise.all(
-          staying.map(async (locale) => {
-            const path = entryPath(collection, slug, locale);
-            const file = await git.getFile(path, commitSha);
-            return file ? { path, contents: file.contents } : undefined;
-          }),
+  const revisions = Object.fromEntries(
+    files.map(({ path }, index) => [path, capturedRows[index]?.revision ?? '']),
+  );
+  const committing = published.some((locale) => going.includes(locale));
+  return {
+    collected,
+    offered,
+    answer,
+    retryKey,
+    existing,
+    baseSha,
+    files,
+    revisions,
+    going,
+    staying,
+    stamp,
+    committing,
+  };
+}
+
+async function commitOffering(
+  ctx: RequestContext,
+  collection: string,
+  slug: string,
+  session: App.Locals['handover'],
+  plan: Plan,
+) {
+  if (!plan.committing) return undefined;
+  const { collected, offered, answer, retryKey, existing, baseSha, files, going, staying, stamp } =
+    plan;
+  const database = ctx.db();
+  const git = ctx.git();
+  // The same question a hide asks, resolved the same way per language.
+  const picked =
+    answer.kind === 'entry'
+      ? collectionEntries(
+          index,
+          String(answer.value ?? '').split('/')[0] ?? '',
+          await overlayRows('default', database, index),
         )
-      ).filter((file): file is { path: string; contents: string } => Boolean(file));
-    }
-    const result = { commit_sha: commitSha };
-    await markOperationCommitted('default', database, operation.id, commitSha, result);
+      : undefined;
+  const operation =
+    existing ??
+    (await beginOperation('default', database, {
+      retryKey,
+      kind: 'locale-off',
+      paths: [...files.map((file) => file.path), 'src/content/redirects.yaml'],
+      revisions: plan.revisions,
+      baseSha,
+      userId: session?.user.id,
+      subject: files.find((file) => file.file)?.path ?? files[0]?.path ?? null,
+      detail: { locales: going },
+    }));
+  let commitSha: string | undefined = operation.commitSha ?? undefined;
+  if (!commitSha) commitSha = await recoverOperationCommit('default', database, git, operation);
+  let kept: { path: string; contents: string }[];
+  if (!commitSha) {
+    const committed = await deleteLocales(
+      git,
+      locationOf(collection),
+      slug,
+      going,
+      offered,
+      (locale) => redirectTarget(answer, collected, picked, locale),
+      { baseSha: operation.baseSha, operationId: operation.id, source: stamp },
+    );
+    commitSha = committed.commitSha;
+    kept = committed.kept;
+  } else {
+    kept = (
+      await Promise.all(
+        staying.map(async (locale) => {
+          const path = entryPath(collection, slug, locale);
+          const file = await git.getFile(path, commitSha);
+          return file ? { path, contents: file.contents } : undefined;
+        }),
+      )
+    ).filter((file): file is { path: string; contents: string } => Boolean(file));
+  }
+  const result = { commit_sha: commitSha };
+  await markOperationCommitted('default', database, operation.id, commitSha, result);
+  return { operation, commitSha, kept, result };
+}
+
+async function recordOffering(
+  ctx: RequestContext,
+  collection: string,
+  slug: string,
+  session: App.Locals['handover'],
+  plan: Plan,
+  committed: Awaited<ReturnType<typeof commitOffering>>,
+): Promise<Response> {
+  const { offered, files, going, staying, stamp } = plan;
+  const database = ctx.db();
+  const git = ctx.git();
+  const pathsOf = (locales: string[]) => locales.map((l) => entryPath(collection, slug, l));
+  if (committed) {
+    const { operation, commitSha, kept, result } = committed;
     const offer = { offered, locales: config.i18n.locales, source: stamp };
     try {
       for (const { locale, path, file } of files) {
