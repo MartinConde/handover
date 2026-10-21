@@ -61,6 +61,7 @@ import type { EditorEntry } from './entry-payload';
 import SourceChange from './SourceChange.svelte';
 import { classifyDraftSaveRefusal } from './save';
 import { createEntryActions } from './entry-actions.svelte';
+import { createEntryAddress } from './entry-address.svelte';
 import { createEntryCreate } from './entry-create.svelte';
 import { createEntryLock } from './entry-lock.svelte';
 import { createEntryPublish } from './entry-publish.svelte';
@@ -756,16 +757,17 @@ async function closeLanguages() {
   (pane ? paneTrigger : languageTrigger)?.focus();
 }
 
-// Unlike a field, an address is validated, unique and owes a redirect when it moves.
-let editing = $state(false);
-let typed = $state('');
-let addressFailed = $state<UiMessage>();
-let addressInput = $state<HTMLInputElement>();
-let addressTrigger = $state<HTMLButtonElement>();
-const address = $derived(entry.addresses?.[locale] ?? '');
-// A language with no file has no address: the offer to make one stands where the form would be.
-const addressable = $derived(
-  entry.localizedSlugs === true && (locale === entry.sourceLocale || !untranslated(locale)),
+const entryAddress = untrack(() =>
+  createEntryAddress({
+    collection,
+    slug,
+    entry: () => entry,
+    locale: () => locale,
+    untranslated,
+    session: entrySession,
+    actions: entryActions,
+    onchanged: () => onchanged(),
+  }),
 );
 const routing = $derived({
   locales: entry.locales,
@@ -773,7 +775,7 @@ const routing = $derived({
   prefixDefaultLocale: entry.prefixDefaultLocale,
 });
 const url = $derived(
-  entryPageUrl(routing, entry, slug, address || slug, locale) ?? '',
+  entryPageUrl(routing, entry, slug, entryAddress.address || slug, locale) ?? '',
 );
 // The part in front of the address, so what is being typed reads as the URL it will be.
 const before = $derived(entryUrl(routing, entry.route, '', locale) ?? '');
@@ -818,51 +820,6 @@ function navigateCanvasEntry(target: {
   locale = target.locale;
   if (mode === 'split') mobilePane = 'page';
   void tick().then(() => canvasPane?.schedule());
-}
-
-function editAddress() {
-  typed = address;
-  addressFailed = undefined;
-  editing = true;
-  void tick().then(() => {
-    addressInput?.focus();
-    addressInput?.select();
-  });
-}
-
-async function cancelAddress() {
-  editing = false;
-  await tick();
-  addressTrigger?.focus();
-}
-
-function addressKeydown(event: KeyboardEvent) {
-  if (event.isComposing) return;
-  if (event.key === 'Enter') {
-    event.preventDefault();
-    if (!entryActions.busy) void saveAddress();
-  } else if (event.key === 'Escape') {
-    event.preventDefault();
-    if (!entryActions.busy) void cancelAddress();
-  }
-}
-
-// The screen is read again afterwards so both columns get the address the server settled on.
-async function saveAddress() {
-  entryActions.busy = true;
-  if (!(await flush())) {
-    entryActions.busy = false;
-    return;
-  }
-  const res = await postJson(`/admin/api/entries/${collection}/${slug}/address/${locale}`, { address: typed.trim() });
-  entryActions.busy = false;
-  if (!res.ok) {
-    addressFailed = await retainedFailure(res, 'ENTRY_ACTION_FAILED');
-    return;
-  }
-  await cancelAddress();
-  invalidateEntryDirectory();
-  onchanged();
 }
 </script>
 
@@ -996,20 +953,20 @@ async function saveAddress() {
 
 {#snippet addressRow()}
   <!-- Every entry but a global can be renamed, so the row is there even where the address is not editable. -->
-  {#if addressable || !entry.singleton}
-    <div class={['slug-row', { 'is-editing': addressable && editing }]}>
-      {#if addressable && editing}
+  {#if entryAddress.addressable || !entry.singleton}
+    <div class={['slug-row', { 'is-editing': entryAddress.addressable && entryAddress.editing }]}>
+      {#if entryAddress.addressable && entryAddress.editing}
         <span class="url">{before}</span>
         <label class="visually-hidden" for="entry-address">{m.editor_address_label({ language: formatLanguageName(locale, uiLocale) }, options)}</label>
         <input
           class="slug-input"
           id="entry-address"
           type="text"
-          style={`width: ${Math.max(4, Math.min(28, typed.length + 1))}ch`}
-          bind:this={addressInput}
-          bind:value={typed}
+          style={`width: ${Math.max(4, Math.min(28, entryAddress.typed.length + 1))}ch`}
+          bind:this={entryAddress.addressInput}
+          bind:value={entryAddress.typed}
           placeholder={slug}
-          onkeydown={addressKeydown}
+          onkeydown={entryAddress.addressKeydown}
         />
         <span class="slug-actions">
           <button
@@ -1018,7 +975,7 @@ async function saveAddress() {
             aria-label={m.editor_address_save({}, options)}
             title={m.editor_address_save({}, options)}
             disabled={entryActions.busy}
-            onclick={saveAddress}
+            onclick={entryAddress.saveAddress}
           >
             <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m4 10.3 3.5 3.5L16 5.7" /></svg>
           </button>
@@ -1028,27 +985,27 @@ async function saveAddress() {
             aria-label={m.editor_address_cancel({}, options)}
             title={m.editor_address_cancel({}, options)}
             disabled={entryActions.busy}
-            onclick={cancelAddress}
+            onclick={entryAddress.cancelAddress}
           >
             <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 5 10 10m0-10L5 15" /></svg>
           </button>
         </span>
-        {#if addressFailed}<span class="mode is-bad">{@render feedback(addressFailed)}</span>{/if}
+        {#if entryAddress.addressFailed}<span class="mode is-bad">{@render feedback(entryAddress.addressFailed)}</span>{/if}
       {:else}
-        {#if addressable}
+        {#if entryAddress.addressable}
           <button
             class="btn-link url slug-edit"
             type="button"
-            bind:this={addressTrigger}
+            bind:this={entryAddress.addressTrigger}
             disabled={entryLock.locked}
             aria-label={`${m.editor_address_edit({}, options)}: ${url}`}
-            onclick={editAddress}>{url}</button
+            onclick={entryAddress.editAddress}>{url}</button
           >
-          {#if !address}<span class="mode">{m.editor_address_file_name({}, options)}</span>{/if}
+          {#if !entryAddress.address}<span class="mode">{m.editor_address_file_name({}, options)}</span>{/if}
         {:else if url}
           <span class="url">{url}</span>
         {/if}
-        {#if !entry.singleton}{#if addressable || url}<span class="sep" aria-hidden="true">·</span
+        {#if !entry.singleton}{#if entryAddress.addressable || url}<span class="sep" aria-hidden="true">·</span
             >{/if}<button
             class="btn-link slug-rename"
             type="button"
