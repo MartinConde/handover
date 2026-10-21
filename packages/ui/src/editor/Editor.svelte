@@ -25,7 +25,6 @@ import { onMount, type Snippet, tick, untrack } from 'svelte';
 import CanvasWorkspace from '../canvas/CanvasWorkspace.svelte';
 import type { CanvasSelection } from '../canvas/canvas-protocol';
 import type { CanvasRenderRequest } from '../canvas/canvas-renderer';
-import OffsiteDialog, { type Target } from '../content/Offsite.svelte';
 import { messageDetail, messageText, retainedFailure } from '../errors.js';
 import { formatLanguageName, messageOptions, type UiLocale } from '../i18n.js';
 import {
@@ -46,14 +45,13 @@ import {
   sitePath,
 } from '../request.js';
 import AutosaveStatus from '../shared/AutosaveStatus.svelte';
-import ConfirmDialog from '../shared/ConfirmDialog.svelte';
 import Modal from '../shared/Modal.svelte';
 import PublishConfirmation from './PublishConfirmation.svelte';
 import { createEntrySession } from './entry-session.svelte';
+import EntryActionDialogs from './EntryActionDialogs.svelte';
 import EntryBanners from './EntryBanners.svelte';
 import Fields from './fields/Fields.svelte';
 import type { EditorEntry } from './entry-payload';
-import SourceChange from './SourceChange.svelte';
 import { createEntryActions } from './entry-actions.svelte';
 import { createEntryAddress } from './entry-address.svelte';
 import { createEntryCreate } from './entry-create.svelte';
@@ -1445,105 +1443,20 @@ function navigateCanvasEntry(target: {
       pending={() => entrySession.persistedActionPending()}
     />
   {/if}
-  {#if entryActions.hiding}
-    <OffsiteDialog
-      action="hide"
-      what={title}
-      {collection}
-      index={entryUrl(routing, entry.index, '', locale) ?? undefined}
-      busy={entryActions.busy}
-      {uiLocale}
-      error={entryActions.statusFailed}
-      returnTo={entryActions.actionTrigger}
-      onconfirm={(target: Target) => entryActions.setStatus(true, target)}
-      onclose={() => (entryActions.hiding = false)}
-    />
-  {/if}
-  {#if entryActions.changingSource}
-    <SourceChange
-      locales={entry.locales}
-      source={entry.sourceLocale}
-      files={entryActions.sourceFiles}
-      offered={entry.offered}
-      stale={entry.stale}
-      fields={shownForm.fields}
-      blocks={shownForm.blocks}
-      {uiLocale}
-      sending={entryActions.sendingSource}
-      failure={entryActions.sourceFailure}
-      returnTo={entryActions.actionTrigger}
-      onconfirm={entryActions.changeSourceTo}
-      onclose={() => (entryActions.changingSource = false)}
-      onreload={() => void reload()}
-    />
-  {/if}
-  {#if entryActions.renaming}
-    <Modal labelledby="rename-h" initialFocus="#rename-to" returnTo={entryActions.actionTrigger} dismissible={!entryActions.busy} onclose={() => (entryActions.renaming = false)}>
-        <h2 id="rename-h">{m.entry_list_rename_question({ title }, options)}</h2>
-        <form onsubmit={entryActions.rename}>
-          <div class="field">
-            <div class="label-row"><label for="rename-to">{m.entry_list_file_name({}, options)}</label></div>
-            <input class="input filename" id="rename-to" type="text" bind:value={entryActions.newName} aria-describedby="rename-hint" />
-            <p class="hint" id="rename-hint">
-              {m.entry_list_saved_as({}, options)} <span class="filename">{entryActions.willBe}</span>. {m.entry_list_rename_hint({}, options)}
-            </p>
-          </div>
-          {#if entryActions.actionFailed}<div class="notice notice-danger" role="alert">{@render feedback(entryActions.actionFailed)}</div>{/if}
-          <div class="actions">
-            <button class="btn" type="button" disabled={entryActions.busy} onclick={() => (entryActions.renaming = false)}>{m.common_cancel({}, options)}</button>
-            <button class="btn btn-primary" type="submit" disabled={entryActions.busy}>{entryActions.busy ? m.entry_list_renaming({}, options) : m.editor_rename({}, options)}</button>
-          </div>
-        </form>
-    </Modal>
-  {/if}
-  {#if entryActions.deleting}
-    <OffsiteDialog
-      action="delete"
-      what={title}
-      {collection}
-      index={entryUrl(routing, entry.index, '', locale) ?? undefined}
-      busy={entryActions.busy}
-      {uiLocale}
-      error={entryActions.actionFailed}
-      returnTo={entryActions.actionTrigger}
-      onconfirm={entryActions.remove}
-      onhide={() => { entryActions.deleting = false; entryActions.hiding = true; }}
-      onclose={() => (entryActions.deleting = false)}
-    />
-  {/if}
-  {#if entryActions.discarding}
-    <ConfirmDialog
-      labelledby="discard-h"
-      role="dialog"
-      returnTo={entryActions.actionTrigger}
-      title={m.pending_discard_question({ title }, options)}
-      cancel={m.common_cancel({}, options)}
-      confirm={entryActions.discardBusy ? m.pending_discarding({}, options) : m.pending_discard_changes({}, options)}
-      busy={entryActions.discardBusy}
-      onconfirm={entryActions.discardDraft}
-      onclose={() => (entryActions.discarding = false)}
-    >
-      <p>{entry.published.length ? m.pending_discard_explanation({}, options) : m.pending_discard_created({}, options)}</p>
-      {#if entryActions.actionFailed}<div class="notice notice-danger" role="alert">{@render feedback(entryActions.actionFailed)}</div>{/if}
-    </ConfirmDialog>
-  {/if}
-  {#if entryActions.offing}
-    {@const going = entryActions.offing}
-    <OffsiteDialog
-      action="off"
-      language={language(going)}
-      what={title}
-      served={localeUrl(going)}
-      {collection}
-      index={localeIndex(going)}
-      busy={entryActions.busy}
-      {uiLocale}
-      error={entryActions.actionFailed}
-      returnTo={entryActions.actionTrigger}
-      onconfirm={(target: Target) => entryActions.turnOff(going, target)}
-      onclose={() => (entryActions.offing = undefined)}
-    />
-  {/if}
+  <EntryActionDialogs
+    {entryActions}
+    {entry}
+    {title}
+    {collection}
+    {locale}
+    fields={shownForm.fields}
+    blocks={shownForm.blocks}
+    {uiLocale}
+    {localeUrl}
+    {localeIndex}
+    {reload}
+    {feedback}
+  />
   {#if entryLock.taking}
     <Modal labelledby="take-h" returnTo={takeTrigger} dismissible={!entryLock.takeBusy} onclose={entryLock.cancelTake}>
         <h2 id="take-h">{entryLock.holderName
