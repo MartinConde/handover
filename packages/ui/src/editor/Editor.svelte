@@ -58,6 +58,7 @@ import { createEntryCreate } from './entry-create.svelte';
 import { createEntryLock } from './entry-lock.svelte';
 import { createEntryPublish } from './entry-publish.svelte';
 import { createEntrySaves } from './entry-saves.svelte';
+import { createEntryView, type EditorMode, readPreference, savePreference } from './entry-view.svelte';
 import { drawn, focusField, land, revealField } from './field-reveal';
 import Translation from './Translation.svelte';
 import UntranslatedPane from './UntranslatedPane.svelte';
@@ -202,74 +203,21 @@ let canvasPane = $state<ReturnType<typeof CanvasWorkspace>>();
 // Sticky panes below the header sit exactly under it, however many rows it wraps to.
 let headerHeight = $state(0);
 
-type EditorMode = 'form' | 'split' | 'canvas';
-type Beside = 'page' | 'language' | 'none';
-const BESIDE: Beside[] = ['page', 'language', 'none'];
-// v3: Form and Split became one view, so earlier saved values mean nothing here.
-const viewKey = untrack(() => `handover:editor-view:v3:${siteBase() || '/'}:${userId}`);
-// A blocked browser preference must never block editing.
-function readPreference(key: string) {
-  try {
-    return localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
-function savePreference(key: string, value: string) {
-  try {
-    localStorage.setItem(key, value);
-  } catch {
-    // Kept for this visit only.
-  }
-}
-const saved = readPreference(viewKey);
-let chosen = $state<Beside | undefined>(
-  BESIDE.includes(saved as Beside) ? (saved as Beside) : undefined,
+const view = untrack(() =>
+  createEntryView({
+    userId: () => userId,
+    preview: () => preview,
+    route: () => entry.route,
+    section: () => section,
+    many: () => many,
+    toContent: () => navigate(`/admin/c/${collection}/${slug}${queueTail}`),
+  }),
 );
-let canvasOpen = $state(saved === 'canvas');
-// Saved as 'form': a page could be shown, but the editor folded it away for a full-width form.
-let collapsed = $state(saved === 'form');
-const canvasSupported = $derived(preview && Boolean(entry.route));
-const pageShown = $derived(section === '' && canvasSupported);
-const besideOptions = $derived(
-  BESIDE.filter((of) => (of === 'page' ? pageShown : of === 'language' ? many : !pageShown)),
-);
-const beside = $derived<Beside>(
-  chosen && besideOptions.includes(chosen) ? chosen : pageShown && !collapsed ? 'page' : 'none',
-);
-const side = $derived(beside === 'language');
-const mode = $derived<EditorMode>(
-  pageShown && canvasOpen ? 'canvas' : beside === 'page' ? 'split' : 'form',
-);
-let canvasVisited = $state(false);
-let mobilePane = $state<'form' | 'page'>('form');
 const canvasEpoch = crypto.randomUUID();
 
-// A link that opens a language is for this visit; only the person's own choice is saved.
-function setBeside(next: Beside, save = true) {
-  if (next === 'none' && pageShown) next = 'page';
-  chosen = next;
-  collapsed = false;
-  canvasOpen = false;
-  if (save) savePreference(viewKey, next);
-}
-function collapse() {
-  chosen = undefined;
-  collapsed = true;
-  canvasOpen = false;
-  savePreference(viewKey, 'form');
-}
-function setCanvas(open: boolean) {
-  if (open && !canvasSupported) return;
-  canvasOpen = open;
-  if (open) mobilePane = 'page';
-  savePreference(viewKey, open ? 'canvas' : collapsed && pageShown ? 'form' : beside);
-  if (open && section !== '') navigate(`/admin/c/${collection}/${slug}${queueTail}`);
-}
-
 $effect(() => {
-  if (mode !== 'form') canvasVisited = true;
-  onmode?.(mode);
+  if (view.mode !== 'form') view.canvasVisited = true;
+  onmode?.(view.mode);
 });
 
 // A site with one language draws none of the language controls.
@@ -278,9 +226,9 @@ const drifted = $derived(entry.drift.length > 0);
 const others = $derived(entry.locales.filter((l) => l !== entry.sourceLocale));
 // The column beside the source language.
 const target = $derived(locale === entry.sourceLocale ? others[0] : locale);
-const shown = $derived(side ? target : locale === entry.sourceLocale ? undefined : locale);
+const shown = $derived(view.side ? target : locale === entry.sourceLocale ? undefined : locale);
 // A translation on its own: the switcher is on another language and the second column is shut.
-const alone = $derived(!side && shown !== undefined);
+const alone = $derived(!view.side && shown !== undefined);
 // The entry always has the file it was opened on; the others are the ones that can be absent.
 const untranslated = (of: string) => of !== entry.sourceLocale && !entrySession.hasSnapshot(of);
 // Turned off for this entry: no file is written for it and the site does not offer it.
@@ -536,7 +484,7 @@ async function goTo(path: string | undefined) {
 let revealingForm = 0;
 let formSelection = 0;
 function revealPreview(path: readonly string[], of: string) {
-  if (mode !== 'split' || revealingForm || of !== locale) return;
+  if (view.mode !== 'split' || revealingForm || of !== locale) return;
   const address = entrySession.addressForPath(of, path.join('.'));
   if (address) canvasPane?.selectForm(address);
 }
@@ -544,18 +492,18 @@ function revealPreview(path: readonly string[], of: string) {
 async function selectForm(selection: CanvasSelection) {
   const target = selection.target;
   if (
-    mode !== 'split' || target.document.collection !== collection ||
+    view.mode !== 'split' || target.document.collection !== collection ||
     target.document.id !== slug || target.locale !== locale || !entrySession.hasSnapshot(locale)
   ) return;
   const at = fieldPosition(target.address, entrySession.snapshot(locale), wholeForm);
   if (!at) return;
   const request = ++formSelection;
   const of = locale;
-  mobilePane = 'form';
+  view.mobilePane = 'form';
   const prefix = locale === entry.sourceLocale ? 'f' : 't';
   revealingForm++;
   try {
-    await revealField(prefix, at.join('.'), () => request === formSelection && of === locale && mode === 'split');
+    await revealField(prefix, at.join('.'), () => request === formSelection && of === locale && view.mode === 'split');
   } finally {
     revealingForm--;
   }
@@ -575,13 +523,13 @@ async function jumpTo(path: string): Promise<boolean> {
     await tick();
   }
   // On a narrow screen the two columns are tabs, and this one is the tab being worked in.
-  if (side && !alone) mobilePane = 'page';
+  if (view.side && !alone) view.mobilePane = 'page';
   return focusField(`t-${at.join('.')}`);
 }
 
 const goToFirst = () => {
-  if (mode === 'canvas') {
-    setCanvas(false);
+  if (view.mode === 'canvas') {
+    view.setCanvas(false);
     locale = entry.sourceLocale;
     void tick().then(() => goTo(missing[0]));
   } else return goTo(missing[0]);
@@ -593,8 +541,8 @@ function reviewCanvasProblems() {
     ...entrySession.incompleteFields(of),
     ...(of === entry.sourceLocale ? problems : entrySession.positionalProblems(of, uiLocale)),
   })[0];
-  setCanvas(false);
-  if (of !== entry.sourceLocale) setBeside('language');
+  view.setCanvas(false);
+  if (of !== entry.sourceLocale) view.setBeside('language');
   void tick().then(() => {
     if (of === entry.sourceLocale) return goTo(path);
     return land('t', path);
@@ -610,7 +558,7 @@ function fromAddress() {
   if (!field && !requestedLocale && queue && query.get('queue') === queue) {
     leaving(() => {
       if (queue !== entry.sourceLocale) locale = queue;
-      setBeside('language', false);
+      view.setBeside('language', false);
     });
     return;
   }
@@ -620,7 +568,7 @@ function fromAddress() {
   if (inColumn && shown !== of) {
     leaving(() => {
       locale = of;
-      setBeside('language', false);
+      view.setBeside('language', false);
     });
   } else if (!inColumn && alone) {
     leaving(() => {
@@ -710,7 +658,7 @@ const canvasRequest = (): CanvasRenderRequest => ({
 });
 
 function canvasCompleted() {
-  if (mode !== 'split') return;
+  if (view.mode !== 'split') return;
   void tick().then(() => canvasPane?.schedule());
 }
 
@@ -729,7 +677,7 @@ function navigateCanvasEntry(target: {
   }
   if (!entry.locales.includes(target.locale) || untranslated(target.locale)) return;
   locale = target.locale;
-  if (mode === 'split') mobilePane = 'page';
+  if (view.mode === 'split') view.mobilePane = 'page';
   void tick().then(() => canvasPane?.schedule());
 }
 </script>
@@ -772,7 +720,7 @@ function navigateCanvasEntry(target: {
 {/snippet}
 
 {#snippet paneHeading(of: string)}
-  {#if side && others.length > 1}
+  {#if view.side && others.length > 1}
     <div class="pop-anchor language-pick">
       <h2 id="pane-{of}">
         <button
@@ -1036,7 +984,7 @@ function navigateCanvasEntry(target: {
 {/snippet}
 
 <main
-  class={['main main-editor', { 'is-canvas-fullscreen': mode === 'canvas' }]}
+  class={['main main-editor', { 'is-canvas-fullscreen': view.mode === 'canvas' }]}
   style:--entry-header-h={`calc(var(--topbar-stuck, 0px) + ${headerHeight}px)`}
 >
   {#if entryActions.actionFailed && !entryActions.renaming && !entryActions.deleting && !entryActions.offing && !entryActions.discarding}<p
@@ -1138,22 +1086,22 @@ function navigateCanvasEntry(target: {
             </div>
           {/if}
         {/if}
-        {#if besideOptions.length > 1 || pageShown || (!entry.singleton && canvasSupported)}
+        {#if view.besideOptions.length > 1 || view.pageShown || (!entry.singleton && view.canvasSupported)}
           <div class="seg editor-beside" role="group" aria-label={m.editor_beside({}, options)}>
-            {#if besideOptions.length > 1 || pageShown}
-              {#each besideOptions.filter((of) => of !== 'none') as of (of)}
+            {#if view.besideOptions.length > 1 || view.pageShown}
+              {#each view.besideOptions.filter((of) => of !== 'none') as of (of)}
                 {@const label = of === 'page' ? m.editor_workspace_preview({}, options) : m.editor_workspace_translate({}, options)}
                 <button
                   type="button"
                   class={{ 'btn-sbs': of === 'language' }}
                   title={label}
-                  aria-pressed={beside === of && mode !== 'canvas'}
+                  aria-pressed={view.beside === of && view.mode !== 'canvas'}
                   disabled={drifted}
                   onclick={() =>
                     leaving(() =>
-                      of === 'page' && beside === 'page'
-                        ? collapse()
-                        : setBeside(!pageShown && side && of === 'language' ? 'none' : of),
+                      of === 'page' && view.beside === 'page'
+                        ? view.collapse()
+                        : view.setBeside(!view.pageShown && view.side && of === 'language' ? 'none' : of),
                     )}
                   ><svg class="workspace-icon" viewBox="0 0 20 20" aria-hidden="true"
                     ><rect x="3" y="3" width="14" height="14" rx="2" />{#if of === 'page'}<path
@@ -1163,13 +1111,13 @@ function navigateCanvasEntry(target: {
                 >
               {/each}
             {/if}
-            {#if !entry.singleton && canvasSupported}
+            {#if !entry.singleton && view.canvasSupported}
               <button
                 class="canvas-open"
                 type="button"
                 title={m.editor_view_canvas({}, options)}
                 disabled={drifted}
-                onclick={() => setCanvas(true)}
+                onclick={() => view.setCanvas(true)}
                 ><svg class="workspace-icon" viewBox="0 0 20 20" aria-hidden="true"
                   ><path d="M7.5 3H3v4.5M12.5 3H17v4.5M7.5 17H3v-4.5M12.5 17H17v-4.5" /></svg
                 ><span class="visually-hidden">{m.editor_view_canvas({}, options)}</span></button
@@ -1203,10 +1151,10 @@ function navigateCanvasEntry(target: {
         'entry-body',
         {
           'has-pane':
-            !drifted && (mode === 'split' || (mode === 'form' && !alone && shown !== undefined)),
-          'is-canvas': mode === 'canvas',
-          'is-split': mode === 'split',
-          'is-full': pageShown && beside === 'none' && !alone,
+            !drifted && (view.mode === 'split' || (view.mode === 'form' && !alone && shown !== undefined)),
+          'is-canvas': view.mode === 'canvas',
+          'is-split': view.mode === 'split',
+          'is-full': view.pageShown && view.beside === 'none' && !alone,
         },
       ]}
     >
@@ -1221,7 +1169,7 @@ function navigateCanvasEntry(target: {
           onresolved={entrySession.afterReconciliation}
         />
       {:else}
-        {#if mode === 'split' || (mode === 'form' && side && shown && !alone)}
+        {#if view.mode === 'split' || (view.mode === 'form' && view.side && shown && !alone)}
           <div
             class="canvas-mobile-tabs seg"
             role="group"
@@ -1229,25 +1177,25 @@ function navigateCanvasEntry(target: {
           >
             <button
               type="button"
-              aria-pressed={mobilePane === 'form'}
-              onclick={() => (mobilePane = 'form')}
-              >{side ? language(entry.sourceLocale) : m.editor_split_form({}, options)}</button
+              aria-pressed={view.mobilePane === 'form'}
+              onclick={() => (view.mobilePane = 'form')}
+              >{view.side ? language(entry.sourceLocale) : m.editor_split_form({}, options)}</button
             >
             <button
               type="button"
-              aria-pressed={mobilePane === 'page'}
-              onclick={() => (mobilePane = 'page')}
-              >{side && shown ? language(shown) : m.editor_split_page({}, options)}</button
+              aria-pressed={view.mobilePane === 'page'}
+              onclick={() => (view.mobilePane = 'page')}
+              >{view.side && shown ? language(shown) : m.editor_split_page({}, options)}</button
             >
           </div>
         {/if}
         <!-- Not drawn when a translation is on its own. -->
-        {#if mode !== 'canvas' && !alone}
+        {#if view.mode !== 'canvas' && !alone}
           <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
           <form
             class={[
               'form',
-              { 'is-mobile-hidden': (mode === 'split' || side) && mobilePane === 'page' },
+              { 'is-mobile-hidden': (view.mode === 'split' || view.side) && view.mobilePane === 'page' },
             ]}
             onsubmit={(e) => e.preventDefault()}
             onfocusout={canvasCompleted}
@@ -1303,7 +1251,7 @@ function navigateCanvasEntry(target: {
           </form>
         {/if}
         <!-- Split replaces a comparison pane rather than adding a third column. -->
-        {#if mode !== 'canvas' && !(mode === 'split' && !alone) && shown && untranslated(shown)}
+        {#if view.mode !== 'canvas' && !(view.mode === 'split' && !alone) && shown && untranslated(shown)}
           <!-- An empty form here would autosave a file nobody asked for. -->
           <UntranslatedPane
             {entry}
@@ -1319,8 +1267,8 @@ function navigateCanvasEntry(target: {
             localeFailure={entryCreate.localeFailure?.locale === shown
               ? entryCreate.localeFailure.message
               : undefined}
-            mobileHidden={(mode === 'split' && mobilePane === 'page') ||
-              (side && !alone && mobilePane === 'form')}
+            mobileHidden={(view.mode === 'split' && view.mobilePane === 'page') ||
+              (view.side && !alone && view.mobilePane === 'form')}
             heading={paneHeading}
             next={queueNext}
             {feedback}
@@ -1331,7 +1279,7 @@ function navigateCanvasEntry(target: {
             oncreateall={(fill) => entryCreate.createAll(fill)}
             onreload={() => void reload()}
           />
-        {:else if mode !== 'canvas' && !(mode === 'split' && !alone) && shown}
+        {:else if view.mode !== 'canvas' && !(view.mode === 'split' && !alone) && shown}
           <!-- Keyed: another language is another file, not the same one under a new name. -->
           {#key shown}
             <div
@@ -1339,8 +1287,8 @@ function navigateCanvasEntry(target: {
                 'canvas-form-surface',
                 {
                   'is-mobile-hidden':
-                    (mode === 'split' && mobilePane === 'page') ||
-                    (side && !alone && mobilePane === 'form'),
+                    (view.mode === 'split' && view.mobilePane === 'page') ||
+                    (view.side && !alone && view.mobilePane === 'form'),
                 },
               ]}
               onfocusout={canvasCompleted}
@@ -1381,7 +1329,7 @@ function navigateCanvasEntry(target: {
                 {references}
                 mark={languageMark}
                 onreference={chooseReference}
-                onclose={side ? () => leaving(() => setBeside('none')) : undefined}
+                onclose={view.side ? () => leaving(() => view.setBeside('none')) : undefined}
                 onturnoff={entry.singleton
                   ? undefined
                   : () => entryActions.startOffing(shown)}
@@ -1389,13 +1337,13 @@ function navigateCanvasEntry(target: {
             </div>
           {/key}
         {/if}
-        {#if canvasVisited}
+        {#if view.canvasVisited}
           <CanvasWorkspace
             bind:this={canvasPane}
-            fullscreen={mode === 'canvas'}
+            fullscreen={view.mode === 'canvas'}
             entryActions={canvasEntryActions}
             publishAction={canvasPublish}
-            active={mode === 'split' || mode === 'canvas'}
+            active={view.mode === 'split' || view.mode === 'canvas'}
             {locale}
             {uiLocale}
             {url}
@@ -1416,9 +1364,9 @@ function navigateCanvasEntry(target: {
             {site}
             servedAt={localeUrl(locale)}
             locked={entryLock.locked}
-            onform={() => setCanvas(false)}
+            onform={() => view.setCanvas(false)}
             onnavigateentry={navigateCanvasEntry}
-            mobileHidden={mode === 'split' && mobilePane === 'form'}
+            mobileHidden={view.mode === 'split' && view.mobilePane === 'form'}
           />
         {/if}
       {/if}
@@ -1434,7 +1382,7 @@ function navigateCanvasEntry(target: {
       sending={entryPublish.sending}
       failed={entryPublish.failed}
       {uiLocale}
-      returnTo={mode === 'canvas' ? canvasPublishButton : publishButton}
+      returnTo={view.mode === 'canvas' ? canvasPublishButton : publishButton}
       bind:panel={publishPanel}
       onclose={entryPublish.close}
       onchoose={entryPublish.later}
