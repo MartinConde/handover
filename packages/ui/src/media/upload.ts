@@ -27,6 +27,56 @@ export interface LibraryItem extends MediaItem {
   uses?: { entry: string; title: string; href: string }[];
 }
 
+export const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+export const isLibraryItem = (value: unknown): value is LibraryItem => {
+  if (
+    !isRecord(value) ||
+    typeof value.id !== 'string' ||
+    !/^[0-9a-f]{64}$/.test(value.id) ||
+    typeof value.src !== 'string'
+  )
+    return false;
+  if (value.filename != null && typeof value.filename !== 'string') return false;
+  if (value.mime != null && typeof value.mime !== 'string') return false;
+  if (value.bytes != null && typeof value.bytes !== 'number') return false;
+  if (value.width != null && typeof value.width !== 'number') return false;
+  if (value.height != null && typeof value.height !== 'number') return false;
+  if (value.alt != null && typeof value.alt !== 'string') return false;
+  if (value.archived != null && typeof value.archived !== 'boolean') return false;
+  if (value.createdAt != null && typeof value.createdAt !== 'number') return false;
+  if (
+    value.tags != null &&
+    (!Array.isArray(value.tags) || !value.tags.every((tag) => typeof tag === 'string'))
+  )
+    return false;
+  return (
+    value.uses == null ||
+    (Array.isArray(value.uses) &&
+      value.uses.every(
+        (use) =>
+          isRecord(use) &&
+          typeof use.entry === 'string' &&
+          typeof use.title === 'string' &&
+          typeof use.href === 'string',
+      ))
+  );
+};
+
+export async function mediaResponse(response: Response, fallback: string): Promise<UiMessage> {
+  const message = await responseMessage(response, fallback);
+  let body: { uses?: unknown } | undefined;
+  try {
+    body = (await response.clone().json()) as typeof body;
+  } catch {
+    body = undefined;
+  }
+  return {
+    ...message,
+    ...(Array.isArray(body?.uses) ? { count: body.uses.length } : {}),
+  };
+}
+
 /** A size a client reads rather than a byte count; nothing stored is ever "0 KB". */
 export const fileSize = (bytes?: number | null, locale: UiLocale = 'en') => {
   if (!bytes) return '';

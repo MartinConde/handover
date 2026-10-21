@@ -2,18 +2,22 @@
 import type { Labels, Preset } from '@handover/core';
 import { ParaglideMessage } from '@inlang/paraglide-js-svelte';
 import { tick } from 'svelte';
-import { messageDetail, messageText, responseMessage, type UiMessage } from '../errors.js';
+import { messageDetail, messageText, type UiMessage } from '../errors.js';
 import { formatMediaDate, messageOptions, type UiLocale } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
-import { request as fetch, postJson, sitePath, uncertainResponse } from '../request.js';
+import { request as fetch, sitePath, uncertainResponse } from '../request.js';
 import ConfirmDialog from '../shared/ConfirmDialog.svelte';
 import MediaImage from '../shared/MediaImage.svelte';
 import Crop from './Crop.svelte';
 import Focal from './Focal.svelte';
+import { createMetadataLanes, type MetadataChange } from './metadata-lanes.svelte';
 import {
   droppedFiles,
   fileSize,
+  isLibraryItem,
+  isRecord,
   type LibraryItem,
+  mediaResponse,
   name,
   uploadFile,
   uploadImage,
@@ -52,77 +56,11 @@ let deleting = $state(false);
 /** The two dialogs the panel opens, and neither is open until a picture is. */
 let framing = $state(false);
 let cropping = $state(false);
-type MetadataChange = {
-  tags?: string[];
-  alt?: string;
-  archived?: boolean;
-  focal?: [number, number];
-};
-type MetadataLane = {
-  acknowledged: LibraryItem;
-  draft: LibraryItem;
-  pending: MetadataChange[];
-  failed?: MetadataChange;
-  writing: boolean;
-};
-const metadataLanes = new Map<string, MetadataLane>();
-let metadataFailures = $state<
-  Record<string, { message: UiMessage; name: string; recovery?: 'retry' | 'reload' }>
->({});
+const lanes = createMetadataLanes({ show: showMetadataDraft });
 let trigger = $state<HTMLElement>();
 let readEpoch = 0;
 const options = $derived(messageOptions(uiLocale));
 const textOf = (message: UiMessage) => messageText(message, uiLocale);
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
-const isLibraryItem = (value: unknown): value is LibraryItem => {
-  if (
-    !isRecord(value) ||
-    typeof value.id !== 'string' ||
-    !/^[0-9a-f]{64}$/.test(value.id) ||
-    typeof value.src !== 'string'
-  )
-    return false;
-  if (value.filename != null && typeof value.filename !== 'string') return false;
-  if (value.mime != null && typeof value.mime !== 'string') return false;
-  if (value.bytes != null && typeof value.bytes !== 'number') return false;
-  if (value.width != null && typeof value.width !== 'number') return false;
-  if (value.height != null && typeof value.height !== 'number') return false;
-  if (value.alt != null && typeof value.alt !== 'string') return false;
-  if (value.archived != null && typeof value.archived !== 'boolean') return false;
-  if (value.createdAt != null && typeof value.createdAt !== 'number') return false;
-  if (
-    value.tags != null &&
-    (!Array.isArray(value.tags) || !value.tags.every((tag) => typeof tag === 'string'))
-  )
-    return false;
-  return (
-    value.uses == null ||
-    (Array.isArray(value.uses) &&
-      value.uses.every(
-        (use) =>
-          isRecord(use) &&
-          typeof use.entry === 'string' &&
-          typeof use.title === 'string' &&
-          typeof use.href === 'string',
-      ))
-  );
-};
-
-async function mediaResponse(response: Response, fallback: string): Promise<UiMessage> {
-  const message = await responseMessage(response, fallback);
-  let body: { uses?: unknown } | undefined;
-  try {
-    body = (await response.clone().json()) as typeof body;
-  } catch {
-    body = undefined;
-  }
-  return {
-    ...message,
-    ...(Array.isArray(body?.uses) ? { count: body.uses.length } : {}),
-  };
-}
 
 // Debounced so typing a word does not spend a request per letter.
 $effect(() => {
@@ -171,9 +109,7 @@ async function load(
   failure = undefined;
   items = next;
   if (reconcileSelection) {
-    metadataFailures = Object.fromEntries(
-      Object.entries(metadataFailures).filter(([id]) => items.some((item) => item.id === id)),
-    );
+    lanes.forget(Object.keys(lanes.failures).filter((id) => !items.some((item) => item.id === id)));
   }
   // The panel is about a picture that may no longer be in the list under this search.
   if (chosen)
@@ -220,8 +156,7 @@ const when = (at?: number) => (at ? formatMediaDate(at, uiLocale) : '');
 
 async function pick(item: LibraryItem) {
   selectedTile = document.activeElement as HTMLElement;
-  const lane = metadataLanes.get(item.id);
-  chosen = lane && (lane.writing || lane.failed || lane.pending.length) ? lane.draft : item;
+  chosen = lanes.view(item);
   tag = '';
   copied = '';
   closeDialog();
@@ -251,106 +186,8 @@ function showMetadataDraft(id: string, draft: LibraryItem) {
   if (chosen?.id === id) chosen = draft;
 }
 
-function laneFor(item: LibraryItem) {
-  const held = metadataLanes.get(item.id);
-  if (held) {
-    if (!held.writing && !held.failed && !held.pending.length) {
-      held.acknowledged = item;
-      held.draft = item;
-    }
-    return held;
-  }
-  const lane: MetadataLane = {
-    acknowledged: item,
-    draft: item,
-    pending: [],
-    writing: false,
-  };
-  metadataLanes.set(item.id, lane);
-  return lane;
-}
-
-async function writeMetadata(id: string, lane: MetadataLane) {
-  if (lane.writing) return;
-  lane.writing = true;
-  try {
-    while (lane.failed || lane.pending.length) {
-      const details = lane.failed ?? lane.pending.shift();
-      if (!details) break;
-      const res = await postJson(`/admin/api/media/${id}`, details, 'PATCH');
-      if (!res.ok) {
-        lane.failed = details;
-        const message = uncertainResponse(res)
-          ? ({ code: 'MEDIA_METADATA_UNCONFIRMED', status: res.status } satisfies UiMessage)
-          : await mediaResponse(res, 'MEDIA_METADATA_FAILED');
-        metadataFailures = {
-          ...metadataFailures,
-          [id]: {
-            message,
-            name: name(lane.draft),
-            recovery:
-              message.code === 'MEDIA_NOT_FOUND'
-                ? 'reload'
-                : message.code === 'MEDIA_METADATA_INVALID'
-                  ? undefined
-                  : 'retry',
-          },
-        };
-        break;
-      }
-      let answer: unknown;
-      try {
-        answer = await res.json();
-      } catch {
-        answer = undefined;
-      }
-      const saved = isRecord(answer) ? answer.media : undefined;
-      if (!isLibraryItem(saved) || saved.id !== id) {
-        lane.failed = details;
-        metadataFailures = {
-          ...metadataFailures,
-          [id]: {
-            message: { code: 'MEDIA_METADATA_INVALID' },
-            name: name(lane.draft),
-            recovery: 'retry',
-          },
-        };
-        break;
-      }
-      lane.acknowledged = { ...lane.acknowledged, ...saved };
-      lane.failed = undefined;
-      const optimistic = lane.draft;
-      lane.draft = { ...optimistic, ...saved };
-      for (const waiting of lane.pending) {
-        for (const key of Object.keys(waiting) as (keyof MetadataChange)[]) {
-          Object.assign(lane.draft, { [key]: optimistic[key] });
-        }
-      }
-      const { [id]: _, ...rest } = metadataFailures;
-      metadataFailures = rest;
-      showMetadataDraft(id, lane.draft);
-    }
-  } finally {
-    lane.writing = false;
-  }
-}
-
-/** Tags and the default alt are the library's own words, so they are saved as they are typed. */
-function describe(details: MetadataChange, item = chosen) {
-  if (!item) return;
-  const lane = laneFor(item);
-  lane.draft = { ...lane.draft, ...details };
-  lane.pending.push(details);
-  showMetadataDraft(item.id, lane.draft);
-  if (!lane.failed) void writeMetadata(item.id, lane);
-}
-
-function retryMetadata(id: string) {
-  const lane = metadataLanes.get(id);
-  if (!lane?.failed) return;
-  const { [id]: _, ...rest } = metadataFailures;
-  metadataFailures = rest;
-  void writeMetadata(id, lane);
+function describeChosen(details: MetadataChange) {
+  if (chosen) lanes.describe(chosen, details);
 }
 
 function addTag() {
@@ -359,7 +196,7 @@ function addTag() {
     tag = '';
     return;
   }
-  describe({ tags: [...(chosen?.tags ?? []), word] });
+  describeChosen({ tags: [...(chosen?.tags ?? []), word] });
   tag = '';
 }
 
@@ -549,12 +386,12 @@ const queueText = (state: QueueState) => {
       {/if}
     </div>
   {/if}
-  {#each Object.entries(metadataFailures) as [id, metadataFailure] (id)}
+  {#each Object.entries(lanes.failures) as [id, metadataFailure] (id)}
     <div class="notice notice-danger metadata-failure" role="alert">
       <p>{textOf(metadataFailure.message)}</p>
       {#if messageDetail(metadataFailure.message, uiLocale)}<p class="detail">{messageDetail(metadataFailure.message, uiLocale)}</p>{/if}
       {#if metadataFailure.recovery}
-        <button class="btn btn-sm" type="button" onclick={() => metadataFailure.recovery === 'reload' ? retryRead(true) : retryMetadata(id)}>
+        <button class="btn btn-sm" type="button" onclick={() => metadataFailure.recovery === 'reload' ? retryRead(true) : lanes.retry(id)}>
           {metadataFailure.recovery === 'reload' ? m.media_library_reload({}, options) : m.media_library_retry_metadata({ filename: metadataFailure.name }, options)}
         </button>
       {/if}
@@ -659,7 +496,7 @@ const queueText = (state: QueueState) => {
                     class="btn btn-sm"
                     type="button"
                     aria-label={m.media_library_unarchive_named({ filename: name(item) }, options)}
-                    onclick={() => describe({ archived: false }, item)}
+                    onclick={() => lanes.describe(item, { archived: false })}
                     >{m.media_library_unarchive({}, options)}</button
                   ></span
                 >
@@ -817,7 +654,7 @@ const queueText = (state: QueueState) => {
                 <button
                   type="button"
                   aria-label={m.media_library_remove_tag({ tag: word }, options)}
-                  onclick={() => describe({ tags: (chosen?.tags ?? []).filter((t) => t !== word) })}
+                  onclick={() => describeChosen({ tags: (chosen?.tags ?? []).filter((t) => t !== word) })}
                   >×</button
                 ></span
               >
@@ -844,7 +681,7 @@ const queueText = (state: QueueState) => {
               class="input textarea"
               id="lib-alt"
               value={chosen.alt ?? ''}
-              onchange={(e) => describe({ alt: e.currentTarget.value })}></textarea>
+              onchange={(e) => describeChosen({ alt: e.currentTarget.value })}></textarea>
             <span class="hint">{m.media_library_alt_hint({}, options)}</span>
           </div>
         {/if}
@@ -852,7 +689,7 @@ const queueText = (state: QueueState) => {
           <button
             class="btn btn-sm btn-ghost archive"
             type="button"
-            onclick={() => describe({ archived: !chosen?.archived })}
+            onclick={() => describeChosen({ archived: !chosen?.archived })}
           >
             {#if chosen.archived}
               <svg aria-hidden="true" viewBox="0 0 24 24"
@@ -905,7 +742,7 @@ const queueText = (state: QueueState) => {
     focal={chosen.focal ?? [0.5, 0.5]}
     {presets}
     {uiLocale}
-    onsave={(point) => { describe({ focal: point }); framing = false; }}
+    onsave={(point) => { describeChosen({ focal: point }); framing = false; }}
     onclose={() => (framing = false)}
   />
 {/if}
