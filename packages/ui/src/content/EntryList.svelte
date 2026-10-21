@@ -19,12 +19,13 @@ import {
   type UiLocale,
 } from '../i18n.js';
 import { navigate } from '../navigate';
-import { missing, offered, owes, partial, queueQuery, rowTitle, stale, workFrom } from '../owed.js';
+import { owes, queueQuery, rowTitle, workFrom } from '../owed.js';
 import * as m from '../paraglide/messages.js';
 import { request as fetch, postJson, sitePath } from '../request.js';
 import { dismiss } from '../shared/dismiss.js';
 import Modal from '../shared/Modal.svelte';
 import Skeleton from '../shared/Skeleton.svelte';
+import LanguageChips from './LanguageChips.svelte';
 import NewEntry from './NewEntry.svelte';
 import OffsiteDialog, { type Target } from './Offsite.svelte';
 
@@ -126,28 +127,6 @@ let search = $state('');
 let showing = $state<'all' | 'live' | 'hidden'>('all');
 let language = $state(address.get('locale') ?? '');
 let work = $state(workFrom(address.get('owed')));
-// Above four languages a chip each stops reading at a glance, so a row counts and names the owed.
-const compact = $derived(locales.length > 4);
-const owedIn = (entry: Entry) => locales.filter((l) => owes(entry, l, 'owed'));
-const counted = (entry: Entry) => {
-  const offer = locales.filter((l) => offered(entry, l));
-  return { created: offer.filter((l) => entry.locales[l]).length, offered: offer.length };
-};
-const summary = (entry: Entry) =>
-  m.entry_list_files_created(
-    {
-      ...counted(entry),
-      languages: locales
-        .map((l) =>
-          m.entry_list_language_state(
-            { language: formatLanguageName(l, uiLocale), state: chipTitle(entry, l) },
-            options,
-          ),
-        )
-        .join('; '),
-    },
-    options,
-  );
 const isHome = (entry: Entry) => index === '/' && entry.id === 'index';
 // The home page leads; filter's copy is sorted, and the sort is stable for the rest.
 const shown = $derived(
@@ -164,31 +143,6 @@ const shown = $derived(
     .sort((a, b) => Number(isHome(b)) - Number(isHome(a))),
 );
 const filtered = $derived(showing !== 'all' || language !== '' || search.trim() !== '');
-const chipTitle = (entry: Entry, locale: string) =>
-  !offered(entry, locale)
-    ? m.entry_list_chip_off({}, options)
-    : !entry.locales[locale]
-      ? m.entry_list_chip_missing({}, options)
-      : entry.stale?.includes(locale)
-        ? m.entry_list_chip_stale({}, options)
-        : partial(entry, locale)
-          ? m.entry_list_chip_partial(
-              {
-                written: entry.partial?.[locale]?.[0] ?? 0,
-                count: entry.partial?.[locale]?.[1] ?? 0,
-              },
-              options,
-            )
-          : m.entry_list_chip_written({}, options);
-// One mark per language, stale before partly written, as the editor's switcher has it.
-const chipClass = (entry: Entry, locale: string) =>
-  missing(entry, locale)
-    ? 'chip-missing'
-    : stale(entry, locale)
-      ? 'chip-stale'
-      : partial(entry, locale)
-        ? 'chip-partial'
-        : undefined;
 const named = (ids: string[]) =>
   ids.length === 1 ? (entries.find((e) => e.id === ids[0]) ?? undefined) : undefined;
 
@@ -583,29 +537,7 @@ async function done() {
           </div>
           {#if many}
             <div class="td" role="cell" data-label={m.entry_list_languages_heading({}, options)}>
-              {#if compact}
-                {@const words = summary(entry)}
-                {@const owed = owedIn(entry)}
-                {@const count = counted(entry)}
-                <span class="visually-hidden">{m.entry_list_languages({}, options)} {words}</span>
-                <span class="chips" aria-hidden="true" title={words}>
-                  <span class="chip chip-count">{count.created}/{count.offered}</span>
-                  {#each owed.slice(0, 3) as locale (locale)}
-                    <span class={['chip', chipClass(entry, locale)]}>{locale.toUpperCase()}</span>
-                  {/each}
-                  {#if owed.length > 3}<span class="chip chip-count">+{owed.length - 3}</span>{/if}
-                </span>
-              {:else}
-              <span class="visually-hidden">{m.entry_list_languages({}, options)}</span>
-              <span class="chips">
-                {#each locales as locale (locale)}
-                  <span
-                    class={['chip', offered(entry, locale) ? chipClass(entry, locale) : 'chip-disabled']}
-                    title="{locale}: {chipTitle(entry, locale)}"
-                  >{locale.toUpperCase()}</span>
-                {/each}
-              </span>
-              {/if}
+              <LanguageChips {entry} {locales} {uiLocale} />
             </div>
           {/if}
           <div class="td edited" role="cell" data-label={m.entry_list_edited({}, options)}>
