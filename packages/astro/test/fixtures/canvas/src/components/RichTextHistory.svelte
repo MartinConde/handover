@@ -2,7 +2,7 @@
 import type { Field } from '@handover/core';
 import { createEntrySession } from '../../../../../../ui/src/editor/entry-session.svelte';
 import Fields from '../../../../../../ui/src/editor/fields/Fields.svelte';
-import '../../../../../../ui/src/tokens.css';
+import '../../../../../../ui/src/styles/index.css';
 
 const fields: Field[] = [
   { path: ['summary'], label: 'Summary', type: 'richtext', required: false, tier: 'basic' },

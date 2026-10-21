@@ -3,7 +3,7 @@ import { mount } from 'svelte';
 import App from './App.svelte';
 import { readDeviceLocale, resolveUiLocale, showUiLocale } from './i18n.js';
 import { request as fetch, localPath } from './request.js';
-import './tokens.css';
+import './styles/index.css';
 
 const target = document.getElementById('app');
 if (!target) throw new Error('Handover shell: #app missing');

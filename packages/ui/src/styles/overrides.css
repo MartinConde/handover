@@ -1,0 +1,141 @@
+/* Per-screen rules kept below everything above: moving one up would reorder it against an equal-specificity rule, or split it from a group member that would. */
+/* Menu current item, slug address, empty-state actions. */
+.menu [aria-current="true"] { background: var(--accent-soft); color: var(--accent-ink); font-weight: 500; }
+.slug-row .url b { color: var(--ink); font-weight: 600; }
+.empty .actions { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--s-2); margin-top: var(--s-2); }
+
+/* Activity detail, lock banner, publish result and set, dialog placeholder. */
+.activity-detail .actions { display: flex; gap: var(--s-2); }
+.activity-detail .form-placeholder { min-height: 96px; }
+.lock-banner .when { font-weight: 400; }
+.publish-result .result-actions { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; }
+.publish-set li > .badge { flex: none; white-space: nowrap; }
+.dialog .form-placeholder { min-height: 0; margin-bottom: var(--s-4); text-align: left; }
+
+/* Media picker: toolbar, file rows, upload queue. */
+.picker-tools .spacer { flex: 1; }
+.picker-main .dropzone.is-big { padding: var(--s-12) var(--s-6); }
+.file-row > input { flex: none; width: 18px; height: 18px; margin: 0; accent-color: var(--accent-ink); }
+.file-row:has(> input:checked) { background: var(--accent-soft); box-shadow: inset 0 0 0 2px var(--accent-ink); }
+.file-row:has(> input:focus-visible) { outline: 2px solid var(--focus); outline-offset: 2px; }
+.upload-row .thumb { grid-row: 1 / span 2; aspect-ratio: 1; border-radius: var(--radius-sm); background: var(--placeholder-photo); }
+.upload-row .state.is-done { color: var(--success-ink); font-weight: 500; }
+.upload-row .progress { grid-column: 2; margin-top: 2px; }
+.upload-row .actions { grid-row: 1 / span 2; grid-column: 3; display: flex; gap: var(--s-2); }
+/* SEO panel: the page as a search result and as a shared card. */
+/* minmax(0) lets the search preview shrink on phones. */
+.previews { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--s-5); align-items: start; }
+.preview-box { display: grid; gap: var(--s-2); }
+.preview-box > .variant-title { margin: 0; }
+/* min-width: 0 keeps the preview from widening its grid. */
+.snippet, .social-card { min-width: 0; }
+.snippet { padding: var(--s-4); border-radius: var(--radius-lg); background: var(--surface-2); font-family: Arial, sans-serif; }
+.snippet .url { font-size: var(--text-sm); color: var(--ink-2); display: flex; align-items: center; gap: var(--s-2); min-width: 0; }
+.snippet .url .fav { flex: none; width: 20px; height: 20px; border-radius: 50%; background: var(--accent); display: inline-grid; place-items: center; font-size: 11px; font-weight: 700; color: var(--on-accent); }
+/* min-width breaks the crumbs' own length out of the min-content chain. */
+.snippet .url .crumbs { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.snippet .title { font-size: 18px; color: var(--info-ink); margin-top: var(--s-1); line-height: 1.3; }
+.snippet .desc { font-size: var(--text-md); color: var(--ink-2); margin-top: var(--s-1); }
+.social-card { border-radius: var(--radius-lg); overflow: hidden; background: var(--surface-2); max-width: 420px; }
+.social-card .thumb { aspect-ratio: 1200 / 630; background: var(--placeholder-photo); }
+.social-card .thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.social-card .body { padding: var(--s-3) var(--s-4); display: grid; gap: 2px; }
+.social-card .domain { font-size: var(--text-xs); color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.04em; }
+.social-card .title { font-weight: 600; }
+.social-card .desc { font-size: var(--text-sm); color: var(--ink-2); }
+/* A definite row lets the media picker dialog body scroll within its height cap. */
+.scrim:has(> .picker-dialog) { grid-template-rows: minmax(0, 1fr); }
+
+/* Settings sections. */
+.settings-section .notice { font-size: var(--text-sm); }
+
+/* Field diffs. */
+.change-diff h4:first-child { margin-top: 0; }
+
+/* Page picker in a dialog, deleted-entry row. */
+/* The picker is the nav builder's component. */
+.dialog .picker { margin-top: calc(var(--s-2) * -1); }
+.dialog .picker-list { max-height: min(280px, 35dvh); overscroll-behavior: contain; }
+.picker-list h4 { margin: 0; padding: var(--s-2) var(--s-3) var(--s-1); font-size: var(--text-xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); }
+/* Deleted view: a full-width row under the table for the refusal. */
+.table .row.row-note { grid-template-columns: 1fr; }
+
+/* Media library, focal dialog, history and dashboard. */
+.tile .tile-actions { position: relative; z-index: 1; display: flex; gap: var(--s-2); margin-top: var(--s-1); }
+.lib-side.is-recovered .facts dd, .lib-side.is-recovered .hint { color: var(--warn-ink); }
+.focal-dialog .hint { font-size: var(--text-xs); color: var(--ink-2); }
+.version-view h4 { margin: var(--s-2) 0 0; font-size: var(--text-xs); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-3); }
+.dtile.span-3 { grid-column: 1 / -1; }
+.locale-line .show { margin-left: auto; display: flex; gap: var(--s-3); }
+
+/* Pre-publish checks — one region above the list, grouped by entry inside it. */
+.checks-sum { padding: 0 var(--s-2); font-size: var(--text-xs); color: var(--ink-2); }
+.check-group { display: grid; gap: var(--s-2); }
+.check-group > h4 { margin: var(--s-2) 0 0; padding: 0 var(--s-2); font-size: var(--text-sm); font-weight: 600; }
+.check-notes { display: grid; gap: var(--s-2); }
+.check-notes > summary { display: flex; align-items: center; gap: var(--s-2); padding: 0 var(--s-2); min-height: 30px; list-style: none; cursor: pointer; font-size: var(--text-sm); color: var(--ink-2); }
+.check-notes > summary::-webkit-details-marker { display: none; }
+.check-notes > summary::before { content: "▸"; color: var(--ink-3); }
+.check-notes[open] > summary::before { content: "▾"; }
+.check-group > h4 .badge { margin-left: var(--s-1); vertical-align: 1px; }
+.checks .notice .sev { font-weight: 600; }
+.checks .notice code { font-family: var(--font-mono); font-size: var(--text-xs); }
+.checks .notice .msg { flex: 1; min-width: 200px; }
+/* The one-entry publish dialog runs the same list, without the per-entry headings. */
+.dialog .checks { margin: var(--s-4) 0; text-align: left; }
+
+
+/* Rich text. */
+/* Input boundaries belong to the outer rich-text editor, including keyboard focus. */
+.rte .rte-body { border: 0; border-radius: 0 0 var(--radius) var(--radius); outline: none; line-height: 1.65; }
+.rte:hover { border-color: var(--border-strong); }
+.rte:focus-within { border-color: var(--focus); outline: 3px solid var(--accent-ring); outline-offset: 0; }
+.rte-toolbar svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.rte-toolbar strong { font-size: 15px; }
+.rte-toolbar em { font-family: Georgia, serif; font-size: 16px; }
+.rte-toolbar .heading-tool { font-size: 12px; }
+
+/* Unavailable media. */
+.media-unavailable { display: flex; align-items: center; justify-content: center; flex-direction: column; gap: var(--s-2); width: 100%; height: 100%; min-height: 100px; padding: var(--s-3); background: var(--surface-2); color: var(--ink-3); font-size: var(--text-xs); text-align: center; }
+.media-unavailable svg { width: 24px; height: 24px; stroke: currentColor; fill: none; stroke-width: 1.5; }
+.media-card .thumb:has(.media-unavailable) .focal, .preview:has(.media-unavailable) .focal { display: none; }
+
+/* Sidebar footer and shell focus. */
+.sidebar-footer { display: grid; gap: var(--s-3); margin-top: auto; padding: var(--s-4) var(--s-3) 0; border-top: 1px solid var(--border); }
+.site-link { display: flex; justify-content: space-between; color: var(--ink-2); text-decoration: none; font-size: var(--text-xs); }
+.site-link:hover { color: var(--ink); }
+.shell-body:focus { outline: none; }
+
+/* Controls: transitions, pressed and disabled buttons, checkboxes. */
+.btn, .filter, .input, .nav a, .global-card, .tabs a, .tabs button { transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease; }
+.btn[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent-soft); color: var(--accent-ink); }
+.btn[disabled] { opacity: 1; background: var(--surface-2); border-color: var(--border); color: var(--ink-3); }
+input[type="checkbox"] { accent-color: var(--accent-ink); }
+
+/* Site settings heading and cards. */
+.page-heading { margin-bottom: var(--s-10); }
+.page-heading h1 { margin-bottom: var(--s-2); }
+.global-card:hover .global-symbol { background: var(--surface); color: var(--accent-ink); }
+
+/* Collection toolbar and filename column. */
+.collection-controls { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-3); margin: var(--s-5) 0; }
+.search-field { position: relative; width: 280px; max-width: 100%; }
+.search-field svg { position: absolute; left: 10px; top: 10px; width: 16px; height: 16px; fill: none; stroke: var(--ink-3); stroke-width: 1.6; pointer-events: none; }
+.search-field .input { padding-left: 34px; font-size: var(--text-sm); }
+.collection-page .table .filename { max-width: 230px; overflow-wrap: anywhere; white-space: normal; color: var(--ink-3); font-size: var(--text-xs); }
+
+/* Entry header buttons. */
+.entry-header .heading-row .btn { font-size: var(--text-xs); min-height: 32px; padding: 0 10px; }
+.entry-header .heading-row .seg button { min-height: 26px; }
+
+/* Media field dropzone and library selection. */
+.field .dropzone { padding: var(--s-5); min-height: 120px; border-width: 1px; }
+.lib-body.has-selection { grid-template-columns: minmax(0, 1fr) 296px; }
+
+/* Diagnostics sections. */
+.diagnostics-page .settings-section { gap: var(--s-3); padding: var(--s-8) 0 0; border-top: 0; }
+.diagnostics-page .settings-section > header { gap: 2px; }
+.diagnostics-page .settings-section h2 { font-size: var(--text-lg); }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
+}

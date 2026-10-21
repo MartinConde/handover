@@ -1,0 +1,154 @@
+/* Settings pages — one column of sections, each with its own heading and its own form. */
+.settings { display: grid; max-width: 880px; width: 100%; }
+.settings-section { display: grid; gap: var(--s-4); padding: var(--s-6) 0; border-top: 1px solid var(--border); }
+.settings-section:first-child { border-top: 0; padding-top: 0; }
+.settings-section > header { display: grid; gap: var(--s-1); }
+.settings-section h2 { font-size: var(--text-lg); letter-spacing: var(--tracking-tight); font-weight: 600; }
+.settings-section > header p { font-size: var(--text-sm); color: var(--ink-2); }
+.settings-section .form { max-width: 420px; gap: var(--s-4); }
+.settings-section .actions { display: flex; gap: var(--s-2); }
+
+/* Account — one card per thing you can change; its button and its feedback sit in the footer. */
+.settings.is-account { max-width: 720px; gap: var(--s-5); }
+.settings-card { display: grid; min-width: 0; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); overflow: hidden; }
+.settings-card-body { display: grid; gap: var(--s-5); padding: var(--s-6); }
+.settings-card-body > header { display: grid; gap: var(--s-1); }
+.settings-card h2 { font-size: var(--text-lg); letter-spacing: var(--tracking-tight); font-weight: 600; }
+.settings-card-body > header p { font-size: var(--text-sm); color: var(--ink-2); }
+.settings-card .field { max-width: 420px; }
+.settings-card-foot { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2) var(--s-4); min-height: 56px; padding: var(--s-3) var(--s-6); border-top: 1px solid var(--border); background: var(--surface-2); }
+.settings-card-foot > p { flex: 1; min-width: min(100%, 220px); font-size: var(--text-sm); }
+.settings-card-foot > .btn { margin-left: auto; }
+.settings-card-foot .notice { padding: var(--s-1) var(--s-3); }
+.settings-card.is-suggested { border-color: var(--accent); }
+.settings-card.is-suggested .settings-card-body { background: var(--accent-soft); }
+.is-account .facts { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--s-4) var(--s-6); }
+.is-account .facts > div { align-content: start; }
+.language-control { display: grid; gap: .35rem; }
+.language-control > span { font-size: .8rem; font-weight: 650; }
+.auth-page .language-control { width: min(220px, 100%); margin: 0 0 var(--s-3) auto; }
+.is-account .language-control { max-width: 320px; }
+/* The card heading already names the select, which keeps its own aria-label. */
+.is-account .language-control > span { display: none; }
+/* 12px is right where `.sub` is a fragment beside a name. */
+.sub { font-size: var(--text-xs); color: var(--ink-2); }
+.facts .sub, .session-item .sub { font-size: var(--text-sm); }
+
+/* Diagnostics — the page is `.settings` at a wider cap. */
+.diagnostics-page .page-head { margin-bottom: var(--s-6); }
+.diagnostics-page .page-head h1 { margin-bottom: var(--s-1); }
+.diagnostics-page .page-head .list-note { margin: 0; }
+.settings.is-wide { max-width: 800px; }
+/* One line that answers "is anything wrong?" before any list is read. */
+.health { display: flex; align-items: center; gap: var(--s-3) var(--s-4); flex-wrap: wrap; padding: var(--s-3) var(--s-3) var(--s-3) var(--s-4); border-radius: var(--radius-lg); background: var(--success-soft); color: var(--success-ink); font-size: var(--text-sm); border: 1px solid #dceae2; }
+.health > p { flex: 1; min-width: min(100%, 240px); }
+.health-line { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-1) var(--s-2); }
+.health-line strong { font-weight: 600; }
+.health-line .sub { color: inherit; font-size: var(--text-xs); }
+.health-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: none; }
+.health.is-busy { background: var(--surface-2); color: var(--ink-2); }
+.health.is-busy .health-dot { animation: pulse 1.2s ease-in-out infinite; }
+.health.is-failing { background: var(--danger-soft); color: var(--danger-ink); }
+.health .btn { flex: none; }
+.check-list { display: grid; margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--border); }
+.check-card { border-bottom: 1px solid var(--border); }
+.check-card .name { font-weight: 600; color: var(--ink); }
+.check-card .what { font-size: var(--text-sm); color: var(--ink-2); }
+.check-card code { font-family: var(--font-mono); font-size: var(--text-xs); }
+.check-card .result { font-size: var(--text-sm); color: var(--ink-2); overflow-wrap: anywhere; }
+.check-card .result.is-ok { color: var(--success-ink); }
+.check-card .result.is-failed { color: var(--danger-ink); }
+/* Keys: the writable rows, so their buttons stay in view. */
+.key-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--s-1) var(--s-4); align-items: center; padding: var(--s-4) var(--s-2); }
+.key-row > :not(.actions) { grid-column: 1; }
+.key-row .head { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-2); }
+.key-row .actions { grid-column: 2; grid-row: 1 / span 3; display: flex; gap: var(--s-2); }
+/* Services: one quiet line each; the evidence waits behind the row. */
+.service-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; }
+.service-row > details { min-width: 0; }
+.service-row summary { display: grid; grid-template-columns: 16px minmax(120px, 11rem) minmax(0, 1fr) auto; align-items: center; gap: var(--s-3); min-height: 52px; padding: var(--s-2); list-style: none; cursor: pointer; border-radius: var(--radius); transition: background 160ms; }
+.service-row summary::-webkit-details-marker { display: none; }
+.service-row summary:hover { background: var(--surface-2); }
+.service-row summary:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.service-row summary .what { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.service-row .state { justify-self: end; font-size: var(--text-xs); }
+.service-row .state .sub { color: var(--ink-3); }
+.service-row .state .badge { display: inline-flex; align-items: center; gap: 6px; }
+.service-row .state .badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.service-row.is-running .state .badge::before { animation: pulse 1.2s ease-in-out infinite; }
+.service-action { margin: 11px var(--s-2) 0 0; }
+.diagnostics-page .chevron { width: 16px; height: 16px; fill: none; stroke: var(--ink-3); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; transition: transform 160ms ease-out; }
+.diagnostics-page details[open] > summary > .chevron { transform: rotate(90deg); }
+.service-facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--s-2) var(--s-5); margin: 0; padding: var(--s-1) var(--s-2) var(--s-4) calc(16px + var(--s-3) + var(--s-2)); font-size: var(--text-sm); }
+.service-facts > div { display: contents; }
+.service-facts dt { color: var(--ink-3); }
+.service-facts dd { margin: 0; min-width: 0; color: var(--ink); overflow-wrap: anywhere; }
+.service-facts dd .sub { margin-left: var(--s-2); font-size: var(--text-xs); color: var(--ink-3); }
+.service-facts .result { color: var(--ink); }
+/* What the developer set: closed until somebody asks. */
+.about { margin-top: var(--s-10); border-top: 1px solid var(--border); }
+.about > summary { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-1) var(--s-2); padding: var(--s-4) var(--s-2); list-style: none; cursor: pointer; border-radius: var(--radius); }
+.about > summary::-webkit-details-marker { display: none; }
+.about > summary:hover { background: var(--surface-2); }
+.about > summary:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.about-title { font-weight: 600; }
+.about > summary .sub { font-size: var(--text-sm); color: var(--ink-3); }
+.about > summary .sub code { font-family: var(--font-mono); font-size: var(--text-xs); }
+.about .facts { gap: 0; padding: 0 var(--s-2) var(--s-2) calc(16px + var(--s-2) + var(--s-2)); }
+.about .facts > div { grid-template-columns: 9rem minmax(0, 1fr); gap: var(--s-4); padding: var(--s-3) 0; border-top: 1px solid var(--border); }
+.about .facts dt { color: var(--ink-3); font-weight: 400; }
+.about .facts dd { font-size: var(--text-sm); color: var(--ink); overflow-wrap: anywhere; min-width: 0; }
+.about .facts code { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink-2); }
+.dev-tools { display: grid; gap: var(--s-2); margin: var(--s-4) var(--s-2) var(--s-4) calc(16px + var(--s-2) + var(--s-2)); padding: var(--s-4); border-radius: var(--radius-lg); background: var(--surface-2); }
+.dev-tools h2 { font-size: var(--text-md); font-weight: 600; }
+.dev-tools p { font-size: var(--text-sm); color: var(--ink-2); }
+.facts .sep { color: var(--border-strong); }
+
+.session-list { display: grid; margin: 0; padding: 0; list-style: none; border: 1px solid var(--border); border-radius: var(--radius); }
+.session-item { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2) var(--s-3); min-height: 52px; padding: var(--s-2) var(--s-4); font-size: var(--text-sm); }
+.session-item + .session-item { border-top: 1px solid var(--border); }
+.session-item .where { display: flex; align-items: center; gap: var(--s-2); font-weight: 500; }
+.session-item .sub { margin-left: auto; }
+
+/* Members — name and email are one cell, so the table keeps the entry list's five columns. */
+.avatar-sm { width: 28px; height: 28px; font-size: var(--text-xs); }
+.avatar.is-pending, .avatar.is-gone { background: none; box-shadow: inset 0 0 0 1.5px var(--border-strong); color: var(--ink-2); }
+.avatar.is-system { background: var(--badge-bg); color: var(--badge-ink); font-size: var(--text-lg); }
+.table .td .who { display: grid; min-width: 0; line-height: 1.35; }
+.table .td .who .name { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-2); font-weight: 500; }
+.menu hr { border: 0; border-top: 1px solid var(--border); margin: var(--s-2) 0; }
+.dialog p + p { margin-top: var(--s-3); }
+/* What a one-entry publish carries with it. */
+.publish-set { display: grid; gap: var(--s-2); margin: var(--s-4) 0; padding: 0; list-style: none; font-size: var(--text-sm); }
+.publish-set li { display: flex; align-items: start; gap: var(--s-2); }
+.publish-set li > .chips { flex: none; white-space: nowrap; }
+.dialog .publish-later { display: grid; gap: var(--s-3); margin: 0 0 var(--s-4); padding: 0; border: 0; font-size: var(--text-sm); }
+.publish-later .later-row { display: grid; gap: var(--s-1); }
+.publish-later label { display: flex; align-items: center; gap: var(--s-2); }
+.publish-later .hint { color: var(--ink-2); font-size: var(--text-xs); }
+.rebuild-note { font-size: var(--text-xs); color: var(--ink-2); }
+.dialog.is-slim { width: min(380px, 100%); }
+
+/* Activity — a row is a sentence, not a table cell, so it is a list and not `.table`. */
+.filters .filter-text { width: 13rem; }
+.list-note { font-size: var(--text-sm); color: var(--ink-2); margin: 0 0 var(--s-4); max-width: 76ch; text-wrap: pretty; }
+.activity { display: grid; margin: 0; padding: 0; list-style: none; }
+.activity > li { border-bottom: 1px solid var(--border); }
+.activity > li:last-child { border-bottom: 0; }
+.activity > li:hover { background: var(--surface-2); }
+.activity-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--s-2) var(--s-3); align-items: center; padding: var(--s-3) var(--s-2); }
+.activity-row .said { min-width: 0; }
+.activity-row .said a { color: var(--ink); font-weight: 500; text-decoration: none; }
+.activity-row .said a:hover { text-decoration: underline; }
+.activity-row .said .sub { margin-left: var(--s-1); }
+.activity-row .said .sha { font-family: var(--font-mono); }
+.activity-row .meta { display: flex; align-items: center; gap: var(--s-3); }
+/* Each row is its own grid, so a column cannot align across rows. */
+.activity-row .when { min-width: 5.5rem; text-align: right; font-size: var(--text-sm); color: var(--ink-2); white-space: nowrap; }
+.activity-row .expand { display: grid; place-items: center; width: 30px; }
+.activity-detail { display: grid; gap: var(--s-3); padding: 0 var(--s-2) var(--s-4) calc(28px + var(--s-3) + var(--s-2)); }
+.activity-detail p { font-size: var(--text-sm); color: var(--ink-2); }
+.activity-detail h2 { margin: 0 0 var(--s-2); font-size: var(--text-sm); font-weight: 600; }
+.load-more { display: grid; justify-items: center; padding-top: var(--s-5); }
+
+.result-actions { display: flex; align-items: center; gap: var(--s-3); font-size: var(--text-sm); }

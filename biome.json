@@ -5,6 +5,7 @@
     "includes": [
       "**",
       "!packages/ui/src/tokens.css",
+      "!packages/ui/src/styles",
       "!packages/ui/src/paraglide",
       "!packages/core/src/identity/auth-schema.ts"
     ]

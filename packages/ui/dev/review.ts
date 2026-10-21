@@ -6,7 +6,7 @@ import type { Member } from '../src/manage/Members.svelte';
 import type { LibraryItem } from '../src/media/upload.js';
 import type { PendingEntry } from '../src/publishing/Pending.svelte';
 import type { Build } from '../src/shared/BuildPill.svelte';
-import '../src/tokens.css';
+import '../src/styles/index.css';
 
 if (!import.meta.env.DEV) throw new Error('The design preview is only available in development');
 const now = Date.now();

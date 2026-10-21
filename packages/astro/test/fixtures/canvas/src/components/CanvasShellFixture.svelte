@@ -2,7 +2,7 @@
 import type { Field } from '@handover/core';
 import App from '../../../../../../ui/src/App.svelte';
 import { requiredFieldProblems } from '../../../../../../ui/src/editor/required-fields';
-import '../../../../../../ui/src/tokens.css';
+import '../../../../../../ui/src/styles/index.css';
 
 const editorEntry = {
   fields: [

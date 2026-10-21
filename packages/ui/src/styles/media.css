@@ -1,0 +1,344 @@
+/* Media widgets. */
+/* The card is the thumbnail and everything the client can say about it. */
+.media-card { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: var(--s-4); padding: var(--s-3); border-radius: var(--radius-lg); background: var(--surface-2); }
+.media-card.is-file { grid-template-columns: 48px minmax(0, 1fr); align-items: start; }
+.media-card .thumb { align-self: start; position: relative; overflow: hidden; border-radius: var(--radius); background: var(--badge-bg); }
+.thumb img, .ratio-preview img { display: block; width: 100%; height: 100%; object-fit: cover; }
+/* The dot is where the crop holds; the element carries its own place, since that is the value. */
+.media-card .thumb .focal, .ratio-preview .focal, .lib-side .preview .focal { position: absolute; width: 14px; height: 14px; margin: -7px 0 0 -7px; border: 2px solid var(--surface); border-radius: 50%; background: var(--accent-ink); box-shadow: 0 0 0 2px var(--accent-ink); }
+.media-card .meta { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-3); align-content: start; min-width: 0; }
+.media-card .meta .name { font-weight: 500; display: flex; gap: var(--s-2); align-items: center; flex-wrap: wrap; }
+.media-card .meta .sub { font-size: var(--text-xs); color: var(--ink-2); font-family: var(--font-mono); overflow-wrap: anywhere; }
+.media-card .meta .actions { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.media-card .field { gap: var(--s-1); }
+.file-icon { display: grid; place-items: center; width: 48px; height: 58px; border-radius: var(--radius-sm); background: var(--surface); box-shadow: var(--shadow-chip); font-size: var(--text-xs); font-weight: 700; color: var(--danger-ink); letter-spacing: 0.02em; }
+.dropzone { display: grid; gap: var(--s-2); justify-items: center; padding: var(--s-6); border: 1.5px dashed var(--border-strong); border-radius: var(--radius-lg); background: var(--surface-2); text-align: center; color: var(--ink-2); font-size: var(--text-sm); }
+.dropzone.is-over { border-color: var(--accent-ink); background: var(--accent-soft); color: var(--accent-ink); }
+.dropzone .btn { margin-top: var(--s-1); }
+
+/* The page picker: a panel inside the field rather than a modal. */
+.picker { display: grid; gap: var(--s-2); padding: var(--s-2); border: 1px solid var(--border-input); border-radius: var(--radius); background: var(--surface); }
+.picker > .actions { display: flex; justify-content: flex-end; gap: var(--s-2); }
+.picker-list { display: grid; gap: 2px; max-height: 190px; overflow: auto; }
+/* In a form field the list is a dropdown's: a search line, two-line rows, the choice ticked. */
+.main-editor .entry-body > .form :is(.link-destination, [data-field-type="reference"]) > .picker { gap: 0; padding: 0; overflow: hidden; border-color: var(--border); box-shadow: var(--shadow-panel); }
+.main-editor .entry-body > .form :is(.link-destination, [data-field-type="reference"]) > .picker > .input { height: 44px; padding-left: 38px; border: 0; border-bottom: 1px solid var(--border); border-radius: 0; background: var(--surface) var(--icon-search) 13px center / 16px no-repeat; outline: 0; box-shadow: none; }
+.main-editor .entry-body > .form :is(.link-destination, [data-field-type="reference"]) > .picker > .input:focus { border-bottom-color: var(--focus); box-shadow: inset 0 -1px 0 var(--focus); }
+.main-editor .entry-body > .form :is(.link-destination, [data-field-type="reference"]) > .picker > .notice { margin: var(--s-2) var(--s-2) 0; }
+.main-editor .entry-body > .form :is(.link-destination, [data-field-type="reference"]) > .picker .picker-list { max-height: 300px; padding: var(--s-1) 6px 6px; overscroll-behavior: contain; }
+.main-editor .entry-body > .form :is(.link-destination, [data-field-type="reference"]) > .picker .picker-list > .hint { padding: var(--s-3); }
+.main-editor .entry-body > .form :is(.link-destination, [data-field-type="reference"]) > .picker .picker-list button:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.main-editor .entry-body > .form :is(.link-destination, [data-field-type="reference"]) > .picker > .actions { padding: 6px; border-top: 1px solid var(--border); background: var(--surface-2); }
+.main-editor .entry-body > .form :is(.link-destination, [data-field-type="reference"]) > .picker > .actions .btn { background: transparent; box-shadow: none; border-color: transparent; }
+.main-editor .entry-body > .form :is(.link-destination, [data-field-type="reference"]) > .picker > .actions .btn:hover { background: var(--badge-bg); }
+.picker-list [role='group'] { display: grid; gap: 2px; }
+.picker-list button { display: flex; align-items: center; gap: var(--s-2); min-width: 0; min-height: 34px; padding: 0 var(--s-3); border: 0; border-radius: var(--radius-sm); background: transparent; text-align: left; color: var(--ink); cursor: pointer; }
+.picker-list button:hover { background: var(--surface-2); }
+.picker-list button[aria-selected="true"] { background: var(--accent-soft); }
+.picker-list button[aria-disabled="true"] { color: var(--ink-3); cursor: default; }
+.picker-list .group-name { padding: var(--s-2) var(--s-3) var(--s-1); font-size: var(--text-xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); }
+/* A single choice reads like the navigation editor's list: name, tags only when they matter, a tick on the current one. */
+.picker:not(.is-library) .picker-list .group-name { padding: var(--s-3) var(--s-3) 2px; font-size: var(--text-sm); font-weight: 600; letter-spacing: normal; text-transform: none; color: var(--ink); }
+.picker:not(.is-library) .picker-list button { min-height: 34px; padding: 0 var(--s-2) 0 var(--s-5); }
+.picker:not(.is-library) .picker-list button::after { content: ""; flex: none; width: 16px; height: 16px; }
+.picker:not(.is-library) .picker-list button[aria-selected="true"]::after { background: var(--accent-ink); -webkit-mask: var(--icon-check) center / contain no-repeat; mask: var(--icon-check) center / contain no-repeat; }
+.picker:not(.is-library) .picker-list button[aria-selected="true"] .library-title { font-weight: 500; }
+.picker-list .why { padding: 0 var(--s-3) var(--s-2) var(--s-5); font-size: var(--text-xs); color: var(--warn-ink); }
+.ref-list { display: grid; gap: var(--s-2); }
+.ref-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--s-2) var(--s-3); min-height: 52px; padding: var(--s-2) var(--s-2) var(--s-2) var(--s-3); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.ref-item .ref-copy { min-width: 0; display: grid; gap: 2px; }
+.ref-item .title { min-width: 0; overflow: hidden; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.ref-item .path { min-width: 0; overflow: hidden; color: var(--ink-3); font-family: var(--font-mono); font-size: var(--text-xs); text-overflow: ellipsis; white-space: nowrap; }
+.ref-item > .chips { grid-column: 1; }
+.ref-item .remove { grid-column: 2; grid-row: 1 / 3; }
+/* A link's three parts sit on one tinted panel, so they read as one field. */
+.link-field-controls { display: grid; gap: var(--s-4); min-width: 0; padding: var(--s-4); border-radius: var(--radius); background: var(--surface-2); }
+.link-destination { min-width: 0; margin: 0; padding: 0; border: 0; display: grid; gap: var(--s-2); }
+.link-destination > legend { margin-bottom: var(--s-2); padding: 0; font-size: var(--text-xs); font-weight: 500; color: var(--ink-2); }
+.link-field-controls .field > .label-row > :first-child { font-size: var(--text-xs); font-weight: 500; color: var(--ink-2); }
+.link-destination > .seg { justify-self: start; background: var(--badge-bg); }
+.link-destination > .seg button { min-width: 0; min-height: 28px; font-size: var(--text-xs); }
+.link-field-controls .check { font-size: var(--text-sm); color: var(--ink-2); }
+.canvas-inspector .link-destination .picker { min-width: 0; overflow: hidden; }
+.list-empty { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--s-2) var(--s-3); min-height: 48px; padding: 6px 6px 6px var(--s-4); border: 1px dashed var(--border-strong); border-radius: var(--radius); background: var(--surface); color: var(--ink-2); font-size: var(--text-sm); }
+
+/* The media picker is the library in a modal, scoped by the field that opened it. */
+.picker-dialog { width: min(1060px, 100%); max-height: 100%; padding: 0; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; text-align: left; }
+.picker-head { display: grid; gap: var(--s-3); padding: var(--s-5) var(--s-5) var(--s-4); border-bottom: 1px solid var(--border); }
+.picker-head .head-row { display: flex; align-items: baseline; gap: var(--s-3); flex-wrap: wrap; }
+.picker-head h2 { margin: 0 auto 0 0; font-size: var(--text-lg); font-weight: 600; letter-spacing: var(--tracking-tight); }
+/* The floor, and only the floor: it is the number a client can act on while choosing. */
+.picker-head .preset { font-size: var(--text-sm); color: var(--ink-2); }
+.picker-tools { display: flex; align-items: center; gap: var(--s-2); }
+.picker-tools .search { flex: 1; max-width: 340px; }
+.picker-body { display: grid; grid-template-columns: minmax(0, 1fr) 320px; min-height: 0; }
+.picker-main { overflow: auto; padding: var(--s-4) var(--s-5) var(--s-5); display: grid; gap: var(--s-5); align-content: start; }
+.picker-main .dropzone { padding: var(--s-4); }
+.picker-side { min-width: 0; padding: var(--s-5); border-left: 1px solid var(--border); background: var(--surface-2); display: flex; flex-direction: column; gap: var(--s-4); overflow: auto; }
+.picker-side > * { flex: none; }
+.picker-side .side-title { font-size: var(--text-sm); font-weight: 600; }
+.picker-side .sub { font-family: var(--font-mono); overflow-wrap: anywhere; }
+.picker-side .empty-side { font-size: var(--text-sm); color: var(--ink-2); }
+.picker-foot { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; padding: var(--s-4) var(--s-5); border-top: 1px solid var(--border); }
+.picker-foot .spacer { flex: 1; }
+.picker-foot .count { font-size: var(--text-sm); color: var(--ink-2); }
+.picker-group { border: 0; margin: 0; padding: 0; display: grid; gap: var(--s-2); }
+.picker-group > legend { padding: 0; margin-bottom: var(--s-2); font-size: var(--text-xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); }
+/* A radio group and nothing more: arrow keys move, space selects, the label is the target. */
+.media-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(158px, 1fr)); gap: var(--s-3); border: 0; margin: 0; padding: 0; }
+.tile { position: relative; display: grid; gap: var(--s-1); padding: var(--s-2); border-radius: var(--radius-lg); background: var(--surface-2); cursor: pointer; }
+.tile:hover { background: var(--badge-bg); }
+.tile > input { position: absolute; top: var(--s-3); left: var(--s-3); z-index: 1; width: 18px; height: 18px; margin: 0; accent-color: var(--accent-ink); }
+.tile .thumb { aspect-ratio: 4 / 3; border-radius: var(--radius); overflow: hidden; background: var(--badge-bg); position: relative; }
+.tile .file-icon { justify-self: center; }
+.tile .name { font-size: var(--text-xs); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tile .sub { font-size: var(--text-xs); color: var(--ink-2); display: flex; flex-wrap: wrap; gap: var(--s-1) var(--s-2); }
+.tile:has(> input:checked) { background: var(--accent-soft); box-shadow: inset 0 0 0 2px var(--accent-ink); }
+.tile:has(> input:focus-visible) { outline: 2px solid var(--focus); outline-offset: 2px; }
+/* Refused, not hidden and not dimmed with opacity: greyed on the picture, the reason in words. */
+.tile:has(> input[aria-disabled="true"]) { cursor: not-allowed; background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--border-strong); }
+.tile:has(> input[aria-disabled="true"]) .thumb { filter: grayscale(0.7); }
+.tile .why { font-size: var(--text-xs); font-weight: 500; color: var(--warn-ink); }
+/* Upload queue — one row per file, the same rows in the picker and in a field. */
+.upload-queue { display: grid; gap: var(--s-2); margin: 0; padding: 0; list-style: none; }
+.upload-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--s-1) var(--s-3); align-items: center; padding: var(--s-2) var(--s-3); border-radius: var(--radius); background: var(--surface-2); }
+.upload-row .name { font-weight: 500; font-size: var(--text-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.upload-row .state { font-size: var(--text-xs); color: var(--ink-2); }
+.upload-row .state.is-failed { color: var(--danger-ink); font-weight: 500; }
+/* The crop this field will render, with the focal dot on it. */
+.ratio-preview { position: relative; border-radius: var(--radius); overflow: hidden; background: var(--badge-bg); }
+.ratio-preview.is-16x9 { aspect-ratio: 16 / 9; }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-3); flex-basis: 100%; max-width: 440px; }
+.pair > div { display: grid; gap: var(--s-1); }
+.pair .lbl { font-size: var(--text-xs); color: var(--ink-2); }
+.pair .ratio-preview.is-old { filter: grayscale(0.4); }
+/* A value the screen shows but nobody edits here. */
+.facts { display: grid; gap: var(--s-4); margin: 0; }
+.facts > div { display: grid; gap: var(--s-1); }
+.facts dt { font-size: var(--text-sm); font-weight: 500; }
+.facts dd { margin: 0; display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; color: var(--ink-2); }
+/* Site settings — one row per thing the site has, the whole row the link. */
+.settings-list { border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); max-width: 1120px; display: grid; gap: 12px; border: 0; }
+.global-card { position: relative; display: grid; grid-template-columns: 36px minmax(0, 1fr) auto auto; grid-template-rows: auto auto; gap: 3px var(--s-4); align-items: center; padding: 22px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--shadow-panel); }
+.global-card:has(> h2 a:focus-visible) { outline: 2px solid var(--focus); outline-offset: -2px; }
+.global-card h2 { grid-column: 2; grid-row: 1; font-size: var(--text-md); font-weight: 600; display: flex; align-items: center; gap: var(--s-2); }
+.global-card h2 a { color: var(--ink); text-decoration: none; }
+.global-card h2 a::after { content: ""; position: absolute; inset: 0; }
+.global-card h2 a:focus-visible { outline: none; }
+.global-card > p { grid-column: 2; grid-row: 2; font-size: var(--text-sm); color: var(--ink-2); }
+/* Above the row-wide link, so the chips keep their tooltips. */
+.global-card .meta { position: relative; z-index: 1; grid-column: 3; grid-row: 1 / 3; display: flex; flex-direction: column; align-items: flex-end; gap: var(--s-1); font-size: var(--text-xs); color: var(--ink-2); }
+.global-card .meta-row { display: inline-flex; align-items: center; gap: var(--s-2); }
+.global-card .arrow { grid-column: 4; grid-row: 1 / 3; width: 14px; height: 14px; fill: none; stroke: var(--ink-3); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+/* Per-field diff — what a publish would take. */
+.diff { display: grid; gap: var(--s-2); font-size: var(--text-sm); }
+.diff .row { padding: var(--s-2) var(--s-3); border-radius: var(--radius-sm); }
+.diff .row small { display: block; font-size: var(--text-xs); font-weight: 500; margin-bottom: 2px; }
+.diff del { background: var(--danger-soft); color: var(--danger-ink); text-decoration: line-through; }
+.diff ins { background: var(--success-soft); color: var(--success-ink); text-decoration: none; }
+/* A word that was replaced puts a deletion straight against an insertion. */
+.diff del + ins, .diff ins + del { margin-left: 2px; }
+.change-diff { padding: var(--s-3) var(--s-4) var(--s-4) 44px; background: var(--surface-2); border-bottom: 1px solid var(--border); }
+.change-diff h3, .change-diff h4 { margin: var(--s-4) 0 var(--s-2); font-size: var(--text-xs); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-3); }
+.change-diff h3:first-child { margin-top: 0; }
+.change-diff .diff .row { background: var(--surface); }
+.change-diff .diff .row.is-quiet { background: none; color: var(--ink-2); }
+.change-diff .diff .row.is-block { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-2); }
+.change-diff .diff .row.is-block small { flex-basis: 100%; margin: 0; }
+.change-diff .diff code { font-family: var(--font-mono); font-size: var(--text-xs); }
+/* Three-way: most fields were only touched by one side. */
+.resolve { display: grid; gap: var(--s-4); padding: var(--s-4); border-radius: var(--radius-lg); background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--border); }
+.resolve > header { display: grid; gap: var(--s-1); }
+.resolve > header h3 { font-size: var(--text-md); font-weight: 600; }
+.resolve > header p { font-size: var(--text-sm); color: var(--ink-2); }
+.resolve-shortcuts { display: grid; gap: var(--s-2); }
+.resolve-shortcuts .btns { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.resolve-list { display: grid; gap: var(--s-3); margin: 0; padding: 0; list-style: none; }
+.resolve-field { display: grid; gap: var(--s-2); padding: var(--s-3); border-radius: var(--radius); background: var(--surface); }
+.resolve-field .head { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-2); }
+.resolve-field .head .name { font-size: var(--text-sm); font-weight: 600; }
+.resolve-field .base { font-size: var(--text-xs); color: var(--ink-2); }
+.resolve-field .sides { display: grid; gap: var(--s-2); border: 0; padding: 0; margin: 0; }
+/* A side is three lines, so the single-line `.choice` grows a body and stops centring. */
+.resolve-field .choice { align-items: flex-start; padding: var(--s-2) var(--s-3); min-height: 0; }
+.resolve-field .choice .body { display: grid; gap: 2px; }
+.resolve-field .choice .quote { color: var(--ink-2); white-space: pre-line; }
+.resolve-field .choice small { font-size: var(--text-xs); color: var(--ink-2); }
+.resolve-field .choice ins { background: var(--success-soft); color: var(--success-ink); text-decoration: none; }
+.resolve-field .choice del { background: var(--danger-soft); color: var(--danger-ink); text-decoration: line-through; }
+/* The gate's `.group` disclosure, scoped. */
+.resolve .group { border-radius: var(--radius-lg); background: var(--surface); padding: var(--s-3) var(--s-4); }
+.resolve .group > summary { display: flex; align-items: center; gap: var(--s-2); list-style: none; font-size: var(--text-sm); font-weight: 500; cursor: pointer; min-height: 30px; }
+.resolve .group > summary::-webkit-details-marker { display: none; }
+.resolve .group > summary .count { margin-left: auto; font-size: var(--text-xs); color: var(--ink-3); font-weight: 400; }
+.merged-list { display: grid; gap: var(--s-1); margin: var(--s-2) 0 0; padding: 0 0 0 var(--s-5); list-style: none; font-size: var(--text-sm); }
+.merged-list .name { font-weight: 500; }
+.resolve > .actions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-3); }
+.resolve > .actions .foot-note { flex-basis: 100%; }
+
+/* The media library reuses the picker layout as a page. */
+.file-rows { display: grid; gap: var(--s-2); border: 0; margin: 0; padding: 0; }
+.file-row { display: flex; align-items: center; gap: var(--s-3); padding: var(--s-2) var(--s-3); border-radius: var(--radius); background: var(--surface-2); }
+.file-row:hover { background: var(--badge-bg); }
+.file-row .file-icon { width: 32px; height: 40px; font-size: 10px; }
+.file-row .who { display: grid; min-width: 0; line-height: 1.35; }
+.file-row .who .name { font-weight: 500; color: inherit; }
+.file-row .sub { font-size: var(--text-xs); color: var(--ink-2); }
+.file-row .usage { margin-left: auto; white-space: nowrap; }
+.file-row.is-link { position: relative; }
+.file-row .tile-link::after { content: ""; position: absolute; inset: 0; border-radius: var(--radius); }
+.file-row:has(.tile-link:focus-visible) { outline: 2px solid var(--focus); outline-offset: 2px; }
+.file-row.is-selected { background: var(--accent-soft); box-shadow: inset 0 0 0 2px var(--accent-ink); }
+.lib-tabs, .list-tabs { margin-bottom: var(--s-5); }
+.list-tabs + .collection-controls { margin-top: 0; }
+.lib-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-6); align-items: start; }
+.lib-main { display: grid; gap: var(--s-5); align-content: start; min-width: 0; }
+/* The empty state replaces the whole grid. */
+.lib-main .dropzone { grid-template-columns: auto minmax(0, 1fr); justify-items: start; align-items: center; gap: var(--s-2) var(--s-3); padding: var(--s-3) var(--s-4); border-color: var(--border-strong); text-align: left; }
+.lib-main .dropzone .dz-icon { width: 20px; height: 20px; color: var(--ink-3); }
+.lib-main .dropzone .dz-text { display: flex; flex-wrap: wrap; gap: var(--s-1) var(--s-3); align-items: baseline; }
+.lib-main .dropzone .dz-text b { font-weight: 500; color: var(--ink); }
+.lib-main .dropzone .btn-link { position: relative; z-index: 1; min-height: 0; font-size: inherit; }
+.lib-main .dropzone.is-over .dz-icon, .lib-main .dropzone.is-over b { color: var(--accent-ink); }
+.lib-main .dropzone.is-big { grid-template-columns: 1fr; justify-items: center; padding: var(--s-12) var(--s-6); text-align: center; }
+.lib-main .dropzone.is-big .dz-icon { width: 32px; height: 32px; }
+.lib-main .dropzone.is-big .dz-text { flex-direction: column; align-items: center; }
+/* Tiles are the pictures themselves: a ring marks the chosen one, the card behind it is gone. */
+.lib-main .media-grid { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: var(--s-6) var(--s-4); }
+.lib-main .tile { gap: var(--s-2); align-content: start; padding: 0; background: none; border-radius: var(--radius); }
+.lib-main .tile:hover { background: none; }
+.lib-main .tile .thumb { border-radius: var(--radius); box-shadow: var(--shadow-chip); transition: box-shadow 120ms ease; }
+.lib-main .tile .thumb img { transition: transform 200ms ease; }
+.lib-main .tile:hover .thumb { box-shadow: var(--shadow-panel); }
+.lib-main .tile:hover .thumb img { transform: scale(1.03); }
+.lib-main .tile.is-selected { background: none; box-shadow: none; }
+.lib-main .tile.is-selected .thumb { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--accent-ink); }
+.lib-main .tile.is-selected .name { color: var(--accent-ink); }
+.lib-main .tile .name { font-size: var(--text-sm); padding: 0 2px; }
+.lib-main .tile .sub { padding: 0 2px; justify-content: space-between; color: var(--ink-3); }
+.lib-main .tile .badge { padding: 0; background: none; color: var(--ink-3); font-weight: 400; }
+.lib-main .tile .badge.is-used { color: var(--success-ink); font-weight: 500; }
+.lib-main .tile.is-archived .thumb { opacity: 0.7; }
+.lib-main .tile .tile-actions { padding: 0 2px; }
+.tile .tile-link, .file-row .tile-link { border: 0; background: none; padding: 0; text-align: left; color: inherit; text-decoration: none; cursor: pointer; }
+.tile .tile-link::after { content: ""; position: absolute; inset: 0; border-radius: var(--radius-lg); }
+.tile:has(.tile-link:focus-visible) { outline: 2px solid var(--focus); outline-offset: 2px; }
+.tile.is-selected { background: var(--accent-soft); box-shadow: inset 0 0 0 2px var(--accent-ink); }
+.tile .flag { position: absolute; top: var(--s-2); left: var(--s-2); }
+.tile.is-archived .thumb { filter: grayscale(0.7); }
+/* The side panel is the picker's, made sticky so the facts follow a long grid. */
+.lib-side { position: sticky; top: var(--s-5); display: grid; gap: var(--s-5); align-content: start; min-width: 0; padding: var(--s-5); border-radius: var(--radius-lg); background: var(--surface-2); }
+.lib-side .side-head { display: grid; gap: 2px; position: relative; padding-right: 24px; }
+.lib-side .side-title { font-size: var(--text-md); font-weight: 600; letter-spacing: var(--tracking-tight); overflow-wrap: anywhere; }
+.lib-side .side-meta { font-size: var(--text-xs); color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.inspector-close { position: absolute; right: -8px; top: -8px; }
+.lib-side .preview { position: relative; aspect-ratio: 3 / 2; border-radius: var(--radius); overflow: hidden; background: var(--badge-bg); box-shadow: var(--shadow-chip); }
+.lib-side .preview img { width: 100%; height: 100%; object-fit: cover; }
+.lib-side .preview + .hint { margin-top: calc(var(--s-3) * -1); }
+.lib-side .file-icon.is-big { width: 64px; height: 78px; font-size: var(--text-sm); }
+/* Key on the left, value on the right. */
+.lib-side .facts { grid-template-columns: max-content minmax(0, 1fr); gap: var(--s-2) var(--s-4); align-items: baseline; font-size: var(--text-sm); }
+.lib-side .facts > div { display: contents; }
+.lib-side .facts dt { font-weight: 400; color: var(--ink-2); }
+.lib-side .facts dd { color: var(--ink); }
+.lib-side .facts .stored { display: grid; grid-column: 1 / -1; gap: var(--s-1); }
+.lib-side .facts .stored dd { display: block; font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lib-side .facts .usage dd { display: block; }
+/* Picture tools pair icons with labels. */
+.lib-side .actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(76px, 1fr)); gap: var(--s-2); }
+.lib-side .action { display: grid; justify-items: center; gap: var(--s-1); min-width: 0; padding: var(--s-3) var(--s-2); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow-chip); font-size: var(--text-xs); font-weight: 500; line-height: 1.25; color: var(--ink); overflow-wrap: anywhere; cursor: pointer; }
+.lib-side .action svg, .lib-side .actions.is-keep svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+.lib-side .action svg { color: var(--accent-ink); }
+.lib-side .action:hover { background: var(--surface-2); }
+.lib-side .action:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.lib-side .action[disabled] { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
+.lib-side .actions:has(> :only-child) .action { display: flex; justify-content: center; gap: var(--s-2); padding: var(--s-2); }
+.lib-side .actions.is-keep { display: flex; justify-content: space-between; }
+.lib-side .actions.is-keep svg { width: 16px; height: 16px; }
+.lib-side .actions.is-keep .btn { padding: 0 var(--s-2); }
+.lib-side .empty-side { font-size: var(--text-sm); color: var(--ink-2); }
+.lib-side .field { gap: var(--s-1); }
+.lib-side .textarea { min-height: 72px; }
+.lib-side .notice { font-size: var(--text-sm); background: var(--warn-soft); color: var(--warn-ink); }
+.lib-side > .hint, .lib-side .preview + .hint { font-size: var(--text-xs); color: var(--ink-2); }
+.lib-side.is-recovered { background: var(--warn-soft); }
+.lib-side.is-recovered .tag-row, .lib-side.is-recovered .textarea { background: var(--surface); }
+.btn-quiet-danger { color: var(--danger-ink); }
+.btn-quiet-danger:hover { background: var(--danger-soft); color: var(--danger-ink); }
+.usage { display: grid; gap: var(--s-2); }
+.usage-list { display: grid; gap: var(--s-1); margin: var(--s-2) 0 0; padding: 0; list-style: none; font-size: var(--text-sm); }
+.usage-list li { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s-2); }
+.usage-list .where { font-size: var(--text-xs); color: var(--ink-2); }
+.usage details > summary { cursor: pointer; list-style: none; display: inline-flex; align-items: center; gap: var(--s-2); }
+.usage details > summary::-webkit-details-marker { display: none; }
+.usage details > summary::after { content: "▸"; color: var(--ink-3); font-size: var(--text-xs); }
+.usage details[open] > summary::after { content: "▾"; }
+/* Tags read as chips and are typed into the same box, so adding one is not a second control. */
+.tag-row { display: flex; flex-wrap: wrap; gap: var(--s-1); align-items: center; min-height: var(--control-h); padding: var(--s-1) var(--s-2); border: 1px solid var(--border-input); border-radius: var(--radius); background: var(--surface); }
+.tag-row .badge { display: inline-flex; align-items: center; gap: var(--s-1); }
+.tag-row .badge button { border: 0; background: none; padding: 0; color: inherit; cursor: pointer; font-size: var(--text-sm); line-height: 1; }
+.tag-row input { flex: 1; min-width: 80px; border: 0; background: none; padding: 0 var(--s-1); font-size: var(--text-sm); }
+.tag-row input:focus { outline: none; }
+.tag-row:has(input:focus) { border-color: var(--accent); outline: 3px solid var(--accent-soft); }
+
+/* Focal point and crop dialogs. */
+.focal-dialog { width: min(880px, 100%); max-height: calc(100dvh - 48px); overflow: auto; display: grid; gap: var(--s-4); }
+.focal-dialog:focus { outline: none; border-radius: var(--radius-lg); }
+.focal-dialog .actions { margin-top: 0; }
+.focal-dialog > .focal-stage { width: min(100%, 600px); justify-self: center; }
+.focal-dialog .ratio-strip { gap: var(--s-4); }
+.focal-dialog .ratio-item .ratio-preview { width: 100%; height: auto; }
+.focal-dialog .ratio-item { flex: none; width: var(--preview-width); min-width: 0; max-width: 100%; }
+.focal-dialog .ratio-item .sub { max-width: 160px; overflow-wrap: anywhere; }
+.focal-stage { position: relative; aspect-ratio: 3 / 2; border-radius: var(--radius); overflow: hidden; background: var(--badge-bg); touch-action: none; }
+.focal-stage img { display: block; width: 100%; height: 100%; object-fit: contain; -webkit-user-drag: none; user-select: none; }
+/* The stage takes the pointer so a drag that starts on the dot keeps going past it. */
+.focal-frame { position: absolute; pointer-events: none; }
+.focal-axes { display: flex; flex-wrap: wrap; gap: var(--s-4); justify-content: center; }
+.focal-axes label { display: flex; align-items: center; gap: var(--s-2); }
+.focal-handle { position: absolute; width: 28px; height: 28px; margin: -14px 0 0 -14px; padding: 0; border: 2px solid var(--surface); border-radius: 50%; background: var(--accent-ink); box-shadow: 0 0 0 2px var(--accent-ink), 0 4px 12px rgba(23, 26, 33, 0.35); pointer-events: none; cursor: default; }
+.focal-handle:focus-visible { outline: 2px solid var(--focus); outline-offset: 4px; border-radius: 50%; }
+.focal-handle::after { content: ""; position: absolute; inset: -6px; border-radius: 50%; }
+.variant-title { font-size: var(--text-xs); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-3); }
+.ratio-strip { display: flex; flex-wrap: wrap; gap: var(--s-5); align-items: flex-start; }
+.ratio-item { display: grid; gap: var(--s-1); }
+.ratio-item .ratio-preview { height: 124px; width: auto; }
+.ratio-item .lbl { font-size: var(--text-sm); font-weight: 500; }
+.ratio-item .sub { font-size: var(--text-xs); color: var(--ink-2); }
+.crop-dialog { width: min(1040px, 100%); }
+.crop-dialog .dialog-cols { grid-template-columns: minmax(0, 1fr) 248px; }
+.crop-dialog .focal-stage { background: var(--ink); }
+.crop-side { display: grid; gap: var(--s-5); align-content: start; }
+.crop-group { display: grid; gap: var(--s-3); }
+.crop-shape { display: flex; flex-wrap: wrap; }
+.crop-shape button { flex: 1 1 auto; padding: 0 var(--s-2); }
+.crop-side .field { gap: var(--s-1); }
+.crop-side .label-row { min-height: 0; }
+.crop-side output { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.crop-side .field:has(.range[disabled]) { opacity: 0.5; }
+.crop-meta { display: grid; gap: var(--s-1); padding: var(--s-3); border-radius: var(--radius); background: var(--surface-2); font-size: var(--text-sm); color: var(--ink-2); overflow-wrap: anywhere; }
+.crop-meta b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+/* The box is the rule of thirds over a darkened picture. */
+.crop-box { position: absolute; border: 2px solid var(--surface); box-shadow: 0 0 0 9999px rgba(23, 26, 33, 0.55); cursor: move; }
+.crop-box::before { content: ""; position: absolute; inset: 0; pointer-events: none; background-image: linear-gradient(to right, transparent calc(100% - 1px), rgba(255, 255, 255, 0.45) calc(100% - 1px)), linear-gradient(to bottom, transparent calc(100% - 1px), rgba(255, 255, 255, 0.45) calc(100% - 1px)); background-size: calc(100% / 3) 100%, 100% calc(100% / 3); }
+.crop-box.is-16x9 { left: 6%; top: 24%; width: 88%; height: 49.5%; }
+.crop-handle { position: absolute; width: 20px; height: 20px; border: 0 solid var(--surface); filter: drop-shadow(0 1px 2px rgba(23, 26, 33, 0.5)); }
+.crop-handle::after { content: ""; position: absolute; inset: -8px; }
+.crop-handle.h-nw { left: -3px; top: -3px; border-width: 3px 0 0 3px; cursor: nwse-resize; }
+.crop-handle.h-ne { right: -3px; top: -3px; border-width: 3px 3px 0 0; cursor: nesw-resize; }
+.crop-handle.h-sw { left: -3px; bottom: -3px; border-width: 0 0 3px 3px; cursor: nesw-resize; }
+.crop-handle.h-se { right: -3px; bottom: -3px; border-width: 0 3px 3px 0; cursor: nwse-resize; }
+
+/* Range slider — the same dot as the focal handle, on a track that fills to the value (--fill. */
+.range { -webkit-appearance: none; appearance: none; width: 100%; height: 20px; margin: 0; padding: 0; background: transparent; cursor: pointer; --fill: 0%; }
+.range::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: linear-gradient(to right, var(--accent-ink) var(--fill), var(--badge-bg) var(--fill)); }
+.range::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; margin-top: -7px; border: 2px solid var(--surface); border-radius: 50%; background: var(--accent-ink); box-shadow: 0 0 0 2px var(--accent-ink), var(--shadow-chip); transition: transform 120ms ease; }
+.range::-moz-range-track { height: 4px; border-radius: 2px; background: var(--badge-bg); }
+.range::-moz-range-progress { height: 4px; border-radius: 2px; background: var(--accent-ink); }
+.range::-moz-range-thumb { width: 14px; height: 14px; border: 2px solid var(--surface); border-radius: 50%; background: var(--accent-ink); box-shadow: 0 0 0 2px var(--accent-ink), var(--shadow-chip); transition: transform 120ms ease; }
+.range:hover::-webkit-slider-thumb, .range:active::-webkit-slider-thumb { transform: scale(1.15); }
+.range:hover::-moz-range-thumb, .range:active::-moz-range-thumb { transform: scale(1.15); }
+.range:focus-visible { outline: none; }
+.range:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 2px var(--accent-ink), 0 0 0 6px var(--accent-soft); }
+.range:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 2px var(--accent-ink), 0 0 0 6px var(--accent-soft); }
+.range[disabled] { cursor: not-allowed; }

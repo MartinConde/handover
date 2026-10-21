@@ -1,0 +1,63 @@
+/* Base. */
+*, *::before, *::after { box-sizing: border-box; }
+html { font-family: var(--font-sans); font-size: 16px; color: var(--ink); background: var(--bg); caret-color: var(--accent-ink); scrollbar-color: #c3c8c3 transparent; -webkit-text-size-adjust: 100%; -webkit-font-smoothing: antialiased; font-feature-settings: "cv11", "ss01"; }
+body { margin: 0; font-size: var(--text-md); line-height: var(--leading); }
+h1, h2, h3, p { margin: 0; }
+::selection { background: var(--accent-ring); color: var(--ink); }
+a { color: var(--accent-ink); text-underline-offset: 2px; }
+button, input, textarea, select { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: var(--radius-sm); }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* Controls. */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--s-2);
+  min-height: var(--control-h); padding: 0 var(--s-4);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--surface); color: var(--ink); font-weight: 500; cursor: pointer; white-space: nowrap;
+  box-shadow: var(--shadow-chip);
+}
+.btn:hover { background: var(--surface-2); }
+a.btn { text-decoration: none; }
+
+.btn-primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; box-shadow: inset 0 1px 0 #ffffff50, 0 2px 3px #526c1510; }
+.btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+.btn-danger { background: var(--danger); border-color: var(--danger); color: var(--on-danger); }
+.btn-danger:hover { background: var(--danger-ink); border-color: var(--danger-ink); color: var(--on-danger); }
+.btn-ghost { border-color: transparent; background: transparent; color: var(--ink-2); box-shadow: none; }
+.btn-ghost:hover { background: var(--badge-bg); color: var(--ink); }
+.btn-sm { min-height: 30px; padding: 0 var(--s-3); font-size: var(--text-sm); }
+.btn-block { width: 100%; }
+.btn-icon { width: 30px; min-height: 30px; padding: 0; font-size: var(--text-md); line-height: 1; }
+.btn[disabled], .btn[aria-disabled="true"] { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
+.btn:not(:disabled):active { transform: translateY(1px); }
+/* 24px is WCAG 2.2's floor for a target that is not inline in a sentence. */
+.btn-link { background: none; border: 0; padding: 0; min-height: 24px; color: var(--accent-ink); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; box-shadow: none; }
+
+.field { display: grid; gap: var(--s-2); align-content: start; scroll-margin-top: 250px; }
+.field label { font-size: var(--text-sm); font-weight: 500; color: var(--ink); }
+.field .hint { font-size: var(--text-xs); color: var(--ink-2); }
+.input {
+  min-height: var(--control-h); width: 100%; padding: 0 var(--s-3);
+  border: 1px solid var(--border-input); border-radius: var(--radius);
+  background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgb(35 43 58 / 2%);
+}
+.input:hover { border-color: var(--border-strong); }
+.input:focus { border-color: var(--focus); outline: 3px solid var(--accent-ring); outline-offset: 0; }
+.input::placeholder { color: var(--ink-3); }
+.input[aria-invalid="true"] { border-color: var(--danger); }
+.input-row { position: relative; }
+.input-row .input { padding-right: 4.5rem; }
+.input-row .btn-link { position: absolute; right: var(--s-3); top: 50%; transform: translateY(-50%); font-size: var(--text-sm); text-decoration: none; }
+
+/* Tag — small tinted label; no border, the tint is the shape */
+.badge { display: inline-block; padding: 1px var(--s-2); border-radius: var(--radius-sm); font-size: var(--text-xs); font-weight: 500; line-height: 1.5; background: var(--badge-bg); color: var(--badge-ink); }
+.badge-accent { background: var(--accent-soft); color: var(--accent-ink); }
+
+/* Inline notices (inside a form or screen) */
+.notice { padding: var(--s-3) var(--s-4); border-radius: var(--radius); font-size: var(--text-sm); }
+.notice-danger { background: var(--danger-soft); color: var(--danger-ink); }
+.notice-warn { background: var(--warn-soft); color: var(--warn-ink); }
+.notice-success { background: var(--success-soft); color: var(--success-ink); }
+.notice-info { background: var(--info-soft); color: var(--info-ink); }
+.technical-detail { display: block; margin-top: var(--s-1); font-family: var(--font-mono); font-size: var(--text-xs); }
