@@ -1,5 +1,5 @@
 import { type ActivityEvent, type ActivityGroup, activityGroupOf } from '@handover/core';
-import { formatRelativeTime, messageOptions, type UiLocale } from '../i18n.js';
+import { messageOptions, type UiLocale } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
 
 /** Both screens that draw the log share these sentences, so they never disagree. */
@@ -388,6 +388,3 @@ export const initials = (event: ActivityEvent) =>
     .slice(0, 2)
     .map((part) => part.charAt(0).toUpperCase())
     .join('');
-
-/** Legacy editor acknowledgement; Activity itself always supplies the reactive UI locale. */
-export const when = (at: number): string => formatRelativeTime(at, 'en');

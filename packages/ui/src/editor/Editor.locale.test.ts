@@ -200,6 +200,24 @@ test('retained drift and restore guidance retranslate in place', async () => {
   expect(banner?.textContent).toContain('entscheide, was bleiben soll');
 });
 
+test('the restored banner dates the version in German in the German admin', async () => {
+  vi.stubGlobal('fetch', answering());
+  state.app = mount(EditorLocaleFixture, {
+    target: document.body,
+    props: {
+      initialUiLocale: 'de',
+      publishState: 'drift',
+      pending: true,
+      restored: '2026-08-12T12:00:00.000Z',
+    },
+  });
+  await settle();
+
+  expect(q('.lock-banner.is-drift')?.textContent).toContain(
+    'Die Version von 12. Aug. 2026 wurde wiederhergestellt.',
+  );
+});
+
 test('an open publish confirmation retranslates without rerunning checks', async () => {
   const fetchMock = answering((url) =>
     url === '/admin/api/publish/checks'

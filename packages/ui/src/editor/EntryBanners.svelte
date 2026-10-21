@@ -1,9 +1,8 @@
 <script lang="ts">
 import type { Snippet } from 'svelte';
 import type { UiMessage } from '../errors.js';
-import { formatLanguageName, messageOptions, type UiLocale } from '../i18n.js';
+import { formatLanguageName, formatRelativeTime, messageOptions, type UiLocale } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
-import { when } from '../shared/activity-line';
 import type { CreatedAll } from './Editor.svelte';
 import type { createEntryLock } from './entry-lock.svelte';
 import type { EditorEntry } from './entry-payload';
@@ -100,7 +99,7 @@ function createdLine(of: string, report: CreatedAll) {
   <!-- The restore is over by the time this draws, so this is what says what just happened. -->
   <div class={['lock-banner', { 'is-drift': drifted }]} role="status">
     <span>
-      <b>{m.editor_restored_version({ date: when(Date.parse(restored)).toLowerCase() }, options)}</b>
+      <b>{m.editor_restored_version({ date: formatRelativeTime(Date.parse(restored), uiLocale) }, options)}</b>
       {#if drifted}
         {m.editor_restored_drift({}, options)}
       {:else}
