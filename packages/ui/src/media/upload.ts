@@ -77,6 +77,8 @@ export async function mediaResponse(response: Response, fallback: string): Promi
   };
 }
 
+export const extension = (item: LibraryItem) => (item.mime?.split('/').pop() ?? '').toUpperCase();
+
 /** A size a client reads rather than a byte count; nothing stored is ever "0 KB". */
 export const fileSize = (bytes?: number | null, locale: UiLocale = 'en') => {
   if (!bytes) return '';
