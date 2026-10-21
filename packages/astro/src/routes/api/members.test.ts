@@ -78,6 +78,16 @@ test('setting a password with nothing in the body says so', async () => {
   expect(((await res.json()) as { error: string }).error).toBe('No password was sent');
 });
 
+test.each([
+  ['an empty body', ''],
+  ['a null body', 'null'],
+  ['malformed JSON', '{'],
+])('setting a password with %s answers 400', async (_name, body) => {
+  const res = await setting(body);
+  expect(res.status).toBe(400);
+  expect(((await res.json()) as { error: string }).error).toBe('No password was sent');
+});
+
 // The account page shows the sentence, so which rule was broken has to survive the route.
 test("a refused password comes back in Better Auth's own words", async () => {
   state.setPassword = async () => {

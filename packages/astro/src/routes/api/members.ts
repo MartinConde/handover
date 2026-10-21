@@ -52,7 +52,8 @@ export async function setPassword(
   cfContext: App.Locals['cfContext'],
   session: App.Locals['handover'],
 ): Promise<Response> {
-  const { newPassword } = (await readJson(request)) as { newPassword?: unknown };
+  const body = (await readJson(request)) as { newPassword?: unknown } | null | undefined;
+  const newPassword = body?.newPassword;
   if (typeof newPassword !== 'string')
     return Response.json({ error: 'No password was sent' }, { status: 400 });
   const auth = createAuth(url, cfContext);

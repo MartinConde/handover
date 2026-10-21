@@ -4,8 +4,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
-- The "Restored the version from …" banner in the editor now shows its date in the admin's language
-  instead of always in English.
+- Setting a first password from the account page with an empty, `null` or malformed body now answers
+  `400` "No password was sent" instead of a `500`.
 - The "Restored the version from …" banner in the editor now shows its date in the admin's language
   instead of always in English.
 - A Google Maps place link with broken percent-encoding (such as `/maps/place/%ZZ`) is now refused
