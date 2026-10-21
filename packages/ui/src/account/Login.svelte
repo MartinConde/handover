@@ -1,5 +1,5 @@
 <script lang="ts">
-import { onDestroy } from 'svelte';
+import { onDestroy, untrack } from 'svelte';
 import { messageText, responseMessage, type UiMessage } from '../errors.js';
 import type { UiLocale } from '../i18n.js';
 import { messageOptions } from '../i18n.js';
@@ -29,10 +29,9 @@ let {
   onlocale?: (locale: UiLocale) => void;
 } = $props();
 
-// svelte-ignore state_referenced_locally -- initialized once from the page URL
-const params = new URLSearchParams(query);
-// svelte-ignore state_referenced_locally -- same page load
-const resetToken = path === '/admin/reset' ? (params.get('token') ?? '') : '';
+// Initialized once from the page URL.
+const params = untrack(() => new URLSearchParams(query));
+const resetToken = untrack(() => (path === '/admin/reset' ? (params.get('token') ?? '') : ''));
 // With no emailed link the expired-link wording would be a lie, so it gets the plain message.
 const refused = Boolean(params.get('error'));
 
@@ -40,20 +39,19 @@ const DEFAULT_RETRY_DELAY = 60_000;
 const MAX_TIMER_DELAY = 2_147_483_647;
 
 type View = 'sign-in' | 'link-sent' | 'reset-sent' | 'link-dead' | 'reset';
-// svelte-ignore state_referenced_locally -- the login view is chosen once per page load
+// The login view is chosen once per page load.
 let view = $state<View>(
-  resetToken ? 'reset' : refused && methods.emailLink ? 'link-dead' : 'sign-in',
+  untrack(() => (resetToken ? 'reset' : refused && methods.emailLink ? 'link-dead' : 'sign-in')),
 );
 let email = $state('');
 let password = $state('');
 let next = $state('');
 let confirm = $state('');
-// svelte-ignore state_referenced_locally -- a site does not gain a mailer while the page is up
-let usePassword = $state(!methods.emailLink);
+// A site does not gain a mailer while the page is up.
+let usePassword = $state(untrack(() => !methods.emailLink));
 let reveal = $state(false);
-// svelte-ignore state_referenced_locally -- the initial error is chosen once per page load
 let error = $state<UiMessage | undefined>(
-  refused && !methods.emailLink ? { code: 'AUTH_SIGN_IN_FAILED' } : undefined,
+  untrack(() => (refused && !methods.emailLink ? { code: 'AUTH_SIGN_IN_FAILED' } : undefined)),
 );
 let fieldError = $state<UiMessage | undefined>();
 let notice = $state(false);

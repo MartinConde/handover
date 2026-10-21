@@ -6,7 +6,7 @@ import {
   type ResolvedSeo,
   type WordPart,
 } from '@handover/core';
-import type { Snippet } from 'svelte';
+import { type Snippet, untrack } from 'svelte';
 import { messageDetail, messageText, responseMessage, type UiMessage } from '../errors.js';
 import { formatLanguageName, messageOptions, type UiLocale } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
@@ -107,8 +107,7 @@ let {
 
 const saveState = $derived(session.saveState(locale));
 const options = $derived(messageOptions(uiLocale));
-// svelte-ignore state_referenced_locally -- the loaded file is the initial value on purpose
-let base = $state<Data>(structuredClone($state.snapshot(session.snapshot(locale))));
+let base = $state<Data>(untrack(() => structuredClone($state.snapshot(session.snapshot(locale)))));
 const saving = $derived(saveState.phase === 'saving');
 let fillFailure = $state<UiMessage>();
 let retryPaths = $state<string[]>();

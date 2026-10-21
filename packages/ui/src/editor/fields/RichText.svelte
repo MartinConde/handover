@@ -87,8 +87,8 @@ function logicalFromDom(view: EditorView): LogicalSelection | undefined {
   }
 }
 
-// svelte-ignore state_referenced_locally -- initialized once to avoid dropping content
-const foreign = richtextErrors(value, tier).length > 0;
+// Initialized once to avoid dropping content.
+const foreign = untrack(() => richtextErrors(value, tier).length > 0);
 
 type ToolbarButton = {
   kind:
@@ -147,8 +147,8 @@ const FULL: ToolbarButton[] = [
     run: (e: Editor) => formatted(() => e.chain().focus().toggleBlockquote().run()),
   },
 ];
-// svelte-ignore state_referenced_locally -- the tier is fixed per field
-const buttons = tier === 'full' ? [...BASIC, ...FULL] : BASIC;
+// The tier is fixed per field.
+const buttons = untrack(() => (tier === 'full' ? [...BASIC, ...FULL] : BASIC));
 const buttonLabel = (button: ToolbarButton) => {
   switch (button.kind) {
     case 'bold':

@@ -1,5 +1,6 @@
 <script lang="ts">
 import type { Drift, Field } from '@handover/core';
+import { untrack } from 'svelte';
 import type { UiLocale } from '../i18n.js';
 import type { CreatedAll } from './Editor.svelte';
 import Editor from './EditorTopbarFixture.svelte';
@@ -30,10 +31,9 @@ let {
   translations?: Record<string, Record<string, unknown>>;
   createdAll?: CreatedAll;
 } = $props();
-// svelte-ignore state_referenced_locally -- each test mount intentionally fixes its initial locale
-let uiLocale = $state<UiLocale>(initialUiLocale);
-// svelte-ignore state_referenced_locally -- each test mount intentionally fixes its state variant
-const drift: Drift[] =
+let uiLocale = $state<UiLocale>(untrack(() => initialUiLocale));
+// Each test mount fixes its state variant.
+const drift: Drift[] = untrack(() =>
   publishState === 'drift'
     ? [
         {
@@ -44,9 +44,9 @@ const drift: Drift[] =
           values: { de: ['Ein seltener Fund.'] },
         },
       ]
-    : [];
-// svelte-ignore state_referenced_locally -- each test mount intentionally fixes its state variant
-const entry = {
+    : [],
+);
+const entry = untrack(() => ({
   fields: [
     { path: ['title'], label: 'Title', type: 'text', required: true },
     ...(feedback
@@ -119,7 +119,7 @@ const entry = {
   route: '/listings/[slug]',
   localizedSlugs: true,
   addresses: { en: '' },
-};
+}));
 </script>
 
 <button data-locale-switch type="button" onclick={() => (uiLocale = uiLocale === 'en' ? 'de' : 'en')}>{uiLocale === 'en' ? 'Deutsch' : 'English'}</button>

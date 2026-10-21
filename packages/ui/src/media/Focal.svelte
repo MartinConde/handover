@@ -1,5 +1,6 @@
 <script lang="ts">
 import type { Labels, Preset } from '@handover/core';
+import { untrack } from 'svelte';
 import type { UiLocale } from '../i18n.js';
 import { messageOptions } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
@@ -25,10 +26,8 @@ let {
   onclose: () => void;
 } = $props();
 
-// svelte-ignore state_referenced_locally -- the dialog edits an initial snapshot
-let across = $state(Math.round(focal[0] * 100));
-// svelte-ignore state_referenced_locally -- the dialog edits an initial snapshot
-let down = $state(Math.round(focal[1] * 100));
+let across = $state(untrack(() => Math.round(focal[0] * 100)));
+let down = $state(untrack(() => Math.round(focal[1] * 100)));
 let area = $state<HTMLElement>();
 let ratio = $state<number>();
 

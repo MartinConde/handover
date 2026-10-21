@@ -1,5 +1,6 @@
 <script lang="ts">
 import { changeSource, type Field } from '@handover/core';
+import { untrack } from 'svelte';
 import { messageText, type UiMessage } from '../errors.js';
 import { formatLanguageList, formatLanguageName, messageOptions, type UiLocale } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
@@ -104,8 +105,8 @@ const rows = $derived(
       return { to, desc, disabled: why !== undefined };
     }),
 );
-// svelte-ignore state_referenced_locally -- the first language that can be chosen starts chosen
-let chosen = $state(rows.find((row) => !row.disabled)?.to);
+// The first language that can be chosen starts chosen.
+let chosen = $state(untrack(() => rows.find((row) => !row.disabled)?.to));
 $effect(() => {
   if (chosen && rows.find((row) => row.to === chosen)?.disabled)
     chosen = rows.find((row) => !row.disabled)?.to;

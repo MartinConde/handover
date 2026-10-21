@@ -1,4 +1,6 @@
 <script lang="ts">
+import { untrack } from 'svelte';
+
 let {
   id,
   value,
@@ -17,8 +19,7 @@ let {
 
 // A field chooses its control when it opens. Changing this while the user types would replace
 // the focused DOM node and discard its selection (including an active IME composition).
-// svelte-ignore state_referenced_locally
-const multiline = value.length > 80 || value.includes('\n');
+const multiline = untrack(() => value.length > 80 || value.includes('\n'));
 </script>
 
 {#if multiline}

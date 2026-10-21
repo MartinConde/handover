@@ -1,6 +1,6 @@
 <script lang="ts">
 import { type Labels, labelIn, type Preset, type UiLocale } from '@handover/core';
-import type { Component, Snippet } from 'svelte';
+import { type Component, type Snippet, untrack } from 'svelte';
 import { on } from 'svelte/events';
 import Account from './account/Account.svelte';
 import Login, { type LoginMethods } from './account/Login.svelte';
@@ -74,13 +74,12 @@ let {
   // What the site's build compiled in, by key; empty in the bundle the package ships.
   screens?: Record<string, Component<ScreenProps>>;
 } = $props();
-// svelte-ignore state_referenced_locally -- the prop is only the initial value
-let session = $state(signedIn);
-// svelte-ignore state_referenced_locally -- the ping below sets them again with a new session
-useCollectionLabels(signedIn?.collectionLabels);
+let session = $state(untrack(() => signedIn));
+// The ping below sets them again with a new session.
+useCollectionLabels(untrack(() => signedIn?.collectionLabels));
 let sessionBusy = $state(false);
-// svelte-ignore state_referenced_locally -- bootstrap resolves this before the first mount
-let uiLocale = $state(initialUiLocale);
+// Bootstrap resolves this before the first mount.
+let uiLocale = $state(untrack(() => initialUiLocale));
 const options = $derived(messageOptions(uiLocale));
 type ShellMessage = {
   code:
@@ -135,12 +134,10 @@ const text = (message: ShellMessage) => {
         : m.shell_entry_load_failed({}, options);
   }
 };
-// svelte-ignore state_referenced_locally -- the prop is the result of the one bootstrap request
 let sessionError = $state<ShellMessage | undefined>(
-  signedIn === undefined ? { code: 'SESSION_CHECK_FAILED' } : undefined,
+  untrack(() => (signedIn === undefined ? { code: 'SESSION_CHECK_FAILED' } : undefined)),
 );
-// svelte-ignore state_referenced_locally -- the prop is only where the page loaded
-let path = $state(landedAt);
+let path = $state(untrack(() => landedAt));
 
 function useLocale(locale: InterfaceLocale, remember = false) {
   uiLocale = locale;

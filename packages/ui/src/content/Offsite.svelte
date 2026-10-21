@@ -1,4 +1,5 @@
 <script lang="ts">
+import { untrack } from 'svelte';
 import type { PickEntry } from '../entry-directory.js';
 import { messageLine, type UiMessage } from '../errors.js';
 import { collectionName, messageOptions, type UiLocale } from '../i18n.js';
@@ -56,8 +57,8 @@ const errorText = $derived(
 
 const singular = $derived(collectionName(collection, uiLocale, 'singular'));
 
-// svelte-ignore state_referenced_locally -- the collection's page above is the initial choice
-let kind = $state<Target['kind']>(index ? 'index' : 'none');
+// The collection's page above is the initial choice.
+let kind = $state<Target['kind']>(untrack(() => (index ? 'index' : 'none')));
 let picked = $state<PickEntry>();
 let url = $state('');
 

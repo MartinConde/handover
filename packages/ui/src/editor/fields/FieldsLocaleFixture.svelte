@@ -1,5 +1,6 @@
 <script lang="ts">
 import type { Field, WordPart } from '@handover/core';
+import { untrack } from 'svelte';
 import { formatLanguageName, type UiLocale } from '../../i18n.js';
 import { createEntrySession } from '../entry-session.svelte';
 import Fields from './Fields.svelte';
@@ -8,8 +9,7 @@ let {
   initialUiLocale = 'en',
   refusalUrl = 'https://www.dailymotion.com/video/x8abc',
 }: { initialUiLocale?: UiLocale; refusalUrl?: string } = $props();
-// svelte-ignore state_referenced_locally -- each test mount intentionally fixes its initial locale
-let uiLocale = $state<UiLocale>(initialUiLocale);
+let uiLocale = $state<UiLocale>(untrack(() => initialUiLocale));
 let commands = $state(0);
 
 const fields = [

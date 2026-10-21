@@ -22,7 +22,7 @@ import {
   referenceText,
   resolveSeo,
 } from '@handover/core';
-import { onMount, type Snippet, tick } from 'svelte';
+import { onMount, type Snippet, tick, untrack } from 'svelte';
 import CanvasWorkspace from '../canvas/CanvasWorkspace.svelte';
 import type { CanvasSelection } from '../canvas/canvas-protocol';
 import type { CanvasRenderRequest } from '../canvas/canvas-renderer';
@@ -145,44 +145,45 @@ function reload() {
   return onreload ? onreload() : onchanged();
 }
 
-// svelte-ignore state_referenced_locally -- the loaded files seed this opened entry's session
-const entryForm = { fields: [...entry.fields], blocks: entry.blocks };
-// svelte-ignore state_referenced_locally -- the loaded files seed this opened entry's session
-const entrySession = createEntrySession({
-  document: `${collection}/${slug}`,
-  sourceLocale: entry.sourceLocale,
-  data: entry.data,
-  translations: entry.translations,
-  revisions: entry.revisions,
-  form: entryForm,
-  problems: { [entry.sourceLocale]: entry.problems },
-  drift: entry.drift,
-  onactivity: () => entryLock.renew(),
-  onreconciled: reload,
-});
+// The loaded files seed this opened entry's session.
+const entryForm = untrack(() => ({ fields: [...entry.fields], blocks: entry.blocks }));
+const entrySession = untrack(() =>
+  createEntrySession({
+    document: `${collection}/${slug}`,
+    sourceLocale: entry.sourceLocale,
+    data: entry.data,
+    translations: entry.translations,
+    revisions: entry.revisions,
+    form: entryForm,
+    problems: { [entry.sourceLocale]: entry.problems },
+    drift: entry.drift,
+    onactivity: () => entryLock.renew(),
+    onreconciled: reload,
+  }),
+);
 const data = $derived(entrySession.snapshot(entry.sourceLocale));
 const saveState = $derived(entrySession.saveState(entry.sourceLocale));
-// svelte-ignore state_referenced_locally -- the loaded entry seeds each file's live draft state
+// The loaded entry seeds each file's live draft state.
 const pendingByLocale = $state<Record<string, boolean>>(
-  Object.fromEntries(entry.locales.map((of) => [of, entry.pending.includes(of)])),
+  untrack(() => Object.fromEntries(entry.locales.map((of) => [of, entry.pending.includes(of)]))),
 );
 const saving = $derived(saveState.phase === 'saving');
 const saveFailed = $derived(saveState.phase === 'failed');
 let saveError = $state<UiMessage>();
-// svelte-ignore state_referenced_locally -- the loaded entry is the initial value on purpose
-let held = $state(entry.held === true);
+let held = $state(untrack(() => entry.held === true));
 const schemaProblems = $derived(entrySession.positionalProblems(entry.sourceLocale, uiLocale));
-// svelte-ignore state_referenced_locally -- the opened entry is the one this publishes
-const entryPublish = createEntryPublish({
-  key: `${collection}/${slug}`,
-  session: entrySession,
-  pending: () => entry.locales.filter((of) => pendingByLocale[of]),
-  many: () => many,
-  reload,
-  onpublished: () => onpublished?.(title),
-  onconflict: () => onconflict?.(),
-  focusPanel: () => publishPanel?.focus(),
-});
+const entryPublish = untrack(() =>
+  createEntryPublish({
+    key: `${collection}/${slug}`,
+    session: entrySession,
+    pending: () => entry.locales.filter((of) => pendingByLocale[of]),
+    many: () => many,
+    reload,
+    onpublished: () => onpublished?.(title),
+    onconflict: () => onconflict?.(),
+    focusPanel: () => publishPanel?.focus(),
+  }),
+);
 // Only the source's check errors gate the header; a translation's are the dialog's to offer.
 const checkProblems = $derived(
   Object.fromEntries(
@@ -195,8 +196,8 @@ const checkProblems = $derived(
   ),
 );
 const problems = $derived({ ...checkProblems, ...schemaProblems });
-// svelte-ignore state_referenced_locally -- the language the entry is written in is where it opens
-let locale = $state(entry.sourceLocale);
+// The language the entry is written in is where it opens.
+let locale = $state(untrack(() => entry.sourceLocale));
 let canvasPane = $state<ReturnType<typeof CanvasWorkspace>>();
 // Sticky panes below the header sit exactly under it, however many rows it wraps to.
 let headerHeight = $state(0);
@@ -204,9 +205,8 @@ let headerHeight = $state(0);
 type EditorMode = 'form' | 'split' | 'canvas';
 type Beside = 'page' | 'language' | 'none';
 const BESIDE: Beside[] = ['page', 'language', 'none'];
-// svelte-ignore state_referenced_locally -- one authenticated editor instance owns one preference key
 // v3: Form and Split became one view, so earlier saved values mean nothing here.
-const viewKey = `handover:editor-view:v3:${siteBase() || '/'}:${userId}`;
+const viewKey = untrack(() => `handover:editor-view:v3:${siteBase() || '/'}:${userId}`);
 // A blocked browser preference must never block editing.
 function readPreference(key: string) {
   try {
@@ -310,8 +310,7 @@ const partial = (of: string) => {
 };
 
 // The language read under each field of the pane; stored as chosen, drawn only while it is valid.
-// svelte-ignore state_referenced_locally -- one authenticated editor instance owns one preference key
-const referenceKey = `handover:editor-reference:v1:${siteBase() || '/'}:${userId}`;
+const referenceKey = untrack(() => `handover:editor-reference:v1:${siteBase() || '/'}:${userId}`);
 let referenceChoice = $state(readPreference(referenceKey) ?? '');
 function chooseReference(of: string | undefined) {
   referenceChoice = of ?? '';
@@ -332,11 +331,12 @@ const reference = $derived.by(() => {
 
 // The list's language filter, carried in the address so remounts and section links keep it.
 const opening = new URLSearchParams(location.search);
-// svelte-ignore state_referenced_locally -- read once per mount, like `?locale=`
-const queue =
+// Read once per mount, like `?locale=`.
+const queue = untrack(() =>
   !entry.singleton && entry.locales.length > 1 && entry.locales.includes(opening.get('queue') ?? '')
     ? (opening.get('queue') ?? undefined)
-    : undefined;
+    : undefined,
+);
 const queueWork = workFrom(opening.get('owed'));
 const queueTail = queueQuery(queue, queueWork);
 let next = $state<
@@ -552,15 +552,17 @@ const otherSource = (of: string) => {
   return typeof from === 'string' && from !== entry.sourceLocale ? from : undefined;
 };
 
-// svelte-ignore state_referenced_locally -- the opened entry owns this lock until remount
-const entryLock = createEntryLock({
-  collection,
-  slug,
-  userId,
-  onlost: () => entrySession.closeSaveGate(),
-  onchanged,
-  failure: retainedFailure,
-});
+// The opened entry owns this lock until remount.
+const entryLock = untrack(() =>
+  createEntryLock({
+    collection,
+    slug,
+    userId,
+    onlost: () => entrySession.closeSaveGate(),
+    onchanged,
+    failure: retainedFailure,
+  }),
+);
 let takeTrigger = $state<HTMLButtonElement>();
 const canPublish = $derived(dirty && !saving && !missing.length && !drifted && !entryLock.locked && !actionBusy);
 
@@ -670,8 +672,7 @@ onMount(() => {
   };
 });
 
-// svelte-ignore state_referenced_locally -- the loaded entry is the initial value on purpose
-let hidden = $state(entry.hidden === true);
+let hidden = $state(untrack(() => entry.hidden === true));
 let publishMenu = $state(false);
 let hiding = $state(false);
 let statusFailed = $state<UiMessage>();

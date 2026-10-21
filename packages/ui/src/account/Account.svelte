@@ -1,5 +1,6 @@
 <script lang="ts">
 import type { UiLocale } from '@handover/core';
+import { untrack } from 'svelte';
 import { messageDetail, messageText, responseMessage, type UiMessage } from '../errors.js';
 import { messageOptions } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
@@ -32,18 +33,16 @@ let {
   onlocale?: (locale: UiLocale) => void;
 } = $props();
 
-// svelte-ignore state_referenced_locally -- the prop seeds the field; the shell reloads it on save
-let name = $state(user.name);
-// svelte-ignore state_referenced_locally
-let email = $state(user.email);
+// The prop seeds the field; the shell reloads it on save.
+let name = $state(untrack(() => user.name));
+let email = $state(untrack(() => user.email));
 let current = $state('');
 let next = $state('');
 let confirm = $state('');
 let reveal = $state(false);
 let passwordError = $state<UiMessage | undefined>();
 // An email link that failed redirects here with Better Auth's code in `?error=`.
-// svelte-ignore state_referenced_locally
-const linkFailed = new URLSearchParams(query).has('error');
+const linkFailed = untrack(() => new URLSearchParams(query).has('error'));
 let notice = $state<UiMessage | undefined>(
   linkFailed ? { code: 'ACCOUNT_EMAIL_LINK_FAILED' } : undefined,
 );

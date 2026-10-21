@@ -1,5 +1,6 @@
 <script lang="ts">
 import { ParaglideMessage } from '@inlang/paraglide-js-svelte';
+import { untrack } from 'svelte';
 import { messageDetail, messageText, type UiMessage } from '../errors.js';
 import type { UiLocale } from '../i18n.js';
 import { messageOptions } from '../i18n.js';
@@ -32,15 +33,11 @@ let {
   onclose: () => void;
 } = $props();
 
-// svelte-ignore state_referenced_locally -- dialog dimensions are initial snapshots
-const width = item.width ?? 0;
-// svelte-ignore state_referenced_locally -- dialog dimensions are initial snapshots
-const height = item.height ?? 0;
+const width = untrack(() => item.width ?? 0);
+const height = untrack(() => item.height ?? 0);
 
-// svelte-ignore state_referenced_locally -- the selected shape is an initial snapshot
-let ratio = $state<string | undefined>(ratios[0]);
-// svelte-ignore state_referenced_locally -- the crop starts from the initial shape
-let region = $state<Region>(fitRegion(width, height, ratios[0]));
+let ratio = $state<string | undefined>(untrack(() => ratios[0]));
+let region = $state<Region>(untrack(() => fitRegion(width, height, ratios[0])));
 let busy = $state(false);
 let failure = $state<UiMessage>();
 let stage = $state<HTMLElement>();

@@ -1,12 +1,13 @@
 <script lang="ts">
 import type { Field } from '@handover/core';
+import { untrack } from 'svelte';
 import type { UiLocale } from '../i18n.js';
 import { createEntrySession } from './entry-session.svelte';
 import Translation from './Translation.svelte';
 
 let { initialUiLocale = 'en' }: { initialUiLocale?: UiLocale } = $props();
-// svelte-ignore state_referenced_locally -- the fixture owns the live preference.
-let uiLocale = $state<UiLocale>(initialUiLocale);
+// The fixture owns the live preference.
+let uiLocale = $state<UiLocale>(untrack(() => initialUiLocale));
 const fields = [
   { path: ['title'], label: 'Title', type: 'text', required: false },
 ] satisfies Field[];

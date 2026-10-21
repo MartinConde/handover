@@ -1,4 +1,5 @@
 <script lang="ts">
+import { untrack } from 'svelte';
 import { messageText, responseMessage, type UiMessage } from '../errors.js';
 import { formatLanguageName, messageOptions, type UiLocale } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
@@ -55,8 +56,8 @@ const text = $derived(
         },
 );
 
-// svelte-ignore state_referenced_locally -- the first language that can be chosen starts chosen
-let chosen = $state(choices[0]);
+// The first language that can be chosen starts chosen.
+let chosen = $state(untrack(() => choices[0]));
 let sending = $state(false);
 let failure = $state<UiMessage>();
 
