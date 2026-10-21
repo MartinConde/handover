@@ -1,7 +1,7 @@
 <script lang="ts" module>
 import type { UiMessage } from '../errors.js';
 
-/** What one Create all did to each language it set out to make; the shell keeps it past the reload. */
+// What one Create all did to each language it set out to make; the shell keeps it past the reload.
 export type CreatedAll = {
   targets: string[];
   done: Record<string, 'created' | 'filled'>;
@@ -96,47 +96,47 @@ let {
 }: {
   collection: string;
   slug: string;
-  /** Who is signed in, so a lock held by the same person reads as their other tab. */
+  // Who is signed in, so a lock held by the same person reads as their other tab.
   userId?: string;
-  /** Where a stored media key is served from; the image and file widgets draw from it. */
+  // Where a stored media key is served from; the image and file widgets draw from it.
   mediaBase?: string;
-  /** This build serves `/_preview`: without it the editor offers Form only, never Canvas. */
+  // This build serves `/_preview`: without it the editor offers Form only, never Canvas.
   preview?: boolean;
   entry: EditorEntry;
-  /** Which of the entry's tabs the address is on; empty is the form itself. */
+  // Which of the entry's tabs the address is on; empty is the form itself.
   section?: string;
-  /** The site's origin, for the SEO previews; none, and the panel draws none. */
+  // The site's origin, for the SEO previews; none, and the panel draws none.
   site?: string;
   uiLocale?: UiLocale;
-  /** A file of this entry was made, removed or settled, so the entry has to be read again. */
+  // A file of this entry was made, removed or settled, so the entry has to be read again.
   onchanged: () => void | Promise<void>;
-  /** Re-read the whole entry without flushing the session whose authoritative data changed. */
+  // Re-read the whole entry without flushing the session whose authoritative data changed.
   onreload?: () => void | Promise<void>;
-  /** Fires only on the save that flips whether this entry has something to publish. */
+  // Fires only on the save that flips whether this entry has something to publish.
   onpending?: () => void;
-  /** A successful entry action made a repository commit outside the ordinary publish control. */
+  // A successful entry action made a repository commit outside the ordinary publish control.
   oncommitted?: () => void | Promise<void>;
-  /** This entry went out from its header, named the way the shell should say it. */
+  // This entry went out from its header, named the way the shell should say it.
   onpublished?: (title: string) => void | Promise<void>;
-  /** Its header publish was refused over a file changed in the repository; the drawer resolves it. */
+  // Its header publish was refused over a file changed in the repository; the drawer resolves it.
   onconflict?: () => void;
-  /** A version went into the drafts; the shell remembers its git date past the reload. */
+  // A version went into the drafts; the shell remembers its git date past the reload.
   onrestored?: (date: string) => void;
-  /** The date of the version the unpublished changes were restored from, while they wait. */
+  // The date of the version the unpublished changes were restored from, while they wait.
   restored?: string;
-  /** The source was changed on purpose; the shell remembers the language past the reload. */
+  // The source was changed on purpose; the shell remembers the language past the reload.
   onsourcechanged?: (locale: string) => void;
-  /** The language this entry was just made to be written in, while that waits to publish. */
+  // The language this entry was just made to be written in, while that waits to publish.
   sourceChanged?: string;
-  /** A Create all finished or stopped; the shell keeps its report past the reload. */
+  // A Create all finished or stopped; the shell keeps its report past the reload.
   oncreatedall?: (report: CreatedAll | undefined) => void;
-  /** The report of this entry's last Create all, until it is dismissed. */
+  // The report of this entry's last Create all, until it is dismissed.
   createdAll?: CreatedAll;
-  /** Lets the application shell collapse its navigation only for full-width Canvas. */
+  // Lets the application shell collapse its navigation only for full-width Canvas.
   onmode?: (mode: EditorMode) => void;
-  /** Hands the shell a live read of the title for its top-bar breadcrumb. */
+  // Hands the shell a live read of the title for its top-bar breadcrumb.
   ontitle?: (read: () => string) => void;
-  /** Hands the shell the address and actions to draw in its top bar; the cleanup takes them back. */
+  // Hands the shell the address and actions to draw in its top bar; the cleanup takes them back.
   ontopbar?: (parts: { lead: Snippet; actions: Snippet }) => () => void;
 } = $props();
 const options = $derived(messageOptions(uiLocale));

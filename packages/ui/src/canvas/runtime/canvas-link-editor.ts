@@ -30,7 +30,7 @@ interface CanvasLinkEditorOptions {
 
 const copy = (value: CanvasLinkValue): CanvasLinkValue => ({ ...value });
 
-/** A site-style-proof link editor shared by rich-text links and schema link fields in Canvas. */
+// Site-style-proof; shared by rich-text links and schema link fields in Canvas.
 export function createCanvasLinkEditor(options: CanvasLinkEditorOptions = {}) {
   const root = options.root ?? document;
   const owner = options.owner ?? window;

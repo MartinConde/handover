@@ -29,9 +29,9 @@ interface CanvasPlainTextOptions {
 
 const length = (element: HTMLElement) => element.textContent?.length ?? 0;
 
-/** Chrome's UA sheet gives `[contenteditable]` its own wrapping, which re-flows the reader's text
- * the moment editing opens. Hold the rendered values so the line breaks never move. `white-space`
- * stays out: the UA leaves it alone, and a rich-text root needs the `pre-wrap` TipTap gives it. */
+// Chrome's UA sheet gives `[contenteditable]` its own wrapping, which re-flows the reader's text
+// the moment editing opens; hold the rendered values so the line breaks never move. `white-space`
+// stays out: the UA leaves it alone, and a rich-text root needs the `pre-wrap` TipTap gives it.
 const WRAPPING = ['overflow-wrap', 'word-break', 'line-break'] as const;
 
 export const readWrapping = (element: HTMLElement) => {
@@ -125,8 +125,8 @@ const replaceSelection = (element: HTMLElement, value: string) => {
   selection.addRange(range);
 };
 
-/** One focused contenteditable surface. It mutates only its annotated element and commits through
- * the versioned parent bridge; the site document never owns persistence or undo. */
+// Mutates only its annotated element and commits through the versioned parent bridge;
+// the site document never owns persistence or undo.
 export function createCanvasPlainTextRuntime(options: CanvasPlainTextOptions) {
   const root = options.root ?? document;
   let configured: PlainField | undefined;

@@ -17,7 +17,7 @@ const normalizedPath = (path: string) => {
   return trimmed || '/';
 };
 
-/** Resolve a site link against the real page URL, not its `/_preview` transport URL. */
+// Resolve a site link against the real page URL, not its `/_preview` transport URL.
 export function canvasDocumentUrl(value: string | URL): URL {
   const url = new URL(String(value));
   const marker = '/_preview';
@@ -30,7 +30,7 @@ export function canvasDocumentUrl(value: string | URL): URL {
   return url;
 }
 
-/** Match an exact localized page address from the same index used by Handover's page picker. */
+// Match an exact localized page address from the same index used by Handover's page picker.
 export function classifyCanvasNavigation(
   href: string,
   index: Pickable,
@@ -67,7 +67,7 @@ interface CanvasNavigationRuntimeOptions {
   onNavigate: (request: CanvasNavigationRequest) => void;
 }
 
-/** Mediates browser intents that the editing overlay did not consume. */
+// Mediates browser intents that the editing overlay did not consume.
 export function createCanvasNavigationRuntime(options: CanvasNavigationRuntimeOptions) {
   const root = options.root ?? document;
   const owner = options.owner ?? window;

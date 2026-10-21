@@ -77,7 +77,7 @@ const compatible = (element: Element): element is HTMLElement =>
   ['ARTICLE', 'ASIDE', 'DIV', 'MAIN', 'SECTION'].includes(element.tagName) &&
   !element.closest('[contenteditable="true"]');
 
-/** One lazy TipTap instance mounted only on an explicitly annotated block-capable prose root. */
+// One lazy TipTap instance mounted only on an explicitly annotated block-capable prose root.
 export function createCanvasRichTextRuntime(options: CanvasRichTextOptions) {
   const root = options.root ?? document;
   const owner = options.owner ?? window;

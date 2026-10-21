@@ -56,9 +56,9 @@ let {
 }: {
   collection: string;
   slug: string;
-  /** Never the language the entry's structure is edited in. */
+  // Never the language the entry's structure is edited in.
   locale: string;
-  /** Entry-lifetime state: this pane may mount and unmount without losing its draft. */
+  // Entry-lifetime state: this pane may mount and unmount without losing its draft.
   session: EntrySession;
   fields: readonly Field[];
   blocks: Record<string, Field[]>;
@@ -68,40 +68,40 @@ let {
   mediaBase?: string;
   inheritedSeo?: ResolvedSeo;
   source: string;
-  /** The lock is on all of the entry's languages, so this column reads like the other one. */
+  // The lock is on all of the entry's languages, so this column reads like the other one.
   locked?: boolean;
   stale?: boolean;
-  /** Source texts this file answers, out of those the source holds. */
+  // Source texts this file answers, out of those the source holds.
   answered?: { written: number; of: number };
-  /** The source paths this language is asked for, and those its file leaves empty. */
+  // The source paths this language is asked for, and those its file leaves empty.
   work?: { paths: string[]; unanswered: string[] };
   translator?: boolean;
-  /** Another entry-wide persisted action is already in flight. */
+  // Another entry-wide persisted action is already in flight.
   actionBlocked?: boolean;
   url?: string;
   site?: string;
   uiLocale?: UiLocale;
-  /** Draws the pane's `h2#pane-{locale}` when the editor offers a choice of language there. */
+  // Draws the pane's `h2#pane-{locale}` when the editor offers a choice of language there.
   heading?: Snippet<[string]>;
-  /** Passed to the form: drawn under the title field. */
+  // Passed to the form: drawn under the title field.
   afterTitle?: Snippet;
   titleKey?: string;
-  /** The queue's way on to the next entry, when the entry was opened from a filtered list. */
+  // The queue's way on to the next entry, when the entry was opened from a filtered list.
   next?: Snippet;
-  /** The language drawn read-only under each field, when one is chosen and still valid. */
+  // The language drawn read-only under each field, when one is chosen and still valid.
   reference?: Reference;
-  /** Languages that can be the reference; none draws no control. */
+  // Languages that can be the reference; none draws no control.
   references?: string[];
-  /** The state mark a language carries in the editor's switchers. */
+  // The state mark a language carries in the editor's switchers.
   mark?: Snippet<[string]>;
   onreference?: (locale: string | undefined) => void;
-  /** Shows the field at this source path in this pane; false when it is no longer drawn. */
+  // Shows the field at this source path in this pane; false when it is no longer drawn.
   onjump?: (path: string) => Promise<boolean>;
   onreveal?: (path: readonly string[]) => void;
-  /** The entry keeps `pending`: this column is thrown away on a screen change, its edit is not. */
+  // The entry keeps `pending`: this column is thrown away on a screen change, its edit is not.
   onsaved?: (pending: boolean, data?: Data) => void;
   onclose?: () => void;
-  /** Absent when the language cannot go. */
+  // Absent when the language cannot go.
   onturnoff?: () => void;
 } = $props();
 
@@ -239,7 +239,7 @@ function startFrom(list: string[]) {
   return -1;
 }
 
-/** Visit the next outstanding field; what is no longer drawn is passed over, not announced. */
+// A field that is no longer drawn is passed over, not announced.
 async function nextTodo() {
   const list = todo;
   if (!list.length) {

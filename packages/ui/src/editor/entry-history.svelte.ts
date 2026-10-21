@@ -8,17 +8,17 @@ const HISTORY_TRANSACTION_LIMIT = 200;
 const HISTORY_CHARACTER_LIMIT = 2_000_000;
 
 export type LogicalSelection = {
-  /** Stable entry identity; prevents a selection leaking into a replacement document. */
+  // Stable entry identity; prevents a selection leaking into a replacement document.
   document: string;
   locale: string;
-  /** Stable field address, independent of the row's current position. */
+  // Stable field address, independent of the row's current position.
   address: string;
   kind?: 'text' | 'node';
   anchor?: number;
   head?: number;
 };
 export type FieldHistory = {
-  /** Typing coalesces for one second; a shared composition id coalesces until its boundary. */
+  // Typing coalesces for one second; a shared composition id coalesces until its boundary.
   kind?: 'change' | 'composition' | 'format' | 'paste' | 'typing';
   group?: string;
   before?: LogicalSelection;
@@ -99,7 +99,7 @@ export function createEntryHistory({
   sourceLocale: string;
   form: Form | undefined;
   snapshots: Record<string, EntryData>;
-  /** A persisted action owns the entry; replay must wait for it. */
+  // A persisted action owns the entry; replay must wait for it.
   blocked: () => boolean;
   apply: (transaction: HistoryTransaction, direction: 'redo' | 'undo') => FieldCommandResult;
 }) {

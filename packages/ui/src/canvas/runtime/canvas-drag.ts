@@ -136,7 +136,7 @@ interface CanvasDragOptions {
   redraw: () => void;
 }
 
-/** Reorders sibling blocks with dnd-kit; the selection overlay only draws what this reports. */
+// Reorders sibling blocks with dnd-kit; the selection overlay only draws what this reports.
 export function createCanvasDragController(options: CanvasDragOptions) {
   const { owner } = options;
   let dragging:
@@ -294,7 +294,7 @@ export function createCanvasDragController(options: CanvasDragOptions) {
     sync,
     clear,
     cancel: () => dragManager.actions.stop({ canceled: true }),
-    /** Advances the drag once per overlay frame. `finished` means the page may be re-read. */
+    // Advances the drag once per overlay frame; `finished` means the page may be re-read.
     step(): { placeholder?: Element } | 'restoring' | 'finished' | undefined {
       if (!dragging) return undefined;
       if (dragging.ending && dragManager.dragOperation.status.idle) {

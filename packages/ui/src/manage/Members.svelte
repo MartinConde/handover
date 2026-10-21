@@ -10,7 +10,7 @@ import Modal from '../shared/Modal.svelte';
 import Skeleton from '../shared/Skeleton.svelte';
 
 export type Member = CoreMember & {
-  /** The entries they are holding a lock on right now, by the name the list shows. */
+  // The entries they are holding a lock on right now, by the name the list shows.
   editing: string[];
 };
 
@@ -51,10 +51,10 @@ let email = $state('');
 let role = $state<'owner' | 'editor'>('editor');
 let open = $state('');
 let busy = $state(false);
-/** Above the table and about the row under it, so the two are read together. */
+// Above the table and about the row under it, so the two are read together.
 let notice = $state<MembersMessage>();
 let failure = $state<MembersMessage>();
-/** The dialog's own refusal, which belongs beside the button that was pressed. */
+// The dialog's own refusal, which belongs beside the button that was pressed.
 let error = $state<MembersMessage>();
 let trigger = $state<HTMLElement>();
 
@@ -75,7 +75,7 @@ const methodName = (method: NonNullable<Member['method']>) => {
   return m.members_method_link({}, options);
 };
 
-/** Coarse on purpose: the question this column answers is "recently, or ages ago?". */
+// Coarse on purpose: the question this column answers is "recently, or ages ago?".
 function when(member: Member): string {
   if (member.pending) return m.members_never({}, options);
   // Signing out deletes the session row, so there is nothing left to read a date off.
@@ -107,7 +107,7 @@ function close() {
   error = undefined;
 }
 
-/** Keep the wire code and safe detail so a visible refusal follows the current UI locale. */
+// Keep the wire code and safe detail so a visible refusal follows the current UI locale.
 async function send(
   path: string,
   init: RequestInit,

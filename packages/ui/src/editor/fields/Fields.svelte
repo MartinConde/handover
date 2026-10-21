@@ -75,61 +75,60 @@ let {
   fields: readonly Field[];
   root: Data;
   path?: readonly string[];
-  /** Fields per block type, keyed as `formOf` returns them. */
+  // Keyed as `formOf` returns them.
   blocks?: Record<string, Field[]>;
-  /** What a block type is called, where its schema names it. */
   blockLabels?: Form['blockLabels'];
-  /** What the collection schema will not accept, by the same dotted path the ids use. */
+  // What the collection schema will not accept, by the same dotted path the ids use.
   problems?: Record<string, string>;
-  /** Names a field whose own path is empty — one scalar row of an array. */
+  // Names a field whose own path is empty: one scalar row of an array.
   rowLabel?: string;
-  /** This is a language the entry is translated into: it owns its words and nothing else. */
+  // This is a language the entry is translated into: it owns its words and nothing else.
   translating?: boolean;
-  /** The paths a machine's words are still standing at — the file's `_machine`. */
+  // The paths a machine's words are still standing at: the file's `_machine`.
   machine?: string[];
-  /** Translate one field from the source language; absent when the site has nothing to do it. */
+  // Absent when the site has nothing to translate with.
   ontranslate?: (path: string) => void;
-  /** What the source language changed since translation, by the address `machine` uses. */
+  // What the source language changed since translation, by the address `machine` uses.
   sourceChanged?: Record<string, WordPart[]>;
-  /** Markers the reader has waved away; the pane owns the list so its to-do agrees with it. */
+  // Markers the reader has dismissed; the pane owns the list so its to-do agrees with it.
   dismissed?: string[];
-  /** What that language is called, for the two lines the marker opens. */
+  // What the source language is called, for the two lines the marker opens.
   sourceLabel?: string;
-  /** When somebody translated this file — the older line's timestamp. */
+  // The older line's timestamp: when somebody translated this file.
   translatedAt?: string;
-  /** Translate this one field again, from the source as it reads now. */
+  // Re-translates from the source as it reads now.
   onretranslate?: (path: string) => void;
-  /** The translation mode the fields inherit — a group hands its own down. */
+  // The translation mode the fields inherit; a group hands its own down.
   inherited?: Translation;
-  /** What the field ids start with; two forms on one screen cannot share it. */
+  // Starts the field ids; two forms on one screen cannot share it.
   prefix?: string;
-  /** Where a stored media key is served from; without it a thumbnail has no source. */
+  // Where a stored media key is served from; without it a thumbnail has no source.
   mediaBase?: string;
-  /** The language this column writes: what a link typed into rich text has to point at. */
+  // The language this column writes: what a link typed into rich text has to point at.
   locale?: string;
   uiLocale?: UiLocale;
-  /** Resolved by the build's own `resolveSeo`, so the greyed value and the emitted tag agree. */
+  // Resolved by the build's own `resolveSeo`, so the greyed value and the emitted tag agree.
   inheritedSeo?: ResolvedSeo;
-  /** The site's origin, for the SEO previews; none, and the panel draws none. */
+  // The site's origin, for the SEO previews; none, and the panel draws none.
   site?: string;
-  /** The path this language serves the entry at, which the previews print under the origin. */
+  // The path this language serves the entry at; the previews print it under the origin.
   servedAt?: string;
-  /** Production writes cross this entry-lifetime boundary; omission is for isolated fixtures. */
+  // Production writes cross this entry-lifetime boundary; omission is for isolated fixtures.
   session?: EntrySession;
-  /** Receives acknowledgements and explicit refusals for inspector/Canvas consumers. */
+  // Receives acknowledgements and explicit refusals for inspector/Canvas consumers.
   oncommand?: (result: FieldCommandResult | ListCommandResult) => void;
-  /** A changing request opens this level's single image field without an extra inspector click. */
+  // A changing request opens this level's single image field without an extra inspector click.
   openMediaPicker?: number;
   onreveal?: (path: readonly string[]) => void;
-  /** A drag-only rendering copy shared with recursive field levels. */
+  // A drag-only rendering copy shared with recursive field levels.
   viewRoot?: Data;
-  /** A persisted action may allow prose edits while freezing list structure. */
+  // A persisted action may allow prose edits while freezing list structure.
   structureLocked?: boolean;
-  /** During machine translation, only plain and rich source prose remains editable. */
+  // During machine translation, only plain and rich source prose remains editable.
   textOnly?: boolean;
-  /** Another language's words drawn under each translated field, read only. */
+  // Another language's words, drawn read only under each translated field.
   reference?: Reference;
-  /** Drawn right under the entry's title field: the editor puts the address there. */
+  // Drawn right under the entry's title field: the editor puts the address there.
   afterTitle?: Snippet;
   titleKey?: string;
 } = $props();

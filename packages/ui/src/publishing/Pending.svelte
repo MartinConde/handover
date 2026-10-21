@@ -28,20 +28,20 @@ import Diff from './Diff.svelte';
 import Resolve from './Resolve.svelte';
 
 export type PendingEntry = {
-  /** `listings/mill-house` — what a publish is of, since the languages go out together. */
+  // `listings/mill-house` — what a publish is of, since the languages go out together.
   key: string;
   title: string;
   labels?: Labels;
   collection: string;
-  /** The languages of it that are waiting, in the order the site declares them. */
+  // The languages of it that are waiting, in the order the site declares them.
   locales: string[];
   files: string[];
-  /** Address changes it owes; redirects.yaml is assembled at publish and is never a row. */
+  // Address changes it owes; redirects.yaml is assembled at publish and is never a row.
   redirects?: number;
   updated_at: number;
-  /** No language of it is in the repository yet, so discarding removes the entry itself. */
+  // No language of it is in the repository yet, so discarding removes the entry itself.
   created?: boolean;
-  /** Somebody marked it "Not ready yet"; null where nobody has. */
+  // Somebody marked it "Not ready yet"; null where nobody has.
   held_by?: { id: string; name: string | null; since?: number | null } | null;
 };
 let {
@@ -58,22 +58,22 @@ let {
   onrefused,
 }: {
   entries: PendingEntry[];
-  /** The language a check found in several files opens. */
+  // The language a check found in several files opens.
   defaultLocale?: string;
-  /** Where a stored media key is served from, for a replaced picture's thumbnails. */
+  // Where a stored media key is served from, for a replaced picture's thumbnails.
   mediaBase?: string;
-  /** The shell's build status, repeated here beside the commit it is of. */
+  // The shell's build status, repeated here beside the commit it is of.
   build?: Build | null;
-  /** Entries a publish was refused over and nothing has settled yet. */
+  // Entries a publish was refused over and nothing has settled yet.
   conflicted?: string[];
   uiLocale?: UiLocale;
   onclose: () => void;
   onpublished: (count: number) => void | Promise<void>;
-  /** Undo the commit this drawer just made; the shell owns the confirmation. */
+  // Undo the commit this drawer just made; the shell owns the confirmation.
   onrevert: (commitSha: string) => void;
-  /** A draft was discarded or overwritten, so the entry must be reread wherever it is open. */
+  // A draft was discarded or overwritten, so the entry must be reread wherever it is open.
   ondiscarded: (key: string) => void;
-  /** A publish here was refused over these, which must outlive the drawer. */
+  // A publish here was refused over these, which must outlive the drawer.
   onrefused?: (keys: string[]) => void;
 } = $props();
 const options = $derived(messageOptions(uiLocale));
@@ -114,30 +114,29 @@ let busy = $state(false);
 let error = $state<UiMessage>();
 const errorText = $derived(error ? messageLine(error, uiLocale) : '');
 let published = $state(0);
-/** The commit this drawer made, which is what Revert is of. */
+// The commit this drawer made: what Revert is of.
 let committed = $state('');
-/** Entries a publish was refused over that Resolve or Discard has not settled yet. */
-// Seeded once: the drawer is remounted each time it opens.
+// Refused entries not yet settled by Resolve or Discard; seeded once, as the drawer remounts on open.
 let conflicts = $state<string[]>(
   untrack(() => conflicted.filter((key) => entries.some((e) => e.key === key))),
 );
-/** What the pre-publish checks found over the selected set, newest answer wins. */
+// What the pre-publish checks found over the selected set, newest answer wins.
 let checks = $state<CheckItem[]>([]);
-/** The pass could not be run at all — which holds nothing back: it is a lint, not a gate. */
+// The pass could not run at all, which holds nothing back: it is a lint, not a gate.
 let checksFailed = $state(false);
 // Plain, not state: it only decides which answer to keep and nothing draws it.
 let asked = 0;
-/** Entries whose stored file is not everything their schema needs; fixed where they are edited. */
+// Entries whose stored file is not everything their schema needs; fixed where they are edited.
 let unready = $state<string[]>([]);
-/** Entries whose languages disagree about their structure; nothing here can settle that. */
+// Entries whose languages disagree about their structure; nothing here can settle that.
 let drifted = $state<string[]>([]);
-/** The entry whose discard is waiting to be confirmed, and whether it is being thrown away. */
+// The entry whose discard is waiting to be confirmed, and whether it is being thrown away.
 let confirming = $state<PendingEntry>();
 let confirmTrigger = $state<HTMLElement>();
 let discarding = $state(false);
-/** The entry whose three-way view is open, which takes the place of the list while it is. */
+// The entry whose three-way view is open, which takes the place of the list while it is.
 let resolving = $state<PendingEntry>();
-/** The entry whose changes are being read, and what came back per entry. */
+// The entry whose changes are being read, and what came back per entry.
 let opened = $state('');
 let changes = $state<
   Record<string, { groups: DiffGroup[]; redirects: { from: string; to: string }[] }>
@@ -220,7 +219,7 @@ const incomplete = (keys: string[]): UiMessage => ({
 // No draft is stale here, so Discard is not the way out; the files themselves are.
 const adrift = (keys: string[]): UiMessage => ({ code: 'PUBLISH_DRIFT', count: keys.length });
 
-/** The entries a refusal's paths belong to: it answers with files, and this list is of entries. */
+// The entries a refusal's paths belong to: it answers with files, and this list is of entries.
 const entriesOf = (paths: string[]) =>
   entries.filter((e) => e.files.some((f) => paths.includes(f))).map((e) => e.key);
 
@@ -229,7 +228,7 @@ $effect(() => {
   void lint(selected.map((e) => e.key));
 });
 
-/** A check nobody could run is no reason to stop a publish, so the lint holds nothing back. */
+// A check nobody could run is no reason to stop a publish, so the lint holds nothing back.
 async function lint(keys: string[]): Promise<CheckItem[]> {
   const request = ++asked;
   if (!keys.length) {

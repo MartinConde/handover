@@ -43,17 +43,16 @@ import { createShellStatus } from './shell-status.svelte';
 
 export interface Session {
   collections: string[];
-  /** What the site calls its collections, in every interface language. */
   collectionLabels?: CollectionLabels;
-  /** Where a stored media key is served from, so a widget can draw what a content file names. */
+  // Where a stored media key is served from, so a widget can draw what a content file names.
   mediaBase?: string;
-  /** Every shape this site crops a picture to, which is what the focal picker previews. */
+  // Every shape this site crops a picture to, which is what the focal picker previews.
   presets?: { label: string; labels?: Labels; preset: Preset }[];
-  /** This build serves `/_preview`, so the editor can offer to show the page before it is live. */
+  // This build serves `/_preview`, so the editor can offer to show the page before it is live.
   preview?: boolean;
-  /** `site` from astro.config, which the SEO previews print each language's address under. */
+  // `site` from astro.config, which the SEO previews print each language's address under.
   site?: string;
-  /** The site's own screens, as ping listed them: the sidebar is drawn before any screen loads. */
+  // The site's own screens, as ping listed them: the sidebar is drawn before any screen loads.
   screens?: { key: string; label: string | Labels; roles?: readonly ('owner' | 'editor')[] }[];
   user: { id: string; name: string; email: string; uiLocale: UiLocale | null };
   role: 'owner' | 'editor';
@@ -72,7 +71,7 @@ let {
   query?: string;
   methods?: LoginMethods;
   initialUiLocale?: InterfaceLocale;
-  /** What the site's build compiled in, by key; empty in the bundle the package ships. */
+  // What the site's build compiled in, by key; empty in the bundle the package ships.
   screens?: Record<string, Component<ScreenProps>>;
 } = $props();
 // svelte-ignore state_referenced_locally -- the prop is only the initial value
@@ -168,15 +167,15 @@ const editing = $derived(
       ? { collection: entryRoute[1] ?? '', slug: entryRoute[2] ?? '', section: entryRoute[3] ?? '' }
       : undefined,
 );
-/** A tab click must not reread the entry, and `editing` is a new object on every address. */
+// A tab click must not reread the entry, and `editing` is a new object on every address.
 const editingAt = $derived(editing ? `${editing.collection}/${editing.slug}` : '');
-/** Kept here because the reload after a restore remounts the editor. */
+// Kept here because the reload after a restore remounts the editor.
 let restored = $state<{ entry: string; date: string }>();
-/** Likewise the language an entry was just made to be written in. */
+// Kept here too: the language an entry was just made to be written in.
 let sourceChanged = $state<{ entry: string; locale: string }>();
-/** And what the last Create all did, which its reload would otherwise take with it. */
+// Kept here too: what the last Create all did, which its reload would otherwise take with it.
 let createdAll = $state<{ entry: string; report: CreatedAll }>();
-/** An authoritative action reads the replacement before retiring the editor that can retry it. */
+// An authoritative action reads the replacement before retiring the editor that can retry it.
 let preparedEntry:
   | {
       entry: string;
@@ -209,13 +208,13 @@ const manage = $derived(MANAGE.filter((item) => !item.ownerOnly || session?.role
 
 const screenLabel = (screen: { key: string; label: string | Labels }) =>
   labelIn(screen.label, uiLocale) ?? screen.key;
-/** A role that is not listed is not shown the link and is not served the address either. */
+// A role that is not listed is not shown the link and is not served the address either.
 const siteScreens = $derived(
   (session?.screens ?? []).filter(
     (screen) => !screen.roles || (session && screen.roles.includes(session.role)),
   ),
 );
-/** The compiled bundle can outlive the config that named a screen, so ping's list decides. */
+// The compiled bundle can outlive the config that named a screen, so ping's list decides.
 const openScreen = $derived.by(() => {
   const key = screenRoute?.[1];
   const listed = key ? siteScreens.find((screen) => screen.key === key) : undefined;
@@ -232,9 +231,8 @@ const openScreen = $derived.by(() => {
 const collections = $derived(session?.collections ?? []);
 const status = createShellStatus();
 let indicator = $state<HTMLButtonElement>();
-/** Bumped after a revert: the drawer's account of the publish it undid has to go with it. */
+// Bumped after a revert: the drawer's account of the publish it undid has to go with it.
 let drawerKey = $state(0);
-/** The commit whose revert is waiting to be confirmed. */
 let confirmRevert = $state<string>();
 let revertError = $state<ShellMessage>();
 let drawer = $state(false);
@@ -401,7 +399,7 @@ async function signOut() {
   session = null;
 }
 
-/** Every repository commit refreshes the shell-owned views that can move because of it. */
+// Every repository commit refreshes the shell-owned views that can move because of it.
 async function commitChanged() {
   invalidateEntryDirectory();
   await Promise.all([status.loadPending(), status.loadBuild()]);
@@ -434,7 +432,7 @@ async function loadEntry(collection: string, slug: string): Promise<EditorEntry>
   } satisfies ShellMessage;
 }
 
-/** Read first: on failure the closed editor remains mounted and can offer a safe retry. */
+// Read first: on failure the closed editor remains mounted and can offer a safe retry.
 async function reloadEntry() {
   if (!editing || !editingAt) return;
   const at = editingAt;
@@ -479,9 +477,9 @@ const manageLabel = (label: (typeof MANAGE)[number]['label']) =>
 const oldest = $derived(Math.min(...status.pending.map((e) => e.updated_at)));
 const held = $derived(status.pending.filter((e) => e.held_by).length);
 
-/** The editor's title getter, tied to its entry so the next one never shows the last name. */
+// The editor's title getter, tied to its entry so the next one never shows the last name.
 let titled = $state<{ entry: string; read: () => string }>();
-/** The open entry's address and actions, drawn in the top bar while that entry is open. */
+// The open entry's address and actions, drawn in the top bar while that entry is open.
 let entryBar = $state.raw<{ entry: string; lead: Snippet; actions: Snippet }>();
 const bar = $derived(entryBar?.entry === editingAt ? entryBar : undefined);
 let topbarHeight = $state(0);

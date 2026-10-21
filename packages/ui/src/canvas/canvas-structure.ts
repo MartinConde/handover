@@ -3,10 +3,10 @@
 import type { CanvasStructureNode } from './canvas-bridge';
 import { canvasSelectionKey } from './canvas-target';
 
-/** Node ids are renumbered on every render, so a collapsed branch is remembered by its target. */
+// Node ids are renumbered on every render, so a collapsed branch is remembered by its target.
 export const canvasNodeKey = (node: CanvasStructureNode) => canvasSelectionKey(node);
 
-/** A row under a collapsed ancestor is not in the tree, however deep the branch it sits in. */
+// A row under a collapsed ancestor is not in the tree, however deep the branch it sits in.
 export function visibleCanvasNodes(
   nodes: readonly CanvasStructureNode[],
   collapsed: Record<string, boolean>,
@@ -34,7 +34,7 @@ export type CanvasStructureIndex = {
   depthOf: (node: CanvasStructureNode) => number;
 };
 
-/** One pass over the tree so parent lookup, depth and hidden-wrapper checks are O(1) per row. */
+// One pass over the tree so parent lookup, depth and hidden-wrapper checks are O(1) per row.
 export function buildStructureIndex(nodes: readonly CanvasStructureNode[]): CanvasStructureIndex {
   const byId = new Map(nodes.map((node) => [node.id, node]));
   const parentOf = (node: CanvasStructureNode) =>

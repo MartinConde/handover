@@ -34,7 +34,7 @@ interface CanvasSelectionRuntimeOptions {
   owner?: Window;
   onSelection?: (selection: CanvasSelection) => void;
   onStructure?: (nodes: CanvasStructureNode[]) => void;
-  /** The inline editor returns true only for a selected, schema-approved text field. */
+  // The inline editor returns true only for a selected, schema-approved text field.
   onActivate?: (
     selection: CanvasSelection,
     element: Element,
@@ -50,7 +50,7 @@ interface CanvasSelectionRuntimeOptions {
   uiLocale?: CanvasUiLocaleState;
 }
 
-/** Read where the click landed from the layout the reader saw: `contenteditable` re-wraps the text. */
+// Read where the click landed from the layout the reader saw: `contenteditable` re-wraps the text.
 const caretOffsetAt = (root: Document, element: Element, x: number, y: number) => {
   const position = root.caretPositionFromPoint?.(x, y);
   const fallback = position ? undefined : root.caretRangeFromPoint?.(x, y);
