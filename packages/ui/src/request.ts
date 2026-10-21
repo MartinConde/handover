@@ -19,6 +19,8 @@ const UNCERTAIN = 'x-handover-request-uncertain';
 const ERROR_CODE = 'x-handover-error-code';
 export const uncertainResponse = (response: Response): boolean =>
   response.headers.get(UNCERTAIN) === 'true';
+export const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /** Treat a disconnected request like an unavailable server in every existing refusal flow. */
 export const request: typeof globalThis.fetch = async (input, init) => {

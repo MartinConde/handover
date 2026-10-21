@@ -1,7 +1,7 @@
 import { DEFAULT_MAX } from '@handover/core';
 import { messageText, responseMessage, type UiMessage } from '../errors.js';
 import { languageTag, type UiLocale } from '../i18n.js';
-import { request, uncertainResponse } from '../request.js';
+import { isRecord, request, uncertainResponse } from '../request.js';
 /** One asset as the admin answers for it: the key a content file stores, and where it is served. */
 export interface MediaItem {
   id: string;
@@ -27,8 +27,6 @@ export interface LibraryItem extends MediaItem {
   uses?: { entry: string; title: string; href: string }[];
 }
 
-export const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
 export const isLibraryItem = (value: unknown): value is LibraryItem => {
   if (
     !isRecord(value) ||

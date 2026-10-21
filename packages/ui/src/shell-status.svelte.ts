@@ -1,4 +1,4 @@
-import { request as fetch } from './request.js';
+import { request as fetch, isRecord } from './request.js';
 import type { Build } from './shared/BuildPill.svelte';
 
 type PendingEntry = {
@@ -11,9 +11,6 @@ type PendingEntry = {
   updated_at: number;
   held_by?: { id: string; name: string | null } | null;
 };
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  value !== null && typeof value === 'object' && !Array.isArray(value);
 
 const isPendingEnvelope = (
   value: unknown,

@@ -10,7 +10,7 @@ import {
   type UiLocale,
 } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
-import { request as fetch, sitePath } from '../request.js';
+import { request as fetch, isRecord, sitePath } from '../request.js';
 import { activityGroupLabel, initials, said } from '../shared/activity-line';
 import BuildPill, { type Build } from '../shared/BuildPill.svelte';
 import { dismiss } from '../shared/dismiss';
@@ -99,8 +99,6 @@ async function load() {
   await Promise.all([loadDashboard(), loadActivity()]);
 }
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  value !== null && typeof value === 'object' && !Array.isArray(value);
 const isDashboardEnvelope = (
   value: unknown,
 ): value is { recent?: Recent[]; published?: typeof published; translations?: Health | null } =>

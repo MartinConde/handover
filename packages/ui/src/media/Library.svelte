@@ -5,7 +5,7 @@ import { tick } from 'svelte';
 import { messageDetail, messageText, type UiMessage } from '../errors.js';
 import { messageOptions, type UiLocale } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
-import { request as fetch, uncertainResponse } from '../request.js';
+import { request as fetch, isRecord, uncertainResponse } from '../request.js';
 import ConfirmDialog from '../shared/ConfirmDialog.svelte';
 import MediaImage from '../shared/MediaImage.svelte';
 import Crop from './Crop.svelte';
@@ -17,7 +17,6 @@ import {
   extension,
   fileSize,
   isLibraryItem,
-  isRecord,
   type LibraryItem,
   mediaResponse,
   name,
