@@ -113,12 +113,11 @@ const german = {
 const cases: { name: string; groups: ReturnType<typeof diffEntry> }[] = [
   {
     name: 'Every field type, in one language',
-    groups: diffEntry('demo', everything, { en: before }, { en: after }),
+    groups: diffEntry(everything, { en: before }, { en: after }),
   },
   {
     name: 'Two languages — what they share is lifted out, and German did not move',
     groups: diffEntry(
-      'demo',
       everything,
       { en: before, de: german },
       { en: after, de: { ...german, price: 435000, bedrooms: 3 } },
@@ -127,7 +126,6 @@ const cases: { name: string; groups: ReturnType<typeof diffEntry> }[] = [
   {
     name: 'A shared value that moved in the German file alone',
     groups: diffEntry(
-      'demo',
       everything,
       { en: before, de: german },
       { en: before, de: { ...german, price: 435000 } },
@@ -136,7 +134,6 @@ const cases: { name: string; groups: ReturnType<typeof diffEntry> }[] = [
   {
     name: 'A translation that moved on its own',
     groups: diffEntry(
-      'demo',
       everything,
       { en: before, de: german },
       { en: before, de: { ...german, image: { ...german.image, alt: 'Das Haus vom Kai aus' } } },

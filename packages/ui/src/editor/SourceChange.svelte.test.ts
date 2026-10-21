@@ -17,12 +17,10 @@ const olderGerman = { ...german, summary: 'Ein Haus am Bach.' };
 
 const marked = async (from: Record<string, unknown>, data: Record<string, unknown>) =>
   parseEntry(
-    'default',
     await markTranslation(
-      'default',
       form,
-      { locale: 'de', contents: stringifyEntry('default', from), blob_sha: 'b1' },
-      stringifyEntry('default', data),
+      { locale: 'de', contents: stringifyEntry(from), blob_sha: 'b1' },
+      stringifyEntry(data),
       undefined,
     ),
   ) as Record<string, unknown>;

@@ -88,7 +88,7 @@ function logicalFromDom(view: EditorView): LogicalSelection | undefined {
 }
 
 // svelte-ignore state_referenced_locally -- initialized once to avoid dropping content
-const foreign = richtextErrors('default', value, tier).length > 0;
+const foreign = richtextErrors(value, tier).length > 0;
 
 type ToolbarButton = {
   kind:

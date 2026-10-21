@@ -189,7 +189,7 @@ const checkProblems = $derived(
     entryPublish.checks
       .filter((c) => c.severity === 'error' && localeOf(c.path) === entry.sourceLocale)
       .flatMap((c) => {
-        const at = fieldPosition('default', c.fieldPath, data);
+        const at = fieldPosition(c.fieldPath, data);
         return at ? [[at.join('.'), checkText(c, uiLocale)]] : [];
       }),
   ),
@@ -287,12 +287,12 @@ const untranslated = (of: string) => of !== entry.sourceLocale && !entrySession.
 const off = (of: string) => !entry.offered.includes(of);
 // Recounted from both columns on every keystroke; nothing is saved or reloaded to learn it.
 const wholeForm = $derived({ fields: [...entry.fields], blocks: entry.blocks });
-const sourceText = $derived(answeredPaths('default', wholeForm, data));
+const sourceText = $derived(answeredPaths(wholeForm, data));
 const translated = $derived(
   Object.fromEntries(
     others
       .filter((of) => entrySession.hasSnapshot(of))
-      .map((of) => [of, answeredPaths('default', wholeForm, entrySession.snapshot(of))]),
+      .map((of) => [of, answeredPaths(wholeForm, entrySession.snapshot(of))]),
   ),
 );
 const answered = $derived(
@@ -326,7 +326,7 @@ const references = $derived(
 const reference = $derived.by(() => {
   const of = referenceChoice;
   if (!references.includes(of)) return undefined;
-  const text = referenceText('default', wholeForm, entrySession.snapshot(of), of);
+  const text = referenceText(wholeForm, entrySession.snapshot(of), of);
   return { locale: of, label: language(of), ...text };
 });
 
@@ -702,7 +702,7 @@ let actionTrigger = $state<HTMLElement>();
 let newName = $state('');
 let actionFailed = $state<UiMessage>();
 let holdFailed = $state<UiMessage>();
-const willBe = $derived(entryName('default', newName, []));
+const willBe = $derived(entryName(newName, []));
 
 function openRename() {
   rememberActionTrigger();
@@ -895,7 +895,7 @@ async function selectForm(selection: CanvasSelection) {
     mode !== 'split' || target.document.collection !== collection ||
     target.document.id !== slug || target.locale !== locale || !entrySession.hasSnapshot(locale)
   ) return;
-  const at = fieldPosition('default', target.address, entrySession.snapshot(locale), wholeForm);
+  const at = fieldPosition(target.address, entrySession.snapshot(locale), wholeForm);
   if (!at) return;
   const request = ++formSelection;
   const of = locale;
@@ -913,7 +913,7 @@ async function selectForm(selection: CanvasSelection) {
 async function jumpTo(path: string): Promise<boolean> {
   const of = shown;
   if (!of || !entrySession.hasSnapshot(of)) return false;
-  const at = fieldPosition('default', path, entrySession.snapshot(of));
+  const at = fieldPosition(path, entrySession.snapshot(of));
   if (!at) return false;
   const wanted = seoField && at[0] === seoAt ? 'seo' : '';
   if (section !== wanted) {
@@ -976,7 +976,7 @@ function fromAddress() {
     });
   }
   if (!field) return;
-  const at = fieldPosition('default', field, inColumn ? entrySession.snapshot(of) : data);
+  const at = fieldPosition(field, inColumn ? entrySession.snapshot(of) : data);
   if (!at) return;
   void tick().then(() => land(inColumn ? 't' : 'f', at.join('.')));
 }
@@ -1033,10 +1033,10 @@ const routing = $derived({
   prefixDefaultLocale: entry.prefixDefaultLocale,
 });
 const url = $derived(
-  entryPageUrl('default', routing, entry, slug, address || slug, locale) ?? '',
+  entryPageUrl(routing, entry, slug, address || slug, locale) ?? '',
 );
 // The part in front of the address, so what is being typed reads as the URL it will be.
-const before = $derived(entryUrl('default', routing, entry.route, '', locale) ?? '');
+const before = $derived(entryUrl(routing, entry.route, '', locale) ?? '');
 
 // Deletes the file, so it asks where that language's readers go; a refusal stays in the dialog.
 let offing = $state<string>();
@@ -1047,8 +1047,8 @@ async function turnOff(of: string, target: Target) {
 
 // What the Turn-off dialog names; no index when the collection has no page above it.
 const localeUrl = (of: string) =>
-  entryPageUrl('default', routing, entry, slug, entry.addresses?.[of] || slug, of) ?? undefined;
-const localeIndex = (of: string) => entryUrl('default', routing, entry.index, '', of) ?? undefined;
+  entryPageUrl(routing, entry, slug, entry.addresses?.[of] || slug, of) ?? undefined;
+const localeIndex = (of: string) => entryUrl(routing, entry.index, '', of) ?? undefined;
 
 const canvasRequest = (): CanvasRenderRequest => ({
   url: previewPath(localeUrl(locale) ?? '/'),
@@ -1964,7 +1964,7 @@ async function saveAddress() {
       action="hide"
       what={title}
       {collection}
-      index={entryUrl('default', routing, entry.index, '', locale) ?? undefined}
+      index={entryUrl(routing, entry.index, '', locale) ?? undefined}
       {busy}
       {uiLocale}
       error={statusFailed}
@@ -2015,7 +2015,7 @@ async function saveAddress() {
       action="delete"
       what={title}
       {collection}
-      index={entryUrl('default', routing, entry.index, '', locale) ?? undefined}
+      index={entryUrl(routing, entry.index, '', locale) ?? undefined}
       {busy}
       {uiLocale}
       error={actionFailed}

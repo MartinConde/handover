@@ -155,7 +155,7 @@ const addLabel = (row: PickEntry) => {
     : m.page_picker_add({ title: rowTitle(row) }, options);
 };
 
-const refused = $derived(typed ? unsafeLinkScheme('default', typed) : undefined);
+const refused = $derived(typed ? unsafeLinkScheme(typed) : undefined);
 
 // Arrow keys walk the rows and wrap; every row is a button, so Tab reaches them regardless.
 function step(e: KeyboardEvent) {

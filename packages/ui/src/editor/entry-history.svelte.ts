@@ -124,9 +124,7 @@ export function createEntryHistory({
       !form
     )
       return undefined;
-    return resolveFieldTarget('default', form, selection.address, current).ok
-      ? clone(selection)
-      : undefined;
+    return resolveFieldTarget(form, selection.address, current).ok ? clone(selection) : undefined;
   };
   const clearActiveHistoryGroup = () => {
     activeHistoryGroup = undefined;

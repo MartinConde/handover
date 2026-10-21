@@ -113,7 +113,7 @@ const directoryText = $derived(
     : m.new_entry_directory_failed({ collection: collectionName(collection, uiLocale) }, options),
 );
 // The same derivation the server runs, so the dialog can promise the file name.
-const preview = $derived(entryName('default', text, taken));
+const preview = $derived(entryName(text, taken));
 // `flat-by-the-sea` → `Flat by the sea`, which is all a file name has to say to be picked.
 const starterLabel = (name: string) => {
   const words = name.replace(/-/g, ' ');
@@ -148,7 +148,7 @@ async function create(event: Event) {
     return;
   }
   const body = (await res.json().catch(() => undefined)) as { slug?: unknown } | undefined;
-  if (typeof body?.slug !== 'string' || !body.slug || addressError('default', body.slug)) {
+  if (typeof body?.slug !== 'string' || !body.slug || addressError(body.slug)) {
     error = { code: 'ENTRY_CREATE_UNCONFIRMED' };
     busy = false;
     return;

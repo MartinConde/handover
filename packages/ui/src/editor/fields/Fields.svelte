@@ -186,7 +186,7 @@ const close = (path: string, then: (path: string) => void) => {
 };
 
 // `_machine` and the translation route name a field by file address, not form position.
-const address = (at: readonly string[]) => fieldAddress('default', at, root) ?? '';
+const address = (at: readonly string[]) => fieldAddress(at, root) ?? '';
 const childAddress = (at: readonly string[], child: string) => {
   const parent = address(at);
   return parent ? `${parent}.${child}` : '';

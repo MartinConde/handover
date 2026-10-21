@@ -154,7 +154,7 @@ $effect(() => {
 });
 
 const isUnsaved = $derived(session.unsaved(locale));
-const machine = $derived(keptMachine('default', base, data));
+const machine = $derived(keptMachine(base, data));
 const filling = $derived(session.machineTranslationPending(locale));
 const mutationBlocked = $derived(locked || actionBlocked || session.localeMutationBlocked(locale));
 

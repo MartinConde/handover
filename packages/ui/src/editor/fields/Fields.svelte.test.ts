@@ -134,7 +134,7 @@ const pickRow = (path: string) => {
   row.click();
   flushSync();
 };
-const roundTrip = () => parseEntry('default', stringifyEntry('default', $state.snapshot(root)));
+const roundTrip = () => parseEntry(stringifyEntry($state.snapshot(root)));
 
 const fire = (sel: string, event: string, set: (el: HTMLInputElement) => void) => {
   const el = q<HTMLInputElement>(sel);
@@ -254,7 +254,7 @@ test('number: writes a number, never a string; clearing removes the key', () => 
     el.value = '82.5';
   });
   expect(root).toEqual({ _version: 1, price: 82.5 });
-  expect(stringifyEntry('default', $state.snapshot(root))).toBe('_version: 1\nprice: 82.5\n');
+  expect(stringifyEntry($state.snapshot(root))).toBe('_version: 1\nprice: 82.5\n');
   type('input#f-price', '');
   expect(root).toEqual({ _version: 1 });
 });
@@ -352,7 +352,7 @@ test('date: writes the ISO string from the date golden, never a Date', () => {
   });
   expect(q<HTMLInputElement>('input#f-availableFrom').type).toBe('date');
   type('input#f-availableFrom', '2026-09-01');
-  expect(stringifyEntry('default', $state.snapshot(root))).toBe(golden('date'));
+  expect(stringifyEntry($state.snapshot(root))).toBe(golden('date'));
   type('input#f-availableFrom', '');
   expect(root).toEqual({ _version: 1 });
 });
@@ -377,7 +377,7 @@ test('select: five options or fewer are radios and store the value', () => {
   fire('input[type="radio"][value="sale"]', 'change', (el) => {
     el.checked = true;
   });
-  expect(stringifyEntry('default', $state.snapshot(root))).toBe(golden('select'));
+  expect(stringifyEntry($state.snapshot(root))).toBe(golden('select'));
 });
 
 test('select: option names are read in the interface language, else capitalised', () => {
@@ -467,7 +467,7 @@ test('link: URL and entry modes write the two shapes from the link golden', asyn
   q<HTMLButtonElement>('#f-more\\.ref button').click();
   await settle();
   pickRow('listings/mill-house');
-  expect(stringifyEntry('default', $state.snapshot(root))).toBe(golden('link'));
+  expect(stringifyEntry($state.snapshot(root))).toBe(golden('link'));
 });
 
 test('link: the chosen entry is named, not left as the path it stores', async () => {
@@ -537,7 +537,7 @@ test('reference: the picker writes the collection/slug the reference golden hold
   q<HTMLButtonElement>('#f-agent button').click();
   await settle();
   pickRow('agents/jane-doe');
-  expect(stringifyEntry('default', $state.snapshot(root))).toBe(golden('reference'));
+  expect(stringifyEntry($state.snapshot(root))).toBe(golden('reference'));
   expect(q('.ref-item .title').textContent).toBe('Jane Doe');
 });
 
@@ -605,10 +605,10 @@ test('group: fields nest under the group key and the object is created on first 
   type('input#f-address\\.street', '12 Harbour Lane');
   type('input#f-address\\.town', 'Salcombe');
   type('input#f-address\\.postcode', 'TQ8 8AA');
-  expect(stringifyEntry('default', $state.snapshot(root))).toBe(golden('group'));
+  expect(stringifyEntry($state.snapshot(root))).toBe(golden('group'));
 });
 
-const body = (parseEntry('default', golden('richtext')) as { body: string }).body;
+const body = (parseEntry(golden('richtext')) as { body: string }).body;
 
 test('richtext: the full-tier golden loads into TipTap and comes back byte-identical', () => {
   show([{ path: ['body'], label: 'Body', type: 'richtext', required: false, tier: 'full' }], {
@@ -618,7 +618,7 @@ test('richtext: the full-tier golden loads into TipTap and comes back byte-ident
   expect(document.querySelectorAll('[role="toolbar"] button')).toHaveLength(8);
   expect(q('#f-body[contenteditable="true"]').getAttribute('aria-labelledby')).toBe('f-body-l');
   expect(q('#f-body h2').textContent).toBe('The house');
-  expect(stringifyEntry('default', $state.snapshot(root))).toBe(golden('richtext'));
+  expect(stringifyEntry($state.snapshot(root))).toBe(golden('richtext'));
 });
 
 test('richtext: a toolbar command writes Markdown back and the button reads as pressed', () => {
@@ -978,7 +978,7 @@ const tags: Field = {
   required: false,
   item: [{ path: [], label: '', type: 'text', required: true }],
 };
-const arrayData = () => parseEntry('default', golden('array')) as Record<string, unknown>;
+const arrayData = () => parseEntry(golden('array')) as Record<string, unknown>;
 const snap = () => $state.snapshot(root) as Record<string, never>;
 const nudge = (key: string, times: number, shiftKey = false) => {
   for (let i = 0; i < times; i++) {
@@ -1103,11 +1103,11 @@ test('array: reordering by keyboard and by mouse emit the same YAML and both _id
     document.querySelectorAll('#f-rooms button[aria-label^="Reorder Rooms row"]'),
   ).toHaveLength(2);
   await keyMove('Rooms row 1', 1);
-  expect(stringifyEntry('default', snap())).toBe(MOVED);
+  expect(stringifyEntry(snap())).toBe(MOVED);
   await keyMove('Rooms row 2', -1);
-  expect(stringifyEntry('default', snap())).toBe(golden('array'));
+  expect(stringifyEntry(snap())).toBe(golden('array'));
   await mouseMove('Rooms row 1', 100);
-  expect(stringifyEntry('default', snap())).toBe(MOVED);
+  expect(stringifyEntry(snap())).toBe(MOVED);
 });
 
 test('array: drag projection moves the cards without changing or saving the entry', async () => {
@@ -1118,12 +1118,12 @@ test('array: drag projection moves the cards without changing or saving the entr
   });
   await key(q('[aria-label="Reorder Rooms row 1"]'), 'Space');
   await key(document, 'ArrowDown');
-  expect(stringifyEntry('default', snap())).toBe(golden('array'));
+  expect(stringifyEntry(snap())).toBe(golden('array'));
   expect(q<HTMLInputElement>('input#f-rooms\\.0\\.name').value).toBe('Master bedroom');
   expect(commands).toEqual([]);
   expect(document.querySelector('#f-rooms [data-dnd-placeholder]')).not.toBeNull();
   await key(document, 'Space');
-  expect(stringifyEntry('default', snap())).toBe(MOVED);
+  expect(stringifyEntry(snap())).toBe(MOVED);
   expect(commands).toEqual([{ ok: true, contentVersion: 1 }]);
 });
 
@@ -1144,7 +1144,7 @@ test('array: Escape puts a picked-up row back where it was', async () => {
   await key(q('[aria-label="Reorder Rooms row 1"]'), 'Space');
   await key(document, 'ArrowDown');
   await key(document, 'Escape');
-  expect(stringifyEntry('default', snap())).toBe(golden('array'));
+  expect(stringifyEntry(snap())).toBe(golden('array'));
   expect(q<HTMLInputElement>('input#f-rooms\\.0\\.name').value).toBe('Kitchen');
   expect(commands).toEqual([]);
 });
@@ -1216,7 +1216,7 @@ const pageFields: Field[] = [
   { path: ['title'], label: 'Title', type: 'text', required: true },
   { path: ['blocks'], label: 'Blocks', type: 'blocks', required: true, types: TYPES },
 ];
-const blocksData = () => parseEntry('default', golden('blocks')) as Record<string, unknown>;
+const blocksData = () => parseEntry(golden('blocks')) as Record<string, unknown>;
 
 test('blocks: the golden renders through the registry, nesting and all, unchanged', () => {
   show(pageFields, blocksData(), registry);
@@ -1226,7 +1226,7 @@ test('blocks: the golden renders through the registry, nesting and all, unchange
   expect(
     q<HTMLTextAreaElement>('textarea#f-blocks\\.1\\.columns\\.0\\.blocks\\.0\\.body').value,
   ).toBe('First paragraph.\n\nSecond paragraph.');
-  expect(stringifyEntry('default', snap())).toBe(golden('blocks'));
+  expect(stringifyEntry(snap())).toBe(golden('blocks'));
 });
 
 test('blocks: a _ref block is read-only instead of an empty form', () => {
@@ -1243,7 +1243,7 @@ test('blocks: moving a block keeps every nested _id and moving back restores the
   const order = (snap() as unknown as { blocks: { _type: string; _id: string }[] }).blocks;
   expect(order.map((b) => `${b._type} ${b._id}`)).toEqual(['columns a1b2c3d4', 'hero k3nf9a2p']);
   await mouseMove('hero', -100);
-  expect(stringifyEntry('default', snap())).toBe(golden('blocks'));
+  expect(stringifyEntry(snap())).toBe(golden('blocks'));
 });
 
 test('blocks: duplicate copies only that subtree with fresh descendant ids', () => {
@@ -1356,7 +1356,7 @@ test('blocks: a collapsed block keeps its header, shows its first words and stay
   expect(q('#f-blocks\\.0 > header .fold').getAttribute('aria-expanded')).toBe('true');
   click('#f-blocks\\.1 > header .fold');
   expect(q<HTMLInputElement>('input#f-blocks\\.1\\.heading').value).toBe('Move to the coast');
-  expect(stringifyEntry('default', snap())).not.toBe(golden('blocks'));
+  expect(stringifyEntry(snap())).not.toBe(golden('blocks'));
 });
 
 test('blocks: the picker lists the registry types and adds one with a fresh _id', () => {
@@ -1384,7 +1384,7 @@ test.each(['cancel', 'Escape'])(
   'blocks: dismissing the picker with %s keeps content and returns focus',
   (action) => {
     show(pageFields, { _version: 1, title: 'Home' }, registry);
-    const before = stringifyEntry('default', snap());
+    const before = stringifyEntry(snap());
     const trigger = q<HTMLButtonElement>('#f-blocks .add');
     trigger.focus();
     click('#f-blocks .add');
@@ -1400,7 +1400,7 @@ test.each(['cancel', 'Escape'])(
       flushSync();
     }
     expect(document.querySelector('[role="dialog"]')).toBeNull();
-    expect(stringifyEntry('default', snap())).toBe(before);
+    expect(stringifyEntry(snap())).toBe(before);
     expect(document.activeElement).toBe(trigger);
   },
 );
@@ -1418,14 +1418,14 @@ test('an image inside a block draws what is stored and writes the file back unch
     '/media/9f3a2c7e.webp',
   );
   expect(q<HTMLInputElement>('input#f-blocks\\.0\\.image\\.alt').value).toBe('Front of the house');
-  expect(stringifyEntry('default', snap())).toBe(golden('blocks'));
+  expect(stringifyEntry(snap())).toBe(golden('blocks'));
 });
 
 const embedFields: Field[] = [
   { path: ['video'], label: 'Video', type: 'embed', required: false },
   { path: ['map'], label: 'Map', type: 'embed', required: false },
 ];
-const embedData = () => parseEntry('default', golden('embed')) as Record<string, unknown>;
+const embedData = () => parseEntry(golden('embed')) as Record<string, unknown>;
 
 test('embed: a pasted link and a typed title round-trip through the embed golden', () => {
   show(embedFields, { _version: 1 });
@@ -1439,7 +1439,7 @@ test('embed: a pasted link and a typed title round-trip through the embed golden
   type('input#f-video\\.title', 'Walkthrough video');
   type('input#f-map', 'https://www.google.com/maps/place/Seaview+Cottage,+Devon/@50.5,-4.8,17z');
   expect(q('#f-map .badge').textContent).toBe('Google Maps');
-  expect(stringifyEntry('default', snap())).toBe(golden('embed'));
+  expect(stringifyEntry(snap())).toBe(golden('embed'));
 });
 
 // The URL is never what is stored, so an unreadable link must not empty a filled field.
@@ -1526,7 +1526,7 @@ test('embed: a translation is offered the title and nothing else', () => {
 });
 
 const seoField: Field = { path: ['seo'], label: 'SEO', type: 'seo', required: false };
-const seoData = () => parseEntry('default', golden('seo')) as Record<string, unknown>;
+const seoData = () => parseEntry(golden('seo')) as Record<string, unknown>;
 // What the site says for a page that types nothing: the same resolution the build runs.
 const INHERITED: ResolvedSeo = {
   title: 'Seaview Cottage · Coastal Homes',
@@ -1547,7 +1547,7 @@ test('seo: the panel draws what is stored and writes the file back unchanged', (
   expect(q<HTMLInputElement>('input#f-seo\\.canonical').value).toBe(
     'https://example.com/listings/seaview-cottage',
   );
-  expect(stringifyEntry('default', snap())).toBe(golden('seo'));
+  expect(stringifyEntry(snap())).toBe(golden('seo'));
 });
 
 // The previews: the page as a search result and as a shared card, at this language's address.
@@ -1637,7 +1637,7 @@ test('seo: a panel filled out of order writes the format’s order', () => {
   });
   type('textarea#f-seo\\.description', 'Coastal homes in Devon.');
   type('input#f-seo\\.title', 'Move to the coast');
-  expect(stringifyEntry('default', snap())).toBe(
+  expect(stringifyEntry(snap())).toBe(
     '_version: 1\nseo:\n  title: "Move to the coast"\n' +
       '  description: "Coastal homes in Devon."\n  noindex: false\n' +
       '  canonical: "https://example.com/listings/seaview-cottage"\n',
@@ -1850,7 +1850,7 @@ const brochureField: Field = {
   required: false,
   accept: ['application/pdf'],
 };
-const imageData = () => parseEntry('default', golden('image')) as Record<string, unknown>;
+const imageData = () => parseEntry(golden('image')) as Record<string, unknown>;
 
 test('an empty translated image has a placeholder without requesting the media root', () => {
   show([heroField], {}, {}, {}, undefined, { translating: true, mediaBase: '/media' });
@@ -1863,7 +1863,7 @@ const library = (media: unknown[]) =>
     'fetch',
     vi.fn(async () => Response.json({ media })),
   );
-const fileData = () => parseEntry('default', golden('file')) as Record<string, unknown>;
+const fileData = () => parseEntry(golden('file')) as Record<string, unknown>;
 
 test('an empty image field offers the library, and its two numbers are two lines', () => {
   show([heroField], { _version: 1 });
@@ -1928,7 +1928,7 @@ test('a picked image is written as the format stores it, and Remove empties the 
   await settle();
   click('.tile');
   click('.picker-foot .btn-primary');
-  expect(stringifyEntry('default', snap())).toBe(
+  expect(stringifyEntry(snap())).toBe(
     `_version: 1
 hero:
   src: "media/9f3a2c7e.webp"
@@ -1938,7 +1938,7 @@ hero:
   );
   // The widget wrote the whole shape with `alt` as a hole, so it lands where the format puts it.
   type('input#f-hero\\.alt', 'Front of the house');
-  expect(stringifyEntry('default', snap())).toBe(
+  expect(stringifyEntry(snap())).toBe(
     `_version: 1
 hero:
   src: "media/9f3a2c7e.webp"
@@ -1968,7 +1968,7 @@ test('a picked image copies the library default alt into content', async () => {
   click('.tile');
   click('.picker-foot .btn-primary');
 
-  expect(stringifyEntry('default', snap())).toBe(
+  expect(stringifyEntry(snap())).toBe(
     `_version: 1
 hero:
   src: "media/9f3a2c7e.webp"
@@ -2021,7 +2021,7 @@ test('a gallery field inserts every picked image as a row of its own', async () 
   click(`.tile input[value="${'b'.repeat(64)}"]`);
   click(`.tile input[value="${'a'.repeat(64)}"]`);
   click('.picker-foot .btn-primary');
-  expect(stringifyEntry('default', snap())).toBe(
+  expect(stringifyEntry(snap())).toBe(
     `_version: 1
 gallery:
   - src: "media/b.webp"
@@ -2128,13 +2128,13 @@ test('a translator gets the words and not the picture', () => {
 
 test('the image preview opens focal editing without changing the stored picture', async () => {
   show([heroField], imageData());
-  const before = stringifyEntry('default', snap());
+  const before = stringifyEntry(snap());
   const preview = document.querySelector<HTMLButtonElement>('.media-card button.thumb');
   expect(preview?.getAttribute('aria-label')).toBe('Set focal point');
   preview?.click();
   await settle();
   expect(q('.focal-handle').getAttribute('aria-label')).toBe('Focal point, 50% across, 35% down');
-  expect(stringifyEntry('default', snap())).toBe(before);
+  expect(stringifyEntry(snap())).toBe(before);
 });
 
 // The page's dot wins over the library's; the middle is not a choice, so it takes the key out.
@@ -2146,7 +2146,7 @@ test('the dot a page moves is written after the numbers, and centring it takes t
   nudge('ArrowDown', 2, true);
   nudge('ArrowDown', 5);
   click('.focal-dialog .btn-primary');
-  expect(stringifyEntry('default', snap())).toBe(
+  expect(stringifyEntry(snap())).toBe(
     `_version: 1
 hero:
   src: "media/9f3a2c7e.webp"
@@ -2162,7 +2162,7 @@ hero:
   await settle();
   nudge('ArrowUp', 1, true);
   click('.focal-dialog .btn-primary');
-  expect(stringifyEntry('default', snap())).toBe(
+  expect(stringifyEntry(snap())).toBe(
     `_version: 1
 hero:
   src: "media/9f3a2c7e.webp"
@@ -2209,7 +2209,7 @@ test('a picked picture brings the library’s dot with it, unless it is the midd
   click('.tile');
   click('.picker-foot .btn-primary');
   // The key is a hole like `alt`, so what it is written as is what the file says: nothing.
-  expect(stringifyEntry('default', snap())).toBe(
+  expect(stringifyEntry(snap())).toBe(
     `_version: 1
 hero:
   src: "media/b.webp"

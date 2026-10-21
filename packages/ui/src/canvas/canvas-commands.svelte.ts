@@ -285,7 +285,7 @@ export function createCanvasCommands(deps: CanvasCommandDeps) {
     if (current !== undefined && typeof current !== 'string') return;
     const text = current ?? '';
     if (resolved.target.field.type === 'richtext') {
-      if (richtextErrors('default', text, resolved.target.field.tier).length) return;
+      if (richtextErrors(text, resolved.target.field.tier).length) return;
       return {
         kind: 'richtext' as const,
         target: value.target,

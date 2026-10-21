@@ -551,7 +551,7 @@ export function createCanvasRichTextRuntime(options: CanvasRichTextOptions) {
       (!compatible(element) && active?.element !== element) ||
       !configured ||
       !sameCanvasTarget(selection.target, configured.target) ||
-      richtextErrors('default', configured.value, configured.tier).length
+      richtextErrors(configured.value, configured.tier).length
     )
       return false;
     if (active?.element === element) return true;

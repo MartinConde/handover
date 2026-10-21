@@ -195,7 +195,6 @@ const named = (ids: string[]) =>
 // The same derivation the server runs, so the dialog can promise the file name in advance.
 const preview = $derived(
   entryName(
-    'default',
     text,
     dialog === 'template'
       ? templates

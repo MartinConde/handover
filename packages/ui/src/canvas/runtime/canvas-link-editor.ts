@@ -204,7 +204,7 @@ export function createCanvasLinkEditor(options: CanvasLinkEditorOptions = {}) {
       validate = () => {
         if (!draft || !destinationInput) return;
         draft.href = destinationInput.value;
-        const refused = unsafeLinkScheme('default', draft.href);
+        const refused = unsafeLinkScheme(draft.href);
         destinationInput.setAttribute('aria-invalid', String(Boolean(refused)));
         error.hidden = !refused;
         error.textContent = refused
@@ -418,7 +418,7 @@ export function createCanvasLinkEditor(options: CanvasLinkEditorOptions = {}) {
     };
 
     function updateApply() {
-      const refused = draft?.type === 'url' ? unsafeLinkScheme('default', draft.href) : undefined;
+      const refused = draft?.type === 'url' ? unsafeLinkScheme(draft.href) : undefined;
       apply.disabled = Boolean(
         applying ||
           !draft ||

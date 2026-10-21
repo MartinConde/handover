@@ -247,14 +247,14 @@ const linkTo = (entry: PickEntry): NonNullable<MenuItem['link']> =>
     ? { type: 'index', collection: entry.collection }
     : { type: 'entry', ref: entry.path };
 function addEntry(entry: PickEntry) {
-  const item = { _id: newId('default'), label: '', link: linkTo(entry) };
+  const item = { _id: newId(), label: '', link: linkTo(entry) };
   menu?.items.push(item);
   lastAdded = item._id;
   addedFeedback = { kind: 'entry', title: entry.title, menu: capitalise(menu?.key ?? '') };
 }
 // An address has no title to fall back on, so the row opens straight away for its label.
 async function addUrl(href: string) {
-  const item: MenuItem = { _id: newId('default'), label: '', link: { type: 'url', href } };
+  const item: MenuItem = { _id: newId(), label: '', link: { type: 'url', href } };
   menu?.items.push(item);
   lastAdded = item._id;
   addedFeedback = { kind: 'url' };
@@ -264,7 +264,7 @@ async function addUrl(href: string) {
 }
 // A heading over sub-items has no page to be named by, so it opens for its label too.
 async function addLabel() {
-  const item: MenuItem = { _id: newId('default'), label: '' };
+  const item: MenuItem = { _id: newId(), label: '' };
   menu?.items.push(item);
   lastAdded = item._id;
   addedFeedback = { kind: 'label' };

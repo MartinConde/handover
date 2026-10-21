@@ -161,7 +161,7 @@ function put(key: string, value: unknown) {
 {:else}
   {@const hiding = level.read([...at, 'noindex']) === true}
   {@const canonical = level.str([...at, 'canonical'])}
-  {@const scheme = unsafeLinkScheme('default', canonical)}
+  {@const scheme = unsafeLinkScheme(canonical)}
   <div class="form" {id} role="group" aria-labelledby="{id}-l" aria-describedby={says}>
     {@render words(
       'title',

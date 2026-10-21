@@ -67,7 +67,7 @@ $effect(() => {
     locales
       .filter((to) => to !== source && to in files && offered.includes(to))
       .map(async (to) => {
-        const changed = await changeSource('default', form, files, { from: source, to, at });
+        const changed = await changeSource(form, files, { from: source, to, at });
         const problems = Object.keys(requiredFieldProblems(fields, changed[to], blocks)).length;
         return [to, { problems, files: changed }] as const;
       }),

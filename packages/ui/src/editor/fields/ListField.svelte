@@ -113,7 +113,7 @@ function keyOf(items: unknown[], i: number): string {
   if (typeof row?._id === 'string') return row._id;
   const keys = names.get(items) ?? [];
   names.set(items, keys);
-  while (keys.length < items.length) keys.push(newId('default'));
+  while (keys.length < items.length) keys.push(newId());
   return keys[i] as string;
 }
 function move(items: unknown[], from: number, to: number) {
@@ -500,7 +500,7 @@ function pickedInto(items: MediaItem[]) {
         type="button"
         aria-label={m.field_list_add_label({ field: text }, options)}
         disabled={level.structureLocked}
-        onclick={() => add(scalar ? '' : { _id: newId('default') })}
+        onclick={() => add(scalar ? '' : { _id: newId() })}
         >{m.field_list_add({}, options)}</button
       >
     {/if}
@@ -592,7 +592,7 @@ function pickedInto(items: MediaItem[]) {
                   value={type}
                   disabled={level.structureLocked}
                   onclick={() => {
-                    add({ _type: type, _id: newId('default') });
+                    add({ _type: type, _id: newId() });
                     level.picker = '';
                   }}>{labelIn(blockLabels?.[type], level.uiLocale) ?? type}</button
                 >

@@ -173,7 +173,7 @@ const labels = () =>
     (el.textContent ?? '').replace(/\s+/g, ' ').trim(),
   );
 /** The tree as the file would hold it. */
-const written = () => stringifyEntry('default', { menus: $state.snapshot(menus) });
+const written = () => stringifyEntry({ menus: $state.snapshot(menus) });
 
 const item = (over: Record<string, unknown>) => ({
   _id: 'a1b2c3d4',
@@ -879,7 +879,7 @@ test('the parsed file survives the round trip through the tree', () => {
           type: "url"
           href: "/"
 `;
-  const parsed = parseEntry('default', file) as { menus: Menu[] };
+  const parsed = parseEntry(file) as { menus: Menu[] };
   show(parsed.menus[0]?.items ?? []);
   expect(written()).toBe(file);
 });

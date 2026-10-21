@@ -50,7 +50,7 @@ function setType(next: 'url' | 'entry') {
       >
     </div>
     {#if type === 'url'}
-      {@const scheme = unsafeLinkScheme('default', href)}
+      {@const scheme = unsafeLinkScheme(href)}
       <div class={['field', { 'is-invalid': scheme }]}>
         <div class="label-row"
           ><label for="{id}.href">{m.field_link_address({}, options)}</label></div

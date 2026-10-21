@@ -95,7 +95,7 @@ $effect(() => {
 
 function choose(type: string) {
   if (!offered.includes(type)) return;
-  const next = canvasBlockDraft(type, newId('default'), blocks[type] ?? []);
+  const next = canvasBlockDraft(type, newId(), blocks[type] ?? []);
   if (mode === 'insert') {
     const result = onapply(next);
     refusal = result.ok ? '' : result.reason;

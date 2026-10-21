@@ -358,12 +358,7 @@ export function createEntrySession({
   const normalize = (snapshot: EntryData, found: EntryProblem[]) => {
     const normalized: Record<string, EntryProblem> = {};
     for (const problem of found) {
-      const address = fieldAddress(
-        'default',
-        problem.path ? problem.path.split('.') : [],
-        snapshot,
-        form,
-      );
+      const address = fieldAddress(problem.path ? problem.path.split('.') : [], snapshot, form);
       // A duplicate id cannot safely attach an error to either occurrence.
       if (address !== undefined && normalized[address] === undefined) normalized[address] = problem;
     }
@@ -456,7 +451,7 @@ export function createEntrySession({
 
   const listTarget = (snapshot: EntryData, address: string) => {
     if (!form) return undefined;
-    const resolved = resolveFieldTarget('default', form, address, snapshot);
+    const resolved = resolveFieldTarget(form, address, snapshot);
     if (!resolved.ok) return undefined;
     const context = fieldContext(form, resolved.target.path, snapshot);
     if (
@@ -535,7 +530,7 @@ export function createEntrySession({
       if (locale === sourceLocale) continue;
       const target = snapshots[locale];
       if (!target) continue;
-      const projected = syncLocale('default', form, locale, { before, after }, target, {
+      const projected = syncLocale(form, locale, { before, after }, target, {
         seeds: restoration[locale],
       });
       if (!Object.hasOwn(target, '_version')) delete projected._version;
@@ -553,7 +548,7 @@ export function createEntrySession({
       if (locale === sourceLocale) continue;
       const target = snapshots[locale];
       if (!target) continue;
-      const resolved = resolveFieldTarget('default', form, address, target);
+      const resolved = resolveFieldTarget(form, address, target);
       if (!resolved.ok) continue;
       const targetContext = fieldContext(form, resolved.target.path, target);
       if (!targetContext) continue;
@@ -604,7 +599,7 @@ export function createEntrySession({
     const originalId = rowId(original);
     if (!originalId || !object(original)) return 'schema';
     const ids = new Map<string, string>();
-    const copy = regenerateIds('default', original, ids);
+    const copy = regenerateIds(original, ids);
     const copyId = rowId(copy);
     if (!copyId || copyId === originalId) return 'ambiguous';
     rows.splice(operation.index + 1, 0, copy);
@@ -614,7 +609,7 @@ export function createEntrySession({
       const target = snapshot && listTarget(snapshot, address);
       const localeRow = target?.rows.find((row) => rowId(row) === originalId);
       if (!snapshot || !localeRow || !object(localeRow)) continue;
-      const localeCopy = regenerateIds('default', localeRow, ids);
+      const localeCopy = regenerateIds(localeRow, ids);
       const localeCopyId = rowId(localeCopy);
       if (!localeCopyId) continue;
       const from = rowAddress(address, originalId);
@@ -659,7 +654,7 @@ export function createEntrySession({
           const container = containers.find((address) =>
             seed.address.startsWith(`${address}[_id=`),
           );
-          const resolved = resolveFieldTarget('default', form, seed.address, source);
+          const resolved = resolveFieldTarget(form, seed.address, source);
           if (container && resolved.ok && resolved.target.address === seed.address)
             held.set(seed.address, clone(seed));
         }
@@ -690,11 +685,11 @@ export function createEntrySession({
     const beforeVersion = versionOf(locale);
     if (command.contentVersion !== beforeVersion) return { ok: false, reason: 'stale' };
 
-    const resolved = resolveFieldTarget('default', form, command.address, current);
+    const resolved = resolveFieldTarget(form, command.address, current);
     if (!resolved.ok) return resolved;
     const context = fieldContext(form, resolved.target.path, current);
     if (!context) return { ok: false, reason: 'schema' };
-    const ownerAddress = fieldAddress('default', context.path, current, form);
+    const ownerAddress = fieldAddress(context.path, current, form);
     if (!ownerAddress) return { ok: false, reason: 'ambiguous' };
     if (inReferencedBlock(current, context.path)) return { ok: false, reason: 'referenced' };
     if (STRUCTURAL.has(context.field.type)) return { ok: false, reason: 'structural' };
@@ -858,7 +853,7 @@ export function createEntrySession({
     },
     addressForPath(locale: string, path: string) {
       const current = snapshots[locale];
-      return current && form ? fieldAddress('default', path.split('.'), current, form) : undefined;
+      return current && form ? fieldAddress(path.split('.'), current, form) : undefined;
     },
     // Form controls still consume the API's positional dotted-path shape.
     positionalProblems(locale: string, uiLocale: UiLocale = 'en'): Record<string, string> {
@@ -866,7 +861,7 @@ export function createEntrySession({
       if (!current) return {};
       const positional: Record<string, string> = {};
       for (const [address, problem] of Object.entries(validation[locale] ?? {})) {
-        const path = fieldPosition('default', address, current, form);
+        const path = fieldPosition(address, current, form);
         if (path) positional[path.join('.')] = problemText(problem, uiLocale);
       }
       return positional;
@@ -874,24 +869,22 @@ export function createEntrySession({
     heldWhenOpened(locale: string, address: string): boolean {
       const loaded = opened[locale];
       if (!loaded || !form) return false;
-      const resolved = resolveFieldTarget('default', form, address, loaded);
+      const resolved = resolveFieldTarget(form, address, loaded);
       return resolved.ok && read(loaded, resolved.target.path) !== undefined;
     },
     resolveField(locale: string, address: string): FieldTargetResult {
       const current = snapshots[locale];
       if (!current) throw new Error(`The ${locale} locale is not loaded in this entry session.`);
-      return form
-        ? resolveFieldTarget('default', form, address, current)
-        : { ok: false, reason: 'schema' };
+      return form ? resolveFieldTarget(form, address, current) : { ok: false, reason: 'schema' };
     },
     inspectField(locale: string, address: string) {
       const current = snapshots[locale];
       if (!current || !form) return { ok: false as const, reason: 'schema' as const };
-      const resolved = resolveFieldTarget('default', form, address, current);
+      const resolved = resolveFieldTarget(form, address, current);
       if (!resolved.ok) return resolved;
       const context = fieldContext(form, resolved.target.path, current);
       if (!context) return { ok: false as const, reason: 'schema' as const };
-      const ownerAddress = fieldAddress('default', context.path, current, form);
+      const ownerAddress = fieldAddress(context.path, current, form);
       if (!ownerAddress) return { ok: false as const, reason: 'ambiguous' as const };
       return {
         ok: true as const,
@@ -916,15 +909,14 @@ export function createEntrySession({
       if (command.contentVersion !== versionOf(locale)) return { ok: false, reason: 'stale' };
       if (locale !== sourceLocale) return { ok: false, reason: 'readonly' };
 
-      const resolved = resolveFieldTarget('default', form, command.address, current);
+      const resolved = resolveFieldTarget(form, command.address, current);
       if (!resolved.ok) return resolved;
       const context = fieldContext(form, resolved.target.path, current);
       if (!context || resolved.target.path.length !== context.path.length)
         return { ok: false, reason: 'schema' };
       if (context.field.type !== 'array' && context.field.type !== 'blocks')
         return { ok: false, reason: 'schema' };
-      if (!fieldAddress('default', context.path, current, form))
-        return { ok: false, reason: 'ambiguous' };
+      if (!fieldAddress(context.path, current, form)) return { ok: false, reason: 'ambiguous' };
       if (inReferencedBlock(current, context.path)) return { ok: false, reason: 'referenced' };
 
       const held = read(current, context.path);
