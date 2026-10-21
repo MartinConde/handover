@@ -13,6 +13,7 @@ import { coordinateEntryPublish, coordinateEntryReplacement } from '../navigate'
 import * as m from '../paraglide/messages.js';
 import { request as fetch, postJson, uncertainResponse } from '../request.js';
 import BuildPill, { type Build } from '../shared/BuildPill.svelte';
+import ConfirmDialog from '../shared/ConfirmDialog.svelte';
 import Modal from '../shared/Modal.svelte';
 import CheckLines, {
   type CheckItem,
@@ -746,28 +747,21 @@ function askDiscard(entry: PendingEntry) {
 </Modal>
 
 {#if confirming}
-  <Modal
+  <ConfirmDialog
     labelledby="discard-h"
+    role="dialog"
     returnTo={confirmTrigger}
-    dismissible={!discarding}
+    title={m.pending_discard_question({ title: named(confirming) }, options)}
+    cancel={m.common_cancel({}, options)}
+    confirm={discarding ? m.pending_discarding({}, options) : m.pending_discard_changes({}, options)}
+    busy={discarding}
+    onconfirm={discard}
     onclose={() => (confirming = undefined)}
   >
-    <h2 id="discard-h">{m.pending_discard_question({ title: named(confirming) }, options)}</h2>
     <p>
       {confirming.created
         ? m.pending_discard_created({}, options)
         : m.pending_discard_explanation({}, options)}
     </p>
-    <div class="actions">
-      <button
-        class="btn"
-        type="button"
-        disabled={discarding}
-        onclick={() => (confirming = undefined)}>{m.common_cancel({}, options)}</button
-      >
-      <button class="btn btn-danger" type="button" disabled={discarding} onclick={discard}>
-        {discarding ? m.pending_discarding({}, options) : m.pending_discard_changes({}, options)}
-      </button>
-    </div>
-  </Modal>
+  </ConfirmDialog>
 {/if}

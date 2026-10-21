@@ -48,6 +48,7 @@ import {
   sitePath,
 } from '../request.js';
 import AutosaveStatus from '../shared/AutosaveStatus.svelte';
+import ConfirmDialog from '../shared/ConfirmDialog.svelte';
 import Modal from '../shared/Modal.svelte';
 import PublishConfirmation from './PublishConfirmation.svelte';
 import {
@@ -1600,17 +1601,20 @@ function navigateCanvasEntry(target: {
     />
   {/if}
   {#if entryActions.discarding}
-    <Modal labelledby="discard-h" returnTo={entryActions.actionTrigger} dismissible={!entryActions.discardBusy} onclose={() => (entryActions.discarding = false)}>
-        <h2 id="discard-h">{m.pending_discard_question({ title }, options)}</h2>
-        <p>{entry.published.length ? m.pending_discard_explanation({}, options) : m.pending_discard_created({}, options)}</p>
-        {#if entryActions.actionFailed}<div class="notice notice-danger" role="alert">{@render feedback(entryActions.actionFailed)}</div>{/if}
-        <div class="actions">
-          <button class="btn" type="button" disabled={entryActions.discardBusy} onclick={() => (entryActions.discarding = false)}>{m.common_cancel({}, options)}</button>
-          <button class="btn btn-danger" type="button" disabled={entryActions.discardBusy} onclick={entryActions.discardDraft}>
-            {entryActions.discardBusy ? m.pending_discarding({}, options) : m.pending_discard_changes({}, options)}
-          </button>
-        </div>
-    </Modal>
+    <ConfirmDialog
+      labelledby="discard-h"
+      role="dialog"
+      returnTo={entryActions.actionTrigger}
+      title={m.pending_discard_question({ title }, options)}
+      cancel={m.common_cancel({}, options)}
+      confirm={entryActions.discardBusy ? m.pending_discarding({}, options) : m.pending_discard_changes({}, options)}
+      busy={entryActions.discardBusy}
+      onconfirm={entryActions.discardDraft}
+      onclose={() => (entryActions.discarding = false)}
+    >
+      <p>{entry.published.length ? m.pending_discard_explanation({}, options) : m.pending_discard_created({}, options)}</p>
+      {#if entryActions.actionFailed}<div class="notice notice-danger" role="alert">{@render feedback(entryActions.actionFailed)}</div>{/if}
+    </ConfirmDialog>
   {/if}
   {#if entryActions.offing}
     {@const going = entryActions.offing}
