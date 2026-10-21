@@ -2,7 +2,6 @@
 import { onMount, type Snippet, tick, untrack } from 'svelte';
 import { cubicOut } from 'svelte/easing';
 import { fly } from 'svelte/transition';
-import { EMPTY_ENTRY_DIRECTORY, readEntryDirectory } from '../entry-directory';
 import { messageLine } from '../errors.js';
 import { messageOptions, type UiLocale } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
@@ -24,7 +23,6 @@ import type {
   CanvasBlockAction,
   CanvasEditingState,
   CanvasInteractionMode,
-  CanvasNavigationMessage,
   CanvasSelection,
   CanvasStructureNode,
 } from './canvas-protocol';
@@ -40,11 +38,8 @@ import {
   nearestOwner,
   sameCanvasSelection,
 } from './canvas-target';
-import {
-  type CanvasNavigationDestination,
-  classifyCanvasNavigation,
-} from './runtime/canvas-navigation';
 import StructureTree from './StructureTree.svelte';
+import { createWorkspaceNavigation } from './workspace-navigation.svelte';
 
 type Renderer = ReturnType<typeof createCanvasRenderer>;
 type Width = 'desktop' | 'tablet' | 'phone';
@@ -199,17 +194,17 @@ let disposed = false;
 let inlineEditing = false;
 let interactionMode = $state<CanvasInteractionMode>('edit');
 let actionRefusal = $state('');
-type NavigationError = 'form-get' | 'form-post' | 'navigation-save' | 'preview-save';
-let navigationError = $state<NavigationError>();
-let navigationBusy = false;
+const navigation = createWorkspaceNavigation({
+  session: () => session,
+  fullscreen: () => fullscreen,
+  url: () => url,
+  options: () => options,
+  onnavigateentry: () => onnavigateentry,
+});
 let mediaPickerRequest = $state(0);
 $effect(() => {
   if (!inspectorOpen) mediaPickerRequest = 0;
 });
-let navigationAction = $state<{
-  destination: CanvasNavigationDestination;
-  download: boolean;
-}>();
 let deletedSelection: CanvasSelection | undefined;
 type BlockEditorState = StagedBlockTarget & {
   address: string;
@@ -252,20 +247,6 @@ const failureText = $derived.by(() => {
       ? m.canvas_failure_render_status({ status: failure.status }, options)
       : m.canvas_failure_render({}, options);
   return m.canvas_failure_start({}, options);
-});
-const navigationErrorText = $derived.by(() => {
-  switch (navigationError) {
-    case 'preview-save':
-      return m.canvas_preview_save_failed({}, options);
-    case 'navigation-save':
-      return m.canvas_navigation_save_failed({}, options);
-    case 'form-post':
-      return m.canvas_form_submit_blocked({}, options);
-    case 'form-get':
-      return m.canvas_form_navigation_blocked({}, options);
-    default:
-      return '';
-  }
 });
 const actionRefusalText = $derived.by(() => {
   if (!actionRefusal) return '';
@@ -668,63 +649,6 @@ function setInteractionMode(next: CanvasInteractionMode) {
   }
 }
 
-const previewHref = (href: string) => {
-  const target = new URL(href, location.href);
-  return previewPath(`${target.pathname}${target.search}${target.hash}`);
-};
-
-async function openCurrentPreview() {
-  navigationError = undefined;
-  if (!(await session.flush())) {
-    navigationError = 'preview-save';
-    return;
-  }
-  window.open(previewPath(url || '/'), '_blank', 'noopener,noreferrer');
-}
-
-async function canvasNavigate(message: CanvasNavigationMessage) {
-  if (navigationBusy || !fullscreen) return;
-  navigationBusy = true;
-  navigationError = undefined;
-  navigationAction = undefined;
-  if (message.kind === 'form') {
-    navigationError = message.method === 'post' ? 'form-post' : 'form-get';
-    navigationBusy = false;
-    return;
-  }
-  let index = EMPTY_ENTRY_DIRECTORY;
-  try {
-    index = await readEntryDirectory();
-  } catch {
-    // An unavailable route index simply makes a same-site destination an explicit preview.
-  }
-  const destination = classifyCanvasNavigation(message.href, index, location.origin);
-  if (!(await session.flush())) {
-    navigationError = 'navigation-save';
-    navigationBusy = false;
-    return;
-  }
-  if (message.download || message.newTab || destination.kind !== 'entry') {
-    navigationAction = { destination, download: message.download };
-    navigationBusy = false;
-    return;
-  }
-  onnavigateentry(destination);
-  navigationBusy = false;
-}
-
-function followNavigationAction() {
-  const action = navigationAction;
-  if (!action) return;
-  const { destination } = action;
-  const href =
-    destination.kind === 'external' || action.download
-      ? destination.href
-      : previewHref(destination.href);
-  window.open(href, '_blank', 'noopener,noreferrer');
-  navigationAction = undefined;
-}
-
 $effect(() => {
   const shown = active;
   const shownLocale = locale;
@@ -801,7 +725,7 @@ function bootstrapRenderer() {
         onSelectionChange: selectionChanged,
         onStructureChange: (next) => (structure = next),
         onAction: canvasAction,
-        onNavigate: canvasNavigate,
+        onNavigate: navigation.canvasNavigate,
         onInteractionChange: interactionChanged,
         onBridgeRejected: (reason) => {
           if (reason === 'stale-version')
@@ -985,7 +909,7 @@ onMount(() => {
     <div class="canvas-entry-actions">
       {#if fullscreen}{@render entryActions?.()}{/if}
       <a class="btn btn-sm canvas-preview" href={previewPath(url || '/')} target="_blank" rel="noreferrer"
-        onclick={(event) => { event.preventDefault(); void openCurrentPreview(); }}>{m.preview_title({}, options)} <CanvasIcon name="external" /></a>
+        onclick={(event) => { event.preventDefault(); void navigation.openCurrentPreview(); }}>{m.preview_title({}, options)} <CanvasIcon name="external" /></a>
       {#if fullscreen}{@render publishAction?.()}{/if}
     </div>
     <span class={['visually-hidden canvas-render-state', { 'is-busy': loading || rendererState.phase === 'rendering', 'is-failed': rendererState.phase === 'failed' }]} role="status">{status}</span>
@@ -1014,23 +938,23 @@ onMount(() => {
     </div>
   {/if}
 
-  {#if navigationError}
+  {#if navigation.error}
     <div class="canvas-navigation-notice" role="alert">
-      <span>{navigationErrorText}</span>
-      <button class="btn btn-sm" type="button" onclick={() => (navigationError = undefined)}>{m.canvas_dismiss({}, options)}</button>
+      <span>{navigation.errorText}</span>
+      <button class="btn btn-sm" type="button" onclick={() => (navigation.error = undefined)}>{m.canvas_dismiss({}, options)}</button>
     </div>
-  {:else if navigationAction}
+  {:else if navigation.action}
     <div class="canvas-navigation-notice" role="status">
       <span>
-        {navigationAction.download
+        {navigation.action.download
           ? m.canvas_download_outside({}, options)
-          : navigationAction.destination.kind === 'external'
+          : navigation.action.destination.kind === 'external'
             ? m.canvas_link_leaves_site({}, options)
             : m.canvas_page_opens_preview({}, options)}
       </span>
-      <button class="btn btn-sm" type="button" onclick={() => (navigationAction = undefined)}>{m.common_cancel({}, options)}</button>
-      <button class="btn btn-sm btn-primary" type="button" onclick={followNavigationAction}>
-        {navigationAction.download ? m.canvas_open_download({}, options) : navigationAction.destination.kind === 'external' ? m.canvas_open_link({}, options) : m.canvas_open_preview({}, options)} ↗
+      <button class="btn btn-sm" type="button" onclick={() => (navigation.action = undefined)}>{m.common_cancel({}, options)}</button>
+      <button class="btn btn-sm btn-primary" type="button" onclick={navigation.followNavigationAction}>
+        {navigation.action.download ? m.canvas_open_download({}, options) : navigation.action.destination.kind === 'external' ? m.canvas_open_link({}, options) : m.canvas_open_preview({}, options)} ↗
       </button>
     </div>
   {/if}
