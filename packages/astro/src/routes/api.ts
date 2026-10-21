@@ -50,15 +50,7 @@ import {
   translatedFromView,
   versionDiff,
 } from './api/history.js';
-import {
-  askUpload,
-  deleteAsset,
-  describeMedia,
-  finishUpload,
-  ingestUpload,
-  library,
-  UPLOAD_KEY,
-} from './api/media.js';
+import { deleteAsset, describeMedia, library } from './api/media.js';
 import {
   account,
   activityLog,
@@ -84,6 +76,7 @@ import {
 import { recordSources, sourcesList } from './api/sources.js';
 import { createEntry, saveTemplate } from './api/templates.js';
 import { createTranslation, machineTranslate } from './api/translation.js';
+import { askUpload, finishUpload, ingestUpload, UPLOAD_KEY } from './api/uploads.js';
 
 const MEMBER = /^members\/([\w-]+)$/;
 const MEMBER_ROLE = /^members\/([\w-]+)\/role$/;
