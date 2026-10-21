@@ -6,16 +6,12 @@ import { messageLine } from '../errors.js';
 import { messageOptions, type UiLocale } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
 import { previewPath } from '../request';
+import { type BlockOutcome, createBlockOps } from './block-ops.svelte';
 import CanvasBlockEditor from './CanvasBlockEditor.svelte';
 import CanvasIcon from './CanvasIcon.svelte';
 import CanvasImagePopover from './CanvasImagePopover.svelte';
 import CanvasInspector from './CanvasInspector.svelte';
-import {
-  createCanvasCommands,
-  read,
-  resolveStagedBlockIndex,
-  type StagedBlockTarget,
-} from './canvas-commands.svelte';
+import { createCanvasCommands, type StagedBlockTarget } from './canvas-commands.svelte';
 import { createCanvasPanels, PANEL_WIDTHS } from './canvas-panels.svelte';
 import type {
   CanvasActionMessage,
@@ -193,7 +189,6 @@ let wasActive = false;
 let disposed = false;
 let inlineEditing = false;
 let interactionMode = $state<CanvasInteractionMode>('edit');
-let actionRefusal = $state('');
 const navigation = createWorkspaceNavigation({
   session: () => session,
   fullscreen: () => fullscreen,
@@ -205,7 +200,6 @@ let mediaPickerRequest = $state(0);
 $effect(() => {
   if (!inspectorOpen) mediaPickerRequest = 0;
 });
-let deletedSelection: CanvasSelection | undefined;
 type BlockEditorState = StagedBlockTarget & {
   address: string;
   types: readonly string[];
@@ -249,6 +243,7 @@ const failureText = $derived.by(() => {
   return m.canvas_failure_start({}, options);
 });
 const actionRefusalText = $derived.by(() => {
+  const actionRefusal = blockOps.actionRefusal;
   if (!actionRefusal) return '';
   if (actionRefusal === 'stale') return m.canvas_action_stale({}, options);
   if (actionRefusal === 'deleted') return m.canvas_action_deleted({}, options);
@@ -427,6 +422,12 @@ const {
   textField,
   canvasCommand,
 } = commands;
+const blockOps = createBlockOps({
+  session: () => session,
+  locale: () => locale,
+  entryDocument: () => entryDocument,
+  blockLocation,
+});
 
 function openBlockEditor(
   action: CanvasBlockAction,
@@ -452,41 +453,15 @@ function closeBlockEditor(reason?: 'applied') {
 function applyBlock(value: Record<string, unknown>) {
   const editing = blockEditor;
   if (!editing) return { ok: false as const, reason: 'stale' as const };
-  const inspected = session.inspectField(locale, editing.address);
-  if (!inspected.ok) return inspected;
-  if (inspected.target.field.type !== 'blocks')
-    return { ok: false as const, reason: 'schema' as const };
-  const held = read(session.snapshot(locale), inspected.target.path);
-  if (held !== undefined && !Array.isArray(held))
-    return { ok: false as const, reason: 'schema' as const };
-  const target = resolveStagedBlockIndex(editing, held ?? []);
-  if (!target.ok) return target;
-  const result = session.listCommand(locale, {
-    address: editing.address,
-    contentVersion: session.contentVersion(locale),
-    operation:
-      editing.mode === 'replace'
-        ? { type: 'replace', index: target.index, value }
-        : { type: 'insert', index: target.index, value },
-  });
-  if (!result.ok) return result;
-  const id = typeof value._id === 'string' ? value._id : '';
-  if (id) {
-    selected = {
-      kind: 'block',
-      target: {
-        document: entryDocument,
-        locale,
-        address: `${editing.address}[_id=${id}]`,
-      },
-    };
-  }
+  const applied = blockOps.applyBlock(editing, value);
+  if (!applied.result.ok) return applied.result;
+  if (applied.selected) selected = applied.selected;
   if (editing.mode === 'insert') {
     inspectorOpen = true;
     mediaPickerRequest = 0;
   }
   void submit('render');
-  return result;
+  return applied.result;
 }
 
 function canvasAction(
@@ -536,84 +511,20 @@ function canvasAction(
     openBlockEditor(message.action, message.selection);
     return;
   }
-  const location = blockLocation(message.selection);
-  if (!location) return;
-  const destination =
-    message.action === 'move' && message.destination
-      ? blockLocation(message.destination)
-      : undefined;
-  if (message.action === 'move' && (!destination || destination.address !== location.address)) {
-    actionRefusal = 'schema';
-    // The page already shows the dragged order; redraw it from the session.
-    void submit('render', true);
-    return;
-  }
-  const operation =
-    message.action === 'duplicate'
-      ? ({ type: 'duplicate', index: location.index } as const)
-      : message.action === 'delete'
-        ? ({ type: 'remove', index: location.index } as const)
-        : message.action === 'move-up'
-          ? ({ type: 'move', from: location.index, to: location.index - 1 } as const)
-          : message.action === 'move-down'
-            ? ({ type: 'move', from: location.index, to: location.index + 1 } as const)
-            : ({ type: 'move', from: location.index, to: destination?.index ?? -1 } as const);
-  const result = session.listCommand(locale, {
-    address: location.address,
-    contentVersion: session.contentVersion(locale),
-    operation,
-  });
-  if (!result.ok) {
-    actionRefusal = result.reason;
-    if (message.action === 'move') void submit('render', true);
-    return;
-  }
-  actionRefusal = '';
-  if (message.action === 'delete') {
-    deletedSelection = message.selection;
-    selected = undefined;
-  } else if (message.action === 'duplicate') {
-    const inspected = session.inspectField(locale, location.address);
-    const rows = inspected.ok ? read(session.snapshot(locale), inspected.target.path) : undefined;
-    const copy = Array.isArray(rows) ? rows[location.index + 1] : undefined;
-    const id =
-      typeof copy === 'object' && copy !== null && !Array.isArray(copy)
-        ? (copy as Record<string, unknown>)._id
-        : undefined;
-    if (typeof id === 'string') {
-      const occurrence = message.selection.target.occurrence;
-      selected = {
-        kind: 'block',
-        target: occurrence
-          ? {
-              ...message.selection.target,
-              occurrence: { ...occurrence, address: `${location.address}[_id=${id}]` },
-            }
-          : {
-              ...message.selection.target,
-              address: `${location.address}[_id=${id}]`,
-            },
-      };
-    }
-  } else {
-    selected = message.selection;
-  }
-  void submit('render');
+  settle(blockOps.listAction(message));
 }
 
 function replay(direction: 'redo' | 'undo') {
-  const missingDeletedTarget =
-    direction === 'undo' && deletedSelection && blockLocation(deletedSelection) === undefined;
-  const result = session[direction]();
-  if (!result.ok) {
-    actionRefusal = result.reason;
+  settle(blockOps.replay(direction));
+}
+
+function settle(outcome: BlockOutcome | undefined) {
+  if (!outcome) return;
+  if (outcome.kind === 'redraw') {
+    void submit('render', true);
     return;
   }
-  actionRefusal = '';
-  if (missingDeletedTarget && deletedSelection && blockLocation(deletedSelection)) {
-    selected = deletedSelection;
-    deletedSelection = undefined;
-  }
+  if (outcome.kind === 'select') selected = outcome.selected;
   void submit('render');
 }
 
@@ -636,7 +547,7 @@ function interactionChanged(state: CanvasEditingState) {
 function setInteractionMode(next: CanvasInteractionMode) {
   if (interactionMode === next) return;
   interactionMode = next;
-  actionRefusal = '';
+  blockOps.actionRefusal = '';
   if (next !== 'edit') {
     structureOpen = false;
     inspectorOpen = false;
@@ -914,7 +825,7 @@ onMount(() => {
     </div>
     <span class={['visually-hidden canvas-render-state', { 'is-busy': loading || rendererState.phase === 'rendering', 'is-failed': rendererState.phase === 'failed' }]} role="status">{status}</span>
   </div>
-  {#if actionRefusal}<div class="canvas-action-refusal" role="alert">{actionRefusalText}</div>{/if}
+  {#if blockOps.actionRefusal}<div class="canvas-action-refusal" role="alert">{actionRefusalText}</div>{/if}
 
   {#if issues.length}
     <div class={['canvas-validation', { 'is-incomplete': incompletePaths.length > 0 }]} role="status">
