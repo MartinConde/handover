@@ -24,8 +24,6 @@ import {
   sourceChanges,
 } from '@handover/core';
 import { formSchema } from '../../config.js';
-import type { RequestContext } from '../../environment.js';
-import { readJson } from './body.js';
 import {
   entryLocales,
   entryPath,
@@ -39,7 +37,9 @@ import {
   pendingLocales,
   SHA,
   schemaOf,
-} from './content.js';
+} from '../../content.js';
+import type { RequestContext } from '../../environment.js';
+import { readJson } from './body.js';
 import { codedError, forbidden, isOwner, notFound } from './respond.js';
 
 /** The draft against HEAD, not the commit it was loaded from: the row says what goes out next. */

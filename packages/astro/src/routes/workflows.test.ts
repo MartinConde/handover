@@ -21,9 +21,9 @@ import { eq } from 'drizzle-orm';
 import { beforeAll, beforeEach, expect, test, vi } from 'vitest';
 import { migrateTestD1, newTestD1 } from '../../../core/src/db.fixture.js';
 import * as tables from '../../../core/src/tables.js';
+import { entryLocales } from '../content.js';
 import { onRequest } from '../middleware.js';
 import { MAX_JSON_BYTES } from './api/body.js';
-import { entryLocales } from './api/content.js';
 import { DELETE, GET, POST, PUT } from './api.js';
 
 const boundary = vi.hoisted(() => ({

@@ -10,8 +10,6 @@ import {
   readRedirects,
   staleLocales,
 } from '@handover/core';
-import type { RequestContext } from '../../../environment.js';
-import { entryProblems } from '../../../problems.js';
 import {
   type entryLocales,
   entryPath,
@@ -24,7 +22,9 @@ import {
   siteSeoDefaults,
   sourceRefusal,
   translator,
-} from '../content.js';
+} from '../../../content.js';
+import type { RequestContext } from '../../../environment.js';
+import { entryProblems } from '../../../problems.js';
 import { entryNotFound, notFound } from '../respond.js';
 
 // Committed and draft rules are both read; empty means the client answered "nowhere".

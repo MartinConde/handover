@@ -24,9 +24,9 @@ import {
 import type { APIRoute } from 'astro';
 import { createAuth } from '../auth.js';
 import { formSchema } from '../config.js';
+import { tabOf } from '../content.js';
 import { requestContext } from '../environment.js';
 import { bodyErrorResponse, readJson } from './api/body.js';
-import { tabOf } from './api/content.js';
 import { dashboard, globalsList, listEntries, pendingList, pickList } from './api/dashboard.js';
 import { autosave, hold, lockState } from './api/entries/editing.js';
 import { discard, duplicate, remove, rename } from './api/entries/lifecycle.js';

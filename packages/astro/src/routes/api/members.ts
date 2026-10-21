@@ -15,12 +15,11 @@ import {
   siteBase,
 } from '@handover/core';
 import { createAuth, loginMethods, mailer } from '../../auth.js';
+import { entryTitle } from '../../content.js';
 import type { RequestContext } from '../../environment.js';
 import { missingMailer } from '../../environment.js';
 import { requestLocale } from '../../locale.js';
-
 import { readJson } from './body.js';
-import { entryTitle } from './content.js';
 import { codedError, forbidden, isOwner, notFound } from './respond.js';
 
 /** Only the facts the page cannot work out itself; everything else is a Better Auth endpoint. */

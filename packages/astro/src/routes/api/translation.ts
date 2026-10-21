@@ -16,8 +16,6 @@ import {
   translatableText,
   withSource,
 } from '@handover/core';
-import type { RequestContext } from '../../environment.js';
-import { readJson } from './body.js';
 import {
   entryLocales,
   entryPath,
@@ -29,7 +27,9 @@ import {
   sourceRefusal,
   translationSource,
   translator,
-} from './content.js';
+} from '../../content.js';
+import type { RequestContext } from '../../environment.js';
+import { readJson } from './body.js';
 import { codedError, notFound } from './respond.js';
 
 /** Structure and shared values from the source file, none of its words, as a draft. */

@@ -23,9 +23,9 @@ import {
   stringifyEntry,
   withSource,
 } from '@handover/core';
+import { entryHref, entryPath, formFor, object } from '../../content.js';
 import type { RequestContext } from '../../environment.js';
 import { readJson } from './body.js';
-import { entryHref, entryPath, formFor, object } from './content.js';
 import { entryTitles } from './dashboard.js';
 import { codedError, forbidden, isOwner } from './respond.js';
 

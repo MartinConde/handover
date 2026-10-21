@@ -21,10 +21,6 @@ import {
   runChecks,
   yamlErrors,
 } from '@handover/core';
-import type { RequestContext } from '../../environment.js';
-import { mediaStore, workerBuilds } from '../../environment.js';
-import { entryProblems } from '../../problems.js';
-import { readBodyText, readJson } from './body.js';
 import {
   ENTRY_FILE,
   entryLocales,
@@ -36,7 +32,11 @@ import {
   publishSources,
   schemaOf,
   siteSeoDefaults,
-} from './content.js';
+} from '../../content.js';
+import type { RequestContext } from '../../environment.js';
+import { mediaStore, workerBuilds } from '../../environment.js';
+import { entryProblems } from '../../problems.js';
+import { readBodyText, readJson } from './body.js';
 import { codedError } from './respond.js';
 
 /** Read from the log: a publish redeploys the Worker, so the tab that pressed it may reload. */

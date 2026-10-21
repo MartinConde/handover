@@ -8,8 +8,8 @@ import {
   pendingDrafts,
   state,
 } from '../../../test/harness.fixture.js';
+import { globalLabel } from '../../content.js';
 import { GET } from '../api.js';
-import { globalLabel } from './content.js';
 
 const { workerMailerMock, configMock, indexMock, cloudflareMock, authMock, coreMock } =
   await vi.hoisted(async () => import('../../../test/harness.fixture.js'));

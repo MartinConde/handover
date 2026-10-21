@@ -25,10 +25,10 @@ import {
   setMediaDetails,
   storedUploadIntent,
 } from '@handover/core';
+import { entryHref, entryTitle } from '../../content.js';
 import type { RequestContext } from '../../environment.js';
 import { mediaStore, NO_BUCKET } from '../../environment.js';
 import { readJson } from './body.js';
-import { entryHref, entryTitle } from './content.js';
 import { codedError, notFound } from './respond.js';
 
 interface UploadBucket {

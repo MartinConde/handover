@@ -22,13 +22,12 @@ import {
   writeSetting,
 } from '@handover/core';
 import { mailer } from '../../auth.js';
+import { deeplKey, entryPath, formFor, publishSources, takenNames } from '../../content.js';
 import type { RequestContext } from '../../environment.js';
 import { mediaStore, missingMailer, NO_BUCKET, workerBuilds } from '../../environment.js';
 import { requestLocale } from '../../locale.js';
-
 import { entryProblems } from '../../problems.js';
 import { readJson } from './body.js';
-import { deeplKey, entryPath, formFor, publishSources, takenNames } from './content.js';
 import { codedError, forbidden, isOwner, notFound } from './respond.js';
 
 export async function testEmail(

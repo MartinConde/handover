@@ -35,9 +35,6 @@ import {
   stringifyEntry,
 } from '@handover/core';
 import { formSchema } from '../../../config.js';
-import type { RequestContext } from '../../../environment.js';
-import { entryProblems } from '../../../problems.js';
-import { readJson } from '../body.js';
 import {
   entryFiles,
   entryLocales,
@@ -56,7 +53,10 @@ import {
   sourceRefusal,
   tabOf,
   unresolvedSource,
-} from '../content.js';
+} from '../../../content.js';
+import type { RequestContext } from '../../../environment.js';
+import { entryProblems } from '../../../problems.js';
+import { readJson } from '../body.js';
 import { codedError, entryNotFound, notFound } from '../respond.js';
 
 /** The mark lives in the files, so turning off a published language commits a delete. */

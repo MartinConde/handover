@@ -16,9 +16,9 @@ import {
   redirectError,
   redirectRule,
 } from '@handover/core';
+import { pickable } from '../../content.js';
 import type { RequestContext } from '../../environment.js';
 import { readJson } from './body.js';
-import { pickable } from './content.js';
 import { codedError } from './respond.js';
 
 // What a `from` is held against: a redirect over a live page takes it off the site silently.

@@ -27,8 +27,6 @@ import {
   renameEntry,
   reservePaths,
 } from '@handover/core';
-import type { RequestContext } from '../../../environment.js';
-import { readJson } from '../body.js';
 import {
   entryFiles,
   entryPath,
@@ -40,7 +38,9 @@ import {
   schemaOf,
   takenNames,
   unresolvedSource,
-} from '../content.js';
+} from '../../../content.js';
+import type { RequestContext } from '../../../environment.js';
+import { readJson } from '../body.js';
 import { codedError, notFound } from '../respond.js';
 
 // Same derivation as a new entry's: a rename cannot produce a name the CMS could not create.
