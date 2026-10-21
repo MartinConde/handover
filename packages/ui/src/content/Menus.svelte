@@ -21,18 +21,10 @@ export interface Menu {
   key: string;
   items: MenuItem[];
 }
-
-// The format is recursive; the cap is this editor's.
-const MAX_DEPTH = 3;
-
-// How many levels the item itself is, so indenting cannot push its children past the cap.
-function heightOf(item: MenuItem): number {
-  return 1 + Math.max(0, ...(item.children ?? []).map(heightOf));
-}
 </script>
 
 <script lang="ts">
-import { type DragDropEventHandlers, DragDropProvider, DragOverlay } from '@dnd-kit/svelte';
+import { DragDropProvider, DragOverlay } from '@dnd-kit/svelte';
 import { createSortable } from '@dnd-kit/svelte/sortable';
 import { type Labels, labelIn, newId } from '@handover/core';
 import { tick } from 'svelte';
@@ -45,6 +37,7 @@ import { capitalise, collectionName, formatLanguageName, messageOptions, type Ui
 import * as m from '../paraglide/messages.js';
 import { dismiss } from '../shared/dismiss.js';
 import ConfirmDialog from '../shared/ConfirmDialog.svelte';
+import { createMenuDrag, createMenuTree } from './menu-tree.svelte';
 import PagePicker from './PagePicker.svelte';
 
 let {
@@ -172,43 +165,10 @@ const listed = (item: MenuItem): PickEntry[] => {
   );
 };
 
-// The list an item at this path is a row of.
-const listAt = (path: number[]): MenuItem[] =>
-  path.reduce<MenuItem[]>((list, i) => list[i]?.children ?? [], menu?.items ?? []);
-function move(list: MenuItem[], from: number, to: number) {
-  list.splice(to, 0, ...list.splice(from, 1));
-}
-function step(path: number[], by: -1 | 1) {
-  const list = listAt(path.slice(0, -1));
-  const i = path[path.length - 1] as number;
-  if (i + by >= 0 && i + by < list.length) move(list, i, i + by);
-}
-// Refused where the row's own children would land past the cap, rather than flattening them.
-const canIndent = (item: MenuItem, path: number[]) =>
-  (path[path.length - 1] as number) > 0 && path.length + heightOf(item) <= MAX_DEPTH;
-function indent(item: MenuItem, path: number[]) {
-  if (!canIndent(item, path)) return;
-  const list = listAt(path.slice(0, -1));
-  const i = path[path.length - 1] as number;
-  const parent = list[i - 1] as MenuItem;
-  // Not `??=`: it hands on the bare array, and a push into that reaches no proxy.
-  if (!parent.children) parent.children = [];
-  parent.children.push(...list.splice(i, 1));
-}
-function outdent(path: number[]) {
-  if (path.length < 2) return;
-  const list = listAt(path.slice(0, -1));
-  const up = listAt(path.slice(0, -2));
-  const at = path[path.length - 2] as number;
-  up.splice(at + 1, 0, ...list.splice(path[path.length - 1] as number, 1));
-  prune(path.slice(0, -1));
-}
-// An empty `children` is a key in the file that says nothing and shows up in every diff.
-function prune(path: number[]) {
-  if (!path.length) return;
-  const parent = listAt(path.slice(0, -1))[path[path.length - 1] as number];
-  if (parent?.children && !parent.children.length) delete parent.children;
-}
+const tree = createMenuTree(() => menu?.items ?? []);
+const { listAt, step, canIndent, indent, outdent, prune, pathOf, find, rowsOf } = tree;
+const drag = createMenuDrag(tree, () => menu?.items ?? []);
+
 function remove(item: MenuItem, path: number[]) {
   if (item.children?.length) {
     removing = item;
@@ -231,15 +191,6 @@ function act(item: MenuItem, what: () => void) {
   what();
   tick().then(() => trigger?.isConnected && trigger.focus());
 }
-// Where the item waiting to be confirmed away sits now — it can be moved from under a dialog.
-const pathOf = (item: MenuItem, list = menu?.items ?? [], at: number[] = []): number[] => {
-  for (const [i, row] of list.entries()) {
-    if (row === item) return [...at, i];
-    const found = row.children?.length ? pathOf(item, row.children, [...at, i]) : [];
-    if (found.length) return found;
-  }
-  return [];
-};
 
 // No label of its own, so renaming the page renames the menu row with it.
 const linkTo = (entry: PickEntry): NonNullable<MenuItem['link']> =>
@@ -311,14 +262,6 @@ function closeEditor() {
   document.getElementById(`${id}-row-${key}`)?.focus();
 }
 const found = $derived(editing ? find(menu?.items ?? [], editing) : undefined);
-function find(list: MenuItem[], key: string): MenuItem | undefined {
-  for (const item of list) {
-    if (item._id === key) return item;
-    const inner = item.children ? find(item.children, key) : undefined;
-    if (inner) return inner;
-  }
-  return undefined;
-}
 // `_locales` as a question about visitors: everywhere, or this one language.
 const shownIn = (item: MenuItem) =>
   item._locales?.length === 1 ? (item._locales[0] as string) : '';
@@ -327,142 +270,9 @@ function showIn(item: MenuItem, only: string) {
   else delete item._locales;
 }
 
-type Handlers = Required<DragDropEventHandlers>;
-type Manager = Parameters<Handlers['onDragOver']>[1];
-// How far sideways a drag must travel to mean one level deeper: the branch indent.
-const INDENT = 36;
-interface Slot {
-  kind: 'line' | 'into' | 'blocked';
-  // Where the indicator is drawn: the list it sits in and the row it follows.
-  list: MenuItem[];
-  after?: MenuItem;
-  deeper: boolean;
-  // What a drop would do: into this parent (the root when absent), after this sibling.
-  parent?: MenuItem;
-  sib?: MenuItem;
-}
-let mark = $state<Slot>();
-// Levels asked for with → and ← during a keyboard drag, on top of the pointer's travel.
-let shift = 0;
-
-interface Row {
-  item: MenuItem;
-  depth: number;
-  parent?: Row;
-}
-function rowsOf(list: MenuItem[], skip?: MenuItem, depth = 1, parent?: Row): Row[] {
-  const rows: Row[] = [];
-  for (const item of list) {
-    if (item === skip) continue;
-    const row: Row = { item, depth, parent };
-    rows.push(row, ...rowsOf(item.children ?? [], skip, depth + 1, row));
-  }
-  return rows;
-}
 const flatItems = $derived(rowsOf(menu?.items ?? []).map((row) => row.item));
 const included = $derived(flatItems.map((item) => keyOf(item.link)).filter(Boolean));
 
-// Nothing moves during a drag: the slot is drawn under the pointer and the drop is the one move.
-function place(manager: Manager, to?: { x: number; y: number }) {
-  mark = undefined;
-  const op = manager.dragOperation;
-  const items = menu?.items ?? [];
-  const src = op.source ? find(items, String(op.source.id)) : undefined;
-  const at = op.target?.element ? find(items, String(op.target.id)) : undefined;
-  if (!src || !at || at === src) return;
-  const all = rowsOf(items);
-  const srcRow = all.find((row) => row.item === src);
-  const atRow = all.find((row) => row.item === at);
-  if (!srcRow || !atRow) return;
-  for (let up = atRow.parent; up; up = up.parent) if (up.item === src) return;
-  const rect = op.target?.element?.getBoundingClientRect();
-  if (!rect) return;
-  // A dragmove is announced before its coordinates land, so the event's own point wins.
-  const point = to ?? op.position.current;
-  const after =
-    op.activatorEvent instanceof KeyboardEvent
-      ? all.indexOf(atRow) > all.indexOf(srcRow)
-      : point.y >= rect.top + rect.height / 2;
-  const flat = rowsOf(items, src);
-  const gap = flat.findIndex((row) => row.item === at) + (after ? 1 : 0);
-  const above = flat[gap - 1];
-  const below = flat[gap];
-  const most = above ? above.depth + 1 : 1;
-  const least = below ? below.depth : 1;
-  const dx = point.x - (op.position.current.x - op.position.delta.x);
-  const wanted = srcRow.depth + Math.round(dx / INDENT) + shift;
-  const depth = Math.min(Math.max(wanted, least), most);
-  let sibRow: Row | undefined;
-  let parentRow: Row | undefined;
-  if (above && depth > above.depth) {
-    parentRow = above;
-  } else if (above) {
-    sibRow = above;
-    while (sibRow && sibRow.depth > depth) sibRow = sibRow.parent;
-    parentRow = sibRow?.parent;
-  }
-  // Its own place is not a move.
-  const path = pathOf(src);
-  const own = listAt(path.slice(0, -1));
-  const prev = own[(path[path.length - 1] as number) - 1];
-  if (parentRow?.item === srcRow.parent?.item && sibRow?.item === prev) return;
-  const kind =
-    depth + heightOf(src) - 1 > MAX_DEPTH ? 'blocked' : depth === least ? 'line' : 'into';
-  let list = items;
-  let anchor: MenuItem | undefined;
-  let deeper = false;
-  if (above && parentRow === above) {
-    const kids = (above.item.children ?? []).filter((child) => child !== src);
-    if (kids.length && above.item.children) {
-      list = above.item.children;
-    } else {
-      list = above.parent?.item.children ?? items;
-      anchor = above.item;
-      deeper = true;
-    }
-  } else if (sibRow) {
-    list = sibRow.parent?.item.children ?? items;
-    anchor = sibRow.item;
-  }
-  mark = { kind, list, after: anchor, deeper, parent: parentRow?.item, sib: sibRow?.item };
-}
-
-function begun() {
-  shift = 0;
-  mark = undefined;
-}
-function moved(event: Parameters<Handlers['onDragMove']>[0], manager: Manager) {
-  if (event.by?.x && event.nativeEvent instanceof KeyboardEvent) {
-    // → and ← on a keyboard drag ask for a level, not a sideways pixel move.
-    event.preventDefault();
-    shift += Math.sign(event.by.x);
-    place(manager);
-    return;
-  }
-  const { current } = manager.dragOperation.position;
-  const to =
-    event.to ?? (event.by ? { x: current.x + event.by.x, y: current.y + event.by.y } : undefined);
-  place(manager, to);
-}
-// A canceled drag has nothing to put back, since the tree never moved.
-function ended(event: Parameters<Handlers['onDragEnd']>[0]) {
-  const slot = mark;
-  mark = undefined;
-  shift = 0;
-  const { source } = event.operation;
-  if (event.canceled || !slot || slot.kind === 'blocked' || !source) return;
-  const item = find(menu?.items ?? [], String(source.id));
-  if (!item) return;
-  const path = pathOf(item);
-  listAt(path.slice(0, -1)).splice(path[path.length - 1] as number, 1);
-  prune(path.slice(0, -1));
-  let into = menu?.items ?? [];
-  if (slot.parent) {
-    if (!slot.parent.children) slot.parent.children = [];
-    into = slot.parent.children;
-  }
-  into.splice(slot.sib ? into.indexOf(slot.sib) + 1 : 0, 0, item);
-}
 const sortable = (key: () => string, index: () => number) =>
   createSortable({
     get id() {
@@ -490,7 +300,7 @@ function walkTabs(event: KeyboardEvent) {
 
 {#snippet branch(list: MenuItem[], path: number[])}
   <ul class="branch">
-    {#if mark && mark.list === list && !mark.after}{@render indicator()}{/if}
+    {#if drag.mark && drag.mark.list === list && !drag.mark.after}{@render indicator()}{/if}
     {#each list as item, i (item._id)}
       {@const here = [...path, i]}
       {@const says = flag(item)}
@@ -609,7 +419,7 @@ function walkTabs(event: KeyboardEvent) {
           {@render branch(item.children, here)}
         {/if}
       </li>
-      {#if mark && mark.list === list && mark.after === item}{@render indicator()}{/if}
+      {#if drag.mark && drag.mark.list === list && drag.mark.after === item}{@render indicator()}{/if}
     {/each}
   </ul>
 {/snippet}
@@ -750,22 +560,22 @@ function walkTabs(event: KeyboardEvent) {
 {/snippet}
 
 {#snippet indicator()}
-  {#if mark?.kind === 'line'}
+  {#if drag.mark?.kind === 'line'}
     <li aria-hidden="true"><div class="drop-line"></div></li>
-  {:else if mark?.kind === 'into' && mark.parent}
+  {:else if drag.mark?.kind === 'into' && drag.mark.parent}
     <li aria-hidden="true">
-      <div class={['drop-into', { 'is-deeper': mark.deeper }]}>
-        {mark.sib
+      <div class={['drop-into', { 'is-deeper': drag.mark.deeper }]}>
+        {drag.mark.sib
           ? m.menus_drop_inside_after(
-              { parent: name(mark.parent), sibling: name(mark.sib) },
+              { parent: name(drag.mark.parent), sibling: name(drag.mark.sib) },
               options,
             )
-          : m.menus_drop_inside({ parent: name(mark.parent) }, options)}
+          : m.menus_drop_inside({ parent: name(drag.mark.parent) }, options)}
       </div>
     </li>
-  {:else if mark}
+  {:else if drag.mark}
     <li aria-hidden="true">
-      <div class={['drop-blocked', { 'is-deeper': mark.deeper }]}>
+      <div class={['drop-blocked', { 'is-deeper': drag.mark.deeper }]}>
         {m.menus_drop_blocked({}, options)}
       </div>
     </li>
@@ -914,10 +724,10 @@ function walkTabs(event: KeyboardEvent) {
           <p class="tree-note">{m.menus_empty_box({}, options)}</p>
         {:else if menu.items.length}
           <DragDropProvider
-            onDragStart={begun}
-            onDragMove={moved}
-            onDragOver={(_, m) => place(m)}
-            onDragEnd={ended}
+            onDragStart={drag.begun}
+            onDragMove={drag.moved}
+            onDragOver={(_, m) => drag.place(m)}
+            onDragEnd={drag.ended}
           >
             <div class="menu-tree">
               {@render branch(menu.items, [])}
