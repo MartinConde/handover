@@ -10,6 +10,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `@handover/core` types use camelCase: `GitFile.blobSha`, `GitClient.publish(files, { baseSha })`
   answering `{ commitSha }`, `BuildStatus`, and the results of `publishDrafts`, `revertCommit`,
   `restoreCommit`, `renameEntry` and `deleteEntry`. The admin API's JSON keys are unchanged.
+- An unexpected admin API error is logged (`admin api: <method> <path> failed`) before the 500.
 
 ## 0.1.0 — first release
 

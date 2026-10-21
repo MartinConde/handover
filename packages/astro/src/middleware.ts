@@ -66,7 +66,8 @@ export const onRequest: MiddlewareHandler = async (
     let response: Response;
     try {
       response = await work();
-    } catch {
+    } catch (err) {
+      console.error(`admin api: ${request.method} ${path} failed`, err);
       response = Response.json({ error: 'Internal server error' }, { status: 500 });
     }
     const headers = new Headers(response.headers);
