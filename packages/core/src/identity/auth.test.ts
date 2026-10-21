@@ -2,7 +2,8 @@ import { hashPassword } from 'better-auth/crypto';
 import { afterEach, beforeAll, beforeEach, expect, test, vi } from 'vitest';
 import { newTestD1, resetTestD1 } from '../db.fixture.js';
 import { type Db, openDb } from '../db.js';
-import { AUTH_BASE_PATH, accountFacts, createAuth, demoteOwner, memberList } from './auth.js';
+import { AUTH_BASE_PATH, createAuth } from './auth.js';
+import { accountFacts, demoteOwner, memberList } from './members.js';
 
 const mf = newTestD1();
 

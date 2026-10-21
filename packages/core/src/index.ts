@@ -211,20 +211,18 @@ export {
 export type { PathReservation } from './drafts/paths.js';
 export { releaseOperationPaths, releasePaths, reservePaths } from './drafts/paths.js';
 export type { Answer, MergedChange, Question, ThreeWay } from './drafts/resolve.js';
-export type { AccountFacts, Auth, AuthConfig, Member, MemberApi, Role } from './identity/auth.js';
-export {
-  AUTH_BASE_PATH,
-  accountFacts,
-  accountLocale,
-  createAuth,
-  demoteOwner,
-  dropEmailLinks,
-  memberApi,
-  memberList,
-  roleOf,
-} from './identity/auth.js';
+export type { Auth, AuthConfig, MemberApi, Role } from './identity/auth.js';
+export { AUTH_BASE_PATH, createAuth, memberApi, roleOf } from './identity/auth.js';
 export type { EmailSender, Mailer } from './identity/mailer.js';
 export { cloudflareMailer, resendMailer, senderAddress } from './identity/mailer.js';
+export type { AccountFacts, Member } from './identity/members.js';
+export {
+  accountFacts,
+  accountLocale,
+  demoteOwner,
+  dropEmailLinks,
+  memberList,
+} from './identity/members.js';
 export type { Integration, SettingFact } from './identity/settings.js';
 export {
   INTEGRATIONS,
