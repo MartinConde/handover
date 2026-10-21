@@ -11,7 +11,7 @@ import {
 } from '../i18n.js';
 import { navigate } from '../navigate';
 import * as m from '../paraglide/messages.js';
-import { request as fetch } from '../request.js';
+import { request as fetch, postJson } from '../request.js';
 import Modal from '../shared/Modal.svelte';
 
 let {
@@ -125,14 +125,10 @@ async function create(event: Event) {
   if (!directoryCurrent) return;
   busy = true;
   error = undefined;
-  const res = await fetch(`/admin/api/entries/${collection}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      title: text,
-      ...(starter ? { template: starter } : {}),
-      ...(locales.length > 1 ? { locale } : {}),
-    }),
+  const res = await postJson(`/admin/api/entries/${collection}`, {
+    title: text,
+    ...(starter ? { template: starter } : {}),
+    ...(locales.length > 1 ? { locale } : {}),
   });
   if (!res.ok) {
     const failure = await responseMessage(res, 'ENTRY_CREATE_FAILED');

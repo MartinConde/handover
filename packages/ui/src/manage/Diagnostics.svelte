@@ -10,7 +10,7 @@ import {
   type UiLocale,
 } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
-import { request as fetch, sitePath } from '../request.js';
+import { request as fetch, postJson, sitePath } from '../request.js';
 import ConfirmDialog from '../shared/ConfirmDialog.svelte';
 import Modal from '../shared/Modal.svelte';
 import Skeleton from '../shared/Skeleton.svelte';
@@ -321,11 +321,7 @@ async function saveKey(event: SubmitEvent) {
   if (!row) return;
   saving = true;
   keyError = undefined;
-  const res = await fetch(`/admin/api/settings/${row.key}`, {
-    method: 'PUT',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ value: typed }),
-  });
+  const res = await postJson(`/admin/api/settings/${row.key}`, { value: typed }, 'PUT');
   const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
   saving = false;
   // The dialog stays open on a refusal: what refused is nearly always a typo in the value.

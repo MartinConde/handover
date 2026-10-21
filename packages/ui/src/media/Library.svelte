@@ -5,7 +5,7 @@ import { tick } from 'svelte';
 import { messageDetail, messageText, responseMessage, type UiMessage } from '../errors.js';
 import { formatMediaDate, messageOptions, type UiLocale } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
-import { request as fetch, sitePath, uncertainResponse } from '../request.js';
+import { request as fetch, postJson, sitePath, uncertainResponse } from '../request.js';
 import ConfirmDialog from '../shared/ConfirmDialog.svelte';
 import MediaImage from '../shared/MediaImage.svelte';
 import Crop from './Crop.svelte';
@@ -270,11 +270,7 @@ async function writeMetadata(id: string, lane: MetadataLane) {
     while (lane.failed || lane.pending.length) {
       const details = lane.failed ?? lane.pending.shift();
       if (!details) break;
-      const res = await fetch(`/admin/api/media/${id}`, {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(details),
-      });
+      const res = await postJson(`/admin/api/media/${id}`, details, 'PATCH');
       if (!res.ok) {
         lane.failed = details;
         const message = uncertainResponse(res)

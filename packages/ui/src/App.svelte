@@ -35,7 +35,7 @@ import { flushNavigation, navigate } from './navigate';
 import * as m from './paraglide/messages.js';
 import Pending from './publishing/Pending.svelte';
 import RevertDialog from './publishing/RevertDialog.svelte';
-import { request as fetch, localPath, sitePath, uncertainResponse } from './request.js';
+import { request as fetch, localPath, postJson, sitePath, uncertainResponse } from './request.js';
 import type { ScreenProps } from './screen.js';
 import BuildPill from './shared/BuildPill.svelte';
 import Skeleton from './shared/Skeleton.svelte';
@@ -343,11 +343,7 @@ async function saveLocale(next: InterfaceLocale) {
   localeBusy = true;
   localeError = false;
   try {
-    const res = await fetch('/admin/api/auth/update-user', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ uiLocale: next }),
-    });
+    const res = await postJson('/admin/api/auth/update-user', { uiLocale: next });
     const confirmed =
       res.ok &&
       ((await res.json().catch(() => null)) as { status?: unknown } | null)?.status === true;
@@ -387,11 +383,7 @@ async function saveLocale(next: InterfaceLocale) {
 // Without the content type Better Auth answers 415 and the session outlives the click.
 async function signOut() {
   if (!(await flushNavigation())) return;
-  const res = await fetch('/admin/api/auth/sign-out', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: '{}',
-  });
+  const res = await postJson('/admin/api/auth/sign-out', {});
   if (!res.ok) {
     notify({ code: 'SIGN_OUT_FAILED' });
     return;

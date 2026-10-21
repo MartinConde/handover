@@ -10,7 +10,7 @@ import type { Snippet } from 'svelte';
 import { messageDetail, messageText, responseMessage, type UiMessage } from '../errors.js';
 import { formatLanguageName, messageOptions, type UiLocale } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
-import { request as fetch, uncertainResponse } from '../request.js';
+import { request as fetch, postJson, uncertainResponse } from '../request.js';
 import AutosaveStatus from '../shared/AutosaveStatus.svelte';
 import { dismiss } from '../shared/dismiss.js';
 import type { EntrySession } from './entry-session.svelte';
@@ -164,11 +164,10 @@ async function fill(paths?: string[]) {
   retryPaths = paths;
   let refusal: UiMessage | undefined;
   const result = await session.machineTranslate(locale, async () => {
-    const res = await fetch(`/admin/api/translate/${collection}/${slug}/${locale}`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(paths ? { paths } : {}),
-    });
+    const res = await postJson(
+      `/admin/api/translate/${collection}/${slug}/${locale}`,
+      paths ? { paths } : {},
+    );
     if (!res.ok) {
       refusal = uncertainResponse(res)
         ? { code: 'TRANSLATION_UNCONFIRMED', status: res.status }

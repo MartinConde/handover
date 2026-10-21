@@ -4,7 +4,7 @@ import { messageLine, responseMessage, type UiMessage } from '../errors.js';
 import { formatExactTime, messageOptions, type UiLocale } from '../i18n.js';
 import { coordinateEntryReplacement } from '../navigate';
 import * as m from '../paraglide/messages.js';
-import { request as fetch, uncertainResponse } from '../request.js';
+import { request as fetch, postJson, uncertainResponse } from '../request.js';
 
 let {
   entry,
@@ -84,17 +84,13 @@ async function done() {
   error = undefined;
   let res: Response | undefined;
   const outcome = await coordinateEntryReplacement(entry, async () => {
-    res = await fetch(`/admin/api/conflict/${entry}`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        version,
-        answers: questions.map((q) => ({
-          path: q.path,
-          ...(q.locale ? { locale: q.locale } : {}),
-          side: answers[key(q)],
-        })),
-      }),
+    res = await postJson(`/admin/api/conflict/${entry}`, {
+      version,
+      answers: questions.map((q) => ({
+        path: q.path,
+        ...(q.locale ? { locale: q.locale } : {}),
+        side: answers[key(q)],
+      })),
     });
     if (uncertainResponse(res)) throw new TypeError('The conflict response was not confirmed.');
     return res.ok;

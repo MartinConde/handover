@@ -11,7 +11,7 @@ import {
 } from '../i18n.js';
 import { coordinateEntryPublish, coordinateEntryReplacement } from '../navigate';
 import * as m from '../paraglide/messages.js';
-import { request as fetch, uncertainResponse } from '../request.js';
+import { request as fetch, postJson, uncertainResponse } from '../request.js';
 import BuildPill, { type Build } from '../shared/BuildPill.svelte';
 import Modal from '../shared/Modal.svelte';
 import CheckLines, {
@@ -236,11 +236,7 @@ async function lint(keys: string[]): Promise<CheckItem[]> {
     checksFailed = false;
     return [];
   }
-  const res = await fetch('/admin/api/publish/checks', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ entries: keys }),
-  }).catch(() => undefined);
+  const res = await postJson('/admin/api/publish/checks', { entries: keys }).catch(() => undefined);
   const failed = !res?.ok;
   const results = (res?.ok && ((await res.json()) as { results?: CheckItem[] }).results) || [];
   // Returning to the same selection must not make an older answer current again.
@@ -268,11 +264,7 @@ async function publish() {
       checksBlocked = true;
       return false;
     }
-    res = await fetch('/admin/api/publish', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ entries: keys }),
-    });
+    res = await postJson('/admin/api/publish', { entries: keys });
     if (uncertainResponse(res)) throw new TypeError('The publish response was not confirmed.');
     return res.ok;
   });

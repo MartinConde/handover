@@ -4,7 +4,7 @@ import { messageDetail, messageText, retainedFailure, type UiMessage } from '../
 import { formatExactTime, formatRelativeTime, messageOptions, type UiLocale } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
 import Diff from '../publishing/Diff.svelte';
-import { request as fetch, sitePath } from '../request.js';
+import { request as fetch, postJson, sitePath } from '../request.js';
 import { activityGroupLabel, ENTRY, initials, type Person, said } from '../shared/activity-line';
 import Skeleton from '../shared/Skeleton.svelte';
 
@@ -123,11 +123,7 @@ async function load(next?: string | null) {
 async function putBack(event: ActivityEvent) {
   putting = event.id;
   refused = undefined;
-  const res = await fetch('/admin/api/restore', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ commit_sha: event.commitSha }),
-  });
+  const res = await postJson('/admin/api/restore', { commit_sha: event.commitSha });
   putting = '';
   if (!res.ok) {
     refused = {

@@ -3,7 +3,7 @@ import { type Pickable, readEntryDirectory } from '../entry-directory.js';
 import { messageLine, messageText, responseMessage, type UiMessage } from '../errors.js';
 import { languageTag, messageOptions, type UiLocale } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
-import { request as fetch, sitePath } from '../request.js';
+import { request as fetch, postJson, sitePath } from '../request.js';
 import ConfirmDialog from '../shared/ConfirmDialog.svelte';
 import Modal from '../shared/Modal.svelte';
 import Skeleton from '../shared/Skeleton.svelte';
@@ -151,13 +151,10 @@ function close() {
 async function save() {
   if (!writing) return;
   saving = true;
-  const res = await fetch(
+  const res = await postJson(
     writing.id ? `/admin/api/redirects/${writing.id}` : '/admin/api/redirects',
-    {
-      method: writing.id ? 'PUT' : 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ from: writing.from, to: writing.to, status: writing.status }),
-    },
+    { from: writing.from, to: writing.to, status: writing.status },
+    writing.id ? 'PUT' : 'POST',
   );
   saving = false;
   if (res.ok) {

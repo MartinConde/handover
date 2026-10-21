@@ -2,7 +2,7 @@
 import type { Drift } from '@handover/core';
 import { formatLanguageList, formatLanguageName, messageOptions, type UiLocale } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
-import { request as fetch } from '../request.js';
+import { postJson } from '../request.js';
 
 let {
   collection,
@@ -102,15 +102,11 @@ const answered = $derived(drift.filter((row) => answers[row.path] !== undefined)
 async function apply() {
   busy = true;
   error = undefined;
-  const res = await fetch(`/admin/api/drift/${collection}/${slug}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      choices: drift.map((row) => ({
-        path: row.path,
-        locales: choicesFor(row)[answers[row.path] ?? 0]?.to ?? [],
-      })),
-    }),
+  const res = await postJson(`/admin/api/drift/${collection}/${slug}`, {
+    choices: drift.map((row) => ({
+      path: row.path,
+      locales: choicesFor(row)[answers[row.path] ?? 0]?.to ?? [],
+    })),
   });
   busy = false;
   if (!res.ok) {

@@ -1,7 +1,7 @@
 <script lang="ts">
 import { collectionName, formatLanguageName, messageOptions, type UiLocale } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
-import { request as fetch, sitePath } from '../request.js';
+import { postJson, sitePath } from '../request.js';
 import Modal from '../shared/Modal.svelte';
 import type { Recorded, Unrecorded } from './SourceLanguagesTile.svelte';
 
@@ -55,11 +55,7 @@ async function record(event: SubmitEvent) {
   event.preventDefault();
   busy = true;
   refusal = undefined;
-  const res = await fetch('/admin/api/sources', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ base }),
-  });
+  const res = await postJson('/admin/api/sources', { base });
   const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
   busy = false;
   if (res.ok) {

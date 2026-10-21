@@ -3,7 +3,7 @@ import type { UiLocale } from '@handover/core';
 import { messageDetail, messageText, responseMessage, type UiMessage } from '../errors.js';
 import { messageOptions } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
-import { request as fetch, sitePath } from '../request.js';
+import { request as fetch, postJson, sitePath } from '../request.js';
 import LanguageControl from '../shared/LanguageControl.svelte';
 
 interface Facts {
@@ -70,11 +70,7 @@ function accountReadFailure(error: unknown): UiMessage {
 
 async function post(path: string, body: unknown) {
   busy = true;
-  const res = await fetch(path, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  });
+  const res = await postJson(path, body);
   busy = false;
   return res;
 }

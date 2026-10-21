@@ -4,7 +4,7 @@ import { messageText, responseMessage, type UiMessage } from '../errors.js';
 import type { UiLocale } from '../i18n.js';
 import { messageOptions } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
-import { request as fetch, sitePath } from '../request.js';
+import { postJson, sitePath } from '../request.js';
 import LanguageControl from '../shared/LanguageControl.svelte';
 
 export interface LoginMethods {
@@ -86,11 +86,7 @@ async function post(path: string, body: unknown) {
   error = undefined;
   fieldError = undefined;
   clearLimit();
-  const res = await fetch(path, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  });
+  const res = await postJson(path, body);
   busy = false;
   // Retrying too fast is the one failure worth naming: the user did nothing wrong.
   if (res.status === 429) {

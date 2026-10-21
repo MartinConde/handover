@@ -2,7 +2,7 @@
 import { messageText, responseMessage, type UiMessage } from '../errors.js';
 import { formatLanguageName, messageOptions, type UiLocale } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
-import { request as fetch, uncertainResponse } from '../request.js';
+import { postJson, uncertainResponse } from '../request.js';
 import { TAB_KEY } from './entry-lock.svelte';
 
 /** The body of the 409 an entry answers when its files do not settle its source language. */
@@ -71,10 +71,9 @@ async function choose(event: SubmitEvent) {
   } catch {
     // Without the token only a lock this person holds elsewhere can refuse, and it says so.
   }
-  const res = await fetch(`/admin/api/entries/${collection}/${slug}/source`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ locale: chosen, tab }),
+  const res = await postJson(`/admin/api/entries/${collection}/${slug}/source`, {
+    locale: chosen,
+    tab,
   });
   if (res.ok) {
     await onchosen(chosen);

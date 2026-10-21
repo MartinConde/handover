@@ -1,6 +1,6 @@
 import { LOCK_TTL } from '@handover/core';
 import type { UiMessage } from '../errors.js';
-import { request as fetch } from '../request.js';
+import { request as fetch, postJson } from '../request.js';
 
 export const TAB_KEY = 'handover-tab';
 // Beat cadence, and how stale the last beat must be before typing renews the lock.
@@ -56,16 +56,10 @@ export function createEntryLock({
   }
 
   async function beat(claim: boolean) {
-    const res = await fetch(
-      `/admin/api/locks/${collection}/${slug}${claim ? '' : `?tab=${tab}`}`,
-      claim
-        ? {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ tab }),
-          }
-        : { method: 'GET' },
-    ).catch(() => undefined);
+    const url = `/admin/api/locks/${collection}/${slug}${claim ? '' : `?tab=${tab}`}`;
+    const res = await (claim ? postJson(url, { tab }) : fetch(url, { method: 'GET' })).catch(
+      () => undefined,
+    );
     if (!res?.ok) return;
     const had = lock?.mine === true;
     const answer = (await res.json()) as EntryLock;
@@ -140,11 +134,7 @@ export function createEntryLock({
       takeBusy = true;
       takeFailure = undefined;
       try {
-        const res = await fetch(`/admin/api/locks/${collection}/${slug}`, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ take: true, tab }),
-        });
+        const res = await postJson(`/admin/api/locks/${collection}/${slug}`, { take: true, tab });
         if (!res.ok) {
           takeFailure = await failure(res, 'EDITOR_LOCK_TAKE_FAILED');
           return;

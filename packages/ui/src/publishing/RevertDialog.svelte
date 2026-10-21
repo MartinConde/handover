@@ -12,7 +12,7 @@ import { retainedFailure } from '../errors.js';
 import { messageOptions, type UiLocale } from '../i18n.js';
 import { coordinateEntryReplacement } from '../navigate';
 import * as m from '../paraglide/messages.js';
-import { request as fetch, uncertainResponse } from '../request.js';
+import { postJson, uncertainResponse } from '../request.js';
 import ConfirmDialog from '../shared/ConfirmDialog.svelte';
 
 let {
@@ -41,11 +41,7 @@ async function revert() {
   reverting = true;
   let res: Response | undefined;
   const outcome = await coordinateEntryReplacement(undefined, async () => {
-    res = await fetch('/admin/api/revert', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ commit_sha: confirmed }),
-    });
+    res = await postJson('/admin/api/revert', { commit_sha: confirmed });
     if (uncertainResponse(res)) throw new TypeError('The revert response was not confirmed.');
     return res.ok;
   });

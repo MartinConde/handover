@@ -21,7 +21,7 @@ import {
 import { navigate } from '../navigate';
 import { missing, offered, owes, partial, queueQuery, rowTitle, stale, workFrom } from '../owed.js';
 import * as m from '../paraglide/messages.js';
-import { request as fetch, sitePath } from '../request.js';
+import { request as fetch, postJson, sitePath } from '../request.js';
 import { dismiss } from '../shared/dismiss.js';
 import Modal from '../shared/Modal.svelte';
 import Skeleton from '../shared/Skeleton.svelte';
@@ -236,10 +236,7 @@ async function load(name: string) {
 
 // Showing an entry again has no question to ask; hiding one always does.
 async function status(ids: string[], hidden: boolean, redirect?: Target) {
-  const res = await send(
-    `/admin/api/status/${collection}`,
-    json({ entries: ids, hidden, redirect }),
-  );
+  const res = await send(`/admin/api/status/${collection}`, { entries: ids, hidden, redirect });
   if (!res) return;
   chosen = [];
   await done();
@@ -267,17 +264,11 @@ const close = () => {
   error = undefined;
 };
 
-const json = (body: unknown) => ({
-  method: 'POST',
-  headers: { 'content-type': 'application/json' },
-  body: JSON.stringify(body),
-});
-
 // A 409 or 503 the interface has no words for is the server's own sentence.
-async function send(url: string, init: RequestInit) {
+async function send(url: string, body: unknown, method = 'POST') {
   busy = true;
   error = undefined;
-  const res = await fetch(url, init);
+  const res = await postJson(url, body, method);
   busy = false;
   if (res.ok) return res;
   error = await responseMessage(res, 'ENTRY_ACTION_FAILED');
@@ -298,7 +289,7 @@ const said = (body: string) =>
 
 // The same inverse commit as a revert; both lists move, so both are read again.
 async function restore(row: Deleted) {
-  const res = await send('/admin/api/restore', json({ commit_sha: row.commit_sha }));
+  const res = await send('/admin/api/restore', { commit_sha: row.commit_sha });
   if (!res) return;
   close();
   await Promise.all([load(collection), loadDeleted(collection)]);
@@ -310,7 +301,7 @@ async function restore(row: Deleted) {
 async function duplicate(event: Event) {
   event.preventDefault();
   const url = `/admin/api/entries/${collection}/${target?.id}/duplicate`;
-  const res = await send(url, json({ to: text, ...(withDrafts ? { drafts: true } : {}) }));
+  const res = await send(url, { to: text, ...(withDrafts ? { drafts: true } : {}) });
   if (!res) return;
   const { slug } = (await res.json()) as { slug: string };
   invalidateEntryDirectory();
@@ -321,7 +312,7 @@ async function duplicate(event: Event) {
 async function saveTemplate(event: Event) {
   event.preventDefault();
   const url = `/admin/api/entries/${collection}/${target?.id}/template`;
-  const res = await send(url, json({ to: text }));
+  const res = await send(url, { to: text });
   if (!res) return;
   const { name } = (await res.json()) as { name: string };
   close();
@@ -333,7 +324,7 @@ async function saveTemplate(event: Event) {
 async function rename(event: Event) {
   event.preventDefault();
   const url = `/admin/api/entries/${collection}/${target?.id}/rename`;
-  const res = await send(url, json({ to: text }));
+  const res = await send(url, { to: text });
   if (!res) return;
   await done();
   await announceCommit(res);
@@ -342,7 +333,7 @@ async function rename(event: Event) {
 // A delete commits now, so the redirect rules ride in that commit, not a later publish.
 async function remove(id: string, redirect: Target) {
   const url = `/admin/api/entries/${collection}/${id}`;
-  const res = await send(url, { ...json({ redirect }), method: 'DELETE' });
+  const res = await send(url, { redirect }, 'DELETE');
   if (!res) return;
   await done();
   await announceCommit(res);

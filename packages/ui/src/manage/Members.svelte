@@ -3,7 +3,7 @@ import type { Member as CoreMember } from '@handover/core';
 import { messageDetail, messageText, responseMessage, type UiMessage } from '../errors.js';
 import { formatRelativeTime, messageOptions, type UiLocale } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
-import { request as fetch, sitePath, uncertainResponse } from '../request.js';
+import { request as fetch, postJson, sitePath, uncertainResponse } from '../request.js';
 import ConfirmDialog from '../shared/ConfirmDialog.svelte';
 import { dismiss } from '../shared/dismiss.js';
 import Modal from '../shared/Modal.svelte';
@@ -109,12 +109,11 @@ function close() {
 
 // Keep the wire code and safe detail so a visible refusal follows the current UI locale.
 async function send(
-  path: string,
-  init: RequestInit,
+  call: () => Promise<Response>,
   fallback: 'MEMBER_ROLE_FAILED' | 'MEMBER_REMOVE_FAILED',
 ): Promise<Record<string, unknown> | undefined> {
   busy = true;
-  const res = await fetch(path, init);
+  const res = await call();
   busy = false;
   if (!res.ok) {
     error = await responseMessage(res, fallback);
@@ -123,17 +122,11 @@ async function send(
   return (await res.json().catch(() => ({}))) as Record<string, unknown>;
 }
 
-const json = (body: unknown): RequestInit => ({
-  method: 'POST',
-  headers: { 'content-type': 'application/json' },
-  body: JSON.stringify(body),
-});
-
 async function invite(event: SubmitEvent) {
   event.preventDefault();
   error = undefined;
   busy = true;
-  const res = await fetch('/admin/api/members', json({ email, role }));
+  const res = await postJson('/admin/api/members', { email, role });
   busy = false;
   if (uncertainResponse(res)) {
     close();
@@ -166,7 +159,7 @@ async function resend(member: Member) {
   notice = undefined;
   failure = undefined;
   busy = true;
-  const res = await fetch(`/admin/api/members/${member.id}/invite`, json({}));
+  const res = await postJson(`/admin/api/members/${member.id}/invite`, {});
   busy = false;
   if (uncertainResponse(res)) {
     failure = { code: 'MEMBER_INVITE_UNCONFIRMED' };
@@ -179,7 +172,12 @@ async function resend(member: Member) {
 async function changeRole(event: SubmitEvent) {
   event.preventDefault();
   error = undefined;
-  if (!(await send(`/admin/api/members/${target?.id}/role`, json({ role }), 'MEMBER_ROLE_FAILED')))
+  if (
+    !(await send(
+      () => postJson(`/admin/api/members/${target?.id}/role`, { role }),
+      'MEMBER_ROLE_FAILED',
+    ))
+  )
     return;
   close();
   await load();
@@ -188,7 +186,10 @@ async function changeRole(event: SubmitEvent) {
 async function remove() {
   error = undefined;
   if (
-    !(await send(`/admin/api/members/${target?.id}`, { method: 'DELETE' }, 'MEMBER_REMOVE_FAILED'))
+    !(await send(
+      () => fetch(`/admin/api/members/${target?.id}`, { method: 'DELETE' }),
+      'MEMBER_REMOVE_FAILED',
+    ))
   )
     return;
   const gone = target;
