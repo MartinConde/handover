@@ -570,7 +570,7 @@ test('switching languages keeps the pending draft attached to the locale that sa
   $$<HTMLButtonElement>(root, '[aria-label="Language"] button')[2]?.click();
   await vi.advanceTimersByTimeAsync(0);
   flushSync();
-  $<HTMLButtonElement>(root, '.entry-header button.btn-primary')?.click();
+  $<HTMLButtonElement>(root, '.entry-actions button.btn-primary')?.click();
   await vi.advanceTimersByTimeAsync(0);
   flushSync();
 
@@ -604,8 +604,8 @@ test('a clean response for one translation does not clear another locale pending
   await vi.advanceTimersByTimeAsync(2000);
 
   expect(pending).toHaveBeenCalledTimes(1);
-  expect($<HTMLButtonElement>(root, '.entry-header button.btn-primary')?.disabled).toBe(false);
-  $<HTMLButtonElement>(root, '.entry-header button.btn-primary')?.click();
+  expect($<HTMLButtonElement>(root, '.entry-actions button.btn-primary')?.disabled).toBe(false);
+  $<HTMLButtonElement>(root, '.entry-actions button.btn-primary')?.click();
   await vi.advanceTimersByTimeAsync(0);
   flushSync();
   expect($(root, '.dialog .publish-set')?.textContent?.replace(/\s+/g, ' ').trim()).toBe(

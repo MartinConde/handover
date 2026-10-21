@@ -83,7 +83,9 @@ test('live interface language updates editor chrome and dates without replacing 
     'Inhalt',
     'Verlauf',
   ]);
-  expect(q('.entry-header button.btn-primary')?.textContent).toBe('Diesen Eintrag veröffentlichen');
+  expect(q('.entry-actions button.btn-primary')?.textContent).toBe(
+    'Diesen Eintrag veröffentlichen',
+  );
   expect(current).toBe(input);
   expect(current?.value).toBe('Unsaved harbour words');
   expect(current?.dataset.localeProof).toBe('same-editor-field');
@@ -151,11 +153,11 @@ test('German publish tooltips keep the header reason order', async () => {
     });
     await settle();
     const en =
-      q<HTMLButtonElement>('.entry-header button.btn-primary')?.getAttribute('title') ?? null;
+      q<HTMLButtonElement>('.entry-actions button.btn-primary')?.getAttribute('title') ?? null;
     q<HTMLButtonElement>('[data-locale-switch]')?.click();
     flushSync();
     const de =
-      q<HTMLButtonElement>('.entry-header button.btn-primary')?.getAttribute('title') ?? null;
+      q<HTMLButtonElement>('.entry-actions button.btn-primary')?.getAttribute('title') ?? null;
     titles.push({ en, de });
     unmount(state.app);
     document.body.innerHTML = '';
@@ -237,8 +239,8 @@ test('an open publish confirmation retranslates without rerunning checks', async
   );
   vi.stubGlobal('fetch', fetchMock);
   state.app = mount(EditorLocaleFixture, { target: document.body, props: { pending: true } });
-  await vi.waitFor(() => expect(q<HTMLButtonElement>('.entry-header .btn-primary')).toBeTruthy());
-  q<HTMLButtonElement>('.entry-header .btn-primary')?.click();
+  await vi.waitFor(() => expect(q<HTMLButtonElement>('.entry-actions .btn-primary')).toBeTruthy());
+  q<HTMLButtonElement>('.entry-actions .btn-primary')?.click();
   await vi.waitFor(() => expect(q('#publish-h')?.textContent).toBe('Publish Seaview Cottage?'));
   flushSync();
   const dialog = q<HTMLDialogElement>('dialog[open]');
@@ -280,8 +282,8 @@ test('an open publish confirmation keeps the languages left for later across a s
       translations: { de: { title: '' } },
     },
   });
-  await vi.waitFor(() => expect(q<HTMLButtonElement>('.entry-header .btn-primary')).toBeTruthy());
-  q<HTMLButtonElement>('.entry-header .btn-primary')?.click();
+  await vi.waitFor(() => expect(q<HTMLButtonElement>('.entry-actions .btn-primary')).toBeTruthy());
+  q<HTMLButtonElement>('.entry-actions .btn-primary')?.click();
   await vi.waitFor(() => expect(q('.dialog input[type="checkbox"]')).toBeTruthy());
   q<HTMLInputElement>('.dialog input[type="checkbox"]')?.click();
   await vi.waitFor(() =>

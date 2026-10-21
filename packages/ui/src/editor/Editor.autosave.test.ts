@@ -1,8 +1,7 @@
 import { LOCK_TTL } from '@handover/core';
-import { flushSync, mount } from 'svelte';
+import { flushSync } from 'svelte';
 import { expect, test, vi } from 'vitest';
 import { deferred } from '../test-helpers.fixture.js';
-import Editor from './Editor.svelte';
 import {
   $,
   addressed,
@@ -14,7 +13,6 @@ import {
   isLint,
   isLock,
   show,
-  state,
   tick,
   type,
   useEditorSetup,
@@ -53,7 +51,7 @@ test('a file somebody changed in the repository badges the header and names the 
   flushSync();
 
   expect($(root, '.dialog')).toBeNull();
-  expect($(root, '.entry-header .badge-danger')?.textContent).toBe(
+  expect($(root, '.entry-lead .badge-danger')?.textContent).toBe(
     'Changed in the repository since you opened it',
   );
   expect($(root, '.entry-header .subline')?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
@@ -266,15 +264,7 @@ test('the entry this screen opened is taken as it opens', async () => {
 });
 
 test('a draft that is ahead of the published file can be published on load', () => {
-  state.app = mount(Editor, {
-    target: document.body,
-    props: {
-      collection: 'listings',
-      slug: 'seaview-cottage',
-      entry: { ...entry, pending: ['en'] },
-      onchanged: () => {},
-    },
-  });
+  show({ entry: { ...entry, pending: ['en'] } });
   expect($<HTMLButtonElement>(document.body, 'button.btn-primary')?.disabled).toBe(false);
 });
 
@@ -319,16 +309,7 @@ test('a draft that matches the published file again leaves nothing to publish', 
 });
 
 const withProblems = (problems: { path: string; message: string }[]) => {
-  state.app = mount(Editor, {
-    target: document.body,
-    props: {
-      collection: 'listings',
-      slug: 'seaview-cottage',
-      entry: { ...entry, pending: ['en'], problems },
-      onchanged: () => {},
-    },
-  });
-  return document.body;
+  return show({ entry: { ...entry, pending: ['en'], problems } });
 };
 
 // Regression: a required field with no widget yet used to say only "Not saved".

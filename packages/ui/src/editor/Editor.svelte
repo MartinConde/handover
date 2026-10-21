@@ -137,7 +137,7 @@ let {
   // Hands the shell a live read of the title for its top-bar breadcrumb.
   ontitle?: (read: () => string) => void;
   // Hands the shell the address and actions to draw in its top bar; the cleanup takes them back.
-  ontopbar?: (parts: { lead: Snippet; actions: Snippet }) => () => void;
+  ontopbar: (parts: { lead: Snippet; actions: Snippet }) => () => void;
 } = $props();
 const options = $derived(messageOptions(uiLocale));
 const feedbackText = (message: UiMessage) => messageText(message, uiLocale);
@@ -510,7 +510,7 @@ const title = $derived(
   entry.labels?.[uiLocale] ?? entry.label ?? (typeof named === 'string' && named ? named : slug),
 );
 onMount(() => ontitle?.(() => title));
-onMount(() => ontopbar?.({ lead: topbarLead, actions: topbarActions }));
+onMount(() => ontopbar({ lead: topbarLead, actions: topbarActions }));
 // The SEO panel is its own tab, so the Content form omits the field; a global has no tabs.
 const seoField = $derived(!entry.singleton && entry.fields.some((f) => f.type === 'seo'));
 // The key the seo field sits under, which is what a problem on it is named by.
@@ -1474,18 +1474,7 @@ async function saveAddress() {
     {feedback}
   />
   <header class={['entry-header', { 'is-held': held }]} bind:offsetHeight={headerHeight}>
-    {#if ontopbar}
-      <h1 class="visually-hidden">{title}</h1>
-    {:else}
-      <div class="heading-row">
-        <div class="title-stack">
-          <h1>{title}</h1>
-          {@render addressRow()}
-          {@render topbarLead()}
-        </div>
-        <div class="actions">{@render topbarActions()}</div>
-      </div>
-    {/if}
+    <h1 class="visually-hidden">{title}</h1>
     {#if entryPublish.conflicted}
       <p class="subline">{m.editor_conflict_guidance({}, options)}</p>
     {/if}
@@ -1711,7 +1700,7 @@ async function saveAddress() {
                 bind:root={entrySession.snapshots[entry.sourceLocale]!}
                 structureLocked={entrySession.structureMutationBlocked()}
                 textOnly={entrySession.sourceTextOnly(entry.sourceLocale)}
-                afterTitle={ontopbar && locale === entry.sourceLocale ? addressRow : undefined}
+                afterTitle={locale === entry.sourceLocale ? addressRow : undefined}
                 titleKey={entry.titleField}
               />
             </fieldset>
@@ -1902,7 +1891,7 @@ async function saveAddress() {
                 }}
                 {mediaBase}
                 heading={paneHeading}
-                afterTitle={ontopbar && shown === locale ? addressRow : undefined}
+                afterTitle={shown === locale ? addressRow : undefined}
                 titleKey={entry.titleField}
                 next={queue ? queueNext : undefined}
                 {reference}

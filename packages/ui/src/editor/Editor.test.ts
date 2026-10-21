@@ -49,18 +49,18 @@ test('a global is drawn without Hide, Delete, Change file name or the tab bar', 
   expect(publishMenuItems(root)).toEqual(['Ready to publish']);
 });
 
-test('a global keeps its title state and publishing controls in one header row', () => {
+test('a global keeps its title state and publishing controls in the header and top bar', () => {
   const root = show({
     collection: 'globals',
     slug: 'site',
     entry: { ...bilingual, singleton: true, label: 'Site details' },
   });
 
-  const row = $(root, '.entry-header > .heading-row');
-  expect(row?.querySelector('h1')?.textContent).toBe('Site details');
-  expect(row?.querySelector('.publish-more')).not.toBeNull();
+  expect($(root, '.entry-header h1')?.textContent).toBe('Site details');
+  const actions = $(root, '.entry-actions');
+  expect(actions?.querySelector('.publish-more')).not.toBeNull();
   expect(root.querySelector('.workspace-toolbar .seg[aria-label="Language"]')).not.toBeNull();
-  expect(row?.querySelector('.btn-primary')?.textContent).toContain('Publish this entry');
+  expect(actions?.querySelector('.btn-primary')?.textContent).toContain('Publish this entry');
 });
 
 test('fields and block types labelled per language are named in the interface language', () => {
@@ -356,7 +356,7 @@ test('final confirmation saves source and translation edits made after the dialo
   const root = show({ entry: { ...bilingual, pending: ['en', 'de'] } });
   $<HTMLButtonElement>(root, 'button.btn-sbs')?.click();
   flushSync();
-  $<HTMLButtonElement>(root, '.entry-header button.btn-primary')?.click();
+  $<HTMLButtonElement>(root, '.entry-actions button.btn-primary')?.click();
   await vi.waitFor(() => {
     flushSync();
     expect($(root, '.dialog h2')).not.toBeNull();
@@ -402,7 +402,7 @@ test('a failed final save prevents publish and releases the editor for another a
   });
   vi.stubGlobal('fetch', fetchMock);
   const root = show({ entry: { ...entry, pending: ['en'] } });
-  $<HTMLButtonElement>(root, '.entry-header button.btn-primary')?.click();
+  $<HTMLButtonElement>(root, '.entry-actions button.btn-primary')?.click();
   await vi.waitFor(() => {
     flushSync();
     expect($(root, '.dialog h2')).not.toBeNull();
@@ -453,7 +453,7 @@ test('final checks freeze every locale and a refusal releases them', async () =>
   const root = show({ entry: { ...bilingual, pending: ['en', 'de'] } });
   $<HTMLButtonElement>(root, 'button.btn-sbs')?.click();
   flushSync();
-  $<HTMLButtonElement>(root, '.entry-header button.btn-primary')?.click();
+  $<HTMLButtonElement>(root, '.entry-actions button.btn-primary')?.click();
   await settle(2);
   $<HTMLButtonElement>(root, '.dialog .btn-primary')?.click();
   await tick();
@@ -567,7 +567,7 @@ test('an uncertain entry publish reloads before offering another attempt', async
     entry: { ...entry, pending: ['en'] },
     onreload: reloaded,
   });
-  $<HTMLButtonElement>(root, '.entry-header button.btn-primary')?.click();
+  $<HTMLButtonElement>(root, '.entry-actions button.btn-primary')?.click();
   await settle(2);
   $<HTMLButtonElement>(root, '.dialog .btn-primary')?.click();
   await settle(2);
@@ -775,7 +775,7 @@ const checksBodies = (mock: { mock: { calls: unknown[][] } }) =>
     .filter((call) => call[0] === '/admin/api/publish/checks')
     .map((call) => JSON.parse(String((call[1] as RequestInit).body)));
 const headerPublish = (root: ParentNode) =>
-  $<HTMLButtonElement>(root, '.entry-header .actions .btn-primary');
+  $<HTMLButtonElement>(root, '.entry-actions .btn-primary');
 const later = (root: ParentNode) => $<HTMLInputElement>(root, '.dialog input[type="checkbox"]');
 
 test('a check error only in a translation leaves the header Publish enabled', async () => {
@@ -1007,8 +1007,7 @@ test('a language the entry has no file in has no address to edit', () => {
 
   switchTo(body, 'DE');
 
-  expect(body.querySelector('.slug-row .slug-edit')).toBe(null);
-  expect(body.querySelector('.slug-row .slug-rename')?.textContent).toBe('Change file name');
+  expect(body.querySelector('.slug-row')).toBe(null);
 });
 
 test('the reason an address was refused is shown against the row', async () => {
@@ -1068,7 +1067,7 @@ test('a hidden entry says in the header where it sends its readers', () => {
     entry: { ...entry, hidden: true, redirects: { en: '/listings' } },
   });
 
-  expect($(root, '.entry-header .badge')?.textContent).toBe('Hidden');
+  expect($(root, '.entry-lead .badge')?.textContent).toBe('Hidden');
   expect($(root, '.subline')?.textContent?.trim()).toBe('Redirecting to /listings while hidden');
 });
 
@@ -1116,9 +1115,7 @@ test('Delete is its own button in the header actions', async () => {
   const root = show();
   await tick();
 
-  expect($(root, '.entry-header .actions button.delete-entry')?.getAttribute('aria-label')).toBe(
-    'Delete',
-  );
+  expect($(root, '.entry-actions button.delete-entry')?.getAttribute('aria-label')).toBe('Delete');
 });
 
 test('Change file name sits in the address row', async () => {

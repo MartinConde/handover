@@ -2,7 +2,8 @@ import { type Drift, type Field, LOCK_TTL } from '@handover/core';
 import { type ComponentProps, flushSync, mount, unmount } from 'svelte';
 import { afterEach, vi } from 'vitest';
 import { HELD, isLock } from '../test-helpers.fixture.js';
-import Editor from './Editor.svelte';
+import type Editor from './Editor.svelte';
+import EditorTopbarFixture from './EditorTopbarFixture.svelte';
 
 export { HELD, isLock, settle } from '../test-helpers.fixture.js';
 
@@ -63,7 +64,7 @@ export const bilingual = {
 
 export const state = {} as { app: ReturnType<typeof mount> };
 export const show = (over: Partial<ComponentProps<typeof Editor>> = {}) => {
-  state.app = mount(Editor, {
+  state.app = mount(EditorTopbarFixture, {
     target: document.body,
     props: {
       collection: 'listings',
@@ -73,6 +74,8 @@ export const show = (over: Partial<ComponentProps<typeof Editor>> = {}) => {
       ...over,
     },
   });
+  // The Editor hands over its top-bar parts when it mounts; this draws them.
+  flushSync();
   return document.body;
 };
 

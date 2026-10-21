@@ -1,7 +1,8 @@
 <script lang="ts">
 import type { Drift, Field } from '@handover/core';
 import type { UiLocale } from '../i18n.js';
-import Editor, { type CreatedAll } from './Editor.svelte';
+import type { CreatedAll } from './Editor.svelte';
+import Editor from './EditorTopbarFixture.svelte';
 
 let {
   initialUiLocale = 'en',
