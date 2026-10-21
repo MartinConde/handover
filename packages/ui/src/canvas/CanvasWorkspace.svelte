@@ -34,7 +34,12 @@ import type {
   createCanvasRenderer,
 } from './canvas-renderer';
 import { buildStructureIndex, structuralName } from './canvas-structure';
-import { editableTarget, historyDirection, sameCanvasSelection } from './canvas-target';
+import {
+  editableTarget,
+  historyDirection,
+  nearestOwner,
+  sameCanvasSelection,
+} from './canvas-target';
 import {
   type CanvasNavigationDestination,
   classifyCanvasNavigation,
@@ -169,15 +174,10 @@ function reviewProblem(issue = issueTargets[0]) {
   inspectorOpen = true;
   blockEditor = undefined;
   // Empty fields may not be rendered; scroll to their nearest annotated owner.
-  const node = structure
-    .filter(
-      (node) =>
-        sameDocument(node.target) &&
-        (node.target.address === issue.address ||
-          issue.address?.startsWith(`${node.target.address}.`) ||
-          issue.address?.startsWith(`${node.target.address}[`)),
-    )
-    .sort((a, b) => b.target.address.length - a.target.address.length)[0];
+  const node = nearestOwner(
+    structure.filter((node) => sameDocument(node.target)),
+    issue.address,
+  );
   void tick().then(() => {
     if (node) renderer?.select(node);
     const inspector = workspace?.querySelector('.canvas-inspector');
@@ -373,16 +373,10 @@ export function schedule(policy: 'continuous' | 'discrete' = 'discrete') {
 
 export function selectForm(address: string) {
   if (!active || fullscreen) return;
-  const node = structure
-    .filter(
-      (node) =>
-        sameDocument(node.target) &&
-        node.target.locale === locale &&
-        (address === node.target.address ||
-          address.startsWith(`${node.target.address}.`) ||
-          address.startsWith(`${node.target.address}[`)),
-    )
-    .sort((a, b) => b.target.address.length - a.target.address.length)[0];
+  const node = nearestOwner(
+    structure.filter((node) => sameDocument(node.target) && node.target.locale === locale),
+    address,
+  );
   if (!node) return;
   selected = node;
   renderer?.select(node);

@@ -36,6 +36,20 @@ const targetIdentity = (target: CanvasTarget) => [
 export const canvasSelectionKey = (selection: CanvasSelection) =>
   JSON.stringify([selection.kind, targetIdentity(selection.target)]);
 
+// Empty fields render no annotation of their own; the deepest annotated ancestor stands in.
+export const nearestOwner = <T extends { target: { address: string } }>(
+  nodes: readonly T[],
+  address: string,
+) =>
+  nodes
+    .filter(
+      (node) =>
+        address === node.target.address ||
+        address.startsWith(`${node.target.address}.`) ||
+        address.startsWith(`${node.target.address}[`),
+    )
+    .sort((a, b) => b.target.address.length - a.target.address.length)[0];
+
 export const historyDirection = (event: KeyboardEvent) => {
   if (!event.ctrlKey && !event.metaKey) return;
   const key = event.key.toLowerCase();

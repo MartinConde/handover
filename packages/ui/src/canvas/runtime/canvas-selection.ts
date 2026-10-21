@@ -11,6 +11,7 @@ import {
   canvasSelectionKey,
   editableTarget,
   historyDirection,
+  nearestOwner,
   sameCanvasDocument,
   sameCanvasSelection,
 } from '../canvas-target';
@@ -321,15 +322,11 @@ export function createCanvasSelectionRuntime(options: CanvasSelectionRuntimeOpti
     // Highlight the closest rendered owner when an empty field has no annotation.
     const invalidNodes = new Set<InternalNode>();
     for (const address of problemAddresses) {
-      const candidates = nodes.filter(
-        (node) =>
-          !foreign(node) &&
-          (address === node.target.address ||
-            address.startsWith(`${node.target.address}.`) ||
-            address.startsWith(`${node.target.address}[`)),
+      const owner = nearestOwner(
+        nodes.filter((node) => !foreign(node)),
+        address,
       );
-      candidates.sort((a, b) => b.target.address.length - a.target.address.length);
-      if (candidates[0]) invalidNodes.add(candidates[0]);
+      if (owner) invalidNodes.add(owner);
     }
     for (const node of invalidNodes)
       for (const element of node.elements) makeBox(element, 'invalid');
