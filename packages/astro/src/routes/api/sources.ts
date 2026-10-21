@@ -261,23 +261,23 @@ export async function recordSources(
       userId: session.user.id,
       detail,
     }));
-  const { commit_sha } = await git.publish(
+  const { commitSha } = await git.publish(
     files.map(({ path, contents }) => ({ path, contents })),
     {
-      base_sha: body.base,
+      baseSha: body.base,
       message: operationMessage(
         `Record source languages for ${found.length} ${found.length === 1 ? 'entry' : 'entries'}`,
         operation.id,
       ),
     },
   );
-  await markOperationCommitted('default', database, operation.id, commit_sha, {
-    commit_sha,
+  await markOperationCommitted('default', database, operation.id, commitSha, {
+    commit_sha: commitSha,
     ...summary(detail),
   });
   return finish(
     ctx,
-    { ...operation, commitSha: commit_sha, detail },
+    { ...operation, commitSha, detail },
     session,
     new Map(files.map((file) => [file.path, file])),
   );
@@ -300,15 +300,15 @@ async function finish(
 ): Promise<Response> {
   const database = ctx.db();
   const git = ctx.git();
-  const commit_sha = operation.commitSha ?? '';
+  const commitSha = operation.commitSha ?? '';
   const detail = operation.detail as Detail;
-  const result = { commit_sha, ...summary(detail) };
+  const result = { commit_sha: commitSha, ...summary(detail) };
   try {
     let sides = known;
     if (!sides) {
       const [before, after] = await Promise.all([
         git.contentFiles(operation.baseSha),
-        git.contentFiles(commit_sha),
+        git.contentFiles(commitSha),
       ]);
       const was = new Map(before.map((file) => [file.path, file.contents]));
       sides = new Map(
@@ -327,19 +327,19 @@ async function finish(
           database,
           path,
           source,
-          side && { sha: commit_sha, was: side.was, contents: side.contents },
+          side && { sha: commitSha, was: side.was, contents: side.contents },
         );
       }
     }
     await finalizeOperation('default', database, operation.id);
   } catch (cause) {
-    throw new OperationFinalizationError(operation.id, commit_sha, { cause });
+    throw new OperationFinalizationError(operation.id, commitSha, { cause });
   }
   await logActivity('default', database, {
     userId: session?.user.id,
     kind: KIND,
     detail: summary(detail),
-    commitSha: commit_sha,
+    commitSha,
   });
   return Response.json(result);
 }

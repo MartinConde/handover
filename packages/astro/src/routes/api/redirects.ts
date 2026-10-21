@@ -121,54 +121,57 @@ export async function addRedirect(
     base: config.i18n.base,
   });
   if (bad) return Response.json(bad, { status: 422 });
-  const typed_ =
+  const requested =
     ruleDetail(prior?.detail) ?? redirectRule({ ...typed, reason: 'manual' }, Date.now());
   const operation =
     prior ??
     (await beginOperation('default', database, {
-      retryKey: `redirect-added:${baseSha}:${typed_.from}:${typed_.to}:${typed_.status}`,
+      retryKey: `redirect-added:${baseSha}:${requested.from}:${requested.to}:${requested.status}`,
       kind: 'redirect-added',
       paths: ['src/content/redirects.yaml'],
       baseSha,
       userId: session?.user.id,
-      subject: typed_._id,
-      detail: { rule: typed_ },
+      subject: requested._id,
+      detail: { rule: requested },
     }));
   const completed = operation.result as { commit_sha?: unknown; rule?: unknown } | null;
   if (operation.state === 'finalized' && completed?.rule)
     return Response.json({ rule: completed.rule });
   // Read back from the file: a destination that already forwarded is collapsed onto its target.
-  let rule = typed_;
-  let commit_sha: string | undefined = operation.commitSha ?? undefined;
-  if (!commit_sha) commit_sha = await recoverOperationCommit('default', database, git, operation);
-  if (!commit_sha) {
+  let rule = requested;
+  let commitSha: string | undefined = operation.commitSha ?? undefined;
+  if (!commitSha) commitSha = await recoverOperationCommit('default', database, git, operation);
+  if (!commitSha) {
     const committed = await editRedirects(
       git,
       `Add redirect ${rule.from}`,
       (all) => {
-        const written = collapseRedirects(all, [typed_]);
-        rule = written.find((candidate) => candidate._id === typed_._id) ?? typed_;
+        const written = collapseRedirects(all, [requested]);
+        rule = written.find((candidate) => candidate._id === requested._id) ?? requested;
         return written;
       },
       { baseSha: operation.baseSha, operationId: operation.id },
     );
-    commit_sha = committed.commit_sha;
+    commitSha = committed.commitSha;
   } else {
     rule =
-      (await readRedirects(git, commit_sha)).find((candidate) => candidate._id === typed_._id) ??
-      typed_;
+      (await readRedirects(git, commitSha)).find((candidate) => candidate._id === requested._id) ??
+      requested;
   }
-  await markOperationCommitted('default', database, operation.id, commit_sha, { commit_sha, rule });
+  await markOperationCommitted('default', database, operation.id, commitSha, {
+    commit_sha: commitSha,
+    rule,
+  });
   try {
     await finalizeOperation('default', database, operation.id);
   } catch (cause) {
-    throw new OperationFinalizationError(operation.id, commit_sha, { cause });
+    throw new OperationFinalizationError(operation.id, commitSha, { cause });
   }
   await logActivity('default', database, {
     userId: session?.user.id,
     kind: 'redirect-added',
     subject: rule._id,
-    commitSha: commit_sha,
+    commitSha,
     detail: { from: rule.from, to: rule.to },
   });
   return Response.json({ rule });
@@ -219,28 +222,30 @@ export async function changeRedirect(
       detail: { rule: { ...found, ...typed } },
     }));
   if (operation.state === 'finalized') return Response.json({});
-  let commit_sha: string | undefined = operation.commitSha ?? undefined;
-  if (!commit_sha) commit_sha = await recoverOperationCommit('default', database, git, operation);
-  if (!commit_sha) {
+  let commitSha: string | undefined = operation.commitSha ?? undefined;
+  if (!commitSha) commitSha = await recoverOperationCommit('default', database, git, operation);
+  if (!commitSha) {
     const committed = await editRedirects(
       git,
       `Edit redirect ${found.from}`,
       (all) => collapseRedirects(all, [{ ...found, ...typed }]),
       { baseSha: operation.baseSha, operationId: operation.id },
     );
-    commit_sha = committed.commit_sha;
+    commitSha = committed.commitSha;
   }
-  await markOperationCommitted('default', database, operation.id, commit_sha, { commit_sha });
+  await markOperationCommitted('default', database, operation.id, commitSha, {
+    commit_sha: commitSha,
+  });
   try {
     await finalizeOperation('default', database, operation.id);
   } catch (cause) {
-    throw new OperationFinalizationError(operation.id, commit_sha, { cause });
+    throw new OperationFinalizationError(operation.id, commitSha, { cause });
   }
   await logActivity('default', database, {
     userId: session?.user.id,
     kind: 'redirect-changed',
     subject: id,
-    commitSha: commit_sha,
+    commitSha,
     detail: { from: typed.from, to: typed.to },
   });
   return Response.json({});
@@ -278,28 +283,30 @@ export async function removeRedirect(
       subject: id,
       detail: { rule: found },
     }));
-  let commit_sha: string | undefined = operation.commitSha ?? undefined;
-  if (!commit_sha) commit_sha = await recoverOperationCommit('default', database, git, operation);
-  if (!commit_sha) {
+  let commitSha: string | undefined = operation.commitSha ?? undefined;
+  if (!commitSha) commitSha = await recoverOperationCommit('default', database, git, operation);
+  if (!commitSha) {
     const committed = await editRedirects(
       git,
       `Delete redirect ${found.from}`,
       (all) => all.filter((rule) => rule._id !== id),
       { baseSha: operation.baseSha, operationId: operation.id },
     );
-    commit_sha = committed.commit_sha;
+    commitSha = committed.commitSha;
   }
-  await markOperationCommitted('default', database, operation.id, commit_sha, { commit_sha });
+  await markOperationCommitted('default', database, operation.id, commitSha, {
+    commit_sha: commitSha,
+  });
   try {
     await finalizeOperation('default', database, operation.id);
   } catch (cause) {
-    throw new OperationFinalizationError(operation.id, commit_sha, { cause });
+    throw new OperationFinalizationError(operation.id, commitSha, { cause });
   }
   await logActivity('default', database, {
     userId: session?.user.id,
     kind: 'redirect-deleted',
     subject: id,
-    commitSha: commit_sha,
+    commitSha,
     detail: { from: found.from, to: found.to },
   });
   return Response.json({ deleted: id });

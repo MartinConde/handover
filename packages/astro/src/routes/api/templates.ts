@@ -125,34 +125,34 @@ export async function saveTemplate(
       subject: from.path,
       detail: { template: name },
     }));
-  let commit_sha: string | undefined = operation.commitSha ?? undefined;
-  if (!commit_sha) commit_sha = await recoverOperationCommit('default', database, git, operation);
-  if (!commit_sha)
-    ({ commit_sha } = await git.publish(
+  let commitSha: string | undefined = operation.commitSha ?? undefined;
+  if (!commitSha) commitSha = await recoverOperationCommit('default', database, git, operation);
+  if (!commitSha)
+    ({ commitSha } = await git.publish(
       [{ path: templatePath(collection, name), contents: stringifyEntry(values) }],
       {
-        base_sha: operation.baseSha,
+        baseSha: operation.baseSha,
         message: operationMessage(
           `Save ${collection}/${slug} as the template ${name}`,
           operation.id,
         ),
       },
     ));
-  await markOperationCommitted('default', database, operation.id, commit_sha, {
-    commit_sha,
+  await markOperationCommitted('default', database, operation.id, commitSha, {
+    commit_sha: commitSha,
     name,
   });
   try {
     await finalizeOperation('default', database, operation.id);
   } catch (cause) {
-    throw new OperationFinalizationError(operation.id, commit_sha, { cause });
+    throw new OperationFinalizationError(operation.id, commitSha, { cause });
   }
   await logActivity('default', database, {
     userId: session?.user.id,
     kind: 'template-saved',
     subject: from.path,
     detail: { template: name },
-    commitSha: commit_sha,
+    commitSha,
   });
   return Response.json({ name });
 }

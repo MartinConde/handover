@@ -72,7 +72,7 @@ export async function publishDrafts(
   entries?: readonly string[],
   snapshot?: readonly Draft[],
   durable?: { userId?: string; baseSha?: string },
-): Promise<{ commit_sha: string; paths: string[]; released: string[] } | undefined> {
+): Promise<{ commitSha: string; paths: string[]; released: string[] } | undefined> {
   let rows = snapshot ?? (await readyDrafts(siteId, db, entries));
   if (!rows.length) return undefined;
   const retryKey = `publish:${rows
@@ -104,20 +104,20 @@ export async function publishDrafts(
     Array.isArray(completed.released)
   )
     return {
-      commit_sha: completed.commit_sha,
+      commitSha: completed.commit_sha,
       paths: completed.paths.filter((path): path is string => typeof path === 'string'),
       released: completed.released.filter((entry): entry is string => typeof entry === 'string'),
     };
   // A caller that judged the selection at one revision commits on that one or not at all, and a
   // moved branch is refused before an operation is recorded that every retry would then find.
-  const base_sha = existing?.baseSha ?? durable?.baseSha ?? (await git.getHead());
+  const baseSha = existing?.baseSha ?? durable?.baseSha ?? (await git.getHead());
   if (!existing && durable?.baseSha && (await git.getHead()) !== durable.baseSha)
     throw new RefMovedError(`the branch moved past ${durable.baseSha}`);
   // Every read is of the commit the publish is made against, so the check and the parent agree.
-  const current = await Promise.all(rows.map((r) => git.getFile(r.path, base_sha)));
+  const current = await Promise.all(rows.map((r) => git.getFile(r.path, baseSha)));
   if (!existing) {
     const conflicts = rows
-      .filter((r, i) => (current[i]?.blob_sha ?? '') !== r.baseBlob)
+      .filter((r, i) => (current[i]?.blobSha ?? '') !== r.baseBlob)
       .map((r) => r.path);
     if (conflicts.length) throw new DraftConflictError(conflicts);
   }
@@ -129,8 +129,8 @@ export async function publishDrafts(
       // The source language as this commit leaves it: its own draft if this publish writes one.
       const drafted = rows.find((r) => r.path === source.path)?.contents;
       const file = drafted
-        ? { contents: drafted, blob_sha: await blobSha(drafted) }
-        : await git.getFile(source.path, base_sha);
+        ? { contents: drafted, blobSha: await blobSha(drafted) }
+        : await git.getFile(source.path, baseSha);
       if (!file) return { path, contents };
       if (rows[i]?.revision.startsWith(SOURCE_CHANGE_REVISION)) return { path, contents };
       const marked = await markTranslation(
@@ -163,7 +163,7 @@ export async function publishDrafts(
   const undone = (rule: RedirectRule) =>
     rule.reason === 'hidden' && rule.entry !== undefined && back.has(rule.entry);
   if (rules.length || back.size) {
-    const file = await appendRedirects(git, rules, base_sha, undone);
+    const file = await appendRedirects(git, rules, baseSha, undone);
     if (file) files.push(file);
   }
   const released = [
@@ -178,7 +178,7 @@ export async function publishDrafts(
         revisions: Object.fromEntries(
           rows.map((row) => [row.path, `${row.revision}:${row.baseSha}:${row.baseBlob}`]),
         ),
-        baseSha: base_sha,
+        baseSha: baseSha,
         userId: durable.userId,
         subject: paths.length === 1 ? (paths[0] ?? null) : null,
         detail: {
@@ -188,33 +188,34 @@ export async function publishDrafts(
         },
       })))
     : undefined;
-  let commit_sha = operation?.commitSha;
-  if (operation && !commit_sha)
-    commit_sha = await recoverOperationCommit(siteId, db, git, operation);
-  if (!commit_sha) {
+  let commitSha = operation?.commitSha;
+  if (operation && !commitSha) commitSha = await recoverOperationCommit(siteId, db, git, operation);
+  if (!commitSha) {
     const published = await git.publish(files, {
-      base_sha,
+      baseSha,
       message: operation
         ? operationMessage(commitMessage(paths), operation.id)
         : commitMessage(paths),
     });
-    commit_sha = published.commit_sha;
+    commitSha = published.commitSha;
   }
-  if (operation && (operation.commitSha || (existing && commit_sha)))
+  if (operation && (operation.commitSha || (existing && commitSha)))
     written = await Promise.all(
       rows
         .filter((row) => row.path in operation.revisions)
         .map(async (row) => ({
           path: row.path,
-          contents: (await git.getFile(row.path, commit_sha))?.contents ?? '',
+          contents: (await git.getFile(row.path, commitSha))?.contents ?? '',
         })),
     );
-  const result = {
-    commit_sha,
-    paths,
-    released,
-  };
-  if (operation) await markOperationCommitted(siteId, db, operation.id, commit_sha, result);
+  const result = { commitSha, paths, released };
+  // Stored keys stay snake_case: rows written by earlier releases are read back by the check above.
+  if (operation)
+    await markOperationCommitted(siteId, db, operation.id, commitSha, {
+      commit_sha: commitSha,
+      paths,
+      released,
+    });
   const finalizedRows = operation
     ? written.map((file) => {
         const currentRow = rows.find((row) => row.path === file.path);
@@ -236,9 +237,9 @@ export async function publishDrafts(
       .update(drafts)
       .set({
         contents: sql`case when ${unchanged} then ${contents} else ${drafts.contents} end`,
-        baseSha: commit_sha,
+        baseSha: commitSha,
         baseBlob: blob,
-        publishedSha: sql`case when ${unchanged} then ${commit_sha} else null end`,
+        publishedSha: sql`case when ${unchanged} then ${commitSha} else null end`,
         heldBy: sql`case when ${unchanged} then null else ${drafts.heldBy} end`,
         heldAt: sql`case when ${unchanged} then null else ${drafts.heldAt} end`,
         pendingRedirects: sql`case when ${unchanged} then null else ${drafts.pendingRedirects} end`,
@@ -260,7 +261,7 @@ export async function publishDrafts(
     try {
       await db.batch([first, ...rest]);
     } catch (cause) {
-      if (operation) throw new OperationFinalizationError(operation.id, commit_sha, { cause });
+      if (operation) throw new OperationFinalizationError(operation.id, commitSha, { cause });
       throw cause;
     }
   return result;

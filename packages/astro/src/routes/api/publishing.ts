@@ -53,13 +53,16 @@ export async function buildStatus(ctx: RequestContext): Promise<Response> {
     console.error('build status: the Workers Builds API could not be asked', err);
     return Response.json({});
   }
-  const { deployed_sha, ...visible } = status;
   // Reconcile against what is serving, even while a newer build is running or has failed.
-  if (deployed_sha) await clearPublished('default', database, deployed_sha, ctx.git());
+  if (status.deployedSha) await clearPublished('default', database, status.deployedSha, ctx.git());
+  const visible = {
+    ...(status.commitSha ? { commit_sha: status.commitSha } : {}),
+    state: status.state,
+    ...(status.startedAt ? { started_at: status.startedAt } : {}),
+    ...(status.liveAt ? { live_at: status.liveAt } : {}),
+  };
   // `committed_at` only while the answer is about our commit, or the pill counts from another.
-  return Response.json(
-    last && visible.commit_sha ? { ...visible, committed_at: last.at } : visible,
-  );
+  return Response.json(last && status.commitSha ? { ...visible, committed_at: last.at } : visible);
 }
 
 // A file whose structure disagrees with its other languages is not committed.
@@ -434,7 +437,7 @@ export async function publish(
     });
   }
   // A Publish click with nothing pending is not an event; a D1 write per click adds up.
-  if (result?.commit_sha) {
+  if (result?.commitSha) {
     await logActivity('default', database, {
       userId: session?.user.id,
       kind: 'publish',
@@ -445,11 +448,17 @@ export async function publish(
         entries: publishedKeys(result.paths),
         paths: result.paths,
       },
-      commitSha: result.commit_sha,
+      commitSha: result.commitSha,
     });
   }
   return Response.json(
-    result ? { ...result, ...(excluded.length ? { released } : {}) } : { paths: [] },
+    result
+      ? {
+          commit_sha: result.commitSha,
+          paths: result.paths,
+          released: excluded.length ? released : result.released,
+        }
+      : { paths: [] },
   );
 }
 

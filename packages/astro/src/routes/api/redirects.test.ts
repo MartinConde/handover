@@ -102,7 +102,7 @@ test('a manual rule is committed as it is added, on its own', async () => {
   expect(res.status).toBe(200);
   expect(publish).toHaveBeenCalledTimes(1);
   expect(publish.mock.calls[0]?.[1]).toEqual({
-    base_sha: 'head789',
+    baseSha: 'head789',
     message: expect.stringContaining('Add redirect /summer-offer'),
   });
   expect(((publish.mock.calls[0]?.[0] ?? []) as { path: string }[]).map((f) => f.path)).toEqual([
@@ -216,7 +216,7 @@ test('a rule is edited in place and the commit says which one', async () => {
 
   expect(res.status).toBe(200);
   expect(publish.mock.calls[0]?.[1]).toEqual({
-    base_sha: 'head789',
+    baseSha: 'head789',
     message: expect.stringContaining('Edit redirect /old'),
   });
   expect(committed().rules).toEqual([

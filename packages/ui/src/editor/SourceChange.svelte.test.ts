@@ -19,7 +19,7 @@ const marked = async (from: Record<string, unknown>, data: Record<string, unknow
   parseEntry(
     await markTranslation(
       form,
-      { locale: 'de', contents: stringifyEntry(from), blob_sha: 'b1' },
+      { locale: 'de', contents: stringifyEntry(from), blobSha: 'b1' },
       stringifyEntry(data),
       undefined,
     ),

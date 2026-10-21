@@ -198,15 +198,15 @@ export async function editRedirects(
   message: string,
   change: (rules: RedirectRule[]) => RedirectRule[],
   deps: { baseSha?: string; operationId?: string } = {},
-): Promise<{ commit_sha: string }> {
-  const base_sha = deps.baseSha ?? (await git.getHead());
-  const file = await git.getFile(REDIRECTS, base_sha);
+): Promise<{ commitSha: string }> {
+  const baseSha = deps.baseSha ?? (await git.getHead());
+  const file = await git.getFile(REDIRECTS, baseSha);
   const doc = (file ? parseEntry(file.contents) : { _version: 1 }) as {
     rules?: RedirectRule[];
   };
   const contents = stringifyEntry({ ...doc, rules: change(doc.rules ?? []) });
   return git.publish([{ path: REDIRECTS, contents }], {
-    base_sha,
+    baseSha,
     message: deps.operationId ? operationMessage(message, deps.operationId) : message,
   });
 }

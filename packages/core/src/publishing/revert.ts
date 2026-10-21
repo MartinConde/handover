@@ -84,7 +84,7 @@ export async function revertCommit(
     /^src\/content\/[\w-]+\/[\w-]+\/[\w-]+\.yaml$/.test(path) || path === REDIRECTS,
   restoring = false,
   durable?: { userId?: string },
-): Promise<{ commit_sha: string; paths: string[]; files: PublishFile[]; operation_id?: string }> {
+): Promise<{ commitSha: string; paths: string[]; files: PublishFile[]; operationId?: string }> {
   const scope = await commitScope(siteId, db, commitSha, restoring);
   const commit = await git.getCommit(commitSha);
   if (!commit.paths.every((path) => scope.allows(path) && allowedPath(path)))
@@ -101,7 +101,7 @@ export async function revertCommit(
     Promise.all(paths.map((p) => git.getFile(p, parent))),
   ]);
   if (!existing) {
-    const moved = paths.filter((_, i) => (now[i]?.blob_sha ?? '') !== (then[i]?.blob_sha ?? ''));
+    const moved = paths.filter((_, i) => (now[i]?.blobSha ?? '') !== (then[i]?.blobSha ?? ''));
     if (moved.length) throw new RevertConflictError(moved);
   }
   const files: PublishFile[] = paths.map((path, i) => ({
@@ -139,28 +139,33 @@ export async function revertCommit(
     Array.isArray(completed.paths)
   )
     return {
-      commit_sha: completed.commit_sha,
+      commitSha: completed.commit_sha,
       paths: completed.paths.filter((path): path is string => typeof path === 'string'),
       files,
-      operation_id: operation.id,
+      operationId: operation.id,
     };
-  let commit_sha = operation?.commitSha;
-  if (operation && !commit_sha)
-    commit_sha = await recoverOperationCommit(siteId, db, git, operation);
-  if (!commit_sha) {
+  let newSha = operation?.commitSha;
+  if (operation && !newSha) newSha = await recoverOperationCommit(siteId, db, git, operation);
+  if (!newSha) {
     const message = `Revert "${commit.message.split('\n')[0]}"\n\nThis reverts commit ${commit.sha}.`;
     const published = await git.publish(changed, {
-      base_sha: head,
+      baseSha: head,
       message: operation ? operationMessage(message, operation.id) : message,
     });
-    commit_sha = published.commit_sha;
+    newSha = published.commitSha;
   }
   const result = {
-    commit_sha,
+    commitSha: newSha,
     paths: files.map((file) => file.path),
-    ...(operation ? { operation_id: operation.id } : {}),
+    ...(operation ? { operationId: operation.id } : {}),
   };
-  if (operation) await markOperationCommitted(siteId, db, operation.id, commit_sha, result);
+  // Stored keys stay snake_case: rows written by earlier releases are read back by the check above.
+  if (operation)
+    await markOperationCommitted(siteId, db, operation.id, newSha, {
+      commit_sha: newSha,
+      paths: result.paths,
+      operation_id: operation.id,
+    });
   // Await the blobs first: a drizzle statement is thenable and would run outside the batch.
   const rebased = await Promise.all(
     rows.map(async (row) => {
@@ -170,7 +175,7 @@ export async function revertCommit(
         revision: row.revision,
         gone: row.contents === '' && Boolean(row.publishedSha) && restored !== null,
         blob: restored === null ? '' : await blobSha(restored),
-        published: committedAt(row.contents, restored, commit_sha),
+        published: committedAt(row.contents, restored, newSha),
       };
     }),
   );
@@ -181,7 +186,7 @@ export async function revertCommit(
       : db
           .update(drafts)
           .set({
-            baseSha: commit_sha,
+            baseSha: newSha,
             baseBlob: blob,
             publishedSha: published,
             revision: nextRevision(revision),
@@ -201,8 +206,8 @@ export async function revertCommit(
                 path,
                 revision: crypto.randomUUID(),
                 contents: published.contents,
-                baseSha: commit_sha,
-                baseBlob: before[i]?.blob_sha ?? '',
+                baseSha: newSha,
+                baseBlob: before[i]?.blobSha ?? '',
                 updatedAt: Date.now(),
               })
               .onConflictDoNothing(),
@@ -219,7 +224,7 @@ export async function revertCommit(
     try {
       await db.batch([first, ...rest]);
     } catch (cause) {
-      if (operation) throw new OperationFinalizationError(operation.id, commit_sha, { cause });
+      if (operation) throw new OperationFinalizationError(operation.id, newSha, { cause });
       throw cause;
     }
   // ⚠️ `files` carries file contents for `restoreCommit`; a route must never answer with it.
@@ -237,16 +242,13 @@ export async function restoreCommit(
   commitSha: string,
   allowedPath?: (path: string) => boolean,
   durable?: { userId?: string },
-): Promise<{ commit_sha: string; paths: string[]; operation_id?: string }> {
-  const { commit_sha, paths, files, operation_id } = await revertCommit(
-    siteId,
-    db,
-    git,
-    commitSha,
-    allowedPath,
-    true,
-    durable,
-  );
+): Promise<{ commitSha: string; paths: string[]; operationId?: string }> {
+  const {
+    commitSha: newSha,
+    paths,
+    files,
+    operationId,
+  } = await revertCommit(siteId, db, git, commitSha, allowedPath, true, durable);
   for (const file of files) {
     if (file.contents === null) continue;
     const open = await loadDraft(siteId, db, file.path);
@@ -267,7 +269,7 @@ export async function restoreCommit(
       })
       .where(and(eq(drafts.siteId, siteId), eq(drafts.path, file.path)));
   }
-  return { commit_sha, paths, ...(operation_id ? { operation_id } : {}) };
+  return { commitSha: newSha, paths, ...(operationId ? { operationId } : {}) };
 }
 
 type DeploymentGit = Pick<GitClient, 'compareCommits' | 'contentFiles'>;

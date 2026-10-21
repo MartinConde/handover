@@ -114,9 +114,9 @@ export async function rename(
   let finalized = false;
   let safelyAborted = false;
   try {
-    let commit_sha: string | undefined = operation.commitSha ?? undefined;
-    if (!commit_sha) commit_sha = await recoverOperationCommit('default', database, git, operation);
-    if (!commit_sha) {
+    let commitSha: string | undefined = operation.commitSha ?? undefined;
+    if (!commitSha) commitSha = await recoverOperationCommit('default', database, git, operation);
+    if (!commitSha) {
       let committed: Awaited<ReturnType<typeof renameEntry>>;
       try {
         committed = await renameEntry(git, locationOf(collection), slug, to, {
@@ -129,10 +129,10 @@ export async function rename(
         if (error instanceof RenameCollisionError) safelyAborted = true;
         throw error;
       }
-      commit_sha = committed.commit_sha;
+      commitSha = committed.commitSha;
     }
-    const result = { slug: to, commit_sha };
-    await markOperationCommitted('default', database, operation.id, commit_sha, result);
+    const result = { slug: to, commit_sha: commitSha };
+    await markOperationCommitted('default', database, operation.id, commitSha, result);
     const latest = await findOperation('default', database, retryKey);
     if (latest?.state === 'finalized') {
       finalized = true;
@@ -141,7 +141,7 @@ export async function rename(
     const committed = (
       await Promise.all(
         config.i18n.locales.map(async (locale) => {
-          const file = await git.getFile(entryPath(collection, to, locale), commit_sha);
+          const file = await git.getFile(entryPath(collection, to, locale), commitSha);
           return file ? { locale, contents: file.contents } : undefined;
         }),
       )
@@ -158,7 +158,7 @@ export async function rename(
           // already captured base bytes if a test double or provider omits that read.
           contents: contents.get(locale) ?? file?.contents,
         })),
-        commit_sha,
+        commitSha,
         session?.user.id,
         reservation,
       );
@@ -167,14 +167,14 @@ export async function rename(
       await finalizeOperation('default', database, operation.id);
       finalized = true;
     } catch (cause) {
-      throw new OperationFinalizationError(operation.id, commit_sha, { cause });
+      throw new OperationFinalizationError(operation.id, commitSha, { cause });
     }
     await logActivity('default', database, {
       userId: session?.user.id,
       kind: 'entry-rename',
       subject: await entrySubject(ctx, collection, to),
       detail: { from: slug },
-      commitSha: commit_sha,
+      commitSha,
     });
     return Response.json(result);
   } finally {
@@ -297,9 +297,9 @@ export async function remove(
           await overlayRows('default', database, index),
         )
       : undefined;
-  let commit_sha: string | undefined = operation.commitSha ?? undefined;
-  if (!commit_sha) commit_sha = await recoverOperationCommit('default', database, git, operation);
-  if (!commit_sha) {
+  let commitSha: string | undefined = operation.commitSha ?? undefined;
+  if (!commitSha) commitSha = await recoverOperationCommit('default', database, git, operation);
+  if (!commitSha) {
     const committed = await deleteEntry(
       git,
       locationOf(collection),
@@ -307,27 +307,26 @@ export async function remove(
       (locale) => redirectTarget(answer, collected, picked, locale),
       { baseSha: operation.baseSha, operationId: operation.id },
     );
-    commit_sha = committed.commit_sha;
+    commitSha = committed.commitSha;
   }
-  const result = { commit_sha };
-  await markOperationCommitted('default', database, operation.id, commit_sha, result);
+  const result = { commit_sha: commitSha };
+  await markOperationCommitted('default', database, operation.id, commitSha, result);
   try {
     // A draft-only language is not in the commit, so its captured row goes here.
     for (const { path, file } of files)
-      if (file)
-        await recordDelete('default', database, path, commit_sha, operation.revisions[path]);
+      if (file) await recordDelete('default', database, path, commitSha, operation.revisions[path]);
       else await discardDraft('default', database, path, operation.revisions[path]);
     await dropLock('default', database, entry);
     await finalizeOperation('default', database, operation.id);
   } catch (cause) {
-    throw new OperationFinalizationError(operation.id, commit_sha, { cause });
+    throw new OperationFinalizationError(operation.id, commitSha, { cause });
   }
   await logActivity('default', database, {
     userId: session?.user.id,
     kind: 'entry-delete',
     subject,
     detail: { locales: files.filter((f) => f.file).map((f) => f.locale) },
-    commitSha: commit_sha,
+    commitSha,
   });
   return Response.json(result);
 }

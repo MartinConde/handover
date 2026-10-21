@@ -23,7 +23,7 @@ const blobSha = (text: string) =>
 const translate = (en: string, de: string, was?: string) =>
   markTranslation(
     millHouse,
-    { locale: 'en', contents: en, blob_sha: 'e4a1c9b0'.repeat(5) },
+    { locale: 'en', contents: en, blobSha: 'e4a1c9b0'.repeat(5) },
     de,
     was,
   );
@@ -78,7 +78,7 @@ test('a block moved in the source language is not something to retranslate', asy
   const en = drifted('en');
   const de = await markTranslation(
     page,
-    { locale: 'en', contents: driftFile('en'), blob_sha: 'e4a1c9b0'.repeat(5) },
+    { locale: 'en', contents: driftFile('en'), blobSha: 'e4a1c9b0'.repeat(5) },
     driftFile('de'),
     undefined,
   );
@@ -164,7 +164,7 @@ test('a mark that says nothing about the values is not a claim to be stale', asy
 const fromFrench = (fr: string) =>
   markTranslation(
     millHouse,
-    { locale: 'fr', contents: fr, blob_sha: 'f7e6d5c4'.repeat(5) },
+    { locale: 'fr', contents: fr, blobSha: 'f7e6d5c4'.repeat(5) },
     localeFile('de'),
     undefined,
   );
@@ -312,7 +312,7 @@ const markedFrom = async (source: [string, unknown], data: unknown) =>
   parseEntry(
     await markTranslation(
       listing,
-      { locale: source[0], contents: stringifyEntry(source[1]), blob_sha: 'old' },
+      { locale: source[0], contents: stringifyEntry(source[1]), blobSha: 'old' },
       stringifyEntry(data),
       undefined,
     ),

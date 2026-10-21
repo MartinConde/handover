@@ -115,7 +115,7 @@ test('one rule taken out is a commit of redirects.yaml alone', async () => {
     rules.filter((r) => r._id !== 'bbbbbbbb'),
   );
 
-  expect(result).toEqual({ commit_sha: 'commit-B' });
+  expect(result).toEqual({ commitSha: 'commit-B' });
   expect(published[0]?.message).toBe('Delete redirect /gone');
   expect(published[0]?.files.map((f) => f.path)).toEqual(['src/content/redirects.yaml']);
   expect(redirects(published[0]?.files ?? []).rules).toEqual([

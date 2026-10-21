@@ -69,7 +69,7 @@ export const VALUES = { title: 'The Mill House', price: '£950 per week', rooms:
 
 export const git = {
   getHead: async () => 'commit-A',
-  getFile: async (path: string) => (path === PATH ? { contents: FILE, blob_sha: BLOB } : undefined),
+  getFile: async (path: string) => (path === PATH ? { contents: FILE, blobSha: BLOB } : undefined),
 };
 
 // A read with no ref is the branch, which `lag` can hold behind the last publish.
@@ -83,12 +83,12 @@ export function fakeRepo(files: Record<string, string>) {
     },
     async getFile(path: string, ref?: string) {
       const contents = ref ? files[path] : (behind[path] ?? files[path]);
-      return contents === undefined ? undefined : { contents, blob_sha: await blobSha(contents) };
+      return contents === undefined ? undefined : { contents, blobSha: await blobSha(contents) };
     },
     publish: vi.fn(async (list: { path: string; contents: string | null }[]) => {
       for (const f of list) if (f.contents !== null) files[f.path] = f.contents;
       head = `commit-${++n}`;
-      return { commit_sha: head };
+      return { commitSha: head };
     }),
     write(path: string, contents: string) {
       files[path] = contents;
@@ -135,7 +135,7 @@ export function fakeHistory(initial: Record<string, string>) {
     },
     async getFile(path: string, ref?: string) {
       const contents = trees[ref ?? head]?.[path];
-      return contents === undefined ? undefined : { contents, blob_sha: await blobSha(contents) };
+      return contents === undefined ? undefined : { contents, blobSha: await blobSha(contents) };
     },
     async getCommit(sha: string) {
       const found = commits[sha];
@@ -161,8 +161,8 @@ export function fakeHistory(initial: Record<string, string>) {
           message: found.message,
         }));
     },
-    publish: vi.fn(async (list, opts: { base_sha: string; message: string }) => ({
-      commit_sha: commit(list, opts.base_sha, opts.message),
+    publish: vi.fn(async (list, opts: { baseSha: string; message: string }) => ({
+      commitSha: commit(list, opts.baseSha, opts.message),
     })),
     /** A commit nobody here made: what moves a file on after a publish. */
     push(list: { path: string; contents: string | null }[]) {
@@ -342,7 +342,7 @@ export function afterRead(
 
 // Records every publish call and every read, with the commit it named.
 export function fakeGit(files: Record<string, string>) {
-  const published: { files: PublishFile[]; message: string; base_sha: string }[] = [];
+  const published: { files: PublishFile[]; message: string; baseSha: string }[] = [];
   const read: { path: string; at?: string }[] = [];
   const git: GitClient = {
     request: () => Promise.reject(new Error('not used')),
@@ -355,11 +355,11 @@ export function fakeGit(files: Record<string, string>) {
     getFile: async (path, at) => {
       read.push({ path, at });
       const contents = files[path];
-      return contents === undefined ? undefined : { contents, blob_sha: `sha-of-${path}` };
+      return contents === undefined ? undefined : { contents, blobSha: `sha-of-${path}` };
     },
     publish: async (list, opts) => {
       published.push({ files: list, ...opts });
-      return { commit_sha: 'commit-B' };
+      return { commitSha: 'commit-B' };
     },
   };
   return { git, published, read };

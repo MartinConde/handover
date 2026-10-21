@@ -61,17 +61,17 @@ test('reverting a publish puts the files back and leaves the changes unpublished
   await logActivity('default', db, {
     kind: 'publish',
     subject: PATH,
-    commitSha: published?.commit_sha,
+    commitSha: published?.commitSha,
     detail: { entries: ['listings/mill-house'] },
   });
-  const result = await revertCommit('default', db, repo, published?.commit_sha ?? '');
+  const result = await revertCommit('default', db, repo, published?.commitSha ?? '');
 
   expect(repo.now()[PATH]).toBe(FILE);
   expect(result.paths).toEqual([PATH]);
   // The confirmation promises the changes stay: the row is in the drawer again, on the revert.
   const pending = await pendingDrafts('default', db);
   expect(pending.map((r) => r.path)).toEqual([PATH]);
-  expect(pending[0]?.baseSha).toBe(result.commit_sha);
+  expect(pending[0]?.baseSha).toBe(result.commitSha);
   expect(pending[0]?.contents).toBe(FILE.replace('rooms: 3', 'rooms: 4'));
 });
 
@@ -84,10 +84,10 @@ test('reverting a publish that created a file removes it', async () => {
   await logActivity('default', db, {
     kind: 'publish',
     subject: PATH,
-    commitSha: published?.commit_sha,
+    commitSha: published?.commitSha,
     detail: { entries: ['listings/mill-house'] },
   });
-  await revertCommit('default', db, repo, published?.commit_sha ?? '');
+  await revertCommit('default', db, repo, published?.commitSha ?? '');
 
   expect(repo.now()[PATH]).toBe(undefined);
   // Still pending, so publishing again writes the file back.
@@ -102,16 +102,16 @@ test('reverting a large publish chunks its draft lookup without splitting finali
     contents: `_version: 1\ntitle: "Entry ${i}"\n`,
   }));
   const published = await repo.publish(files, {
-    base_sha: 'commit-0',
+    baseSha: 'commit-0',
     message: 'Publish a large collection',
   });
   await logActivity('default', db, {
     kind: 'publish',
-    commitSha: published.commit_sha,
+    commitSha: published.commitSha,
     detail: { paths: files.map((file) => file.path) },
   });
 
-  const reverted = await revertCommit('default', db, repo, published.commit_sha);
+  const reverted = await revertCommit('default', db, repo, published.commitSha);
 
   expect(reverted.paths.toSorted()).toEqual(files.map((file) => file.path).toSorted());
   expect(await db.select().from(drafts)).toHaveLength(100);
@@ -125,16 +125,16 @@ test('reverting a rename brings the old name back and takes the new one away', a
       { path: PATH, contents: null },
       { path: RENAMED, contents: FILE },
     ],
-    { base_sha: 'commit-0', message: 'Rename the Mill House' },
+    { baseSha: 'commit-0', message: 'Rename the Mill House' },
   );
 
   await logActivity('default', db, {
     kind: 'entry-rename',
     subject: PATH,
-    commitSha: renamed?.commit_sha,
+    commitSha: renamed?.commitSha,
     detail: { entries: [entryKey(PATH) ?? '', entryKey(RENAMED) ?? ''] },
   });
-  await revertCommit('default', db, repo, renamed.commit_sha);
+  await revertCommit('default', db, repo, renamed.commitSha);
 
   expect(repo.now()[PATH]).toBe(FILE);
   expect(repo.now()[RENAMED]).toBe(undefined);
@@ -151,10 +151,10 @@ test('reverting is refused when a file has changed since that commit', async () 
   await logActivity('default', db, {
     kind: 'publish',
     subject: PATH,
-    commitSha: published?.commit_sha,
+    commitSha: published?.commitSha,
     detail: { entries: ['listings/mill-house'] },
   });
-  await expect(revertCommit('default', db, repo, published?.commit_sha ?? '')).rejects.toThrow(
+  await expect(revertCommit('default', db, repo, published?.commitSha ?? '')).rejects.toThrow(
     new RevertConflictError([PATH]),
   );
   expect(repo.now()[PATH]).toBe(before);
@@ -171,7 +171,7 @@ test('reverting recomputes redirects.yaml rather than restoring it', async () =>
   const [one, two, three] = ['aaaa1111', 'bbbb2222', 'cccc3333'];
   const repo = fakeHistory({ [REDIRECTS]: rules(one) });
   const published = await repo.publish([{ path: REDIRECTS, contents: rules(one, two) }], {
-    base_sha: 'commit-0',
+    baseSha: 'commit-0',
     message: 'Update prices',
   });
   repo.push([{ path: REDIRECTS, contents: rules(one, two, three) }]);
@@ -179,10 +179,10 @@ test('reverting recomputes redirects.yaml rather than restoring it', async () =>
   await logActivity('default', db, {
     kind: 'redirect-added',
     subject: PATH,
-    commitSha: published?.commit_sha,
+    commitSha: published?.commitSha,
     detail: {},
   });
-  await revertCommit('default', db, repo, published.commit_sha);
+  await revertCommit('default', db, repo, published.commitSha);
 
   const left = repo.now()[REDIRECTS] ?? '';
   expect(left).toContain(one);
@@ -201,18 +201,18 @@ test('restoring a turn-off re-offers the language in the draft that was open', a
       { path: MILL_DE, contents: null },
       { path: PATH, contents: kept },
     ],
-    { base_sha: 'commit-0', message: 'Turn off de for listings/mill-house' },
+    { baseSha: 'commit-0', message: 'Turn off de for listings/mill-house' },
   );
-  await recordDelete('default', db, MILL_DE, off.commit_sha);
-  await recordOffer('default', db, PATH, kept, OFFER, off.commit_sha);
+  await recordDelete('default', db, MILL_DE, off.commitSha);
+  await recordOffer('default', db, PATH, kept, OFFER, off.commitSha);
 
   await logActivity('default', db, {
     kind: 'locale-off',
     subject: PATH,
-    commitSha: off?.commit_sha,
+    commitSha: off?.commitSha,
     detail: { entries: ['listings/mill-house'] },
   });
-  await restoreCommit('default', db, repo, off.commit_sha);
+  await restoreCommit('default', db, repo, off.commitSha);
 
   const row = (await db.select().from(drafts)).find((r) => r.path === PATH);
   const entry = parseEntry(row?.contents ?? '') as Record<string, unknown>;
@@ -227,19 +227,19 @@ test('restoring a delete takes away the row that was hiding the path', async () 
   const repo = fakeHistory({ [PATH]: FILE });
   const index = indexOf({ [PATH]: FILE });
   const deleted = await repo.publish([{ path: PATH, contents: null }], {
-    base_sha: 'commit-0',
+    baseSha: 'commit-0',
     message: 'Delete listings/mill-house',
   });
-  await recordDelete('default', db, PATH, deleted.commit_sha);
+  await recordDelete('default', db, PATH, deleted.commitSha);
   expect(await listed(db, index)).toEqual([]);
 
   await logActivity('default', db, {
     kind: 'entry-delete',
     subject: PATH,
-    commitSha: deleted?.commit_sha,
+    commitSha: deleted?.commitSha,
     detail: { entries: ['listings/mill-house'] },
   });
-  await restoreCommit('default', db, repo, deleted.commit_sha);
+  await restoreCommit('default', db, repo, deleted.commitSha);
 
   expect(repo.now()[PATH]).toBe(FILE);
   expect(await only(db)).toBe(undefined);
@@ -252,7 +252,7 @@ test('a published row is cleared once the build carrying it is live', async () =
   await saveDraft('default', db, repo, PATH, { ...VALUES, rooms: 4 });
   const published = await publishDrafts('default', db, repo);
 
-  expect(await clearPublished('default', db, published?.commit_sha ?? '', repo)).toEqual([PATH]);
+  expect(await clearPublished('default', db, published?.commitSha ?? '', repo)).toEqual([PATH]);
   expect(await only(db)).toBe(undefined);
 });
 
@@ -276,7 +276,7 @@ test('a later deployed commit clears an earlier published overlay', async () => 
   const published = await publishDrafts('default', db, repo);
   const deployed = repo.push([{ path: PATH, contents: FILE.replace('rooms: 3', 'rooms: 5') }]);
 
-  expect((await only(db))?.publishedSha).toBe(published?.commit_sha);
+  expect((await only(db))?.publishedSha).toBe(published?.commitSha);
   expect(await clearPublished('default', db, deployed, repo)).toEqual([PATH]);
   expect(await only(db)).toBe(undefined);
 });
@@ -286,13 +286,13 @@ test('matching deployed content can clear an overlay from a divergent history', 
   const repo = fakeHistory({ [PATH]: FILE });
   await saveDraft('default', db, repo, PATH, { ...VALUES, rooms: 4 });
   const published = await publishDrafts('default', db, repo);
-  const contents = repo.at(published?.commit_sha ?? '')[PATH] ?? '';
+  const contents = repo.at(published?.commitSha ?? '')[PATH] ?? '';
   const divergent = await repo.publish([{ path: PATH, contents }], {
-    base_sha: 'commit-0',
+    baseSha: 'commit-0',
     message: 'Same content on another history',
   });
 
-  expect(await clearPublished('default', db, divergent.commit_sha, repo)).toEqual([PATH]);
+  expect(await clearPublished('default', db, divergent.commitSha, repo)).toEqual([PATH]);
   expect(await only(db)).toBeUndefined();
 });
 
@@ -329,7 +329,7 @@ test('a published row whose entry somebody is editing is kept', async () => {
   const published = await publishDrafts('default', db, repo);
   await claimLock('default', db, 'listings/mill-house', 'anna', 'tab');
 
-  expect(await clearPublished('default', db, published?.commit_sha ?? '', repo)).toEqual([]);
+  expect(await clearPublished('default', db, published?.commitSha ?? '', repo)).toEqual([]);
   expect((await only(db))?.path).toBe(PATH);
 });
 
@@ -354,7 +354,7 @@ test('cleanup rechecks the revision when a newer save arrives after selecting ca
       await saveDraft('default', db, repo, PATH, { ...VALUES, rooms: 5 });
     },
   );
-  await clearPublished('default', raced, published?.commit_sha ?? '', repo);
+  await clearPublished('default', raced, published?.commitSha ?? '', repo);
   expect((await loadDraft('default', db, PATH))?.contents).toContain('rooms: 5');
   expect((await loadDraft('default', db, PATH))?.publishedSha).toBeNull();
 });
@@ -371,7 +371,7 @@ test('cleanup rechecks a lock acquired after its lock read', async () => {
       await claimLock('default', db, 'listings/mill-house', 'editing', 'tab');
     },
   );
-  await clearPublished('default', raced, published?.commit_sha ?? '', repo);
+  await clearPublished('default', raced, published?.commitSha ?? '', repo);
   expect(await loadDraft('default', db, PATH)).toBeDefined();
 });
 
@@ -412,7 +412,7 @@ const undoRules = (before: RedirectRule[], after: RedirectRule[], head: Redirect
         contents: JSON.stringify({
           rules: at === 'before' ? before : at === 'after' ? after : head,
         }),
-        blob_sha: 'blob',
+        blobSha: 'blob',
       }),
     },
     { parent: 'before', commit: 'after', head: 'head' },

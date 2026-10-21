@@ -128,7 +128,7 @@ test('getFile returns decoded contents and the blob sha', async () => {
 
   expect(file).toEqual({
     contents: 'title: Mühlenhaus\n',
-    blob_sha: 'sha-of-src/content/listings/en/mill-house.yaml',
+    blobSha: 'sha-of-src/content/listings/en/mill-house.yaml',
   });
 });
 
@@ -316,16 +316,16 @@ test('getHead returns the branch commit sha', async () => {
   expect(await git.getHead()).toBe('commit-A');
 });
 
-test('publish builds the tree on base_tree, parents the commit on base_sha and never forces the ref', async () => {
+test('publish builds the tree on base_tree, parents the commit on baseSha and never forces the ref', async () => {
   const gh = fakeGitData();
   const git = createGitClient(app, { fetch: gh.fetch });
 
   const result = await git.publish([{ path: 'src/content/a.yaml', contents: 'title: A\n' }], {
-    base_sha: 'commit-A',
+    baseSha: 'commit-A',
     message: 'Update A',
   });
 
-  expect(result).toEqual({ commit_sha: 'commit-B' });
+  expect(result).toEqual({ commitSha: 'commit-B' });
   expect(gh.bodies['POST /repos/acme/site/git/trees']).toEqual({
     base_tree: 'tree-A',
     tree: [{ path: 'src/content/a.yaml', mode: '100644', type: 'blob', content: 'title: A\n' }],
@@ -347,7 +347,7 @@ test('publish removes a file with a null-sha tree entry', async () => {
   const git = createGitClient(app, { fetch: gh.fetch });
 
   await git.publish([{ path: 'src/content/a.yaml', contents: null }], {
-    base_sha: 'commit-A',
+    baseSha: 'commit-A',
     message: 'Delete A',
   });
 
@@ -376,18 +376,18 @@ test('getHead skips a lagging ref read of heads this client has already replaced
   };
   const git = createGitClient(app, { fetch: fetch as typeof globalThis.fetch });
 
-  await git.publish([{ path: 'a.yaml', contents: 'a' }], { base_sha: 'commit-A', message: 'm' });
-  await git.publish([{ path: 'b.yaml', contents: 'b' }], { base_sha: 'commit-B', message: 'm' });
+  await git.publish([{ path: 'a.yaml', contents: 'a' }], { baseSha: 'commit-A', message: 'm' });
+  await git.publish([{ path: 'b.yaml', contents: 'b' }], { baseSha: 'commit-B', message: 'm' });
 
   expect(await git.getHead()).toBe('commit-C');
 });
 
-test('publish throws RefMovedError when the branch moved past base_sha', async () => {
+test('publish throws RefMovedError when the branch moved past baseSha', async () => {
   const gh = fakeGitData({ headMovesTo: 'commit-X' });
   const git = createGitClient(app, { fetch: gh.fetch });
 
   await expect(
-    git.publish([{ path: 'a.yaml', contents: 'a' }], { base_sha: 'commit-A', message: 'm' }),
+    git.publish([{ path: 'a.yaml', contents: 'a' }], { baseSha: 'commit-A', message: 'm' }),
   ).rejects.toBeInstanceOf(RefMovedError);
 });
 

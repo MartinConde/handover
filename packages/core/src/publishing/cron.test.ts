@@ -308,7 +308,7 @@ function repo(
       getFile: async (path: string, ref?: string) => {
         asked.push(`file ${path}@${ref}`);
         const contents = versions[`${path}@${ref}`];
-        return contents === undefined ? undefined : { contents, blob_sha: 'b' };
+        return contents === undefined ? undefined : { contents, blobSha: 'b' };
       },
     },
   };

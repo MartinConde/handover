@@ -170,7 +170,7 @@ test('a save of a translation goes to that language and takes only the words it 
       source: {
         locale: 'en',
         contents: home.en,
-        blob_sha: 'blob-src/content/pages/en/home.yaml',
+        blobSha: 'blob-src/content/pages/en/home.yaml',
       },
     },
     undefined,

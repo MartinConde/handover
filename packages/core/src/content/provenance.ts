@@ -18,7 +18,7 @@ export interface I18nMark {
 export interface TranslationSource {
   locale: string;
   contents: string;
-  blob_sha: string;
+  blobSha: string;
 }
 
 /** A source language moving on makes the mark disagree: stale is a warning, never a refusal. */
@@ -45,7 +45,7 @@ export async function markTranslation(
   if (preserveStampedSource && stamped && !sameMark(stamped, previous)) return contents;
   const mark: I18nMark = {
     sourceLocale: source.locale,
-    sourceBlob: source.blob_sha,
+    sourceBlob: source.blobSha,
     sourceHash: await hashOf(form, parseEntry(source.contents)),
     translatedAt: new Date().toISOString(),
   };

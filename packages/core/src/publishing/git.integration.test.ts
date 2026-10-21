@@ -34,7 +34,7 @@ const removeAfter = (git: GitClient, name: string, paths: string[]) =>
     if (left.length === 0) return;
     await git.publish(
       left.map((path) => ({ path, contents: null })),
-      { base_sha: head, message: `Clean up after ${name}` },
+      { baseSha: head, message: `Clean up after ${name}` },
     );
   });
 
@@ -51,12 +51,12 @@ test.skipIf(!configured)('getFile reads a file from the throwaway repo', async (
 
   const file = await git.getFile(env.GITHUB_TEST_PATH ?? 'README.md');
 
-  expect(file?.blob_sha).toMatch(/^[0-9a-f]{40}$/);
+  expect(file?.blobSha).toMatch(/^[0-9a-f]{40}$/);
   expect(file?.contents.length).toBeGreaterThan(0);
 });
 
 test.skipIf(!configured)(
-  'publish commits exactly one changed path and refuses a stale base_sha',
+  'publish commits exactly one changed path and refuses a stale baseSha',
   async () => {
     const [owner, repo] = (env.GITHUB_REPO ?? '').split('/');
     const app = {
@@ -71,20 +71,18 @@ test.skipIf(!configured)(
     const path = 'handover-integration-test.txt';
     const base = await git.getHead();
 
-    const { commit_sha } = await git.publish([{ path, contents: `publish test ${base}\n` }], {
-      base_sha: base,
+    const { commitSha } = await git.publish([{ path, contents: `publish test ${base}\n` }], {
+      baseSha: base,
       message: `Integration test publish from ${base.slice(0, 7)}`,
     });
 
-    const res = await git.request(
-      `/repos/${app.owner}/${app.repo}/compare/${base}...${commit_sha}`,
-    );
+    const res = await git.request(`/repos/${app.owner}/${app.repo}/compare/${base}...${commitSha}`);
     const diff = (await res.json()) as { files: { filename: string }[] };
     expect(diff.files.map((f) => f.filename)).toEqual([path]);
     expect((await git.getFile(path))?.contents).toBe(`publish test ${base}\n`);
 
     await expect(
-      git.publish([{ path, contents: 'stale\n' }], { base_sha: base, message: 'stale' }),
+      git.publish([{ path, contents: 'stale\n' }], { baseSha: base, message: 'stale' }),
     ).rejects.toBeInstanceOf(RefMovedError);
   },
   30_000,
@@ -131,17 +129,17 @@ test.skipIf(!configured)(
       `src/content/listings/en/${name}-b.yaml`,
       redirects,
     ]);
-    const { commit_sha: seeded } = await git.publish(
+    const { commitSha: seeded } = await git.publish(
       [
         {
           path: `src/content/listings/en/${name}.yaml`,
           contents: `_version: 1\ntitle: "${name}"\n`,
         },
       ],
-      { base_sha: await git.getHead(), message: `Seed ${name}` },
+      { baseSha: await git.getHead(), message: `Seed ${name}` },
     );
 
-    const { commit_sha: renamed } = await renameEntry(git, loc, name, `${name}-b`);
+    const { commitSha: renamed } = await renameEntry(git, loc, name, `${name}-b`);
 
     expect(await compare(seeded, renamed)).toEqual({
       commits: 1,
@@ -152,7 +150,7 @@ test.skipIf(!configured)(
       newRules: 1,
     });
 
-    const { commit_sha: deleted } = await deleteEntry(git, loc, `${name}-b`, () => '/');
+    const { commitSha: deleted } = await deleteEntry(git, loc, `${name}-b`, () => '/');
 
     expect(await compare(renamed, deleted)).toEqual({
       commits: 1,
@@ -193,9 +191,9 @@ test.skipIf(!configured)(
     const name = `it-${(await git.getHead()).slice(0, 7)}`;
     const paths = [1, 2].map((n) => `src/content/listings/en/${name}-${n}.yaml`);
     removeAfter(git, name, paths);
-    const { commit_sha: seeded } = await git.publish(
+    const { commitSha: seeded } = await git.publish(
       paths.map((path) => ({ path, contents: `_version: 1\ntitle: "${name}"\n` })),
-      { base_sha: await git.getHead(), message: `Seed ${name}` },
+      { baseSha: await git.getHead(), message: `Seed ${name}` },
     );
     for (const [i, path] of paths.entries()) {
       await saveDraft('default', db, git, path, { title: `${name} edited ${i}` });
@@ -205,7 +203,7 @@ test.skipIf(!configured)(
 
     expect(published?.paths.toSorted()).toEqual(paths.toSorted());
     const res = await git.request(
-      `/repos/${app.owner}/${app.repo}/compare/${seeded}...${published?.commit_sha}`,
+      `/repos/${app.owner}/${app.repo}/compare/${seeded}...${published?.commitSha}`,
     );
     const diff = (await res.json()) as { total_commits: number; files: { filename: string }[] };
     expect(diff.total_commits).toBe(1);
@@ -280,7 +278,7 @@ test.skipIf(!configured)(
           contents: `_version: 1\ntitle: "${name}"\nsummary: "Eine Mühle."\nprice: 425000\n`,
         },
       ],
-      { base_sha: await git.getHead(), message: `Seed ${name}` },
+      { baseSha: await git.getHead(), message: `Seed ${name}` },
     );
 
     // Somebody translates the German, and the publish writes down which English it came from.
@@ -291,8 +289,8 @@ test.skipIf(!configured)(
     });
     const marked = await publishDrafts('default', db, git, sourceOf);
 
-    expect((await git.getFile(de, marked?.commit_sha ?? ''))?.contents).toContain('_i18n:');
-    expect(await stale(marked?.commit_sha ?? '')).toEqual([]);
+    expect((await git.getFile(de, marked?.commitSha ?? ''))?.contents).toContain('_i18n:');
+    expect(await stale(marked?.commitSha ?? '')).toEqual([]);
 
     await saveDraft('default', db, git, en, {
       title: `${name} EN`,
@@ -301,7 +299,7 @@ test.skipIf(!configured)(
     });
     const moved = await publishDrafts('default', db, git, sourceOf);
 
-    expect(await stale(moved?.commit_sha ?? '')).toEqual(['de']);
+    expect(await stale(moved?.commitSha ?? '')).toEqual(['de']);
 
     await saveDraft('default', db, git, de, {
       title: `${name} DE`,
@@ -310,7 +308,7 @@ test.skipIf(!configured)(
     });
     const caught = await publishDrafts('default', db, git, sourceOf);
 
-    expect(await stale(caught?.commit_sha ?? '')).toEqual([]);
+    expect(await stale(caught?.commitSha ?? '')).toEqual([]);
   },
   120_000,
 );
@@ -365,7 +363,7 @@ test.skipIf(!configured)(
         { path: en, contents: LISTING(name) },
         { path: de, contents: LISTING(`${name} DE`) },
       ],
-      { base_sha: await git.getHead(), message: `Seed ${name}` },
+      { baseSha: await git.getHead(), message: `Seed ${name}` },
     );
 
     await saveDraft('default', db, git, de, {
@@ -382,11 +380,11 @@ test.skipIf(!configured)(
     const second = await publishDrafts('default', db, git, sourceOf);
 
     expect(second?.paths).toEqual([de]);
-    expect(await parentOf(second?.commit_sha ?? '')).toBe(first?.commit_sha);
+    expect(await parentOf(second?.commitSha ?? '')).toBe(first?.commitSha);
     // And the row is on the file as the commit left it, which is what made that true.
     const row = await loadDraft('default', db, de);
-    expect(row?.baseSha).toBe(second?.commit_sha);
-    expect(row?.baseBlob).toBe((await git.getFile(de, second?.commit_sha ?? ''))?.blob_sha);
+    expect(row?.baseSha).toBe(second?.commitSha);
+    expect(row?.baseBlob).toBe((await git.getFile(de, second?.commitSha ?? ''))?.blobSha);
   },
   120_000,
 );
@@ -398,8 +396,8 @@ test.skipIf(!configured)(
     const name = `it-same-${(await git.getHead()).slice(0, 7)}`;
     const path = `src/content/listings/en/${name}.yaml`;
     removeAfter(git, name, [path]);
-    const { commit_sha: seeded } = await git.publish([{ path, contents: LISTING(name) }], {
-      base_sha: await git.getHead(),
+    const { commitSha: seeded } = await git.publish([{ path, contents: LISTING(name) }], {
+      baseSha: await git.getHead(),
       message: `Seed ${name}`,
     });
     await saveDraft('default', db, git, path, {
@@ -409,8 +407,8 @@ test.skipIf(!configured)(
     });
 
     // Somebody commits the same file again — a formatting pass that changed nothing.
-    const { commit_sha: reformatted } = await git.publish([{ path, contents: LISTING(name) }], {
-      base_sha: seeded,
+    const { commitSha: reformatted } = await git.publish([{ path, contents: LISTING(name) }], {
+      baseSha: seeded,
       message: `Reformat ${name}`,
     });
     const published = await publishDrafts('default', db, git);
@@ -418,8 +416,8 @@ test.skipIf(!configured)(
     // The commit moved and the file did not, so the publish went on top rather than being refused.
     expect(reformatted).not.toBe(seeded);
     expect(published?.paths).toEqual([path]);
-    expect(await parentOf(published?.commit_sha ?? '')).toBe(reformatted);
-    expect((await git.getFile(path, published?.commit_sha ?? ''))?.contents).toContain(
+    expect(await parentOf(published?.commitSha ?? '')).toBe(reformatted);
+    expect((await git.getFile(path, published?.commitSha ?? ''))?.contents).toContain(
       'A restored mill.',
     );
   },
@@ -433,8 +431,8 @@ test.skipIf(!configured)(
     const name = `it-theirs-${(await git.getHead()).slice(0, 7)}`;
     const path = `src/content/listings/en/${name}.yaml`;
     removeAfter(git, name, [path]);
-    const { commit_sha: seeded } = await git.publish([{ path, contents: LISTING(name) }], {
-      base_sha: await git.getHead(),
+    const { commitSha: seeded } = await git.publish([{ path, contents: LISTING(name) }], {
+      baseSha: await git.getHead(),
       message: `Seed ${name}`,
     });
     await saveDraft('default', db, git, path, {
@@ -445,12 +443,12 @@ test.skipIf(!configured)(
     const loaded = await loadDraft('default', db, path);
 
     // A developer edits the same file straight in the repository.
-    const { commit_sha: theirs } = await git.publish(
+    const { commitSha: theirs } = await git.publish(
       [{ path, contents: LISTING(name).replace('A mill.', 'A mill above the weir.') }],
-      { base_sha: seeded, message: `Edit ${name} in code` },
+      { baseSha: seeded, message: `Edit ${name} in code` },
     );
     // The precondition: the blob at HEAD is no longer the one the draft was loaded from.
-    expect((await git.getFile(path, theirs))?.blob_sha).not.toBe(loaded?.baseBlob);
+    expect((await git.getFile(path, theirs))?.blobSha).not.toBe(loaded?.baseBlob);
     const caught = await publishDrafts('default', db, git).catch((err) => err);
 
     expect(caught).toBeInstanceOf(DraftConflictError);
@@ -469,9 +467,9 @@ test.skipIf(!configured)(
     const mine = `src/content/listings/en/${name}.yaml`;
     const theirs = `src/content/listings/en/${name}-theirs.yaml`;
     removeAfter(git, name, [mine, theirs]);
-    const { commit_sha: seeded } = await git.publish(
+    const { commitSha: seeded } = await git.publish(
       [mine, theirs].map((path) => ({ path, contents: LISTING(name) })),
-      { base_sha: await git.getHead(), message: `Seed ${name}` },
+      { baseSha: await git.getHead(), message: `Seed ${name}` },
     );
     await saveDraft('default', db, git, mine, {
       title: name,
@@ -479,15 +477,15 @@ test.skipIf(!configured)(
       price: 425000,
     });
 
-    const { commit_sha: elsewhere } = await git.publish(
+    const { commitSha: elsewhere } = await git.publish(
       [{ path: theirs, contents: LISTING(name).replace('A mill.', 'Somebody else.') }],
-      { base_sha: seeded, message: `Edit ${name}-theirs in code` },
+      { baseSha: seeded, message: `Edit ${name}-theirs in code` },
     );
     const published = await publishDrafts('default', db, git);
 
     expect(published?.paths).toEqual([mine]);
     const res = await git.request(
-      `/repos/${app.owner}/${app.repo}/compare/${elsewhere}...${published?.commit_sha}`,
+      `/repos/${app.owner}/${app.repo}/compare/${elsewhere}...${published?.commitSha}`,
     );
     const diff = (await res.json()) as { total_commits: number; files: { filename: string }[] };
     expect(diff.total_commits).toBe(1);
@@ -501,8 +499,8 @@ const conflicted = async (name: string) => {
   const { git, db, parentOf } = await harness();
   const path = `src/content/listings/en/${name}.yaml`;
   removeAfter(git, name, [path]);
-  const { commit_sha: seeded } = await git.publish([{ path, contents: LISTING(name) }], {
-    base_sha: await git.getHead(),
+  const { commitSha: seeded } = await git.publish([{ path, contents: LISTING(name) }], {
+    baseSha: await git.getHead(),
     message: `Seed ${name}`,
   });
   // Ours: the price, and a summary nobody else touches.
@@ -512,7 +510,7 @@ const conflicted = async (name: string) => {
     price: 400000,
   });
   // Theirs: the same price, and a title nobody else touches.
-  const { commit_sha: theirs } = await git.publish(
+  const { commitSha: theirs } = await git.publish(
     [
       {
         path,
@@ -521,7 +519,7 @@ const conflicted = async (name: string) => {
           .replace(name, `${name} b`),
       },
     ],
-    { base_sha: seeded, message: `Edit ${name} in code` },
+    { baseSha: seeded, message: `Edit ${name} in code` },
   );
   await expect(publishDrafts('default', db, git)).rejects.toBeInstanceOf(DraftConflictError);
   const conflict = await entryConflict('default', db, git, TRANSLATED, { en: path });
@@ -546,8 +544,8 @@ test.skipIf(!configured)(
     const published = await publishDrafts('default', db, git);
 
     expect(published?.paths).toEqual([path]);
-    expect(await parentOf(published?.commit_sha ?? '')).toBe(conflict.head);
-    const file = (await git.getFile(path, published?.commit_sha ?? ''))?.contents ?? '';
+    expect(await parentOf(published?.commitSha ?? '')).toBe(conflict.head);
+    const file = (await git.getFile(path, published?.commitSha ?? ''))?.contents ?? '';
     // Ours where both wrote, theirs where only they did, and ours where only we did.
     expect(file).toContain('price: 400000');
     expect(file).toContain(`title: "${name} b"`);
@@ -572,8 +570,8 @@ test.skipIf(!configured)(
     const published = await publishDrafts('default', db, git);
 
     expect(published?.paths).toEqual([path]);
-    expect(await parentOf(published?.commit_sha ?? '')).toBe(conflict.head);
-    const file = (await git.getFile(path, published?.commit_sha ?? ''))?.contents ?? '';
+    expect(await parentOf(published?.commitSha ?? '')).toBe(conflict.head);
+    const file = (await git.getFile(path, published?.commitSha ?? ''))?.contents ?? '';
     expect(file).toContain('price: 450000');
     expect(file).toContain('A restored mill.');
   },

@@ -274,7 +274,7 @@ const title: Form = {
 const translated = (en: string, de: string) =>
   markTranslation(
     title,
-    { locale: 'en', contents: `_version: 1\ntitle: "${en}"\n`, blob_sha: 'e4a1c9b0'.repeat(5) },
+    { locale: 'en', contents: `_version: 1\ntitle: "${en}"\n`, blobSha: 'e4a1c9b0'.repeat(5) },
     `_version: 1\ntitle: "${de}"\n`,
     undefined,
   );

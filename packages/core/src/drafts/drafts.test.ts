@@ -60,7 +60,7 @@ test('opening an invalid repository document does not copy it into the draft sto
   await expect(
     openDraft('default', db, PATH, 'commit-A', {
       contents,
-      blob_sha: await blobSha(contents),
+      blobSha: await blobSha(contents),
     }),
   ).rejects.toThrow('opaque[0]._id: expected eight characters from 0-9a-z, got "bad"');
   expect(await db.select().from(drafts)).toEqual([]);
@@ -95,7 +95,7 @@ test('ordinary saves preserve managed values and cannot add one that is absent',
   const managedGit = {
     getHead: async () => 'commit-A',
     getFile: async (path: string) =>
-      path === PATH ? { contents: managedFile, blob_sha: await blobSha(managedFile) } : undefined,
+      path === PATH ? { contents: managedFile, blobSha: await blobSha(managedFile) } : undefined,
   };
   const options = {
     form: { fields: [], blocks: {} },

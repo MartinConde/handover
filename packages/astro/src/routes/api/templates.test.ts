@@ -223,7 +223,7 @@ test('saving as a template commits one stripped file and logs it', async () => {
       },
     ],
     {
-      base_sha: 'head789',
+      baseSha: 'head789',
       message: expect.stringContaining('Save pages/home as the template landing-page'),
     },
   );

@@ -366,7 +366,7 @@ test('a batch publish records the entries it carried, one each and capped', asyn
     { length: 10 },
     (_, i) => `src/content/listings/${i % 2 ? 'de' : 'en'}/house-${Math.floor(i / 2)}.yaml`,
   );
-  publishDrafts.mockImplementationOnce(async () => ({ commit_sha: 'def456', paths }));
+  publishDrafts.mockImplementationOnce(async () => ({ commitSha: 'def456', paths }));
 
   await POST(publishing(''));
 
@@ -467,7 +467,7 @@ test('a publish with no body is still every entry that is ready', async () => {
 test('a publish that released a hold logs it against the person who set it', async () => {
   heldDrafts.mockResolvedValueOnce({ 'listings/mill-house': { id: 'u2', name: 'Anna Berg' } });
   publishDrafts.mockImplementationOnce(async () => ({
-    commit_sha: 'def456',
+    commitSha: 'def456',
     paths: ['src/content/listings/en/mill-house.yaml'],
     released: ['listings/mill-house'],
   }));
@@ -549,10 +549,10 @@ test('the build endpoint answers where the last commit has got to', async () => 
 test('the rows a live build carries are cleared when it reports live', async () => {
   commitBuild.mockImplementationOnce(
     async (_cfg: unknown, commit: { sha: string } | undefined) => ({
-      commit_sha: commit?.sha,
-      deployed_sha: 'live123',
+      commitSha: commit?.sha,
+      deployedSha: 'live123',
       state: 'live',
-      started_at: 1755864100000,
+      startedAt: 1755864100000,
     }),
   );
   await GET(ctx('build'));
@@ -568,8 +568,8 @@ test('the rows a live build carries are cleared when it reports live', async () 
 test('an answer that names no commit carries no committed_at', async () => {
   commitBuild.mockImplementationOnce(async () => ({
     state: 'live',
-    started_at: 1755864100000,
-    live_at: 1755864200000,
+    startedAt: 1755864100000,
+    liveAt: 1755864200000,
   }));
   expect(await (await GET(ctx('build'))).json()).toEqual({
     state: 'live',
@@ -898,7 +898,7 @@ test('an unfinished new language waits while the rest of the entry publishes on 
   state.locales = ['en', 'de'];
   readyDrafts.mockImplementationOnce(async () => millDrafts());
   publishDrafts.mockClear();
-  publishDrafts.mockImplementationOnce(async () => ({ commit_sha: 'def456', paths: [MILL_EN] }));
+  publishDrafts.mockImplementationOnce(async () => ({ commitSha: 'def456', paths: [MILL_EN] }));
 
   const res = await selecting('publish', {
     entries: ['listings/mill-house'],
@@ -917,7 +917,7 @@ test('a hold stays on an entry whose held language was left out', async () => {
   heldDrafts.mockResolvedValueOnce({ 'listings/mill-house': { id: 'u2', name: 'Anna Berg' } });
   readyDrafts.mockImplementationOnce(async () => millDrafts('u2'));
   publishDrafts.mockImplementationOnce(async () => ({
-    commit_sha: 'def456',
+    commitSha: 'def456',
     paths: [MILL_EN],
     released: ['listings/mill-house'],
   }));

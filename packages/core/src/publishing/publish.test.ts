@@ -146,7 +146,7 @@ test('a publish retry finalizes the same durable commit after its D1 batch faile
     userId: 'u1',
   });
 
-  expect(retried).toMatchObject({ commit_sha: failed.commitSha, paths: [PATH] });
+  expect(retried).toMatchObject({ commitSha: failed.commitSha, paths: [PATH] });
   expect(repo.publish).toHaveBeenCalledTimes(1);
   expect(await pendingDrafts('default', db)).toEqual([]);
   expect((await db.select().from(tables.operations))[0]?.state).toBe('finalized');
@@ -179,7 +179,7 @@ test('a publish retry recovers a commit whose Git response was lost', async () =
     userId: 'u1',
   });
 
-  expect(recovered?.commit_sha).toBe(committed);
+  expect(recovered?.commitSha).toBe(committed);
   expect(await history.getHead()).not.toBe(committed);
   expect(history.publish).toHaveBeenCalledTimes(1);
   expect((await db.select().from(tables.operations))[0]?.state).toBe('finalized');
@@ -212,7 +212,7 @@ test('operation recovery refuses a real branch move and a tagged out-of-scope co
     baseSha: await outside.getHead(),
   });
   await outside.publish([{ path: OTHER, contents: OTHER_FILE }], {
-    base_sha: await outside.getHead(),
+    baseSha: await outside.getHead(),
     message: operationMessage('Wrong path', guarded.id),
   });
 
@@ -253,7 +253,7 @@ test('finalizing a committed publish rebases rather than losing a newer draft', 
     userId: 'u1',
   });
 
-  expect(retried?.commit_sha).toBe(failed.commitSha);
+  expect(retried?.commitSha).toBe(failed.commitSha);
   expect(repo.publish).toHaveBeenCalledTimes(1);
   const row = await loadDraft('default', db, PATH);
   expect(row?.contents).toContain('rooms: 5');
@@ -422,7 +422,7 @@ test('a machine fill keeps the source snapshot it saw when the source moves befo
   const source = {
     locale: 'en',
     contents: repo.read(PAGE_EN),
-    blob_sha: await blobSha(repo.read(PAGE_EN)),
+    blobSha: await blobSha(repo.read(PAGE_EN)),
   };
   await saveTranslated(
     'default',
@@ -678,8 +678,8 @@ test('a published translation is re-seeded on the bytes the commit wrote', async
   const row = await only(db);
   expect(row?.contents).toBe(repo.read(PAGE_DE));
   expect(row?.baseBlob).toBe(await blobSha(repo.read(PAGE_DE)));
-  expect(row?.baseSha).toBe(result?.commit_sha);
-  expect(row?.publishedSha).toBe(result?.commit_sha);
+  expect(row?.baseSha).toBe(result?.commitSha);
+  expect(row?.publishedSha).toBe(result?.commitSha);
   expect(await pendingDrafts('default', db)).toEqual([]);
 });
 
@@ -697,7 +697,7 @@ test('an address change published once is not written a second time', async () =
   expect(rules.map((r) => r.from)).toEqual(['/de/home']);
 });
 
-// The branch is served from a cache, so a base_sha taken beside a lagging blob would miss a commit.
+// The branch is served from a cache, so a baseSha taken beside a lagging blob would miss a commit.
 test('a branch read that has not caught up cannot make a publish miss a commit', async () => {
   const db = await fresh();
   const repo = fakeRepo({ [PATH]: FILE });

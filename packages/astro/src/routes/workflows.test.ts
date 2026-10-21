@@ -203,7 +203,7 @@ beforeEach(async () => {
     },
     getFile: async (path: string, sha = head) => {
       const contents = trees[sha]?.[path];
-      return contents === undefined ? undefined : { contents, blob_sha: await blobSha(contents) };
+      return contents === undefined ? undefined : { contents, blobSha: await blobSha(contents) };
     },
     getCommit: async (sha: string) => commits[sha],
     contentFiles: async (sha = head) =>
@@ -219,11 +219,11 @@ beforeEach(async () => {
       if (descendsFrom(base, tip)) return 'behind';
       return 'diverged';
     },
-    publish: async (files: PublishFile[], opts: { base_sha: string; message: string }) => {
+    publish: async (files: PublishFile[], opts: { baseSha: string; message: string }) => {
       await pause?.();
-      expect(head).toBe(opts.base_sha);
+      expect(head).toBe(opts.baseSha);
       writes.push(files);
-      return { commit_sha: push(files, opts.message) };
+      return { commitSha: push(files, opts.message) };
     },
   };
 });

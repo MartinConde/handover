@@ -3,14 +3,14 @@ export type BuildState = 'building' | 'live' | 'failed';
 
 export interface BuildStatus {
   /** The requested commit, or the worker's newest when absent. */
-  commit_sha?: string;
+  commitSha?: string;
   /** The newest successful build: the repository version the Worker is actually serving. */
-  deployed_sha?: string;
+  deployedSha?: string;
   state: BuildState;
   /** Epoch ms the build was created, so the pill can say how long it has been going. */
-  started_at?: number;
+  startedAt?: number;
   /** Epoch ms the build that carried it finished, which is when the site changed. */
-  live_at?: number;
+  liveAt?: number;
 }
 
 export interface WorkerBuilds {
@@ -107,10 +107,10 @@ export async function commitBuild(
           : 'failed';
   const stopped = state === 'live' && found?.stopped_on ? Date.parse(found.stopped_on) : undefined;
   return {
-    ...(named && commit ? { commit_sha: commit.sha } : {}),
-    ...(deployedSha ? { deployed_sha: deployedSha } : {}),
+    ...(named && commit ? { commitSha: commit.sha } : {}),
+    ...(deployedSha ? { deployedSha } : {}),
     state,
-    ...(started ? { started_at: started } : {}),
-    ...(stopped ? { live_at: stopped } : {}),
+    ...(started ? { startedAt: started } : {}),
+    ...(stopped ? { liveAt: stopped } : {}),
   };
 }

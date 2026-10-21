@@ -11,7 +11,7 @@ export interface GitHubApp {
 
 export interface GitFile {
   contents: string;
-  blob_sha: string;
+  blobSha: string;
 }
 
 export interface PublishFile {
@@ -97,11 +97,11 @@ export interface GitClient {
   getCommit(sha: string): Promise<GitCommit>;
   publish(
     files: PublishFile[],
-    opts: { base_sha: string; message: string },
-  ): Promise<{ commit_sha: string }>;
+    opts: { baseSha: string; message: string },
+  ): Promise<{ commitSha: string }>;
 }
 
-// The branch moved past base_sha between load and publish; the non-force ref update refused it.
+// The branch moved past baseSha between load and publish; the non-force ref update refused it.
 export class RefMovedError extends Error {
   override name = 'RefMovedError';
 }
@@ -303,7 +303,7 @@ export function createGitClient(
       if (!res.ok) throw new Error(`GitHub getFile ${path} failed: ${res.status}`);
       const body = (await res.json()) as { sha: string; content: string };
       const bytes = Uint8Array.from(atob(body.content.replace(/\s+/g, '')), (c) => c.charCodeAt(0));
-      return { contents: new TextDecoder().decode(bytes), blob_sha: body.sha };
+      return { contents: new TextDecoder().decode(bytes), blobSha: body.sha };
     },
 
     /** By id: the source bytes may be many commits back; `undefined` once git has collected it. */
@@ -411,11 +411,11 @@ export function createGitClient(
       };
     },
 
-    // parents: [base_sha] plus a non-force ref update makes a concurrent push fail, not clobber.
-    async publish(files, { base_sha, message }) {
+    // parents: [baseSha] plus a non-force ref update makes a concurrent push fail, not clobber.
+    async publish(files, { baseSha, message }) {
       const post = { method: 'POST', headers: { 'content-type': 'application/json' } };
       const parent = await json<{ tree: { sha: string } }>(
-        `${repo}/git/commits/${base_sha}`,
+        `${repo}/git/commits/${baseSha}`,
         {},
         'read base commit',
       );
@@ -437,7 +437,7 @@ export function createGitClient(
       );
       const commit = await json<{ sha: string }>(
         `${repo}/git/commits`,
-        { ...post, body: JSON.stringify({ message, tree: tree.sha, parents: [base_sha] }) },
+        { ...post, body: JSON.stringify({ message, tree: tree.sha, parents: [baseSha] }) },
         'create commit',
       );
       const res = await request(`${repo}/git/refs/${branchRef}`, {
@@ -446,12 +446,12 @@ export function createGitClient(
         body: JSON.stringify({ sha: commit.sha, force: false }),
       });
       if (res.status === 422)
-        throw new RefMovedError(`${app.branch ?? 'main'} moved past ${base_sha}`);
+        throw new RefMovedError(`${app.branch ?? 'main'} moved past ${baseSha}`);
       if (!res.ok) throw new Error(`GitHub update ref failed: ${res.status}`);
       for (const [base, next] of replaced)
         if (now() - next.at >= SUCCESSOR_TTL_MS) replaced.delete(base);
-      replaced.set(base_sha, { sha: commit.sha, at: now() });
-      return { commit_sha: commit.sha };
+      replaced.set(baseSha, { sha: commit.sha, at: now() });
+      return { commitSha: commit.sha };
     },
   };
 }

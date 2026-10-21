@@ -600,7 +600,7 @@ test('the simulated conflict is made in a collection its schema can be filled in
         contents: expect.stringMatching(/The version in the code[\s\S]*And the code here too/),
       },
     ],
-    expect.objectContaining({ base_sha: 'def456' }),
+    expect.objectContaining({ baseSha: 'def456' }),
   );
 });
 

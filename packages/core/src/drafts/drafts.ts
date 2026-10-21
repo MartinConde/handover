@@ -89,7 +89,7 @@ export async function openDraft(
   db: Db,
   path: string,
   head: string,
-  file: { contents: string; blob_sha: string } | undefined,
+  file: { contents: string; blobSha: string } | undefined,
 ): Promise<Draft | undefined> {
   if (file) {
     // A failed open must not leave unreadable repository bytes behind as a durable draft row.
@@ -102,7 +102,7 @@ export async function openDraft(
         revision: sql`case when ${unreserved(siteId, path)} then ${crypto.randomUUID()} else null end`,
         contents: file.contents,
         baseSha: head,
-        baseBlob: file.blob_sha,
+        baseBlob: file.blobSha,
         updatedAt: Date.now(),
       })
       .onConflictDoNothing();
@@ -124,9 +124,9 @@ export async function refreshUntouched(
   db: Db,
   row: Draft | undefined,
   head: string,
-  file: { contents: string; blob_sha: string } | undefined,
+  file: { contents: string; blobSha: string } | undefined,
 ): Promise<Draft | undefined> {
-  if (!row || !file || row.publishedSha || row.baseBlob === file.blob_sha) return row;
+  if (!row || !file || row.publishedSha || row.baseBlob === file.blobSha) return row;
   if (await isPending(row)) return row;
   if (file.contents) parseEntry(file.contents);
   // A new revision, so a tab still showing the old file is refused rather than merged over it.
@@ -135,7 +135,7 @@ export async function refreshUntouched(
     .set({
       contents: file.contents,
       baseSha: head,
-      baseBlob: file.blob_sha,
+      baseBlob: file.blobSha,
       revision: nextRevision(row.revision),
     })
     .where(
@@ -346,7 +346,7 @@ export async function load(
     open: false,
     revision: undefined,
     baseSha: head,
-    baseBlob: file.blob_sha,
+    baseBlob: file.blobSha,
     contents: file.contents,
     entry: parseEntry(file.contents),
     redirects: [] as RedirectRule[],

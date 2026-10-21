@@ -53,9 +53,9 @@ export async function entryConflict(
       return {
         locale,
         path,
-        blob: at?.blob_sha ?? '',
+        blob: at?.blobSha ?? '',
         revision: row?.revision,
-        moved: Boolean(row) && (at?.blob_sha ?? '') !== row?.baseBlob,
+        moved: Boolean(row) && (at?.blobSha ?? '') !== row?.baseBlob,
         side: {
           base: parseEntry(was?.contents ?? ''),
           ours: parseEntry(row?.contents ?? at?.contents ?? ''),

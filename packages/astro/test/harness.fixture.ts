@@ -230,13 +230,13 @@ const {
     getFile: vi.fn(async (path: string, ref?: string) => {
       // `<ref>:<path>` is the file as one commit has it, which is what a version diff reads.
       const atRef = ref === undefined ? undefined : files[`${ref}:${path}`];
-      if (atRef !== undefined) return { contents: atRef, blob_sha: `blob-${ref}-${path}` };
+      if (atRef !== undefined) return { contents: atRef, blobSha: `blob-${ref}-${path}` };
       const stored = files[path];
-      if (stored !== undefined) return { contents: stored, blob_sha: `blob-${path}` };
+      if (stored !== undefined) return { contents: stored, blobSha: `blob-${path}` };
       if (path === 'src/content/listings/en/mill-house.yaml')
         return {
           contents: 'title: The Mill House\nlocation: Bakewell\nrooms: 3\n',
-          blob_sha: 'abc123',
+          blobSha: 'abc123',
         };
       return undefined;
     }),
@@ -260,12 +260,12 @@ const {
     ),
     // The one-request read the delete gate is made on; the walk is tested in core's git.test.ts.
     contentFiles: vi.fn<() => Promise<{ path: string; contents: string }[]>>(async () => []),
-    publish: vi.fn(async (_files: unknown, opts: { base_sha: string }) => {
-      if (opts.base_sha === 'stale') {
+    publish: vi.fn(async (_files: unknown, opts: { baseSha: string }) => {
+      if (opts.baseSha === 'stale') {
         const { RefMovedError } = await import('@handover/core');
         throw new RefMovedError('moved');
       }
-      return { commit_sha: 'def456' };
+      return { commitSha: 'def456' };
     }),
     // The D1 boundary; the real ones run against a D1 in @handover/core's own tests.
     pendingDrafts: vi.fn(async () => [
@@ -298,8 +298,8 @@ const {
     ),
     holdEntry: vi.fn(async () => {}),
     publishDrafts: vi.fn<
-      (...args: unknown[]) => Promise<{ commit_sha: string; paths: string[] } | undefined>
-    >(async () => ({ commit_sha: 'def456', paths: ['src/content/listings/en/mill-house.yaml'] })),
+      (...args: unknown[]) => Promise<{ commitSha: string; paths: string[] } | undefined>
+    >(async () => ({ commitSha: 'def456', paths: ['src/content/listings/en/mill-house.yaml'] })),
     saveDraft: vi.fn<() => Promise<{ updated_at: number; pending: boolean } | undefined>>(
       async () => ({ updated_at: 1755864000000, pending: true }),
     ),
@@ -328,9 +328,9 @@ const {
     overlayRows: vi.fn(async () => [] as { path: string; contents: string }[]),
     // The Workers Builds boundary; the mapping runs against a faked API in core's builds.test.ts.
     commitBuild: vi.fn(async (_cfg: unknown, commit: { sha: string } | undefined) => ({
-      ...(commit ? { commit_sha: commit.sha } : {}),
+      ...(commit ? { commitSha: commit.sha } : {}),
       state: 'building' as string,
-      started_at: 1755864100000,
+      startedAt: 1755864100000,
     })),
     clearPublished: vi.fn(async () => [] as string[]),
     // The D1 and R2 boundaries; both run for real in core's own media.test.ts.
@@ -387,11 +387,11 @@ const {
       }),
     ),
     revertCommit: vi.fn(async () => ({
-      commit_sha: 'rev999',
+      commitSha: 'rev999',
       paths: ['src/content/listings/en/mill-house.yaml'],
     })),
     restoreCommit: vi.fn(async () => ({
-      commit_sha: 'res888',
+      commitSha: 'res888',
       paths: ['src/content/listings/en/mill-house.yaml'],
     })),
     // The query is core's; what the route makes of the rows is tested here.

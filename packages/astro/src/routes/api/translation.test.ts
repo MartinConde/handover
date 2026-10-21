@@ -184,7 +184,7 @@ test('a machine is asked for the fields the translation has not got, and no othe
       source: {
         locale: 'en',
         contents: home.en,
-        blob_sha: 'blob-src/content/pages/en/home.yaml',
+        blobSha: 'blob-src/content/pages/en/home.yaml',
       },
     },
   );
@@ -215,7 +215,7 @@ test('a machine fill keeps the source snapshot sent before the provider round tr
       source: {
         locale: 'en',
         contents: home.en,
-        blob_sha: 'blob-src/content/pages/en/home.yaml',
+        blobSha: 'blob-src/content/pages/en/home.yaml',
       },
     },
   );
@@ -244,7 +244,7 @@ test('a named field is translated whether it is empty or not', async () => {
       source: {
         locale: 'en',
         contents: home.en,
-        blob_sha: 'blob-src/content/pages/en/home.yaml',
+        blobSha: 'blob-src/content/pages/en/home.yaml',
       },
     },
   );
@@ -294,7 +294,7 @@ test('a site with no hook of its own translates with the DEEPL_API_KEY it holds'
       source: {
         locale: 'en',
         contents: home.en,
-        blob_sha: 'blob-src/content/pages/en/home.yaml',
+        blobSha: 'blob-src/content/pages/en/home.yaml',
       },
     },
   );

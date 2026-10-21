@@ -21,7 +21,7 @@ test('rename moves every locale file and appends a rule per language in one comm
   const result = await renameEntry(git, listings, 'seaview', 'seaview-cottage', { now });
 
   expect(result).toEqual({
-    commit_sha: 'commit-B',
+    commitSha: 'commit-B',
     files: [
       { locale: 'en', contents: '_version: 1\ntitle: "Seaview"\n' },
       { locale: 'de', contents: '_version: 1\ntitle: "Meerblick"\n' },
@@ -29,7 +29,7 @@ test('rename moves every locale file and appends a rule per language in one comm
   });
   expect(published).toHaveLength(1);
   expect(published[0]?.message).toBe('Rename listings/seaview to seaview-cottage');
-  expect(published[0]?.base_sha).toBe('commit-A');
+  expect(published[0]?.baseSha).toBe('commit-A');
   expect(published[0]?.files).toEqual([
     { path: 'src/content/listings/en/seaview.yaml', contents: null },
     {
@@ -373,7 +373,7 @@ test('a rename reads every file it moves at the commit it is made against', asyn
 
   await renameEntry(git, listings, 'seaview', 'seaview-cottage', { now });
 
-  expect(published[0]?.base_sha).toBe('commit-A');
+  expect(published[0]?.baseSha).toBe('commit-A');
   expect(read.every((r) => r.at === 'commit-A')).toBe(true);
   // redirects.yaml is in the commit too, so the rules it is appended to are that commit's.
   expect(read).toContainEqual({ path: 'src/content/redirects.yaml', at: 'commit-A' });

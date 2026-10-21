@@ -7,6 +7,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Helpers that never used the site id no longer take it: drop the leading `'default'` from
   `staticSource`, `entryAt`, `filterLive`, `isLive`, `entryAddress`, `entryUrl`, `globalsAt`,
   `menusAt` and `getEntryLocales`, and from `renameEntry`/`deleteEntry` in `@handover/core`.
+- `@handover/core` types use camelCase: `GitFile.blobSha`, `GitClient.publish(files, { baseSha })`
+  answering `{ commitSha }`, `BuildStatus`, and the results of `publishDrafts`, `revertCommit`,
+  `restoreCommit`, `renameEntry` and `deleteEntry`. The admin API's JSON keys are unchanged.
 
 ## 0.1.0 — first release
 

@@ -158,10 +158,10 @@ export async function offering(
         subject: files.find((file) => file.file)?.path ?? files[0]?.path ?? null,
         detail: { locales: going },
       }));
-    let commit_sha: string | undefined = operation.commitSha ?? undefined;
-    if (!commit_sha) commit_sha = await recoverOperationCommit('default', database, git, operation);
+    let commitSha: string | undefined = operation.commitSha ?? undefined;
+    if (!commitSha) commitSha = await recoverOperationCommit('default', database, git, operation);
     let kept: { path: string; contents: string }[];
-    if (!commit_sha) {
+    if (!commitSha) {
       const committed = await deleteLocales(
         git,
         locationOf(collection),
@@ -171,32 +171,32 @@ export async function offering(
         (locale) => redirectTarget(answer, collected, picked, locale),
         { baseSha: operation.baseSha, operationId: operation.id, source: stamp },
       );
-      commit_sha = committed.commit_sha;
+      commitSha = committed.commitSha;
       kept = committed.kept;
     } else {
       kept = (
         await Promise.all(
           staying.map(async (locale) => {
             const path = entryPath(collection, slug, locale);
-            const file = await git.getFile(path, commit_sha);
+            const file = await git.getFile(path, commitSha);
             return file ? { path, contents: file.contents } : undefined;
           }),
         )
       ).filter((file): file is { path: string; contents: string } => Boolean(file));
     }
-    const result = { commit_sha };
-    await markOperationCommitted('default', database, operation.id, commit_sha, result);
+    const result = { commit_sha: commitSha };
+    await markOperationCommitted('default', database, operation.id, commitSha, result);
     const offer = { offered, locales: config.i18n.locales, source: stamp };
     try {
       for (const { locale, path, file } of files) {
         if (!going.includes(locale)) continue;
         // A language with a draft and a file loses both, or the row would republish the file.
         if (file)
-          await recordDelete('default', database, path, commit_sha, operation.revisions[path]);
+          await recordDelete('default', database, path, commitSha, operation.revisions[path]);
         else await discardDraft('default', database, path, operation.revisions[path]);
       }
       for (const file of kept)
-        await recordOffer('default', database, file.path, file.contents, offer, commit_sha);
+        await recordOffer('default', database, file.path, file.contents, offer, commitSha);
       // A staying language with only a draft is not in the commit, so its draft takes the mark.
       const drafted = staying.filter((l) => !files.some((f) => f.locale === l && f.file));
       if (drafted.length)
@@ -211,7 +211,7 @@ export async function offering(
         );
       await finalizeOperation('default', database, operation.id);
     } catch (cause) {
-      throw new OperationFinalizationError(operation.id, commit_sha, { cause });
+      throw new OperationFinalizationError(operation.id, commitSha, { cause });
     }
     // Logged so the Deleted view can say what it would put back without asking git.
     await logActivity('default', database, {
@@ -219,7 +219,7 @@ export async function offering(
       kind: 'locale-off',
       subject: await entrySubject(ctx, collection, slug),
       detail: { locales: going },
-      commitSha: commit_sha,
+      commitSha,
     });
     return Response.json(result);
   }

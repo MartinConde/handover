@@ -418,7 +418,7 @@ test('an unedited draft of an older file lists the title the build has', async (
   const db = await fresh();
   await openDraft('default', db, PATH, 'commit-A', {
     contents: FILE,
-    blob_sha: await blobSha(FILE),
+    blobSha: await blobSha(FILE),
   });
 
   const built = indexOf({ [PATH]: FILE.replace('The Mill House', 'Mill House') });
@@ -429,7 +429,7 @@ test('an unedited draft renamed before its build is listed under the new name', 
   const db = await fresh();
   await openDraft('default', db, PATH, 'commit-A', {
     contents: FILE,
-    blob_sha: await blobSha(FILE),
+    blobSha: await blobSha(FILE),
   });
   await recordRenames('default', db, [{ from: PATH, to: RENAMED, contents: FILE }], 'commit-B');
 
@@ -440,7 +440,7 @@ test('an unedited draft moved onto an offer commit is previewed before that buil
   const db = await fresh();
   await openDraft('default', db, PATH, 'commit-A', {
     contents: FILE,
-    blob_sha: await blobSha(FILE),
+    blobSha: await blobSha(FILE),
   });
   const offer = { offered: ['en'], locales: ['en', 'de'] };
   const committed = stringifyEntry(offeredEntry(parseEntry(FILE), offer));

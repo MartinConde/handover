@@ -402,10 +402,10 @@ export async function revert(
     userId: session?.user.id,
     kind: 'revert',
     detail: { of: sha, files: result.paths.length },
-    commitSha: result.commit_sha,
+    commitSha: result.commitSha,
   });
   // The commit and the paths, never the whole result: it carries the restored file contents.
-  return Response.json({ commit_sha: result.commit_sha, paths: result.paths });
+  return Response.json({ commit_sha: result.commitSha, paths: result.paths });
 }
 
 // Redirect-only changes require an owner; content paths must be configured editable files.
@@ -463,10 +463,10 @@ export async function restore(
       if (drafted.length)
         await setEntryLocales('default', database, git, drafted, offered, config.i18n.locales);
     }
-    if (result.operation_id) await finalizeOperation('default', database, result.operation_id);
+    if (result.operationId) await finalizeOperation('default', database, result.operationId);
   } catch (cause) {
-    if (result.operation_id)
-      throw new OperationFinalizationError(result.operation_id, result.commit_sha, { cause });
+    if (result.operationId)
+      throw new OperationFinalizationError(result.operationId, result.commitSha, { cause });
     throw cause;
   }
   await logActivity('default', database, {
@@ -475,7 +475,7 @@ export async function restore(
     // `restore` is what tells this row from a revert on screen: both are the same inverse commit.
     subject: result.paths[0] ?? null,
     detail: { of: sha, files: result.paths.length, restore: true },
-    commitSha: result.commit_sha,
+    commitSha: result.commitSha,
   });
-  return Response.json({ commit_sha: result.commit_sha, paths: result.paths });
+  return Response.json({ commit_sha: result.commitSha, paths: result.paths });
 }

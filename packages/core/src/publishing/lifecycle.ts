@@ -74,13 +74,13 @@ export async function renameEntry(
   from: string,
   to: string,
   deps: { now?: () => number; baseSha?: string; operationId?: string } = {},
-): Promise<{ commit_sha: string; files: { locale: string; contents: string }[] }> {
-  const base_sha = deps.baseSha ?? (await git.getHead());
+): Promise<{ commitSha: string; files: { locale: string; contents: string }[] }> {
+  const baseSha = deps.baseSha ?? (await git.getHead());
   const destinations = await Promise.all(
-    loc.i18n.locales.map((locale) => git.getFile(entryPath(loc.collection, locale, to), base_sha)),
+    loc.i18n.locales.map((locale) => git.getFile(entryPath(loc.collection, locale, to), baseSha)),
   );
   if (destinations.some(Boolean)) throw new RenameCollisionError();
-  const files = await localeFiles(git, loc, from, base_sha);
+  const files = await localeFiles(git, loc, from, baseSha);
   const changes: PublishFile[] = files.flatMap(({ locale, contents }) => [
     { path: entryPath(loc.collection, locale, from), contents: null },
     { path: entryPath(loc.collection, locale, to), contents },
@@ -102,9 +102,9 @@ export async function renameEntry(
       : [];
   });
   if (rules.length)
-    changes.push(...(await redirectsFile(git, rules, deps.now ?? Date.now, base_sha)));
+    changes.push(...(await redirectsFile(git, rules, deps.now ?? Date.now, baseSha)));
   const published = await git.publish(changes, {
-    base_sha,
+    baseSha,
     message: deps.operationId
       ? operationMessage(`Rename ${loc.collection}/${from} to ${to}`, deps.operationId)
       : `Rename ${loc.collection}/${from} to ${to}`,
@@ -119,9 +119,9 @@ export async function deleteEntry(
   name: string,
   redirectTo: ((locale: string) => string | undefined) | undefined,
   deps: { now?: () => number; baseSha?: string; operationId?: string } = {},
-): Promise<{ commit_sha: string }> {
-  const base_sha = deps.baseSha ?? (await git.getHead());
-  const files = await localeFiles(git, loc, name, base_sha);
+): Promise<{ commitSha: string }> {
+  const baseSha = deps.baseSha ?? (await git.getHead());
+  const files = await localeFiles(git, loc, name, baseSha);
   const changes: PublishFile[] = files.map(({ locale }) => ({
     path: entryPath(loc.collection, locale, name),
     contents: null,
@@ -136,10 +136,10 @@ export async function deleteEntry(
           : [];
       });
   if (rules.length)
-    changes.push(...(await redirectsFile(git, rules, deps.now ?? Date.now, base_sha)));
+    changes.push(...(await redirectsFile(git, rules, deps.now ?? Date.now, baseSha)));
   const message = `Delete ${loc.collection}/${name}`;
   return git.publish(changes, {
-    base_sha,
+    baseSha,
     message: deps.operationId ? operationMessage(message, deps.operationId) : message,
   });
 }
@@ -153,9 +153,9 @@ export async function deleteLocales(
   offered: string[],
   redirectTo: ((locale: string) => string | undefined) | undefined,
   deps: { now?: () => number; baseSha?: string; operationId?: string; source?: string } = {},
-): Promise<{ commit_sha: string; kept: ContentFile[] }> {
-  const base_sha = deps.baseSha ?? (await git.getHead());
-  const files = await localeFiles(git, loc, name, base_sha);
+): Promise<{ commitSha: string; kept: ContentFile[] }> {
+  const baseSha = deps.baseSha ?? (await git.getHead());
+  const files = await localeFiles(git, loc, name, baseSha);
   const gone = files.filter((file) => going.includes(file.locale));
   const kept = files
     .filter((file) => !going.includes(file.locale))
@@ -186,9 +186,9 @@ export async function deleteLocales(
           : [];
       });
   if (rules.length)
-    changes.push(...(await redirectsFile(git, rules, deps.now ?? Date.now, base_sha)));
-  const { commit_sha } = await git.publish(changes, {
-    base_sha,
+    changes.push(...(await redirectsFile(git, rules, deps.now ?? Date.now, baseSha)));
+  const { commitSha } = await git.publish(changes, {
+    baseSha,
     message: deps.operationId
       ? operationMessage(
           `Turn off ${going.join(', ')} for ${loc.collection}/${name}`,
@@ -196,7 +196,7 @@ export async function deleteLocales(
         )
       : `Turn off ${going.join(', ')} for ${loc.collection}/${name}`,
   });
-  return { commit_sha, kept };
+  return { commitSha, kept };
 }
 
 /** One `_id` map across locales keeps the copy one entry; the address stays with the original. */

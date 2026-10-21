@@ -119,10 +119,10 @@ export async function translationSource(
   const path = entryPath(collection, slug, locale);
   const row = await loadDraft('default', ctx.db(), path);
   if (row?.contents)
-    return { locale, contents: row.contents, blob_sha: await blobSha(row.contents) };
+    return { locale, contents: row.contents, blobSha: await blobSha(row.contents) };
   const head = await ctx.git().getHead();
   const file = await ctx.git().getFile(path, head);
-  return file ? { locale, contents: file.contents, blob_sha: file.blob_sha } : undefined;
+  return file ? { locale, contents: file.contents, blobSha: file.blobSha } : undefined;
 }
 
 // Every file must be recorded in D1 too, or a draft at the old path publishes it back.
@@ -240,7 +240,7 @@ export async function entryLocales(
       const stale =
         row &&
         file &&
-        row.baseBlob !== file.blob_sha &&
+        row.baseBlob !== file.blobSha &&
         !row.publishedSha &&
         !(await isPending(row));
       return { locale, path, file, row, stale };

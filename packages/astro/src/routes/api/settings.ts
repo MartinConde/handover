@@ -341,11 +341,11 @@ export async function simulateConflict(
     if (third) theirs[third] = 'Changed in the code, and only there';
     if (fourth) ours[fourth] = 'Changed by you, and only you';
     await saveDraft('default', database, git, path, ours);
-    const { commit_sha } = await git.publish(
+    const { commitSha } = await git.publish(
       [{ path, contents: stringifyEntry({ _version: FORMAT_VERSION, ...theirs }) }],
-      { base_sha: seeded.commit_sha, message: `Edit ${slug} in code` },
+      { baseSha: seeded.commitSha, message: `Edit ${slug} in code` },
     );
-    return Response.json({ entry: `${collection}/${slug}`, path, commit_sha });
+    return Response.json({ entry: `${collection}/${slug}`, path, commit_sha: commitSha });
   }
   return new Response(
     'No collection on this site can be filled in from its schema alone: a scratch entry needs a collection whose required fields are text, numbers, choices or true/false',

@@ -191,7 +191,7 @@ beforeEach(async () => {
     getHead: async () => head,
     getFile: async (at: string, sha = head) => {
       const contents = trees[sha]?.[at];
-      return contents === undefined ? undefined : { contents, blob_sha: await blobSha(contents) };
+      return contents === undefined ? undefined : { contents, blobSha: await blobSha(contents) };
     },
     getCommit: async (sha: string) => commits[sha],
     getBlob: async (sha: string) => {
@@ -203,10 +203,10 @@ beforeEach(async () => {
     fileCommits: async () => [],
     contentFiles: async (sha = head) =>
       Object.entries(trees[sha] ?? {}).map(([p, contents]) => ({ path: p, contents })),
-    publish: async (files: PublishFile[], opts: { base_sha: string }) => {
-      expect(head).toBe(opts.base_sha);
+    publish: async (files: PublishFile[], opts: { baseSha: string }) => {
+      expect(head).toBe(opts.baseSha);
       writes.push(files);
-      return { commit_sha: push(Object.fromEntries(files.map((f) => [f.path, f.contents]))) };
+      return { commitSha: push(Object.fromEntries(files.map((f) => [f.path, f.contents]))) };
     },
   };
 });
@@ -251,7 +251,7 @@ const record = async (base: string) => call('POST', 'sources', { base });
 const marked = async (contents: string, from: string, source: string) =>
   markTranslation(
     form,
-    { locale: from, contents: source, blob_sha: await blobSha(source) },
+    { locale: from, contents: source, blobSha: await blobSha(source) },
     contents,
     undefined,
   );
@@ -635,7 +635,7 @@ const FR = '_version: 1\n_source: en\ntitle: "Accueil"\nbody: "Bienvenue"\n';
 const fromFrench = async () =>
   markTranslation(
     form,
-    { locale: 'fr', contents: FR, blob_sha: await blobSha(FR) },
+    { locale: 'fr', contents: FR, blobSha: await blobSha(FR) },
     '_version: 1\n_source: en\ntitle: "Startseite"\nbody: "Willkommen"\n',
     undefined,
   );
