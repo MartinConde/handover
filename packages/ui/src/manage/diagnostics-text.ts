@@ -43,10 +43,10 @@ export const responseMessage = (
 });
 
 /** The provider's own sentence is English, so it follows the localized one as technical detail. */
-const withDetail = (generic: string, message: DiagnosticMessage, options: Options) =>
-  message.detail
-    ? `${generic} ${m.common_technical_detail({ detail: message.detail }, options)}`
-    : generic;
+export const diagnosticDetail = (message: DiagnosticMessage, uiLocale: UiLocale) =>
+  message.detail && message.code !== 'DIAGNOSTIC_DETAIL'
+    ? m.common_technical_detail({ detail: message.detail }, messageOptions(uiLocale))
+    : '';
 
 export function diagnosticText(message: DiagnosticMessage, uiLocale: UiLocale): string {
   const options = messageOptions(uiLocale);
@@ -54,11 +54,7 @@ export function diagnosticText(message: DiagnosticMessage, uiLocale: UiLocale): 
     case 'DIAGNOSTICS_LOAD_FAILED':
       return m.diagnostics_load_failed({ status: message.status ?? 0 }, options);
     case 'DIAGNOSTIC_CHECK_FAILED':
-      return withDetail(
-        m.diagnostics_check_failed({ status: message.status ?? 0 }, options),
-        message,
-        options,
-      );
+      return m.diagnostics_check_failed({ status: message.status ?? 0 }, options);
     case 'DIAGNOSTIC_EMAIL_SENT':
       return m.diagnostics_email_sent({ email: message.to ?? '' }, options);
     case 'DIAGNOSTIC_GITHUB_OK':
@@ -90,11 +86,7 @@ export function diagnosticText(message: DiagnosticMessage, uiLocale: UiLocale): 
     case 'INTEGRATION_KEYS_LOAD_FAILED':
       return m.diagnostics_keys_load_failed({ status: message.status ?? 0 }, options);
     case 'INTEGRATION_KEY_SAVE_FAILED':
-      return withDetail(
-        m.diagnostics_key_save_failed({ status: message.status ?? 0 }, options),
-        message,
-        options,
-      );
+      return m.diagnostics_key_save_failed({ status: message.status ?? 0 }, options);
     case 'INTEGRATION_KEY_REMOVE_FAILED':
       return m.diagnostics_key_remove_failed({ status: message.status ?? 0 }, options);
     case 'INTEGRATION_KEY_REQUIRED':
@@ -106,23 +98,15 @@ export function diagnosticText(message: DiagnosticMessage, uiLocale: UiLocale): 
     case 'DIAGNOSTIC_CONFLICT_CREATED':
       return m.diagnostics_conflict_created({ entry: message.entry ?? '' }, options);
     case 'DIAGNOSTIC_CONFLICT_FAILED':
-      return withDetail(
-        m.diagnostics_conflict_failed({ status: message.status ?? 0 }, options),
-        message,
-        options,
-      );
+      return m.diagnostics_conflict_failed({ status: message.status ?? 0 }, options);
     case 'DIAGNOSTIC_DETAIL':
       return message.detail ?? '';
     case 'DIAGNOSTIC_REFUSED':
-      return withDetail(m.diagnostics_refused({}, options), message, options);
+      return m.diagnostics_refused({}, options);
     case 'DIAGNOSTIC_UNAVAILABLE':
-      return withDetail(m.diagnostics_unavailable({}, options), message, options);
+      return m.diagnostics_unavailable({}, options);
     default:
-      return withDetail(
-        m.diagnostics_check_failed({ status: message.status ?? 0 }, options),
-        message,
-        options,
-      );
+      return m.diagnostics_check_failed({ status: message.status ?? 0 }, options);
   }
 }
 

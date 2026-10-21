@@ -19,6 +19,7 @@ import {
   checkStops,
   checkWhat,
   type DiagnosticMessage,
+  diagnosticDetail,
   diagnosticText,
   provider,
   responseMessage,
@@ -326,8 +327,8 @@ function says(row: Key): string {
           <h2 id="integ">{m.diagnostics_keys_title({}, options)}</h2>
           <p>{m.diagnostics_keys_hint({}, options)}</p>
         </header>
-        {#if keysError}<p class="notice notice-danger" role="alert">{diagnosticText(keysError, uiLocale)}</p>{/if}
-        {#if keySaid}<p class="notice notice-info" role="status">{diagnosticText(keySaid, uiLocale)}</p>{/if}
+        {#if keysError}<p class="notice notice-danger" role="alert">{diagnosticText(keysError, uiLocale)}{#if diagnosticDetail(keysError, uiLocale)}<span class="technical-detail">{diagnosticDetail(keysError, uiLocale)}</span>{/if}</p>{/if}
+        {#if keySaid}<p class="notice notice-info" role="status">{diagnosticText(keySaid, uiLocale)}{#if diagnosticDetail(keySaid, uiLocale)}<span class="technical-detail">{diagnosticDetail(keySaid, uiLocale)}</span>{/if}</p>{/if}
         <ul class="check-list">
           {#each keys as row (row.key)}
             {@const translation = row.key === 'deepl' ? results.translation : undefined}
@@ -338,11 +339,11 @@ function says(row: Key): string {
               </div>
               <p class="what">{says(row)}</p>
               {#if translation?.state === 'failed'}
-                <p class="result is-failed" role="status">{translation.message ? diagnosticText(translation.message, uiLocale) : ''}</p>
+                <p class="result is-failed" role="status">{#if translation.message}{diagnosticText(translation.message, uiLocale)}{#if diagnosticDetail(translation.message, uiLocale)}<span class="technical-detail">{diagnosticDetail(translation.message, uiLocale)}</span>{/if}{#if diagnosticDetail(translation.message, uiLocale)}<span class="technical-detail">{diagnosticDetail(translation.message, uiLocale)}</span>{/if}{/if}</p>
               {:else if translation?.state === 'ok' && translation.message}
-                <p class="result is-ok" role="status">{diagnosticText(translation.message, uiLocale)}</p>
+                <p class="result is-ok" role="status">{diagnosticText(translation.message, uiLocale)}{#if diagnosticDetail(translation.message, uiLocale)}<span class="technical-detail">{diagnosticDetail(translation.message, uiLocale)}</span>{/if}</p>
               {:else if translation?.message?.code === 'DIAGNOSTIC_TRANSLATION_SINGLE_LANGUAGE'}
-                <p class="result" role="status">{diagnosticText(translation.message, uiLocale)}</p>
+                <p class="result" role="status">{diagnosticText(translation.message, uiLocale)}{#if diagnosticDetail(translation.message, uiLocale)}<span class="technical-detail">{diagnosticDetail(translation.message, uiLocale)}</span>{/if}</p>
               {/if}
               <div class="actions">
                 <!-- No button where the site's code is in charge: it could change nothing. -->
@@ -430,7 +431,7 @@ function says(row: Key): string {
                           {#if result.state === 'running'}
                             {m.diagnostics_checking({}, options)}
                           {:else if result.message}
-                            {diagnosticText(result.message, uiLocale)}
+                            {diagnosticText(result.message, uiLocale)}{#if diagnosticDetail(result.message, uiLocale)}<span class="technical-detail">{diagnosticDetail(result.message, uiLocale)}</span>{/if}
                           {/if}
                         </span>
                         {#if result.at}<span class="sub">{when(result.at)}</span>{/if}
@@ -521,7 +522,7 @@ function says(row: Key): string {
                 {simulating ? m.diagnostics_making_conflict({}, options) : m.diagnostics_simulate_conflict({}, options)}
               </button>
             </div>
-            {#if conflict}<p class="notice notice-info" role="status">{diagnosticText(conflict, uiLocale)}</p>{/if}
+            {#if conflict}<p class="notice notice-info" role="status">{diagnosticText(conflict, uiLocale)}{#if diagnosticDetail(conflict, uiLocale)}<span class="technical-detail">{diagnosticDetail(conflict, uiLocale)}</span>{/if}</p>{/if}
           </section>
         {/if}
       </details>
@@ -585,7 +586,7 @@ function says(row: Key): string {
             {/if}
           </div>
           {#if keyError}<div class="notice notice-danger" role="alert">
-              {diagnosticText(keyError, uiLocale)}
+              {diagnosticText(keyError, uiLocale)}{#if diagnosticDetail(keyError, uiLocale)}<span class="technical-detail">{diagnosticDetail(keyError, uiLocale)}</span>{/if}
             </div>{/if}
           <div class="actions">
             <button class="btn" type="button" disabled={saving} onclick={close}
@@ -603,6 +604,6 @@ function says(row: Key): string {
       </Modal>
     {/if}
   {:catch error}
-    <p class="notice notice-danger" role="alert">{diagnosticText(error as DiagnosticMessage, uiLocale)}</p>
+    <p class="notice notice-danger" role="alert">{diagnosticText(error as DiagnosticMessage, uiLocale)}{#if diagnosticDetail(error as DiagnosticMessage, uiLocale)}<span class="technical-detail">{diagnosticDetail(error as DiagnosticMessage, uiLocale)}</span>{/if}</p>
   {/await}
 </main>

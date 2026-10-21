@@ -475,11 +475,15 @@ test('a refused or unset check reads in German first and keeps the provider sent
     'de',
   );
 
-  expect(text(card(root, 'Bilder und Dateien'))).toContain(
-    'Der Dienst hat die Anfrage abgelehnt. Technisches Detail: R2 provider detail (403)',
+  expect(text(card(root, 'Bilder und Dateien'))).toContain('Der Dienst hat die Anfrage abgelehnt.');
+  expect(card(root, 'Bilder und Dateien').querySelector('.technical-detail')?.textContent).toBe(
+    'Technisches Detail: R2 provider detail (403)',
   );
   expect(text(card(root, 'Veröffentlichen'))).toContain(
-    'Diese Prüfung ist für diese Website nicht eingerichtet. Technisches Detail: No bucket is configured: set R2_BUCKET',
+    'Diese Prüfung ist für diese Website nicht eingerichtet.',
+  );
+  expect(card(root, 'Veröffentlichen').querySelector('.technical-detail')?.textContent).toBe(
+    'Technisches Detail: No bucket is configured: set R2_BUCKET',
   );
 });
 
