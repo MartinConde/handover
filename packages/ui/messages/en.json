@@ -305,7 +305,6 @@
   "request_malformed": "The request could not be read. Reload the page and try again.",
   "common_technical_detail": "Technical detail: {detail}",
   "common_retry": "Retry",
-  "common_save_failed": "Could not save {field}.",
   "common_loading": "Loading…",
   "common_cancel": "Cancel",
   "shell_session_check_failed": "Could not check whether you are signed in. Check the connection and try again.",

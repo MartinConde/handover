@@ -305,7 +305,6 @@
   "request_malformed": "Die Anfrage konnte nicht gelesen werden. Lade die Seite neu und versuche es erneut.",
   "common_technical_detail": "Technisches Detail: {detail}",
   "common_retry": "Erneut versuchen",
-  "common_save_failed": "{field} konnte nicht gespeichert werden.",
   "common_loading": "Wird geladen…",
   "common_cancel": "Abbrechen",
   "shell_session_check_failed": "Es konnte nicht geprüft werden, ob du angemeldet bist. Prüfe die Verbindung und versuche es erneut.",
