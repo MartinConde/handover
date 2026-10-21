@@ -21,7 +21,6 @@ export interface LocaleSyncOptions {
 
 /** The skeleton follows `after`; rows only `target` has stay put, as drift is somebody's call. */
 export function syncLocale(
-  siteId: string,
   form: Form,
   locale: string,
   edit: { before: unknown; after: unknown },
@@ -42,8 +41,8 @@ export function syncLocale(
   // Structural changes can remove a marked subtree. Existing marks survive only while their
   // translated string does; new marks additionally have to be proven by the accepted seed.
   const translated = new Set(translatedValues(form, out).map(([path]) => path));
-  const machine = keptMachine(siteId, target, out).filter(
-    (path) => translatedString(siteId, form, out, path, translated) !== undefined,
+  const machine = keptMachine(target, out).filter(
+    (path) => translatedString(form, out, path, translated) !== undefined,
   );
   const marked = new Set(machine);
   for (const seed of state.used)
@@ -51,8 +50,8 @@ export function syncLocale(
       if (marked.has(path)) continue;
       const prefix = `${seed.address}.`;
       if (!path.startsWith(prefix)) continue;
-      const seeded = valueAt(siteId, seed.value, path.slice(prefix.length));
-      const current = translatedString(siteId, form, out, path, translated);
+      const seeded = valueAt(seed.value, path.slice(prefix.length));
+      const current = translatedString(form, out, path, translated);
       if (typeof seeded !== 'string' || current !== seeded) continue;
       machine.push(path);
       marked.add(path);
@@ -76,21 +75,19 @@ export function syncLocaleField(
 }
 
 function translatedString(
-  siteId: string,
   form: Form,
   root: unknown,
   address: string,
   translated: ReadonlySet<string>,
 ): string | undefined {
-  const position = fieldPosition(siteId, address, root, form);
-  const canonical = position && fieldAddress(siteId, position, root, form);
-  const value =
-    canonical && translated.has(canonical) ? valueAt(siteId, root, address, form) : undefined;
+  const position = fieldPosition(address, root, form);
+  const canonical = position && fieldAddress(position, root, form);
+  const value = canonical && translated.has(canonical) ? valueAt(root, address, form) : undefined;
   return typeof value === 'string' ? value : undefined;
 }
 
-function valueAt(siteId: string, root: unknown, address: string, form?: Form): unknown {
-  const position = fieldPosition(siteId, address, root, form);
+function valueAt(root: unknown, address: string, form?: Form): unknown {
+  const position = fieldPosition(address, root, form);
   return position?.reduce<unknown>(
     (value, key) =>
       Array.isArray(value) ? value[Number(key)] : isObject(value) ? value[key] : undefined,
@@ -121,7 +118,6 @@ export interface DriftChoice {
 
 /** `_locales` is rewritten only where the answer differs from what the mark already said. */
 export function applyDrift(
-  _siteId: string,
   form: Form,
   locales: string[],
   files: Record<string, unknown>,
@@ -317,7 +313,7 @@ export interface Drift {
 }
 
 /** Rows the languages disagree about; a publish is refused while one stands. */
-export function driftReport(_siteId: string, form: Form, files: Record<string, unknown>): Drift[] {
+export function driftReport(form: Form, files: Record<string, unknown>): Drift[] {
   const found: Drift[] = [];
   const copies = Object.entries(files).map(([locale, data]) => ({ locale, data }));
   if (copies.length > 1) driftIn(form, form.fields, copies, '', found);

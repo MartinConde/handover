@@ -18,7 +18,7 @@ test('rename moves every locale file and appends a rule per language in one comm
       '_version: 1\nrules:\n  - _id: "aaaaaaaa"\n    from: "/old"\n    to: "/new"\n    status: 301\n    reason: "manual"\n    createdAt: "2026-01-01T00:00:00Z"\n',
   });
 
-  const result = await renameEntry('default', git, listings, 'seaview', 'seaview-cottage', { now });
+  const result = await renameEntry(git, listings, 'seaview', 'seaview-cottage', { now });
 
   expect(result).toEqual({
     commit_sha: 'commit-B',
@@ -84,7 +84,7 @@ test('rename writes no rule for a language whose address is its own', async () =
   });
   const pages = { collection: 'pages', route: '/[slug]', i18n, localizedSlugs: true };
 
-  await renameEntry('default', git, pages, 'seaview', 'seaview-cottage', { now });
+  await renameEntry(git, pages, 'seaview', 'seaview-cottage', { now });
 
   expect(redirects(published[0]?.files ?? []).rules).toEqual([
     {
@@ -102,7 +102,7 @@ test('rename writes no rule for a language whose address is its own', async () =
 test('rename creates redirects.yaml when the repo has none', async () => {
   const { git, published } = fakeGit({ 'src/content/listings/en/a.yaml': '_version: 1\n' });
 
-  await renameEntry('default', git, listings, 'a', 'b', { now });
+  await renameEntry(git, listings, 'a', 'b', { now });
 
   expect(published[0]?.files.find((f) => f.path === 'src/content/redirects.yaml')?.contents).toBe(
     `_version: 1\nrules:\n  - _id: "${redirects(published[0]?.files ?? []).rules[0]._id}"\n    from: "/listings/a"\n    to: "/listings/b"\n    status: 301\n    reason: "slug-change"\n    entry: "listings/b"\n    createdAt: "2026-08-22T09:30:00Z"\n`,
@@ -116,7 +116,7 @@ test('rename collapses a chain so an old URL points at the newest name', async (
       '_version: 1\nrules:\n  - _id: "aaaaaaaa"\n    from: "/listings/a"\n    to: "/listings/b"\n    status: 301\n    reason: "slug-change"\n    entry: "listings/b"\n    createdAt: "2026-01-01T00:00:00Z"\n',
   });
 
-  await renameEntry('default', git, listings, 'b', 'c', { now });
+  await renameEntry(git, listings, 'b', 'c', { now });
 
   expect(redirects(published[0]?.files ?? []).rules).toEqual([
     {
@@ -147,7 +147,7 @@ test('renaming back drops the rule that would redirect a URL to itself', async (
       '_version: 1\nrules:\n  - _id: "aaaaaaaa"\n    from: "/listings/a"\n    to: "/listings/b"\n    status: 301\n    reason: "slug-change"\n    entry: "listings/b"\n    createdAt: "2026-01-01T00:00:00Z"\n',
   });
 
-  await renameEntry('default', git, listings, 'b', 'a', { now });
+  await renameEntry(git, listings, 'b', 'a', { now });
 
   expect(redirects(published[0]?.files ?? []).rules).toEqual([
     {
@@ -166,7 +166,6 @@ test('rename of a collection without a route writes no redirect', async () => {
   const { git, published } = fakeGit({ 'src/content/globals/en/a.yaml': '_version: 1\n' });
 
   await renameEntry(
-    'default',
     git,
     { collection: 'globals', i18n: { locales: ['en'], defaultLocale: 'en' } },
     'a',
@@ -183,7 +182,7 @@ test('rename of a collection without a route writes no redirect', async () => {
 test('rename refuses an entry that exists in no locale', async () => {
   const { git, published } = fakeGit({});
 
-  await expect(renameEntry('default', git, listings, 'ghost', 'x', { now })).rejects.toThrow(
+  await expect(renameEntry(git, listings, 'ghost', 'x', { now })).rejects.toThrow(
     'listings/ghost has no file in any of en, de, fr',
   );
   expect(published).toHaveLength(0);
@@ -195,7 +194,7 @@ test('delete removes every locale file and sends each language to its own index'
     'src/content/listings/fr/seaview.yaml': '_version: 1\n',
   });
 
-  await deleteEntry('default', git, listings, 'seaview', index, { now });
+  await deleteEntry(git, listings, 'seaview', index, { now });
 
   expect(published).toHaveLength(1);
   expect(published[0]?.message).toBe('Delete listings/seaview');
@@ -231,7 +230,7 @@ test('delete redirects the address a language served, not the file name', async 
   });
   const pages = { collection: 'pages', route: '/[slug]', i18n, localizedSlugs: true };
 
-  await deleteEntry('default', git, pages, 'seaview', index, { now });
+  await deleteEntry(git, pages, 'seaview', index, { now });
 
   expect(redirects(published[0]?.files ?? []).rules).toEqual([
     {
@@ -257,7 +256,7 @@ test('delete sends each language to the target it was given, and none where it w
     de: '/de/listings/hafenwohnung',
   };
 
-  await deleteEntry('default', git, listings, 'seaview', (locale) => picked[locale], { now });
+  await deleteEntry(git, listings, 'seaview', (locale) => picked[locale], { now });
 
   expect(redirects(published[0]?.files ?? []).rules).toEqual([
     {
@@ -281,7 +280,7 @@ test('delete sends each language to the target it was given, and none where it w
 test('delete with no redirect target touches only the entry files', async () => {
   const { git, published } = fakeGit({ 'src/content/listings/en/seaview.yaml': '_version: 1\n' });
 
-  await deleteEntry('default', git, listings, 'seaview', undefined, { now });
+  await deleteEntry(git, listings, 'seaview', undefined, { now });
 
   expect(published[0]?.files).toEqual([
     { path: 'src/content/listings/en/seaview.yaml', contents: null },
@@ -297,7 +296,7 @@ test('duplicate copies every locale of the entry with one shared id map', async 
     'src/content/listings/de/seaview.yaml': block('Meerblick'),
   });
 
-  const copies = await duplicateEntry('default', git, listings, 'seaview', 'seaview-copy');
+  const copies = await duplicateEntry(git, listings, 'seaview', 'seaview-copy');
 
   expect(copies.map((c) => c.path)).toEqual([
     'src/content/listings/en/seaview-copy.yaml',
@@ -318,7 +317,7 @@ test('duplicate leaves the original address behind and falls back to the new fil
   });
   const pages = { collection: 'pages', route: '/[slug]', i18n, localizedSlugs: true };
 
-  const copies = await duplicateEntry('default', git, pages, 'seaview', 'seaview-copy');
+  const copies = await duplicateEntry(git, pages, 'seaview', 'seaview-copy');
 
   expect(copies[0]?.contents).toBe('_version: 1\ntitle: "Meerblick"\n');
 });
@@ -332,7 +331,7 @@ test('a row that never had an _id gets the same new one in every locale', async 
     'src/content/listings/de/seaview.yaml': block('Meerblick'),
   });
 
-  const copies = await duplicateEntry('default', git, listings, 'seaview', 'seaview-copy');
+  const copies = await duplicateEntry(git, listings, 'seaview', 'seaview-copy');
 
   const ids = copies.map(
     (c) => (parse(c.contents) as { blocks: { _id: string }[] }).blocks[0]?._id,
@@ -348,7 +347,7 @@ test('duplicate copies the bytes the caller hands it over the committed ones', a
     'src/content/listings/de/seaview.yaml': '_version: 1\ntitle: "Meerblick"\n',
   });
 
-  const copies = await duplicateEntry('default', git, listings, 'seaview', 'seaview-copy', {
+  const copies = await duplicateEntry(git, listings, 'seaview', 'seaview-copy', {
     en: '_version: 1\ntitle: "Seaview, edited"\n',
   });
 
@@ -360,7 +359,7 @@ test('duplicate copies the bytes the caller hands it over the committed ones', a
 test('duplicate stamps the version onto a file that has none', async () => {
   const { git } = fakeGit({ 'src/content/listings/en/seaview.yaml': 'title: "Seaview"\n' });
 
-  const copies = await duplicateEntry('default', git, listings, 'seaview', 'seaview-copy');
+  const copies = await duplicateEntry(git, listings, 'seaview', 'seaview-copy');
 
   expect(copies[0]?.contents).toBe('_version: 1\ntitle: "Seaview"\n');
 });
@@ -372,7 +371,7 @@ test('a rename reads every file it moves at the commit it is made against', asyn
     'src/content/redirects.yaml': '_version: 1\nrules: []\n',
   });
 
-  await renameEntry('default', git, listings, 'seaview', 'seaview-cottage', { now });
+  await renameEntry(git, listings, 'seaview', 'seaview-cottage', { now });
 
   expect(published[0]?.base_sha).toBe('commit-A');
   expect(read.every((r) => r.at === 'commit-A')).toBe(true);
@@ -382,16 +381,14 @@ test('a rename reads every file it moves at the commit it is made against', asyn
 
 // The rename commit's message is the one place the old name is written down.
 test('renamedFrom reads the old name out of a rename commit of this entry', () => {
+  expect(renamedFrom('Rename listings/old-mill to mill-house', 'listings', 'mill-house')).toBe(
+    'old-mill',
+  );
   expect(
-    renamedFrom('default', 'Rename listings/old-mill to mill-house', 'listings', 'mill-house'),
-  ).toBe('old-mill');
-  expect(
-    renamedFrom('default', 'Rename pages/old-mill to mill-house', 'listings', 'mill-house'),
+    renamedFrom('Rename pages/old-mill to mill-house', 'listings', 'mill-house'),
   ).toBeUndefined();
   expect(
-    renamedFrom('default', 'Rename listings/mill-house to barn', 'listings', 'mill-house'),
+    renamedFrom('Rename listings/mill-house to barn', 'listings', 'mill-house'),
   ).toBeUndefined();
-  expect(
-    renamedFrom('default', 'Update listings/en/mill-house', 'listings', 'mill-house'),
-  ).toBeUndefined();
+  expect(renamedFrom('Update listings/en/mill-house', 'listings', 'mill-house')).toBeUndefined();
 });

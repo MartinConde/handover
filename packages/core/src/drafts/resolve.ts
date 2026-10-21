@@ -44,15 +44,14 @@ export interface Answer {
 
 /** Two diffs laid over each other; a question is only ever about a field, never a moved block. */
 export function conflictReport(
-  siteId: string,
   form: Form,
   files: Record<string, ThreeWay>,
 ): { questions: Question[]; merged: MergedChange[] } {
   const side = (of: keyof ThreeWay) =>
     Object.fromEntries(Object.entries(files).map(([locale, f]) => [locale, f[of]]));
   const base = side('base');
-  const ours = flatten(diffEntry(siteId, form, base, side('ours')));
-  const theirs = flatten(diffEntry(siteId, form, base, side('theirs')));
+  const ours = flatten(diffEntry(form, base, side('ours')));
+  const theirs = flatten(diffEntry(form, base, side('theirs')));
   const questions: Question[] = [];
   const merged: MergedChange[] = [];
   for (const [key, mine] of ours) {
@@ -83,7 +82,6 @@ export function conflictReport(
 
 /** HEAD is the ground, our fields laid over it; the file's marks stay the repository's. */
 export function applyResolution(
-  siteId: string,
   form: Form,
   files: Record<string, ThreeWay>,
   answers: Answer[],
@@ -92,8 +90,7 @@ export function applyResolution(
     Object.fromEntries(Object.entries(files).map(([locale, f]) => [locale, f[of]]));
   const base = side('base');
   const wins = new Map<string, 'ours' | 'theirs'>();
-  for (const key of flatten(diffEntry(siteId, form, base, side('ours'))).keys())
-    wins.set(key, 'ours');
+  for (const key of flatten(diffEntry(form, base, side('ours'))).keys()) wins.set(key, 'ours');
   for (const answer of answers) wins.set(keyOf(answer.locale, answer.path), answer.side);
   return Object.fromEntries(
     Object.entries(files).map(([locale, f]) => [

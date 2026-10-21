@@ -443,10 +443,7 @@ test('an unedited draft moved onto an offer commit is previewed before that buil
     blob_sha: await blobSha(FILE),
   });
   const offer = { offered: ['en'], locales: ['en', 'de'] };
-  const committed = stringifyEntry(
-    'default',
-    offeredEntry('default', parseEntry('default', FILE), offer),
-  );
+  const committed = stringifyEntry(offeredEntry(parseEntry(FILE), offer));
   await recordOffer('default', db, PATH, committed, offer, 'commit-B');
 
   expect(await draftFiles('default', db, indexOf({ [PATH]: FILE }))).toEqual([

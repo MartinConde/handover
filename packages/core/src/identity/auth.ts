@@ -26,7 +26,7 @@ const roles = { owner: adminAc, editor: userAc };
 
 /** Anything but `owner` is an editor, the narrower role being the safe guess. */
 export type Role = 'owner' | 'editor';
-export const roleOf = (_siteId: string, user: { id: string; role?: string | null }): Role =>
+export const roleOf = (user: { id: string; role?: string | null }): Role =>
   user.role === 'owner' ? 'owner' : 'editor';
 
 export interface AuthConfig {
@@ -252,8 +252,7 @@ export interface MemberApi {
   removeUser(args: { body: { userId: string }; headers: Headers }): Promise<unknown>;
 }
 
-export const memberApi = (_siteId: string, auth: Auth): MemberApi =>
-  auth.api as unknown as MemberApi;
+export const memberApi = (auth: Auth): MemberApi => auth.api as unknown as MemberApi;
 
 // A mailed reset link is opened once; ten a minute from one address is somebody guessing.
 const RESET_LINKS = { window: 60, max: 10 };
@@ -335,7 +334,7 @@ export function createAuth(siteId: string, db: Db, config: AuthConfig): Auth {
 }
 
 /** Every emailed sign-in link to the address, so a revoked or resent invite stops working. */
-export async function dropEmailLinks(_siteId: string, db: Db, email: string): Promise<void> {
+export async function dropEmailLinks(db: Db, email: string): Promise<void> {
   const { verification } = authTables;
   await db
     .delete(verification)
@@ -364,7 +363,6 @@ export interface AccountFacts {
 
 /** Not `/list-sessions`: that needs a session younger than `freshAge` and leaks each token. */
 export async function accountFacts(
-  _siteId: string,
   db: Db,
   userId: string,
   currentSessionId: string,
@@ -477,7 +475,7 @@ export async function memberList(siteId: string, db: Db): Promise<Member[]> {
         id: row.id,
         name: row.name,
         email: row.email,
-        role: roleOf(siteId, row),
+        role: roleOf(row),
         pending,
         // GitHub first: whoever linked it signs in with it whatever else they hold.
         method: pending
@@ -495,7 +493,7 @@ export async function memberList(siteId: string, db: Db): Promise<Member[]> {
 }
 
 /** The rule lives in the `WHERE`: two owners demoting each other at once would both pass a read. */
-export async function demoteOwner(_siteId: string, db: Db, userId: string): Promise<boolean> {
+export async function demoteOwner(db: Db, userId: string): Promise<boolean> {
   const anotherOwner = db
     .select({ one: sql`1` })
     .from(authTables.user)

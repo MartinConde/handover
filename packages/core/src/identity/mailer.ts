@@ -7,7 +7,7 @@ export type Mailer = (message: {
 }) => Promise<{ id?: string }>;
 
 /** The refusal is quoted rather than counted: Resend's message says exactly what is wrong. */
-export function resendMailer(_siteId: string, key: string, from: string): Mailer {
+export function resendMailer(key: string, from: string): Mailer {
   return async ({ to, subject, text, html }) => {
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -36,10 +36,7 @@ export interface EmailSender {
 }
 
 /** Cloudflare and SMTP take the halves apart, or `from` becomes `MAIL FROM. */
-export function senderAddress(
-  _siteId: string,
-  from: string,
-): { name: string; email: string } | string {
+export function senderAddress(from: string): { name: string; email: string } | string {
   const angled = /^\s*(.*?)\s*<([^>]+)>\s*$/.exec(from);
   if (!angled) return from.trim();
   const name = (angled[1] ?? '').replace(/^"|"$/g, '').trim();
@@ -48,12 +45,12 @@ export function senderAddress(
 }
 
 /** The runtime's error carries no `E_*` code, so its message is what the settings screen quotes. */
-export function cloudflareMailer(_siteId: string, binding: EmailSender, from: string): Mailer {
+export function cloudflareMailer(binding: EmailSender, from: string): Mailer {
   return async ({ to, subject, text, html }) => {
     try {
       const { messageId } = await binding.send({
         to,
-        from: senderAddress(_siteId, from),
+        from: senderAddress(from),
         subject,
         text,
         ...(html ? { html } : {}),

@@ -17,7 +17,7 @@ import { getEntryLocales } from 'astro-handover';
 import cms from '../../cms.config';
 
 export const locales = (source: Source, slug: string) =>
-  getEntryLocales('default', source, cms, 'pages', slug);
+  getEntryLocales(source, cms, 'pages', slug);
 ```
 
 ```astro
@@ -43,7 +43,7 @@ goes nowhere — so a site that declares one language never draws a switcher.
 
 Each button is the language's code in capitals. For anything else — the language's own name, a
 flag, a menu — call `getEntryLocales()` and write the markup yourself. One URL on its own is
-`entryUrl('default', cms.i18n, '/[slug]', slug, 'de')`.
+`entryUrl(cms.i18n, '/[slug]', slug, 'de')`.
 
 `getEntryLocales()` answers about an entry. A page that is not one — an index, a search, a
 contact form — builds its own pair from the same rule:
@@ -58,7 +58,7 @@ import cms from '../../cms.config';
 // `entryUrl` is undefined only for a collection with no route; '/' is one.
 const locales = cms.i18n.locales.map((locale) => ({
   locale,
-  url: entryUrl('default', cms.i18n, '/', '', locale)!,
+  url: entryUrl(cms.i18n, '/', '', locale)!,
 }));
 ---
 

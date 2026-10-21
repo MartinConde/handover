@@ -41,7 +41,6 @@ export interface AstroContent<K extends string> {
 }
 
 export function staticSource<C extends Record<string, unknown>>(
-  _siteId: string,
   astro: AstroContent<keyof C & string>,
 ): ContentSource<C> {
   return {
@@ -70,7 +69,6 @@ export function staticSource<C extends Record<string, unknown>>(
 
 /** The build's snapshot with the draft rows laid over it; metadata reads skip `validate`. */
 export function draftSource<C extends Record<string, unknown>>(
-  siteId: string,
   built: ContentSource<C>,
   rows: readonly ContentFile[],
   validate: (collection: string, data: unknown, path: string) => unknown,
@@ -99,7 +97,7 @@ export function draftSource<C extends Record<string, unknown>>(
     checked: boolean,
   ) => {
     const path = pathOf(collection, id);
-    if (!parsed.has(path)) parsed.set(path, parseEntry(siteId, contents));
+    if (!parsed.has(path)) parsed.set(path, parseEntry(contents));
     const data = parsed.get(path);
     if (checked && !validated.has(path))
       validated.set(path, validate(collection, structuredClone(data), path));
@@ -168,7 +166,6 @@ export interface LocaleSite {
 
 /** The switcher's languages: a file that exists and is live, never the `_locales` mark. */
 export async function getEntryLocales<C extends Record<string, unknown>>(
-  siteId: string,
   source: ContentSource<C>,
   site: LocaleSite,
   collection: keyof C & string,
@@ -179,8 +176,8 @@ export async function getEntryLocales<C extends Record<string, unknown>>(
   const found = await Promise.all(
     site.i18n.locales.map(async (locale) => {
       const entry = await entryMetadata(source, collection, `${locale}/${slug}`);
-      if (!entry || !isLive(siteId, entry.data)) return undefined;
-      const { url } = pageOf(siteId, site.i18n, site.collections[collection], entry, slug, locale);
+      if (!entry || !isLive(entry.data)) return undefined;
+      const { url } = pageOf(site.i18n, site.collections[collection], entry, slug, locale);
       return url ? { locale, url } : undefined;
     }),
   );
@@ -202,7 +199,6 @@ export interface NavLink {
 
 /** An item whose entry is missing or hidden in this language is dropped, children included. */
 export async function menusAt<C extends Record<string, unknown>>(
-  siteId: string,
   source: ContentSource<C>,
   site: LocaleSite,
   navigation: unknown,
@@ -212,13 +208,12 @@ export async function menusAt<C extends Record<string, unknown>>(
   const out: Record<string, NavLink[]> = {};
   for (const menu of menus) {
     if (!isObject(menu) || typeof menu.key !== 'string') continue;
-    out[menu.key] = await navLinks(siteId, source, site, menu.items, locale);
+    out[menu.key] = await navLinks(source, site, menu.items, locale);
   }
   return out;
 }
 
 async function navLinks<C extends Record<string, unknown>>(
-  siteId: string,
   source: ContentSource<C>,
   site: LocaleSite,
   items: unknown,
@@ -228,7 +223,7 @@ async function navLinks<C extends Record<string, unknown>>(
   for (const item of Array.isArray(items) ? items : []) {
     if (!isObject(item)) continue;
     if (Array.isArray(item._locales) && !item._locales.includes(locale)) continue;
-    const children = await navLinks(siteId, source, site, item.children, locale);
+    const children = await navLinks(source, site, item.children, locale);
     const label = typeof item.label === 'string' ? item.label : '';
     // A label with nothing under it, or with no word in this language, would open nothing.
     if (item.link === undefined) {
@@ -240,10 +235,10 @@ async function navLinks<C extends Record<string, unknown>>(
         });
       continue;
     }
-    const target = await href(siteId, source, site, item.link, locale);
+    const target = await href(source, site, item.link, locale);
     if (!target) continue;
     if (item.entries === true && isObject(item.link) && typeof item.link.collection === 'string')
-      children.unshift(...(await entryLinks(siteId, source, site, item.link.collection, locale)));
+      children.unshift(...(await entryLinks(source, site, item.link.collection, locale)));
     links.push({
       label: label || target.name,
       href: target.href,
@@ -256,7 +251,6 @@ async function navLinks<C extends Record<string, unknown>>(
 }
 
 async function entryLinks<C extends Record<string, unknown>>(
-  siteId: string,
   source: ContentSource<C>,
   site: LocaleSite,
   collection: string,
@@ -266,12 +260,12 @@ async function entryLinks<C extends Record<string, unknown>>(
   const links: NavLink[] = [];
   const all = await source.getCollection(collection as keyof C & string, locale);
   // By name, as the menu editor lists them: the loader's own order is whichever file was read first.
-  const live = filterLive(siteId, all).sort((a, b) => a.id.localeCompare(b.id));
+  const live = filterLive(all).sort((a, b) => a.id.localeCompare(b.id));
   for (const entry of live) {
     const name = entry.id.slice(locale.length + 1);
     // The index page's own copy is the item that lists these.
     if (of?.index && name === 'index') continue;
-    const { url, title } = pageOf(siteId, site.i18n, of, entry, name, locale);
+    const { url, title } = pageOf(site.i18n, of, entry, name, locale);
     if (!url) continue;
     links.push({
       label: title,
@@ -292,7 +286,6 @@ export function indexName(collection: string, label: unknown, locale: string): s
 }
 
 async function href<C extends Record<string, unknown>>(
-  siteId: string,
   source: ContentSource<C>,
   site: LocaleSite,
   link: unknown,
@@ -304,7 +297,7 @@ async function href<C extends Record<string, unknown>>(
   // An index is not an entry: the address is this language's index page, or nothing.
   if (link.type === 'index') {
     if (typeof link.collection !== 'string') return undefined;
-    const url = entryUrl(siteId, site.i18n, site.collections[link.collection]?.index, '', locale);
+    const url = entryUrl(site.i18n, site.collections[link.collection]?.index, '', locale);
     return url
       ? {
           href: url,
@@ -318,15 +311,14 @@ async function href<C extends Record<string, unknown>>(
   const name = link.ref.slice(cut + 1);
   if (cut < 1 || !name) return undefined;
   const entry = await entryMetadata(source, collection as keyof C & string, `${locale}/${name}`);
-  if (!entry || !isLive(siteId, entry.data)) return undefined;
+  if (!entry || !isLive(entry.data)) return undefined;
   const of = site.collections[collection];
-  const { url, title } = pageOf(siteId, site.i18n, of, entry, name, locale);
+  const { url, title } = pageOf(site.i18n, of, entry, name, locale);
   return url ? { href: url, name: title } : undefined;
 }
 
 /** With localized slugs a file whose `slug` moved is not served under its file name. */
 export async function entryAt<C extends Record<string, unknown>, K extends keyof C & string>(
-  siteId: string,
   source: ContentSource<C>,
   site: LocaleSite,
   collection: K,
@@ -334,29 +326,22 @@ export async function entryAt<C extends Record<string, unknown>, K extends keyof
   address: string,
 ): Promise<ContentEntry<C[K]> | undefined> {
   const visible = (entry: ContentEntry<C[K]> | undefined) =>
-    entry && (source.preview === true || isLive(siteId, entry.data)) ? entry : undefined;
+    entry && (source.preview === true || isLive(entry.data)) ? entry : undefined;
   if (!site.collections[collection]?.localizedSlugs)
     return visible(await source.getEntry(collection, `${locale}/${address}`));
   // Resolve from metadata first so a slug scan does not validate every page in the language.
   const named = await entryMetadata(source, collection, `${locale}/${address}`);
-  if (named && entryAddress(siteId, named.data, address) === address)
+  if (named && entryAddress(named.data, address) === address)
     return visible(await source.getEntry(collection, named.id));
   const found = source.getCollectionMetadata
     ? await source.getCollectionMetadata(collection, locale)
     : await source.getCollection(collection, locale);
-  const match = found.find(
-    (e) => entryAddress(siteId, e.data, e.id.slice(locale.length + 1)) === address,
-  );
+  const match = found.find((e) => entryAddress(e.data, e.id.slice(locale.length + 1)) === address);
   return match ? visible(await source.getEntry(collection, match.id)) : undefined;
 }
 
 /** Every `_ref` naming an undeclared global: refused at build like an unregistered `_type`. */
-export function refErrors(
-  _siteId: string,
-  path: string,
-  contents: string,
-  globals: Iterable<string>,
-): string[] {
+export function refErrors(path: string, contents: string, globals: Iterable<string>): string[] {
   const declared = [...globals];
   const errors: string[] = [];
   const walk = (node: unknown, at: string): void => {
@@ -394,7 +379,6 @@ export interface GlobalsSelection {
 
 /** Omit selection to read the whole collection; selected globals use validated entry reads. */
 export async function globalsAt<C extends Record<string, unknown>>(
-  _siteId: string,
   source: ContentSource<C>,
   locale: string,
   selection?: GlobalsSelection,

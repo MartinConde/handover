@@ -75,7 +75,7 @@ export interface Form {
   blockLabels?: Record<string, string | Labels>;
 }
 
-export function fieldsFrom(_siteId: string, schema: JsonSchema): Field[] {
+export function fieldsFrom(schema: JsonSchema): Field[] {
   return objectFields(schema, schema);
 }
 
@@ -181,7 +181,7 @@ export function imagePresets(forms: Iterable<Form>): (Named & { preset: Preset }
   return [...found.values()];
 }
 
-export function formOf(_siteId: string, schema: JsonSchema): Form {
+export function formOf(schema: JsonSchema): Form {
   const blocks: Record<string, Field[]> = {};
   const blockLabels: Record<string, string | Labels> = {};
   const seen = new Set<JsonSchema>();
@@ -203,7 +203,7 @@ export function formOf(_siteId: string, schema: JsonSchema): Form {
       if (child) collect(child);
   };
   collect(schema);
-  const fields = fieldsFrom(_siteId, schema);
+  const fields = fieldsFrom(schema);
   return Object.keys(blockLabels).length ? { fields, blocks, blockLabels } : { fields, blocks };
 }
 

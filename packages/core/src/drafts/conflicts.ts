@@ -57,9 +57,9 @@ export async function entryConflict(
         revision: row?.revision,
         moved: Boolean(row) && (at?.blob_sha ?? '') !== row?.baseBlob,
         side: {
-          base: parseEntry(siteId, was?.contents ?? ''),
-          ours: parseEntry(siteId, row?.contents ?? at?.contents ?? ''),
-          theirs: parseEntry(siteId, at?.contents ?? ''),
+          base: parseEntry(was?.contents ?? ''),
+          ours: parseEntry(row?.contents ?? at?.contents ?? ''),
+          theirs: parseEntry(at?.contents ?? ''),
         },
       };
     }),
@@ -80,7 +80,7 @@ export async function entryConflict(
         .filter((f) => f.moved)
         .map((f) => [f.locale, { path: f.path, blob: f.blob, revision: f.revision }]),
     ),
-    ...conflictReport(siteId, form, sides),
+    ...conflictReport(form, sides),
   };
 }
 
@@ -92,12 +92,12 @@ export async function resolveConflict(
   conflict: EntryConflict,
   answers: Answer[],
 ): Promise<{ paths: string[] }> {
-  const resolved = applyResolution(siteId, form, conflict.sides, answers);
+  const resolved = applyResolution(form, conflict.sides, answers);
   const updatedAt = Date.now();
   // Await the blobs first: a drizzle statement is thenable and would run outside the batch.
   const written = await Promise.all(
     Object.entries(conflict.conflicted).map(async ([locale, at]) => {
-      const contents = stringifyEntry(siteId, writtenEntry(siteId, resolved[locale], form.fields));
+      const contents = stringifyEntry(writtenEntry(resolved[locale], form.fields));
       // Every answer "theirs" is the head file, which waits for its build like a published row.
       const same = contents !== '' && (await blobSha(contents)) === at.blob;
       return { ...at, contents, published: same ? conflict.head : null };
@@ -165,12 +165,12 @@ export async function resolveDrift(
   );
   const open = found.filter((f) => f !== undefined);
   const before = Object.fromEntries(open.map((f) => [f.locale, f.loaded.entry]));
-  const after = applyDrift(siteId, form, locales, before, choices);
+  const after = applyDrift(form, locales, before, choices);
   const updatedAt = Date.now();
   // Both sides stamped, so a file the answer leaves alone is not written for the stamp's sake.
   const writes = open.flatMap(({ locale, path, loaded }) => {
-    const contents = stringifyEntry(siteId, writtenEntry(siteId, after[locale], form.fields));
-    return contents === stringifyEntry(siteId, writtenEntry(siteId, before[locale], form.fields))
+    const contents = stringifyEntry(writtenEntry(after[locale], form.fields));
+    return contents === stringifyEntry(writtenEntry(before[locale], form.fields))
       ? []
       : [upsert(db, siteId, path, contents, loaded, updatedAt, stampOf(by))];
   });

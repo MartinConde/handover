@@ -12,7 +12,7 @@ export type Translate = (
 const PER_REQUEST = 50;
 
 /** A `:fx` key only answers on the free host; a source language has no regional variant. */
-export function deeplTranslate(_siteId: string, key: string): Translate {
+export function deeplTranslate(key: string): Translate {
   const host = key.trimEnd().endsWith(':fx') ? 'api-free.deepl.com' : 'api.deepl.com';
   return async (texts, from, to, signal) => {
     const out: string[] = [];
@@ -45,7 +45,6 @@ export function deeplTranslate(_siteId: string, key: string): Translate {
 
 /** `_machine` names every path a machine's words still stand at; see `keptMachine`. */
 export function machineFilled(
-  _siteId: string,
   data: unknown,
   filled: Record<string, string>,
 ): Record<string, unknown> {
@@ -60,7 +59,7 @@ export function machineFilled(
 }
 
 /** The browser never says which values it touched, so an unchanged value keeps its badge. */
-export function keptMachine(_siteId: string, before: unknown, after: unknown): string[] {
+export function keptMachine(before: unknown, after: unknown): string[] {
   const machine = isObject(before) && Array.isArray(before._machine) ? before._machine : [];
   return (machine as string[]).filter((path) => {
     const now = readAt(after, path);
@@ -70,7 +69,6 @@ export function keptMachine(_siteId: string, before: unknown, after: unknown): s
 
 /** Rows are addressed by `_id`, since a row's position changes when somebody moves it. */
 export function fieldAddress(
-  _siteId: string,
   path: readonly string[],
   root: unknown,
   form?: Form,
@@ -101,12 +99,7 @@ export function fieldAddress(
 }
 
 /** `fieldAddress` read back to positions; a row the data no longer has ends the walk. */
-export function fieldPosition(
-  _siteId: string,
-  address: string,
-  root: unknown,
-  form?: Form,
-): string[] | undefined {
+export function fieldPosition(address: string, root: unknown, form?: Form): string[] | undefined {
   const resolved = positionOf(address, root);
   if (!resolved.ok) return undefined;
   return !form || fieldAt(form, resolved.path, root) ? resolved.path : undefined;
@@ -125,17 +118,12 @@ export type FieldTargetResult =
   | { ok: false; reason: FieldTargetFailure };
 
 /** Resolve an external stable address against both the current data and its declared form. */
-export function resolveFieldTarget(
-  _siteId: string,
-  form: Form,
-  address: string,
-  root: unknown,
-): FieldTargetResult {
+export function resolveFieldTarget(form: Form, address: string, root: unknown): FieldTargetResult {
   const resolved = positionOf(address, root);
   if (!resolved.ok) return resolved;
   const field = fieldAt(form, resolved.path, root);
   if (!field) return { ok: false, reason: 'schema' };
-  const canonical = fieldAddress(_siteId, resolved.path, root, form);
+  const canonical = fieldAddress(resolved.path, root, form);
   if (!canonical) return { ok: false, reason: 'ambiguous' };
   return { ok: true, target: { address: canonical, path: resolved.path, field } };
 }

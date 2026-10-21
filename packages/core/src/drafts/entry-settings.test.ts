@@ -304,7 +304,7 @@ test('a restore keeps the address, the status and the languages the entry has no
     { path: PATH, entry: { ...OLD_EN, slug: 'the-mill', _status: 'live', _locales: ['en'] } },
   ]);
 
-  const entry = parseEntry('default', (await only(db))?.contents ?? '') as Record<string, unknown>;
+  const entry = parseEntry((await only(db))?.contents ?? '') as Record<string, unknown>;
   expect(entry._status).toBe('hidden');
   expect(entry.slug).toBe(undefined);
   expect(entry._locales).toBe(undefined);
@@ -336,12 +336,10 @@ test('restoring one language across a structural change leaves the languages in 
 
   const rows = await db.select().from(drafts);
   const files = {
-    en: parseEntry('default', rows.find((r) => r.path === PAGE_EN)?.contents ?? ''),
-    de: parseEntry('default', repo.read(PAGE_DE)),
+    en: parseEntry(rows.find((r) => r.path === PAGE_EN)?.contents ?? ''),
+    de: parseEntry(repo.read(PAGE_DE)),
   };
-  expect(driftReport('default', PAGE_FORM, files).map((d) => d.path)).toEqual([
-    'blocks[_id=q1w2e3r4]',
-  ]);
+  expect(driftReport(PAGE_FORM, files).map((d) => d.path)).toEqual(['blocks[_id=q1w2e3r4]']);
 });
 
 // Recreating the path would skip the rules Create from English and a turn-on commit.

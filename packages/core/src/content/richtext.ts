@@ -45,7 +45,7 @@ export function hasWords(markdown: string): boolean {
 const LINK_SCHEMES = new Set(['http', 'https', 'mailto', 'tel']);
 
 /** The scheme of a link that must not be rendered, or undefined when the target is fine. */
-export function unsafeLinkScheme(_siteId: string, url: string): string | undefined {
+export function unsafeLinkScheme(url: string): string | undefined {
   // biome-ignore lint/suspicious/noControlCharactersInRegex: what a browser itself drops.
   const found = /^([a-z][a-z0-9+.-]*):/i.exec(url.replace(/[\u0000-\u0020\u007f]/g, ''));
   const scheme = found?.[1]?.toLowerCase();
@@ -66,7 +66,7 @@ const BASIC_NODES = new Set([
 const FULL_ONLY_NODES = new Set(['heading', 'blockquote']);
 
 // GFM is parsed so a table or strikethrough is rejected by name instead of rendering later.
-export function richtextErrors(_siteId: string, markdown: string, tier: RichtextTier): string[] {
+export function richtextErrors(markdown: string, tier: RichtextTier): string[] {
   const tree = fromMarkdown(markdown, {
     extensions: [gfm()],
     mdastExtensions: [gfmFromMarkdown()],
@@ -78,8 +78,8 @@ export function richtextErrors(_siteId: string, markdown: string, tier: Richtext
       errors.push(`heading level ${node.depth} is not allowed${at}`);
     else if (FULL_ONLY_NODES.has(node.type) && tier === 'basic')
       errors.push(`${node.type} needs richtext: full${at}`);
-    else if (node.type === 'link' && unsafeLinkScheme(_siteId, node.url))
-      errors.push(`${unsafeLinkScheme(_siteId, node.url)}: links are not allowed${at}`);
+    else if (node.type === 'link' && unsafeLinkScheme(node.url))
+      errors.push(`${unsafeLinkScheme(node.url)}: links are not allowed${at}`);
     else if (node.type === 'listItem' && typeof node.checked === 'boolean')
       errors.push(`task list item is not allowed${at}`);
     else if (!BASIC_NODES.has(node.type) && !FULL_ONLY_NODES.has(node.type))
@@ -91,7 +91,7 @@ export function richtextErrors(_siteId: string, markdown: string, tier: Richtext
 }
 
 /** Read with the parser the page renders with, so the link check sees what the site sees. */
-export function richtextLinks(_siteId: string, markdown: string): string[] {
+export function richtextLinks(markdown: string): string[] {
   const tree = fromMarkdown(markdown, {
     extensions: [gfm()],
     mdastExtensions: [gfmFromMarkdown()],
@@ -112,7 +112,7 @@ const escapeHtml = (text: string) =>
 const escapeAttribute = (value: string) => escapeHtml(value).replace(/"/g, '&quot;');
 
 /** Emitted from the mdast: Astro's Markdown pipeline is a native binary Workers cannot run. */
-export function renderRichtext(_siteId: string, markdown: string): string {
+export function renderRichtext(markdown: string): string {
   const tree = fromMarkdown(markdown, {
     extensions: [gfm()],
     mdastExtensions: [gfmFromMarkdown()],
@@ -147,7 +147,7 @@ export function renderRichtext(_siteId: string, markdown: string): string {
         return `<em>${kids()}</em>`;
       case 'link':
         // A file written outside the CMS never passed the tier check, so the target is read again.
-        return unsafeLinkScheme(_siteId, node.url)
+        return unsafeLinkScheme(node.url)
           ? kids()
           : `<a href="${escapeAttribute(node.url)}">${kids()}</a>`;
       case 'break':

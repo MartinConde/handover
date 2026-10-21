@@ -64,5 +64,4 @@ export const page: Form = {
 
 export const driftFile = (locale: string) =>
   readFileSync(join(import.meta.dirname, '../../test/drift', locale, 'home.yaml'), 'utf8');
-export const drifted = (locale: string) =>
-  parseEntry('default', driftFile(locale)) as Record<string, unknown>;
+export const drifted = (locale: string) => parseEntry(driftFile(locale)) as Record<string, unknown>;

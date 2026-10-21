@@ -226,10 +226,10 @@ test('resolving a stored conflict keeps the draft menu change named by the repor
     title,
     menus: [{ _id: 'menu0001', key: 'header', items: [item(label)] }],
   });
-  const base = stringifyEntry('default', entry('Navigation', 'Home'));
+  const base = stringifyEntry(entry('Navigation', 'Home'));
   const repo = fakeHistory({ [path]: base });
   await saveDraft('default', db, repo, path, entry('Navigation', 'Welcome'));
-  repo.push([{ path, contents: stringifyEntry('default', entry('Main navigation', 'Home')) }]);
+  repo.push([{ path, contents: stringifyEntry(entry('Main navigation', 'Home')) }]);
 
   const conflict = await entryConflict('default', db, repo, form, { en: path });
   if (!conflict) throw new Error('the repository edit above is what makes this a conflict');
@@ -240,7 +240,7 @@ test('resolving a stored conflict keeps the draft menu change named by the repor
 
   await resolveConflict('default', db, form, conflict, []);
 
-  expect(parseEntry('default', (await loadDraft('default', db, path))?.contents ?? '')).toEqual(
+  expect(parseEntry((await loadDraft('default', db, path))?.contents ?? '')).toEqual(
     entry('Main navigation', 'Welcome'),
   );
 });

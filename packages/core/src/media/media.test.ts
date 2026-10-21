@@ -136,10 +136,10 @@ test.each(['size', 'mime', 'hash', 'image'])(
       f.objects.set(f.upload.key, { data, mime: f.upload.mime });
     }
     await expect(
-      confirmUpload('default', openDb('default', binding), store, f.upload, { fetch: f.fetch }),
+      confirmUpload('default', openDb(binding), store, f.upload, { fetch: f.fetch }),
     ).rejects.toThrow(UploadRefusedError);
     expect(f.calls.some((call) => call.method === 'PUT')).toBe(false);
-    expect(await findMedia('default', openDb('default', binding), f.upload.hash)).toBeUndefined();
+    expect(await findMedia('default', openDb(binding), f.upload.hash)).toBeUndefined();
     expect(f.objects.has(f.upload.key ?? '')).toBe(false);
   },
 );
@@ -148,12 +148,12 @@ test('a missing upload and a foreign temporary key are refused', async () => {
   const f = fixture('missing');
   f.objects.clear();
   await expect(
-    confirmUpload('default', openDb('default', binding), store, f.upload, { fetch: f.fetch }),
+    confirmUpload('default', openDb(binding), store, f.upload, { fetch: f.fetch }),
   ).rejects.toThrow(/never reached/);
   await expect(
     confirmUpload(
       'default',
-      openDb('default', binding),
+      openDb(binding),
       store,
       { ...f.upload, key: f.key },
       { fetch: f.fetch },
@@ -167,12 +167,12 @@ test('a disconnected object read retains the temporary bytes for retry', async (
     throw new TypeError('offline');
   }) as typeof fetch;
   await expect(
-    confirmUpload('default', openDb('default', binding), store, f.upload, { fetch: failed }),
+    confirmUpload('default', openDb(binding), store, f.upload, { fetch: failed }),
   ).rejects.toThrow('offline');
   expect(f.objects.has(f.upload.key ?? '')).toBe(true);
   expect(
     (
-      await confirmUpload('default', openDb('default', binding), store, f.upload, {
+      await confirmUpload('default', openDb(binding), store, f.upload, {
         fetch: f.fetch,
       })
     ).created,
@@ -181,7 +181,7 @@ test('a disconnected object read retains the temporary bytes for retry', async (
 
 test('finalization derives dimensions and replaying the upload URL cannot change the final object', async () => {
   const f = fixture('immutable');
-  const db = openDb('default', binding);
+  const db = openDb(binding);
   const result = await confirmUpload('default', db, store, f.upload, { fetch: f.fetch, now: 1700 });
   expect(result.media).toMatchObject({
     id: f.upload.hash,
@@ -212,13 +212,13 @@ test('a temporary object changed after GET cannot race the verified final bytes'
       f.objects.set(f.upload.key ?? '', { data: Buffer.from('evil'), mime: 'text/html' });
     return response;
   }) as unknown as typeof globalThis.fetch;
-  await confirmUpload('default', openDb('default', binding), store, f.upload, { fetch });
+  await confirmUpload('default', openDb(binding), store, f.upload, { fetch });
   expect(f.objects.get(f.key)?.data).toEqual(new Uint8Array(f.data));
 });
 
 test('PDF bytes are verified and the final object is forced to download', async () => {
   const f = fixture('brochure', 'application/pdf');
-  const { media } = await confirmUpload('default', openDb('default', binding), store, f.upload, {
+  const { media } = await confirmUpload('default', openDb(binding), store, f.upload, {
     fetch: f.fetch,
   });
   expect(media).toMatchObject({ r2Key: f.key, width: null, height: null });
@@ -230,7 +230,7 @@ test('PDF bytes are verified and the final object is forced to download', async 
   bad.upload.key = temporary(mediaKey(bad.upload));
   bad.objects.set(bad.upload.key, { data, mime: bad.upload.mime });
   await expect(
-    confirmUpload('default', openDb('default', binding), store, bad.upload, { fetch: bad.fetch }),
+    confirmUpload('default', openDb(binding), store, bad.upload, { fetch: bad.fetch }),
   ).rejects.toThrow(/not a PDF/);
 });
 
@@ -248,7 +248,7 @@ test('the widest crop at a ratio is what a picture is measured by, not its longe
 });
 
 test('the library is newest first, and pictures and files are two lists', async () => {
-  const db = openDb('default', binding);
+  const db = openDb(binding);
   const put = async (hash: string, mime: string, now: number) => {
     await db.insert(tables.media).values({
       id: hash,
@@ -290,7 +290,7 @@ const lister = (pages: { keys: string[]; next?: string }[]) => {
 };
 
 test('the library searches the file name and the tags, and only it sees the archived', async () => {
-  const db = openDb('search', binding);
+  const db = openDb(binding);
   const rows = [
     {
       id: 'a1'.repeat(32),
@@ -331,7 +331,7 @@ const yaml = (...keys: string[]) =>
   `title: "Mill House"\nphoto:\n  src: "${keys[0] ?? PHOTO}"\nblocks:\n  - _type: "hero"\n    _id: "k3nf9a2p"\n    image:\n      src: "${keys[1] ?? PHOTO}"\n`;
 
 test('a scan finds a stored key wherever it sits, and nothing that is not one', () => {
-  const uses = mediaUsesFrom('default', [
+  const uses = mediaUsesFrom([
     { path: 'src/content/listings/en/mill-house.yaml', contents: yaml(PHOTO, BROCHURE) },
     {
       path: 'src/content/pages/en/home.yaml',
@@ -345,29 +345,27 @@ test('a scan finds a stored key wherever it sits, and nothing that is not one', 
 });
 
 test('an entry is one place however many of its languages carry the picture', () => {
-  const uses = mediaUsesFrom('default', [
+  const uses = mediaUsesFrom([
     { path: 'src/content/listings/en/mill-house.yaml', contents: yaml() },
     { path: 'src/content/listings/de/mill-house.yaml', contents: yaml() },
     { path: 'src/content/pages/en/home.yaml', contents: yaml() },
   ]);
-  expect(mediaUsage('default', uses, [])).toEqual({
+  expect(mediaUsage(uses, [])).toEqual({
     [PHOTO]: ['listings/mill-house', 'pages/home'],
   });
 });
 
 test('a draft is what the entry uses now — the picture it dropped and the one it took', () => {
-  const uses = mediaUsesFrom('default', [
+  const uses = mediaUsesFrom([
     { path: 'src/content/listings/en/mill-house.yaml', contents: yaml() },
   ]);
-  const swapped = mediaUsage('default', uses, [
+  const swapped = mediaUsage(uses, [
     { path: 'src/content/listings/en/mill-house.yaml', contents: yaml(BROCHURE, BROCHURE) },
   ]);
   expect(swapped).toEqual({ [BROCHURE]: ['listings/mill-house'] });
   // An empty draft is a file the client has deleted: it names nothing at all.
   expect(
-    mediaUsage('default', uses, [
-      { path: 'src/content/listings/en/mill-house.yaml', contents: '' },
-    ]),
+    mediaUsage(uses, [{ path: 'src/content/listings/en/mill-house.yaml', contents: '' }]),
   ).toEqual({});
 });
 
@@ -384,7 +382,7 @@ test('reconciliation verifies orphans and skips bad hashes, types, sizes and tem
           `<ListBucketResult>${keys.map((key) => `<Contents><Key>${key}</Key><Size>${key === f.key ? f.data.length : 3}</Size></Contents>`).join('')}</ListBucketResult>`,
         )
       : f.fetch(input)) as unknown as typeof globalThis.fetch;
-  const db = openDb('recover', binding);
+  const db = openDb(binding);
   expect(await reconcileMedia('recover', db, store, { fetch, now: 1700 })).toBe(1);
   expect(await findMedia('recover', db, f.upload.hash)).toMatchObject({
     width: 1,
@@ -398,7 +396,7 @@ test('reconciliation verifies orphans and skips bad hashes, types, sizes and tem
 test('reconciliation does not adopt an object whose deletion tombstone owns the hash', async () => {
   const f = fixture('deleted-reconcile');
   f.objects.set(f.key, { data: f.data, mime: f.upload.mime });
-  const db = openDb('deleted-reconcile', binding);
+  const db = openDb(binding);
   await db.insert(tables.media).values({
     id: f.upload.hash,
     siteId: 'deleted-reconcile',
@@ -427,12 +425,12 @@ test('a truncated listing is followed to the end', async () => {
     { keys: ['foreign'], next: 'page-2' },
     { keys: ['also-foreign'] },
   ]);
-  expect(await reconcileMedia('paged', openDb('paged', binding), store, { fetch })).toBe(0);
+  expect(await reconcileMedia('paged', openDb(binding), store, { fetch })).toBe(0);
   expect(seen).toEqual([null, 'page-2']);
 });
 
 test('a site with no bucket has nothing to reconcile and does not fail', async () => {
-  expect(await reconcileMedia('nobucket', openDb('nobucket', binding), undefined)).toBe(0);
+  expect(await reconcileMedia('nobucket', openDb(binding), undefined)).toBe(0);
 });
 
 /** The bucket for the connection check: what each request was, and what it answers. */
@@ -502,7 +500,7 @@ test('the gate counts a file that names the key, whichever file it is', () => {
 });
 
 test('archiving is a flag on the row, and unarchiving takes it off again', async () => {
-  const db = openDb('archive', binding);
+  const db = openDb(binding);
   const id = 'e5'.repeat(32);
   await db.insert(tables.media).values({
     id,
@@ -520,7 +518,7 @@ test('archiving is a flag on the row, and unarchiving takes it off again', async
 });
 
 test('a delete leaves a tombstone after the object is gone', async () => {
-  const db = openDb('delete', binding);
+  const db = openDb(binding);
   const id = 'f6'.repeat(32);
   const key = `media/${id}.webp`;
   const order: string[] = [];
@@ -542,7 +540,7 @@ test('a delete leaves a tombstone after the object is gone', async () => {
 });
 
 test('a draft that wins the database race prevents object deletion', async () => {
-  const db = openDb('delete-used', binding);
+  const db = openDb(binding);
   const id = 'c7'.repeat(32);
   const key = `media/${id}.webp`;
   const fetch = vi.fn<typeof globalThis.fetch>();
@@ -568,7 +566,7 @@ test('a draft that wins the database race prevents object deletion', async () =>
 });
 
 test('a failed object deletion keeps the media record for a safe retry', async () => {
-  const db = openDb('delete-retry', binding);
+  const db = openDb(binding);
   const id = 'd7'.repeat(32);
   const key = `media/${id}.webp`;
   await db
@@ -608,7 +606,7 @@ test('a failed object deletion keeps the media record for a safe retry', async (
 
 test('upload confirmation refuses a hash while its deletion is pending', async () => {
   const f = fixture('deleting-confirmation');
-  const db = openDb('deleting-confirmation', binding);
+  const db = openDb(binding);
   await db.insert(tables.media).values({
     id: f.upload.hash,
     siteId: 'deleting-confirmation',
@@ -627,7 +625,7 @@ test('upload confirmation refuses a hash while its deletion is pending', async (
 
 // The dot is the row's default rather than a page's; centre is what "nobody set one" looks like.
 test('the focal point is two numbers on the row, and centring it is saying nothing', async () => {
-  const db = openDb('focal', binding);
+  const db = openDb(binding);
   const id = 'a7'.repeat(32);
   await db.insert(tables.media).values({
     id,
@@ -652,7 +650,7 @@ test('a crop is confirmed as its own row, pointing at the picture it came from',
   const parent = 'b8'.repeat(32);
   const { media } = await confirmUpload(
     'default',
-    openDb('default', binding),
+    openDb(binding),
     store,
     { ...f.upload, derivedFrom: parent },
     { fetch: f.fetch },
@@ -662,7 +660,7 @@ test('a crop is confirmed as its own row, pointing at the picture it came from',
 
 test('abandoned temporary uploads are verified and finalized only after their lease', async () => {
   const f = fixture('abandoned');
-  const db = openDb('abandoned', binding);
+  const db = openDb(binding);
   const fetch = (async (input: Request) =>
     new URL(input.url).searchParams.has('list-type')
       ? new Response(
@@ -680,7 +678,7 @@ test('abandoned temporary uploads are verified and finalized only after their le
 
 test('failed finalization leaves no row and retry can finish the same upload', async () => {
   const f = fixture('failed-finalization');
-  const db = openDb('default', binding);
+  const db = openDb(binding);
   const fetch = (async (input: Request) =>
     input.method === 'PUT'
       ? new Response(null, { status: 503 })
@@ -697,7 +695,7 @@ test('failed finalization leaves no row and retry can finish the same upload', a
 
 test('a failed media row write retains staging for an immediate confirmation retry', async () => {
   const f = fixture('registration-retry');
-  const real = openDb('default', binding);
+  const real = openDb(binding);
   const db = new Proxy(real, {
     get(target, property) {
       if (property === 'insert')
@@ -722,7 +720,7 @@ test('a store with a jurisdiction talks to the jurisdictional R2 endpoint', asyn
     hosts.push(new URL(input.url).host);
     return new Response('<ListBucketResult></ListBucketResult>');
   }) as unknown as typeof globalThis.fetch;
-  const db = openDb('jurisdiction', binding);
+  const db = openDb(binding);
   await reconcileMedia('jurisdiction', db, { ...store, jurisdiction: 'eu' }, { fetch });
   expect(hosts).toEqual(['2e4dff78a4af5223c7940d6b41d7c9a7.eu.r2.cloudflarestorage.com']);
 });

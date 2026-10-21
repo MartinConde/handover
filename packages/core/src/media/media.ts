@@ -186,13 +186,13 @@ function keysIn(node: unknown, found: Set<string>) {
 }
 
 /** Built with the entry index: a usage count is a repo-wide scan and git is slow to list. */
-export function mediaUsesFrom(siteId: string, files: Iterable<ContentFile>): MediaUses {
+export function mediaUsesFrom(files: Iterable<ContentFile>): MediaUses {
   const uses: MediaUses = {};
   for (const file of files) {
     // Entries only, like the index: `_templates/` and `redirects.yaml` name no entry.
     if (!entryKey(file.path)) continue;
     const found = new Set<string>();
-    keysIn(parseEntry(siteId, file.contents), found);
+    keysIn(parseEntry(file.contents), found);
     if (found.size) uses[file.path] = [...found].sort();
   }
   return uses;
@@ -200,7 +200,6 @@ export function mediaUsesFrom(siteId: string, files: Iterable<ContentFile>): Med
 
 /** Drafts overlay the built map; an entry counts once however many languages carry the picture. */
 export function mediaUsage(
-  siteId: string,
   uses: MediaUses,
   drafts: readonly ContentFile[],
 ): Record<string, string[]> {
@@ -208,7 +207,7 @@ export function mediaUsage(
   // A deleted file's empty contents parse to nothing, which is the right answer.
   for (const draft of drafts) {
     const found = new Set<string>();
-    keysIn(parseEntry(siteId, draft.contents), found);
+    keysIn(parseEntry(draft.contents), found);
     files[draft.path] = [...found];
   }
   const used: Record<string, Set<string>> = {};

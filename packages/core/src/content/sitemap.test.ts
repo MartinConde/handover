@@ -25,13 +25,13 @@ const locs = (pages: ReturnType<typeof sitemapFrom>, locale: string) =>
   (pages[locale] ?? []).map((p) => p.loc);
 
 test('an entry is one URL per language it is written in, under that language’s own address', () => {
-  const pages = sitemapFrom('default', both(), site);
+  const pages = sitemapFrom(both(), site);
   expect(locs(pages, 'en')).toEqual([`${BASE}/`, `${BASE}/listings/mill-house/`]);
   expect(locs(pages, 'de')).toEqual([`${BASE}/de/`, `${BASE}/de/listings/muehlenhaus/`]);
 });
 
 test('every language of a page is named beside it as an alternate', () => {
-  const [page] = sitemapFrom('default', both(), site).en?.slice(1) ?? [];
+  const [page] = sitemapFrom(both(), site).en?.slice(1) ?? [];
   expect(page?.alternates).toEqual([
     { locale: 'en', loc: `${BASE}/listings/mill-house/` },
     { locale: 'de', loc: `${BASE}/de/listings/muehlenhaus/` },
@@ -39,20 +39,20 @@ test('every language of a page is named beside it as an alternate', () => {
 });
 
 test('a hidden entry is in no language’s sitemap', () => {
-  const pages = sitemapFrom('default', both('_status: "hidden"\n', '_status: "hidden"\n'), site);
+  const pages = sitemapFrom(both('_status: "hidden"\n', '_status: "hidden"\n'), site);
   expect(locs(pages, 'en')).toEqual([`${BASE}/`]);
   expect(locs(pages, 'de')).toEqual([`${BASE}/de/`]);
 });
 
 test('a page asking to stay out of search is left out of the sitemap', () => {
   const noindex = 'seo:\n  noindex: true\n';
-  const pages = sitemapFrom('default', both(noindex, noindex), site);
+  const pages = sitemapFrom(both(noindex, noindex), site);
   expect(locs(pages, 'en')).toEqual([`${BASE}/`]);
 });
 
 test('a language the entry is not offered in is left out, and alternates one language is not a list', () => {
   const only = '_locales:\n  - "en"\n';
-  const pages = sitemapFrom('default', both(only, only), site);
+  const pages = sitemapFrom(both(only, only), site);
   expect(locs(pages, 'en')).toEqual([`${BASE}/`, `${BASE}/listings/mill-house/`]);
   expect(locs(pages, 'de')).toEqual([`${BASE}/de/`]);
   expect(pages.en?.[1]?.alternates).toEqual([]);
@@ -60,7 +60,6 @@ test('a language the entry is not offered in is left out, and alternates one lan
 
 test('a collection nothing renders contributes no URL', () => {
   const pages = sitemapFrom(
-    'default',
     [at('src/content/samples/en/everything.yaml', 'title: "Everything"\n')],
     site,
   );
@@ -69,23 +68,19 @@ test('a collection nothing renders contributes no URL', () => {
 
 test("the entry named index is listed once, at its collection's index page", () => {
   const home = { ...site, collections: { pages: { route: '/[slug]', index: '/' } } };
-  const pages = sitemapFrom(
-    'default',
-    [at('src/content/pages/en/index.yaml', 'title: "Home"\n')],
-    home,
-  );
+  const pages = sitemapFrom([at('src/content/pages/en/index.yaml', 'title: "Home"\n')], home);
   expect(locs(pages, 'en')).toEqual([`${BASE}/`]);
 });
 
 test('a site that serves its pages without the slash is written without it', () => {
-  const pages = sitemapFrom('default', both(), { ...site, slash: false });
+  const pages = sitemapFrom(both(), { ...site, slash: false });
   expect(locs(pages, 'en')).toEqual([`${BASE}/`, `${BASE}/listings/mill-house`]);
   expect(locs(pages, 'de')).toEqual([`${BASE}/de`, `${BASE}/de/listings/muehlenhaus`]);
 });
 
 test('the XML is one url per page, with its alternates inside it', () => {
   expect(
-    sitemapXml('default', [
+    sitemapXml([
       {
         loc: `${BASE}/listings/mill-house/`,
         lastmod: '2026-08-30T10:00:00+02:00',
@@ -109,16 +104,16 @@ test('the XML is one url per page, with its alternates inside it', () => {
 });
 
 test('an address with an ampersand in it is escaped rather than breaking the file', () => {
-  const pages = sitemapFrom('default', [at('src/content/pages/en/rd.yaml', 'slug: "r&d"\n')], {
+  const pages = sitemapFrom([at('src/content/pages/en/rd.yaml', 'slug: "r&d"\n')], {
     ...site,
     collections: { pages: { route: '/[slug]' } },
   });
   expect(locs(pages, 'en')).toEqual([`${BASE}/r&d/`]);
-  expect(sitemapXml('default', pages.en ?? [])).toContain(`<loc>${BASE}/r&amp;d/</loc>`);
+  expect(sitemapXml(pages.en ?? [])).toContain(`<loc>${BASE}/r&amp;d/</loc>`);
 });
 
 test('the index names one sitemap per language', () => {
-  expect(sitemapIndexXml('default', [`${BASE}/sitemap-en.xml`, `${BASE}/sitemap-de.xml`])).toBe(
+  expect(sitemapIndexXml([`${BASE}/sitemap-en.xml`, `${BASE}/sitemap-de.xml`])).toBe(
     '<?xml version="1.0" encoding="UTF-8"?>\n' +
       '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
       `  <sitemap><loc>${BASE}/sitemap-en.xml</loc></sitemap>\n` +
@@ -128,13 +123,13 @@ test('the index names one sitemap per language', () => {
 });
 
 test('robots.txt points at the sitemap and keeps crawlers out of the admin', () => {
-  expect(robotsText('default', `${BASE}/sitemap-index.xml`)).toBe(
+  expect(robotsText(`${BASE}/sitemap-index.xml`)).toBe(
     `User-agent: *\nDisallow: /admin\nDisallow: /_preview\n\nSitemap: ${BASE}/sitemap-index.xml\n`,
   );
 });
 
 test('robots.txt names no sitemap for a site that has not said where it is served', () => {
-  expect(robotsText('default')).toBe('User-agent: *\nDisallow: /admin\nDisallow: /_preview\n');
+  expect(robotsText()).toBe('User-agent: *\nDisallow: /admin\nDisallow: /_preview\n');
 });
 
 const EN = 'src/content/listings/en/mill-house.yaml';
@@ -142,13 +137,13 @@ const DE = 'src/content/listings/de/mill-house.yaml';
 
 test('a page is dated by its file’s last commit and an index by its newest page; one the log does not know has no date', () => {
   const modified = new Map([[EN, '2026-08-30T10:00:00+02:00']]);
-  const pages = sitemapFrom('default', both(), site, modified);
+  const pages = sitemapFrom(both(), site, modified);
   expect(pages.en?.map((p) => p.lastmod)).toEqual([
     '2026-08-30T10:00:00+02:00',
     '2026-08-30T10:00:00+02:00',
   ]);
   expect(pages.de?.map((p) => p.lastmod)).toEqual([undefined, undefined]);
-  expect(sitemapXml('default', pages.de ?? [])).not.toContain('lastmod');
+  expect(sitemapXml(pages.de ?? [])).not.toContain('lastmod');
 });
 
 test('an index is dated by the newest of its pages, whatever order the log lists them in', () => {
@@ -161,14 +156,12 @@ test('an index is dated by the newest of its pages, whatever order the log lists
     ...site,
     collections: { ...site.collections, pages: { route: '/[slug]', index: '/' } },
   };
-  expect(sitemapFrom('default', files, listings, modified).en?.[0]?.lastmod).toBe(
-    '2026-08-31T09:00:00+02:00',
-  );
+  expect(sitemapFrom(files, listings, modified).en?.[0]?.lastmod).toBe('2026-08-31T09:00:00+02:00');
 });
 
 test('the git log is read newest first, so the first date a path appears under is its last change', () => {
   const log = `2026-08-31T09:00:00+02:00\n\n${DE}\n\n2026-08-30T10:00:00+02:00\n\n${EN}\n${DE}\n`;
-  expect(modifiedFrom('default', log)).toEqual(
+  expect(modifiedFrom(log)).toEqual(
     new Map([
       [DE, '2026-08-31T09:00:00+02:00'],
       [EN, '2026-08-30T10:00:00+02:00'],
@@ -178,7 +171,7 @@ test('the git log is read newest first, so the first date a path appears under i
 
 test('a site under a base path has every address under it', () => {
   const under = { ...site, i18n: { ...site.i18n, base: '/site' } };
-  const pages = sitemapFrom('default', both(), under);
+  const pages = sitemapFrom(both(), under);
   expect(locs(pages, 'en')).toEqual([`${BASE}/site/`, `${BASE}/site/listings/mill-house/`]);
   expect(locs(pages, 'de')).toEqual([`${BASE}/site/de/`, `${BASE}/site/de/listings/muehlenhaus/`]);
 });

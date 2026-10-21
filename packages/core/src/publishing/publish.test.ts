@@ -68,7 +68,7 @@ const REDIRECTS = 'src/content/redirects.yaml';
 const sourceOf = async (path: string) =>
   path === PAGE_DE ? { locale: 'en', path: PAGE_EN, form: PAGE_FORM } : undefined;
 const mark = (contents: string) =>
-  (parseEntry('default', contents) as { _i18n?: Record<string, string> })._i18n;
+  (parseEntry(contents) as { _i18n?: Record<string, string> })._i18n;
 const german = (heading: string) => ({
   title: 'Startseite',
   blocks: [
@@ -85,11 +85,10 @@ const english = (heading: string) => ({
 });
 const stale = (repo: ReturnType<typeof bilingual>) =>
   staleLocales(
-    'default',
     PAGE_FORM,
     {
-      en: parseEntry('default', repo.read(PAGE_EN)),
-      de: parseEntry('default', repo.read(PAGE_DE)),
+      en: parseEntry(repo.read(PAGE_EN)),
+      de: parseEntry(repo.read(PAGE_DE)),
     },
     'en',
   );
@@ -128,7 +127,7 @@ test('a publish retry finalizes the same durable commit after its D1 batch faile
       };
     },
   });
-  const flaky = openDb('default', flakyBinding);
+  const flaky = openDb(flakyBinding);
 
   const failed = await publishDrafts('default', flaky, repo, undefined, undefined, undefined, {
     userId: 'u1',
@@ -228,7 +227,6 @@ test('finalizing a committed publish rebases rather than losing a newer draft', 
   await saveDraft('default', db, repo, PATH, { ...VALUES, rooms: 4 });
   let fail = true;
   const flaky = openDb(
-    'default',
     new Proxy(binding, {
       get(target, key) {
         if (key !== 'batch') {
@@ -452,7 +450,7 @@ test('publishing an address change writes one redirect for that language', async
 
   await publishDrafts('default', db, repo);
 
-  const rules = (parseEntry('default', repo.read(REDIRECTS)) as { rules: RedirectRule[] }).rules;
+  const rules = (parseEntry(repo.read(REDIRECTS)) as { rules: RedirectRule[] }).rules;
   expect(rules).toEqual([
     {
       _id: expect.stringMatching(/^[0-9a-z]{8}$/),
@@ -506,7 +504,7 @@ test('publishing an unhide takes the committed hide rules out of redirects.yaml'
     true,
   );
   await publishDrafts('default', db, repo);
-  const kept = (parseEntry('default', repo.read(REDIRECTS)) as { rules: RedirectRule[] }).rules;
+  const kept = (parseEntry(repo.read(REDIRECTS)) as { rules: RedirectRule[] }).rules;
   expect(kept).toHaveLength(2);
 
   await setEntryStatus(
@@ -519,9 +517,7 @@ test('publishing an unhide takes the committed hide rules out of redirects.yaml'
   );
   await publishDrafts('default', db, repo);
 
-  expect((parseEntry('default', repo.read(REDIRECTS)) as { rules: RedirectRule[] }).rules).toEqual(
-    [],
-  );
+  expect((parseEntry(repo.read(REDIRECTS)) as { rules: RedirectRule[] }).rules).toEqual([]);
   expect(repo.read(PAGE_EN)).toBe(page('Home', 'Move to the coast', 'Ready to move?'));
 });
 
@@ -538,9 +534,8 @@ test('publishing an unhide points a rule the hide re-pointed back at the page', 
     entry: 'pages/home',
     createdAt: '2026-08-01T09:00:00Z',
   };
-  repo.write(REDIRECTS, stringifyEntry('default', { _version: 1, rules: [older] }));
-  const rules = () =>
-    (parseEntry('default', repo.read(REDIRECTS)) as { rules: RedirectRule[] }).rules;
+  repo.write(REDIRECTS, stringifyEntry({ _version: 1, rules: [older] }));
+  const rules = () => (parseEntry(repo.read(REDIRECTS)) as { rules: RedirectRule[] }).rules;
   await setEntryStatus(
     'default',
     db,
@@ -698,7 +693,7 @@ test('an address change published once is not written a second time', async () =
   await saveDraft('default', db, repo, PAGE_DE, german('Zieh ans Meer'));
   await publishDrafts('default', db, repo);
 
-  const rules = (parseEntry('default', repo.read(REDIRECTS)) as { rules: RedirectRule[] }).rules;
+  const rules = (parseEntry(repo.read(REDIRECTS)) as { rules: RedirectRule[] }).rules;
   expect(rules.map((r) => r.from)).toEqual(['/de/home']);
 });
 
@@ -738,7 +733,7 @@ test.each(['hide-move', 'move-hide', 'hide-clear'])(
       expect.arrayContaining([expect.objectContaining({ reason: 'hidden', ...HIDE_DE })]),
     );
     await publishDrafts('default', db, repo);
-    const rules = (parseEntry('default', repo.read(REDIRECTS)) as { rules: RedirectRule[] }).rules;
+    const rules = (parseEntry(repo.read(REDIRECTS)) as { rules: RedirectRule[] }).rules;
     expect(rules.map(({ from, to }) => ({ from, to }))).toEqual([HIDE_DE]);
   },
 );

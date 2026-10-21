@@ -23,16 +23,15 @@ export interface TranslationSource {
 
 /** A source language moving on makes the mark disagree: stale is a warning, never a refusal. */
 export async function markTranslation(
-  siteId: string,
   form: Form,
   source: TranslationSource,
   contents: string,
   was: string | undefined,
   preserveStampedSource = false,
 ): Promise<string> {
-  const data = parseEntry(siteId, contents);
+  const data = parseEntry(contents);
   if (!isObject(data)) return contents;
-  const before = new Map(was ? translatedValues(form, parseEntry(siteId, was)) : []);
+  const before = new Map(was ? translatedValues(form, parseEntry(was)) : []);
   const after = new Map(translatedValues(form, data));
   const typed =
     before.size !== after.size ||
@@ -41,16 +40,16 @@ export async function markTranslation(
   // API saves stamp the exact source snapshot the translator saw. Publishing must carry that
   // mark forward instead of silently replacing it with a source that moved in the meantime.
   const stamped = completeMark(data._i18n);
-  const previousData = was === undefined ? undefined : parseEntry(siteId, was);
+  const previousData = was === undefined ? undefined : parseEntry(was);
   const previous = completeMark(isObject(previousData) ? previousData._i18n : undefined);
   if (preserveStampedSource && stamped && !sameMark(stamped, previous)) return contents;
   const mark: I18nMark = {
     sourceLocale: source.locale,
     sourceBlob: source.blob_sha,
-    sourceHash: await hashOf(form, parseEntry(siteId, source.contents)),
+    sourceHash: await hashOf(form, parseEntry(source.contents)),
     translatedAt: new Date().toISOString(),
   };
-  return stringifyEntry(siteId, { ...data, _i18n: mark });
+  return stringifyEntry({ ...data, _i18n: mark });
 }
 
 const completeMark = (value: unknown): I18nMark | undefined => {
@@ -78,7 +77,6 @@ export type EntrySource =
 
 /** `files` is each declared language's effective data; an unmarked file agrees with a marked one. */
 export function entrySource(
-  _siteId: string,
   i18n: Pick<I18nRouting, 'locales' | 'defaultLocale'>,
   files: Record<string, unknown>,
 ): EntrySource | undefined {
@@ -110,7 +108,6 @@ export function entrySource(
 // Every file's `_i18n` once `to` is the source; marks move only when `from` and `to` are in sync.
 // `blob` is `to`'s file as written, `at` the time for a mark `from` did not already have.
 export async function provenance(
-  _siteId: string,
   form: Form,
   files: Record<string, unknown>,
   change: { from: string; to: string; blob: string; at: string },
@@ -170,7 +167,6 @@ export function sourceOnlyConflicts(form: Form, source: unknown, target: unknown
 
 /** Every file once `to` is the source; without `from` (recovery) files are only stamped. */
 export async function changeSource(
-  siteId: string,
   form: Form,
   files: Record<string, unknown>,
   change: { from?: string; to: string; at: string },
@@ -184,14 +180,13 @@ export async function changeSource(
   delete taken._i18n;
   const out: Record<string, Record<string, unknown>> = {};
   for (const [locale, data] of Object.entries(files))
-    out[locale] = withSource(siteId, locale === to ? taken : data, to);
+    out[locale] = withSource(locale === to ? taken : data, to);
   if (from === undefined) return out;
   // Handed its old mark back: that is what says whether the two languages are in sync.
   const marks = await provenance(
-    siteId,
     form,
     { ...files, [to]: { ...out[to], _i18n: target._i18n } },
-    { from, to, blob: await blobSha(stringifyEntry(siteId, out[to])), at: change.at },
+    { from, to, blob: await blobSha(stringifyEntry(out[to])), at: change.at },
   );
   for (const [locale, mark] of Object.entries(marks)) {
     const file = out[locale];
@@ -204,7 +199,6 @@ export async function changeSource(
 
 /** Stale: a complete mark naming another language than the source, or the source as it no longer is. */
 export async function staleLocales(
-  _siteId: string,
   form: Form,
   files: Record<string, unknown>,
   source: string,

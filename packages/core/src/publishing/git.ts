@@ -196,7 +196,6 @@ const successors = new WeakMap<
 const SUCCESSOR_TTL_MS = 60_000;
 
 export function createGitClient(
-  _siteId: string,
   app: GitHubApp,
   deps: { fetch?: typeof globalThis.fetch; now?: () => number } = {},
 ): GitClient {

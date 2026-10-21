@@ -21,7 +21,7 @@ let binding: Awaited<ReturnType<typeof mf.getD1Database>>;
 let db: Db;
 beforeAll(async () => {
   binding = await mf.getD1Database('DB');
-  db = openDb('default', binding);
+  db = openDb(binding);
 });
 
 beforeEach(() => resetTestD1(binding));

@@ -10,8 +10,7 @@ its data in one `load()`, and the layout is handed the result. Follow them and
 `ContentSource` provides `getEntry` and `getCollection`, with an optional `preview` flag. Entry ids are `locale/slug`, matching the
 folder layout `src/content/<collection>/<locale>/<slug>.yaml`, and `getCollection` takes the
 locale and returns only that folder. `staticSource` wraps Astro's own `astro:content` functions;
-pass them in, since the package does not import `astro:content` itself. The first argument
-everywhere is the site id — use `'default'`.
+pass them in, since the package does not import `astro:content` itself.
 
 **`load()` returns the props its page renders**, and names the component that renders them. The
 page file spreads one into the other.
@@ -27,13 +26,13 @@ export { default as Page } from '../layouts/Page.astro';
 
 type Source = ContentSource<{ listings: Listing }>;
 
-export const staticSource: Source = createStaticSource('default', {
+export const staticSource: Source = createStaticSource({
   getEntry: async (collection, id) => getEntry(collection, id),
   getCollection: (collection) => getCollection(collection),
 });
 
 export async function load(source: Source, { locale, slug }: { locale: string; slug: string }) {
-  const entry = await entryAt('default', source, cms, 'listings', locale, slug);
+  const entry = await entryAt(source, cms, 'listings', locale, slug);
   return entry && { data: entry.data, locale };
 }
 ```
@@ -89,19 +88,19 @@ from it, so nothing lists the folder twice.
 export { default as Index } from '../layouts/Index.astro';
 
 export async function loadIndex(source: Source, { locale }: { locale: string }) {
-  const entries = filterLive('default', await source.getCollection('listings', locale));
+  const entries = filterLive(await source.getCollection('listings', locale));
   return {
     locale,
     listings: entries.map((e) => {
       const name = e.id.slice(locale.length + 1);
-      return { address: entryAddress('default', e.data, name), data: e.data };
+      return { address: entryAddress(e.data, name), data: e.data };
     }),
   };
 }
 ```
 
 **[Globals](site-files.md) are gathered here too** and passed down as props.
-`globalsAt('default', source, locale)` reads the entire collection. For preview, pass a fourth
+`globalsAt(source, locale)` reads the entire collection. For preview, pass a third
 argument such as `{ required: ['site', 'navigation'], blocks: entry.data.blocks }` to read only
 the layout's globals and references in the rendered block tree. Required drafts still validate;
 invalid unused globals are never read. See [Blocks](blocks.md) for the shared loader example.

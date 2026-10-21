@@ -12,7 +12,7 @@ beforeAll(async () => {
   await migrateTestD1(binding);
 });
 
-const db = () => openDb('default', binding);
+const db = () => openDb(binding);
 afterEach(async () => {
   await db().delete(settings);
 });

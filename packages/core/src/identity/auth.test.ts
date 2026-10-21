@@ -10,7 +10,7 @@ let binding: Awaited<ReturnType<typeof mf.getD1Database>>;
 let db: Db;
 beforeAll(async () => {
   binding = await mf.getD1Database('DB');
-  db = openDb('default', binding);
+  db = openDb(binding);
 });
 
 // Each test gets its own database so failed sign-ins cannot spend another's rate-limit budget.
@@ -440,7 +440,7 @@ test('a member who set a password by reset keeps it after opening a sign-in link
 test('an invited user has no password and no session anywhere', async () => {
   const id = await seedUser('invited@example.com', 'editor');
 
-  expect(await accountFacts('default', db, id, 'none')).toEqual({
+  expect(await accountFacts(db, id, 'none')).toEqual({
     hasPassword: false,
     sessions: [],
   });
@@ -454,7 +454,7 @@ test('a signed-in user has a password and sees the session that asked marked as 
   });
   const [row] = (await binding.prepare('SELECT id FROM session').all()).results as { id: string }[];
 
-  const facts = await accountFacts('default', db, id, row?.id ?? '');
+  const facts = await accountFacts(db, id, row?.id ?? '');
 
   expect(facts.hasPassword).toBe(true);
   expect(facts.sessions).toHaveLength(1);
@@ -469,7 +469,7 @@ test('no session token reaches the account page', async () => {
     password: 'correct-horse-battery',
   });
 
-  const facts = await accountFacts('default', db, id, 'whichever');
+  const facts = await accountFacts(db, id, 'whichever');
 
   expect(Object.keys(facts.sessions[0] ?? {}).sort()).toEqual([
     'current',
@@ -946,7 +946,7 @@ test('an owner beside another owner is demoted', async () => {
   const martin = await seedUser('martin@example.com', 'owner');
   await seedInvite('kim@example.com', 'owner');
 
-  expect(await demoteOwner('default', db, martin)).toBe(true);
+  expect(await demoteOwner(db, martin)).toBe(true);
   expect(await roleOfRow(martin)).toBe('editor');
 });
 
@@ -954,7 +954,7 @@ test('the last owner is not demoted, and is left as they were', async () => {
   const martin = await seedUser('martin@example.com', 'owner');
   await seedUser('anna@example.com', 'editor');
 
-  expect(await demoteOwner('default', db, martin)).toBe(false);
+  expect(await demoteOwner(db, martin)).toBe(false);
   expect(await roleOfRow(martin)).toBe('owner');
 });
 
@@ -963,10 +963,7 @@ test('two owners cannot demote each other into a site with no owner', async () =
   const martin = await seedUser('martin@example.com', 'owner');
   const kim = await seedUser('kim@example.com', 'owner');
 
-  const both = await Promise.all([
-    demoteOwner('default', db, martin),
-    demoteOwner('default', db, kim),
-  ]);
+  const both = await Promise.all([demoteOwner(db, martin), demoteOwner(db, kim)]);
 
   expect(both.filter(Boolean)).toHaveLength(1);
   const left = (await binding.prepare("SELECT id FROM user WHERE role = 'owner'").all()).results;
@@ -977,7 +974,7 @@ test('somebody who is not an owner is nobody to demote', async () => {
   const anna = await seedUser('anna@example.com', 'editor');
   await seedUser('martin@example.com', 'owner');
 
-  expect(await demoteOwner('default', db, anna)).toBe(false);
+  expect(await demoteOwner(db, anna)).toBe(false);
   expect(await roleOfRow(anna)).toBe('editor');
 });
 

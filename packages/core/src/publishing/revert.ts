@@ -32,13 +32,12 @@ export class RevertConflictError extends Error {
 
 /** Invert only the rules this commit changed; overlapping later edits refuse the whole undo. */
 export async function revertRedirects(
-  siteId: string,
   git: Pick<GitClient, 'getFile'>,
   at: { commit: string; parent: string; head: string },
 ): Promise<PublishFile | undefined> {
   const doc = async (ref: string) => {
     const file = await git.getFile(REDIRECTS, ref);
-    return file ? (parseEntry(siteId, file.contents) as { rules?: RedirectRule[] }) : undefined;
+    return file ? (parseEntry(file.contents) as { rules?: RedirectRule[] }) : undefined;
   };
   const [before, after, head] = await Promise.all([doc(at.parent), doc(at.commit), doc(at.head)]);
   const byId = (rules: readonly RedirectRule[]) => new Map(rules.map((r) => [r._id, r]));
@@ -71,7 +70,7 @@ export async function revertRedirects(
   }
   return {
     path: REDIRECTS,
-    contents: stringifyEntry(siteId, { ...(head ?? before), rules: [...current.values()] }),
+    contents: stringifyEntry({ ...(head ?? before), rules: [...current.values()] }),
   };
 }
 
@@ -109,7 +108,7 @@ export async function revertCommit(
     path,
     contents: before[i]?.contents ?? null,
   }));
-  const rules = await revertRedirects(siteId, git, { commit: commitSha, parent, head });
+  const rules = await revertRedirects(git, { commit: commitSha, parent, head });
   const changed = rules ? [...files, rules] : files;
   const rows: Draft[] = [];
   // Reading candidates is independent; the later revision-guarded writes remain one batch.
@@ -252,13 +251,13 @@ export async function restoreCommit(
     if (file.contents === null) continue;
     const open = await loadDraft(siteId, db, file.path);
     if (!open) continue;
-    const entry = writtenEntry(siteId, parseEntry(siteId, open.contents));
-    const restored = parseEntry(siteId, file.contents) as Record<string, unknown>;
+    const entry = writtenEntry(parseEntry(open.contents));
+    const restored = parseEntry(file.contents) as Record<string, unknown>;
     for (const mark of MARKS) {
       if (mark in restored) entry[mark] = restored[mark];
       else delete entry[mark];
     }
-    const contents = stringifyEntry(siteId, keptSource(siteId, writtenEntry(siteId, entry)));
+    const contents = stringifyEntry(keptSource(writtenEntry(entry)));
     if (contents === open.contents) continue;
     await db
       .update(drafts)

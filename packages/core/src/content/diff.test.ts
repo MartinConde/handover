@@ -17,14 +17,13 @@ const listing: Form = {
 const changesIn = (groups: ReturnType<typeof diffEntry>, locale?: string): Change[] =>
   groups.find((g) => g.locale === locale)?.changes ?? [];
 const enChanges = (form: Form, before: unknown, after: unknown) =>
-  changesIn(diffEntry('default', form, { en: before }, { en: after }), 'en');
+  changesIn(diffEntry(form, { en: before }, { en: after }), 'en');
 
 test('a value every language shares is lifted out of them', () => {
   const en = { title: 'Mill House', price: 450000 };
   const de = { title: 'Mühlenhaus', price: 450000 };
 
   const groups = diffEntry(
-    'default',
     listing,
     { en, de },
     { en: { ...en, price: 435000 }, de: { ...de, price: 435000 } },
@@ -41,7 +40,7 @@ test('a value the languages share is caught in whichever file it moved in', () =
   const en = { title: 'Mill House', price: 450000 };
   const de = { title: 'Mühlenhaus', price: 450000 };
 
-  const groups = diffEntry('default', listing, { en, de }, { en, de: { ...de, price: 435000 } });
+  const groups = diffEntry(listing, { en, de }, { en, de: { ...de, price: 435000 } });
 
   expect(changesIn(groups)).toEqual([
     { path: 'price', label: 'Price', kind: 'value', before: '450000', after: '435000' },
@@ -51,7 +50,7 @@ test('a value the languages share is caught in whichever file it moved in', () =
 test('an entry in one language has no shared group, because nothing is doubled', () => {
   const en = { title: 'Mill House', price: 450000 };
 
-  const groups = diffEntry('default', listing, { en }, { en: { ...en, price: 435000 } });
+  const groups = diffEntry(listing, { en }, { en: { ...en, price: 435000 } });
 
   expect(groups.map((g) => g.locale)).toEqual(['en']);
   expect(changesIn(groups, 'en')).toEqual([
@@ -204,12 +203,7 @@ test('only the properties a translator retypes are per-language', () => {
   const before = { image: { src: 'media/a.webp', alt: 'The front', width: 2400, height: 1600 } };
   const after = { image: { src: 'media/b.webp', alt: 'The garden', width: 1800, height: 1200 } };
 
-  const groups = diffEntry(
-    'default',
-    listing,
-    { en: before, de: before },
-    { en: after, de: after },
-  );
+  const groups = diffEntry(listing, { en: before, de: before }, { en: after, de: after });
 
   expect(changesIn(groups)).toEqual([
     {
@@ -276,7 +270,7 @@ test('a language nothing happened in gets a group with no changes, so silence is
   const en = { title: 'Mill House' };
   const de = { title: 'Mühlenhaus' };
 
-  const groups = diffEntry('default', listing, { en, de }, { en: { title: 'The Mill House' }, de });
+  const groups = diffEntry(listing, { en, de }, { en: { title: 'The Mill House' }, de });
 
   expect(groups.map((g) => g.locale)).toEqual([undefined, 'en', 'de']);
   expect(changesIn(groups, 'de')).toEqual([]);
@@ -292,9 +286,7 @@ test('the marks a file carries are not a change anybody made', () => {
     title: 'Mill House',
   };
 
-  expect(diffEntry('default', listing, { en }, { en: after })).toEqual([
-    { locale: 'en', changes: [] },
-  ]);
+  expect(diffEntry(listing, { en }, { en: after })).toEqual([{ locale: 'en', changes: [] }]);
 });
 
 // Blocks — the four row shapes, keyed by `_id` the way the rest of the walk keys them.
@@ -583,7 +575,7 @@ test('two files that say the same thing produce no changes at all', () => {
   const en = { title: 'Mill House', price: 450000, image: { src: 'media/a.webp', alt: 'Front' } };
   const de = { title: 'Mühlenhaus', price: 450000, image: { src: 'media/a.webp', alt: 'Vorn' } };
 
-  expect(diffEntry('default', listing, { en, de }, { en, de })).toEqual([
+  expect(diffEntry(listing, { en, de }, { en, de })).toEqual([
     { changes: [] },
     { locale: 'en', changes: [] },
     { locale: 'de', changes: [] },
@@ -681,7 +673,7 @@ test('a language present before and absent after is one removal, not a deletion 
   const en = { title: 'Mill House', price: 450000 };
   const de = { title: 'Mühlenhaus', summary: 'Am Fluss', price: 450000 };
 
-  const groups = diffEntry('default', listing, { en, de }, { en });
+  const groups = diffEntry(listing, { en, de }, { en });
 
   expect(groups).toEqual([
     { changes: [] },
@@ -728,7 +720,6 @@ test('a menu label retyped in one language is that language’s change, not a sh
   const de = header([home('Startseite'), news('Neuigkeiten')]);
 
   const groups = diffEntry(
-    'default',
     navigation,
     { en, de },
     { en, de: header([home('Startseite'), news('Aktuelles')]) },
@@ -809,7 +800,6 @@ test('a menu item moved in both files is one move, said once', () => {
   const de = header([home('Startseite'), news('Neuigkeiten')]);
 
   const groups = diffEntry(
-    'default',
     navigation,
     { en, de },
     {
@@ -834,7 +824,6 @@ test('a menu item moved in both files is one move, said once', () => {
 // `staleLocales` says a language is behind; `sourceChanges` says which fields.
 test('a source value that moved comes back as the words that moved', () => {
   const changed = sourceChanges(
-    'default',
     listing,
     { title: 'Mill House', summary: 'Above the harbour.' },
     { title: 'Mill House', summary: 'Above the fish market.' },
@@ -854,7 +843,7 @@ test('an adversarial long source comparison returns a bounded whole-value summar
   const before = Array.from({ length: 10_000 }, (_, i) => `before${i}`).join(' ');
   const after = Array.from({ length: 10_000 }, (_, i) => `after${i}`).join(' ');
 
-  expect(sourceChanges('default', listing, { summary: before }, { summary: after })).toEqual({
+  expect(sourceChanges(listing, { summary: before }, { summary: after })).toEqual({
     summary: [
       { text: before, mark: 'del' },
       { text: after, mark: 'ins' },
@@ -865,13 +854,12 @@ test('an adversarial long source comparison returns a bounded whole-value summar
 test('a value the source has not touched is not marked', () => {
   const en = { title: 'Mill House', summary: 'Above the harbour.' };
 
-  expect(sourceChanges('default', listing, en, en)).toEqual({});
+  expect(sourceChanges(listing, en, en)).toEqual({});
 });
 
 // A price is written into every file, so retranslating it would say the same number back.
 test('a shared value that moved is not something to retranslate', () => {
   const changed = sourceChanges(
-    'default',
     listing,
     { title: 'Mill House', price: 450000 },
     { title: 'Mill House', price: 435000 },
@@ -882,7 +870,6 @@ test('a shared value that moved is not something to retranslate', () => {
 
 test('a source value that went reads as the whole sentence going', () => {
   const changed = sourceChanges(
-    'default',
     listing,
     { title: 'Mill House', summary: 'Above the harbour.' },
     { title: 'Mill House' },
@@ -896,7 +883,6 @@ test('a source value that went reads as the whole sentence going', () => {
 // A block is addressed by `_id`, the way `_machine` and the translate route address it.
 test('a block field is marked at the address the form knows it by', () => {
   const changed = sourceChanges(
-    'default',
     page,
     { blocks: [hero, cta] },
     { blocks: [{ ...hero, heading: 'Seaview Cottage, Devon' }, cta] },

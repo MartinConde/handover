@@ -35,7 +35,7 @@ const JOBS: Record<
   reconcile: { every: HOUR, run: (siteId, d) => reconcileMedia(siteId, d.db, d.store, d) },
   retention: { every: 24 * HOUR, run: (siteId, d) => expireActivity(siteId, d.db, d.now) },
   orphans: { every: 24 * HOUR, run: (siteId, d) => sweepOrphans(siteId, d.db, d.git, d.now) },
-  hidden: { every: 24 * HOUR, run: (siteId, d) => findHiddenLong(siteId, d.git, d.now) },
+  hidden: { every: 24 * HOUR, run: (_, d) => findHiddenLong(d.git, d.now) },
 };
 
 /** What each job this tick belonged to did, or the message it failed with. */
@@ -48,7 +48,7 @@ const claimJob = async (
   deps: JobDeps,
   now: number,
 ) => {
-  const token = newId(siteId);
+  const token = newId();
   const [claim] = await deps.db
     .insert(cronState)
     .values({
@@ -146,7 +146,6 @@ export interface HiddenLong {
 
 /** Dated from the file's own commits, walked newest first until a shown or old-enough version. */
 export async function findHiddenLong(
-  _siteId: string,
   git: Pick<GitClient, 'contentFiles' | 'fileCommits' | 'getFile'> | undefined,
   now = Date.now(),
 ): Promise<{ done: number; entries: HiddenLong[] }> {

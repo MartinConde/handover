@@ -2,7 +2,7 @@ import { expect, test } from 'vitest';
 import { parseEntry, stringifyEntry } from './entry-format.js';
 import { filterLive, isLive, newId, regenerateIds } from './reserved.js';
 
-const roundTrip = (data: unknown) => parseEntry('default', stringifyEntry('default', data));
+const roundTrip = (data: unknown) => parseEntry(stringifyEntry(data));
 
 test.each([
   ['_version', { _version: 1, title: 'Home' }],
@@ -41,11 +41,11 @@ test.each([
   ['_source: ""', '_source'],
   ['blocks:\n  - _id: "k3nf9a2p"\n    _source: de', 'blocks[0]._source'],
 ])('parse rejects malformed %j naming the path', (yaml, path) => {
-  expect(() => parseEntry('default', yaml)).toThrow(path);
+  expect(() => parseEntry(yaml)).toThrow(path);
 });
 
 test('newId is eight lowercase alphanumerics', () => {
-  const ids = new Set(Array.from({ length: 200 }, () => newId('default')));
+  const ids = new Set(Array.from({ length: 200 }, () => newId()));
   for (const id of ids) expect(id).toMatch(/^[0-9a-z]{8}$/);
   expect(ids.size).toBe(200);
 });
@@ -72,7 +72,7 @@ const collectIds = (value: unknown, out: string[] = []): string[] => {
 };
 
 test('regenerateIds replaces every _id at every depth and keeps the rest', () => {
-  const copy = regenerateIds('default', page);
+  const copy = regenerateIds(page);
   const before = collectIds(page);
   const after = collectIds(copy);
   expect(before).toHaveLength(4);
@@ -85,7 +85,7 @@ test('regenerateIds replaces every _id at every depth and keeps the rest', () =>
 });
 
 test('regenerateIds rewrites _machine paths to the new ids', () => {
-  const copy = regenerateIds('default', page);
+  const copy = regenerateIds(page);
   const [cta, columns, inner] = collectIds(copy.blocks);
   expect(copy._machine).toEqual([
     `blocks[_id=${cta}].heading`,
@@ -95,7 +95,7 @@ test('regenerateIds rewrites _machine paths to the new ids', () => {
 
 // A hand-written template has no `_id` anywhere, and the form gives every row it adds one.
 test('regenerateIds gives an array item that never had an _id one of its own', () => {
-  const copy = regenerateIds('default', {
+  const copy = regenerateIds({
     title: 'New listing',
     blocks: [{ _type: 'hero', heading: 'Move to the coast' }],
     tags: ['sea', 'devon'],
@@ -116,8 +116,8 @@ test('a stamped _id is shared across the locale files of one entry too', () => {
       { _type: 'quote', body: 'Ho' },
     ],
   };
-  const en = regenerateIds('default', rows, ids);
-  const de = regenerateIds('default', rows, ids);
+  const en = regenerateIds(rows, ids);
+  const de = regenerateIds(rows, ids);
   expect(collectIds(de)).toEqual(collectIds(en));
   expect(collectIds(en)).toHaveLength(2);
   expect(new Set(collectIds(en)).size).toBe(2);
@@ -125,27 +125,27 @@ test('a stamped _id is shared across the locale files of one entry too', () => {
 
 test('a shared map gives two locale files the same new ids', () => {
   const ids = new Map<string, string>();
-  const en = regenerateIds('default', page, ids);
-  const de = regenerateIds('default', { ...page, blocks: [page.blocks[0]] }, ids);
+  const en = regenerateIds(page, ids);
+  const de = regenerateIds({ ...page, blocks: [page.blocks[0]] }, ids);
   expect(collectIds(de)).toEqual(collectIds(en).slice(0, 1));
 });
 
 test('isLive is true only when _status is absent', () => {
-  expect(isLive('default', { title: 'x' })).toBe(true);
-  expect(isLive('default', { _status: 'hidden' })).toBe(false);
+  expect(isLive({ title: 'x' })).toBe(true);
+  expect(isLive({ _status: 'hidden' })).toBe(false);
 });
 
 test('filterLive drops entries with a _status', () => {
   const live = { id: 'en/a', data: { title: 'a' } };
   const hidden = { id: 'en/b', data: { _status: 'hidden', title: 'b' } };
-  expect(filterLive('default', [live, hidden])).toEqual([live]);
+  expect(filterLive([live, hidden])).toEqual([live]);
 });
 
 test('a locale the entry is not offered in is not live in it', () => {
   const both = { title: 'x' };
   const english = { _locales: ['en'], title: 'x' };
-  expect(isLive('default', both, 'de')).toBe(true);
-  expect(isLive('default', english, 'de')).toBe(false);
-  expect(isLive('default', english, 'en')).toBe(true);
-  expect(isLive('default', { _status: 'hidden', _locales: ['en', 'de'] }, 'de')).toBe(false);
+  expect(isLive(both, 'de')).toBe(true);
+  expect(isLive(english, 'de')).toBe(false);
+  expect(isLive(english, 'en')).toBe(true);
+  expect(isLive({ _status: 'hidden', _locales: ['en', 'de'] }, 'de')).toBe(false);
 });

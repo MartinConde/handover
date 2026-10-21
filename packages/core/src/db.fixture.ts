@@ -48,7 +48,7 @@ export async function resetTestD1(binding: Awaited<ReturnType<Miniflare['getD1Da
 /** Bound to a test file's own `binding`, read live so it works whenever `beforeAll` finishes. */
 export function draftDb(getBinding: () => Awaited<ReturnType<Miniflare['getD1Database']>>) {
   return async () => {
-    const db = openDb('default', getBinding());
+    const db = openDb(getBinding());
     await db.delete(drafts);
     await db.delete(tables.activity);
     await db.delete(tables.operations);
@@ -268,14 +268,12 @@ export const ruleFor = async (db: ReturnType<typeof openDb>, path: string) =>
 
 // The index as the last build made it: one build behind whatever a rename or delete commits.
 export const indexOf = (files: Record<string, string>) =>
-  indexFrom(
-    'default',
-    Object.entries(files).map(([path, contents]) => ({ path, contents })),
-  );
+  indexFrom(Object.entries(files).map(([path, contents]) => ({ path, contents })));
 export const listed = async (db: ReturnType<typeof openDb>, index: ContentIndex) =>
-  collectionEntries('default', index, 'listings', await overlayRows('default', db, index)).map(
-    (e) => [e.id, e.locales.en?.title],
-  );
+  collectionEntries(index, 'listings', await overlayRows('default', db, index)).map((e) => [
+    e.id,
+    e.locales.en?.title,
+  ]);
 
 export async function seedPublishedRows(db: ReturnType<typeof openDb>, count: number) {
   const publishedSha = 'deployed-commit';
@@ -339,7 +337,7 @@ export function afterRead(
       };
     },
   });
-  return openDb('default', wrapped);
+  return openDb(wrapped);
 }
 
 // Records every publish call and every read, with the commit it named.

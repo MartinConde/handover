@@ -18,13 +18,11 @@ test("redirectsText writes each from both ways and to in the site's own form", (
     { ...rule, from: '/brochure', to: 'https://example.com/b.pdf', reason: 'manual' as const },
     { ...rule, from: '/gone/', to: '/', reason: 'deleted' as const },
   ];
-  expect(redirectsText('default', rules, true)).toBe(
+  expect(redirectsText(rules, true)).toBe(
     '/old /new/ 301\n/old/ /new/ 301\n/brochure https://example.com/b.pdf 301\n/brochure/ https://example.com/b.pdf 301\n/gone / 301\n/gone/ / 301\n',
   );
-  expect(redirectsText('default', rules.slice(0, 1), false)).toBe(
-    '/old /new 301\n/old/ /new 301\n',
-  );
-  expect(redirectsText('default', [], true)).toBe('');
+  expect(redirectsText(rules.slice(0, 1), false)).toBe('/old /new 301\n/old/ /new 301\n');
+  expect(redirectsText([], true)).toBe('');
 });
 
 test('redirectsText writes a rule to or from a file once, without a slash', () => {
@@ -32,7 +30,7 @@ test('redirectsText writes a rule to or from a file once, without a slash', () =
   const rules = [
     { ...rule, from: '/wp-sitemap.xml', to: '/sitemap-index.xml', reason: 'manual' as const },
   ];
-  expect(redirectsText('default', rules, true)).toBe('/wp-sitemap.xml /sitemap-index.xml 301\n');
+  expect(redirectsText(rules, true)).toBe('/wp-sitemap.xml /sitemap-index.xml 301\n');
 });
 
 test('a rule appended re-points the rule that led to its old address', () => {
@@ -104,7 +102,7 @@ test('a re-pointed rule keeps the entry it belongs to when the new rule names no
 test('reading redirects from a repository that has never written one is no rules', async () => {
   const { git } = fakeGit({});
 
-  expect(await readRedirects('default', git)).toEqual([]);
+  expect(await readRedirects(git)).toEqual([]);
 });
 
 test('one rule taken out is a commit of redirects.yaml alone', async () => {
@@ -113,7 +111,7 @@ test('one rule taken out is a commit of redirects.yaml alone', async () => {
       '_version: 1\nrules:\n  - _id: "aaaaaaaa"\n    from: "/old"\n    to: "/new"\n    status: 301\n    reason: "manual"\n    createdAt: "2026-01-01T00:00:00Z"\n  - _id: "bbbbbbbb"\n    from: "/gone"\n    to: "/"\n    status: 302\n    reason: "manual"\n    createdAt: "2026-01-02T00:00:00Z"\n',
   });
 
-  const result = await editRedirects('default', git, 'Delete redirect /gone', (rules) =>
+  const result = await editRedirects(git, 'Delete redirect /gone', (rules) =>
     rules.filter((r) => r._id !== 'bbbbbbbb'),
   );
 
@@ -138,12 +136,12 @@ const site = {
 };
 
 test('an empty box is asked for rather than corrected', () => {
-  expect(redirectError('default', { from: '  ', to: '/listings' }, site)).toEqual({
+  expect(redirectError({ from: '  ', to: '/listings' }, site)).toEqual({
     field: 'from',
     message: 'An old address is needed.',
     descriptor: { code: 'REDIRECT_FROM_REQUIRED' },
   });
-  expect(redirectError('default', { from: '/a', to: '' }, site)).toEqual({
+  expect(redirectError({ from: '/a', to: '' }, site)).toEqual({
     field: 'to',
     message: 'A destination is needed.',
     descriptor: { code: 'REDIRECT_TO_REQUIRED' },
@@ -156,27 +154,27 @@ test('redirect sources are literal paths and slash variants share one address', 
   expect(redirectSourceError('/listings//harbour-flat')).toContain('normalized');
   expect(redirectSourceError('/listings/%2e%2e/admin')).toContain('normalized');
   expect(redirectSourceError('/listings/%2a')).toContain('literal');
-  expect(
-    redirectError('default', { from: '/listings/harbour-flat/', to: '/listings' }, site),
-  ).toMatchObject({ descriptor: { code: 'REDIRECT_SHADOWS_PAGE' } });
-  expect(redirectError('default', { from: '/summer-offer/', to: '/listings' }, site)).toMatchObject(
-    { descriptor: { code: 'REDIRECT_FROM_EXISTS' } },
-  );
+  expect(redirectError({ from: '/listings/harbour-flat/', to: '/listings' }, site)).toMatchObject({
+    descriptor: { code: 'REDIRECT_SHADOWS_PAGE' },
+  });
+  expect(redirectError({ from: '/summer-offer/', to: '/listings' }, site)).toMatchObject({
+    descriptor: { code: 'REDIRECT_FROM_EXISTS' },
+  });
 });
 
 test.each(['/admin', '/admin/api/drafts', '/_preview/home', '/_astro/app.js'])(
   'redirect source %s is reserved for the application',
   (from) => {
-    expect(redirectError('default', { from, to: '/listings' }, site)).toMatchObject({
+    expect(redirectError({ from, to: '/listings' }, site)).toMatchObject({
       descriptor: { code: 'REDIRECT_FROM_RESERVED' },
     });
   },
 );
 
 test('encoded paths and slash-normalized loops use their served address', () => {
-  expect(
-    redirectError('default', { from: '/listings/%68arbour-flat', to: '/listings' }, site),
-  ).toMatchObject({ descriptor: { code: 'REDIRECT_SHADOWS_PAGE' } });
+  expect(redirectError({ from: '/listings/%68arbour-flat', to: '/listings' }, site)).toMatchObject({
+    descriptor: { code: 'REDIRECT_SHADOWS_PAGE' },
+  });
   expect(collapseRedirects([manual('/a', '/b/', 'one')], [manual('/b', '/a/', 'two')])).toEqual([
     manual('/b', '/a/', 'two'),
   ]);
@@ -184,7 +182,7 @@ test('encoded paths and slash-normalized loops use their served address', () => 
 
 test('redirect destinations may contain literal percent signs in queries or external paths', () => {
   for (const to of ['/offer?discount=10%', 'https://example.com/10%-off']) {
-    expect(redirectError('default', { from: '/sale', to }, site)).toBeUndefined();
+    expect(redirectError({ from: '/sale', to }, site)).toBeUndefined();
     expect(collapseRedirects([], [manual('/sale', to)])).toEqual([manual('/sale', to)]);
   }
 });
@@ -192,7 +190,7 @@ test('redirect destinations may contain literal percent signs in queries or exte
 test.each(['/sale?campaign=x', '/sale#details', '/offers/../sale', '/offers/%2e%2e/sale/'])(
   'a redirect cannot loop back through the destination %s',
   (to) => {
-    expect(redirectError('default', { from: '/sale', to }, site)).toMatchObject({
+    expect(redirectError({ from: '/sale', to }, site)).toMatchObject({
       descriptor: { code: 'REDIRECT_SAME_ADDRESS' },
     });
   },
@@ -200,19 +198,13 @@ test.each(['/sale?campaign=x', '/sale#details', '/offers/../sale', '/offers/%2e%
 
 test('configured-base and build-time application paths cannot become redirects', () => {
   expect(
-    redirectError(
-      'default',
-      { from: '/studio/%61dmin/api', to: '/listings' },
-      { ...site, base: '/studio' },
-    ),
+    redirectError({ from: '/studio/%61dmin/api', to: '/listings' }, { ...site, base: '/studio' }),
   ).toMatchObject({ descriptor: { code: 'REDIRECT_FROM_RESERVED' } });
-  expect(() => redirectsText('default', [manual('/admin/api', '/listings')], false)).toThrow(
-    /reserved/,
-  );
+  expect(() => redirectsText([manual('/admin/api', '/listings')], false)).toThrow(/reserved/);
 });
 
 test('an old address that is not a path says so with the path it meant', () => {
-  expect(redirectError('default', { from: 'summer-offer', to: '/listings' }, site)).toEqual({
+  expect(redirectError({ from: 'summer-offer', to: '/listings' }, site)).toEqual({
     field: 'from',
     message: 'An address has to start with "/" — did you mean "/summer-offer"?',
     descriptor: { code: 'REDIRECT_FROM_SLASH', suggestion: '/summer-offer' },
@@ -220,15 +212,13 @@ test('an old address that is not a path says so with the path it meant', () => {
 });
 
 test('an old address given as a full web address is refused as one', () => {
-  expect(
-    redirectError('default', { from: 'https://example.com/x', to: '/listings' }, site)?.message,
-  ).toBe('An old address is a path on this site, like "/summer-offer", not a full web address.');
+  expect(redirectError({ from: 'https://example.com/x', to: '/listings' }, site)?.message).toBe(
+    'An old address is a path on this site, like "/summer-offer", not a full web address.',
+  );
 });
 
 test('an old address that is a real page names the page it would hide', () => {
-  expect(
-    redirectError('default', { from: '/listings/harbour-flat', to: '/listings' }, site),
-  ).toEqual({
+  expect(redirectError({ from: '/listings/harbour-flat', to: '/listings' }, site)).toEqual({
     field: 'from',
     message: 'This is a real page. A redirect here would hide Harbour Flat from visitors.',
     descriptor: { code: 'REDIRECT_SHADOWS_PAGE', page: 'Harbour Flat' },
@@ -236,7 +226,7 @@ test('an old address that is a real page names the page it would hide', () => {
 });
 
 test('a rule that sends an address to itself is refused on the destination', () => {
-  expect(redirectError('default', { from: '/a', to: '/a' }, site)).toEqual({
+  expect(redirectError({ from: '/a', to: '/a' }, site)).toEqual({
     field: 'to',
     message: 'This sends visitors back where they came from. Pick somewhere else.',
     descriptor: { code: 'REDIRECT_SAME_ADDRESS' },
@@ -244,20 +234,18 @@ test('a rule that sends an address to itself is refused on the destination', () 
 });
 
 test('a second rule from an address that already has one is refused', () => {
-  expect(redirectError('default', { from: '/summer-offer', to: '/other' }, site)?.message).toBe(
+  expect(redirectError({ from: '/summer-offer', to: '/other' }, site)?.message).toBe(
     'There is already a redirect from this address.',
   );
 });
 
 // Editing a rule reads its own `from` back, which is not a clash with itself.
 test('a rule keeping its own old address is not refused as a duplicate', () => {
-  expect(
-    redirectError('default', { from: '/summer-offer', to: '/other' }, site, 'taken'),
-  ).toBeUndefined();
+  expect(redirectError({ from: '/summer-offer', to: '/other' }, site, 'taken')).toBeUndefined();
 });
 
 test('a destination that is neither a path nor a web address is refused', () => {
-  expect(redirectError('default', { from: '/a', to: 'listings' }, site)).toEqual({
+  expect(redirectError({ from: '/a', to: 'listings' }, site)).toEqual({
     field: 'to',
     message:
       'A destination is a path on this site or a full web address — did you mean "/listings"?',
@@ -266,20 +254,18 @@ test('a destination that is neither a path nor a web address is refused', () => 
 });
 
 test('a path and an absolute destination are both accepted', () => {
-  expect(redirectError('default', { from: '/a', to: '/b' }, site)).toBeUndefined();
-  expect(
-    redirectError('default', { from: '/a', to: 'https://example.com/b.pdf' }, site),
-  ).toBeUndefined();
+  expect(redirectError({ from: '/a', to: '/b' }, site)).toBeUndefined();
+  expect(redirectError({ from: '/a', to: 'https://example.com/b.pdf' }, site)).toBeUndefined();
 });
 
 test('redirect fields cannot contain whitespace or control characters', () => {
   for (const value of ['/old\n/shadow', '/old\r/shadow', '/old\t/shadow', '/old shadow']) {
-    expect(redirectError('default', { from: value, to: '/new' }, site)).toEqual({
+    expect(redirectError({ from: value, to: '/new' }, site)).toEqual({
       field: 'from',
       message: 'An old address cannot contain spaces or control characters.',
       descriptor: { code: 'REDIRECT_FROM_WHITESPACE' },
     });
-    expect(redirectError('default', { from: '/old', to: value }, site)).toEqual({
+    expect(redirectError({ from: '/old', to: value }, site)).toEqual({
       field: 'to',
       message: 'A destination cannot contain spaces or control characters.',
       descriptor: { code: 'REDIRECT_TO_WHITESPACE' },
@@ -290,7 +276,6 @@ test('redirect fields cannot contain whitespace or control characters', () => {
 test('lifecycle redirects reject unsafe generated targets before they are stored or emitted', () => {
   expect(() =>
     redirectRule(
-      'default',
       { from: '/old', to: '/new\n/shadow', status: 301, reason: 'slug-change' },
       Date.parse('2026-01-01T00:00:00Z'),
     ),
@@ -298,7 +283,6 @@ test('lifecycle redirects reject unsafe generated targets before they are stored
 
   expect(() =>
     redirectsText(
-      'default',
       [manual('/old\n/shadow https://outside.example 302\n/another', '/new', 'unsafe')],
       true,
     ),

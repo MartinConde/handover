@@ -134,7 +134,6 @@ export async function publishDrafts(
       if (!file) return { path, contents };
       if (rows[i]?.revision.startsWith(SOURCE_CHANGE_REVISION)) return { path, contents };
       const marked = await markTranslation(
-        siteId,
         source.form,
         { locale: source.locale, ...file },
         contents,
@@ -148,15 +147,15 @@ export async function publishDrafts(
   // A moved but hidden page never served its pending address, so it owes no slug-change redirect.
   const rules = rows.flatMap((r) =>
     (r.pendingRedirects ?? []).filter(
-      (rule) => rule.reason !== 'slug-change' || isLive(siteId, parseEntry(siteId, r.contents)),
+      (rule) => rule.reason !== 'slug-change' || isLive(parseEntry(r.contents)),
     ),
   );
   // An entry this commit puts back on the site takes its hide rules with it.
   const back = new Set(
     rows.flatMap((r, i) =>
       current[i] &&
-      !isLive(siteId, parseEntry(siteId, current[i]?.contents ?? '')) &&
-      isLive(siteId, parseEntry(siteId, r.contents))
+      !isLive(parseEntry(current[i]?.contents ?? '')) &&
+      isLive(parseEntry(r.contents))
         ? (entryKey(r.path) ?? [])
         : [],
     ),
@@ -164,7 +163,7 @@ export async function publishDrafts(
   const undone = (rule: RedirectRule) =>
     rule.reason === 'hidden' && rule.entry !== undefined && back.has(rule.entry);
   if (rules.length || back.size) {
-    const file = await appendRedirects(siteId, git, rules, base_sha, undone);
+    const file = await appendRedirects(git, rules, base_sha, undone);
     if (file) files.push(file);
   }
   const released = [

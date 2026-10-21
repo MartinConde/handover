@@ -75,7 +75,7 @@ const groupWhere = (group: ActivityGroup) =>
 export async function logActivity(siteId: string, db: Db, event: ActivityEntry): Promise<void> {
   try {
     await db.insert(activity).values({
-      id: newId(siteId),
+      id: newId(),
       siteId,
       at: Date.now(),
       userId: event.userId ?? null,

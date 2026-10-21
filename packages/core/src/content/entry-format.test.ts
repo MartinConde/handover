@@ -26,7 +26,7 @@ const blobSha = (text: string) =>
 for (const name of readdirSync(goldenDir)) {
   test(`golden ${name} survives parse → serialise byte for byte`, () => {
     const golden = readFileSync(join(goldenDir, name), 'utf8');
-    const out = stringifyEntry('default', parseEntry('default', golden));
+    const out = stringifyEntry(parseEntry(golden));
     expect(out).toBe(golden);
     expect(blobSha(out)).toBe(blobSha(golden));
   });
@@ -39,14 +39,14 @@ for (const locale of ['en', 'de']) {
       join(import.meta.dirname, '../../test/drift', locale, 'home.yaml'),
       'utf8',
     );
-    expect(stringifyEntry('default', parseEntry('default', file))).toBe(file);
+    expect(stringifyEntry(parseEntry(file))).toBe(file);
   });
 }
 
 for (const locale of ['en', 'de']) {
   test(`the ${locale} locale fixture is one the serialiser could have written`, () => {
     const file = localeFile(locale);
-    expect(stringifyEntry('default', parseEntry('default', file))).toBe(file);
+    expect(stringifyEntry(parseEntry(file))).toBe(file);
   });
 }
 
@@ -180,10 +180,10 @@ const nesting: Record<string, unknown> = {
 };
 
 test('a date is stored as a quoted string, never a YAML timestamp or a Date', () => {
-  expect(parseEntry('default', 'availableFrom: 2026-09-01\n')).toEqual({
+  expect(parseEntry('availableFrom: 2026-09-01\n')).toEqual({
     availableFrom: '2026-09-01',
   });
-  expect(() => stringifyEntry('default', { availableFrom: new Date('2026-09-01') })).toThrow(
+  expect(() => stringifyEntry({ availableFrom: new Date('2026-09-01') })).toThrow(
     'Date object at availableFrom',
   );
 });
@@ -203,12 +203,11 @@ test('every shape the serialiser refuses is an EntryShapeError', () => {
     // a misplaced _version
     { rows: [{ _version: 2 }] },
   ];
-  for (const data of refused)
-    expect(() => stringifyEntry('default', data)).toThrow(EntryShapeError);
+  for (const data of refused) expect(() => stringifyEntry(data)).toThrow(EntryShapeError);
 });
 
 test('reserved keys come first in fixed order, then fields in schema order', () => {
-  const out = stringifyEntry('default', {
+  const out = stringifyEntry({
     title: 'Home',
     _id: 'k3nf9a2p',
     _version: 1,
@@ -220,46 +219,42 @@ test('reserved keys come first in fixed order, then fields in schema order', () 
 });
 
 test('null and undefined values are omitted, never written', () => {
-  expect(stringifyEntry('default', { title: 'Home', body: null, seo: { title: undefined } })).toBe(
+  expect(stringifyEntry({ title: 'Home', body: null, seo: { title: undefined } })).toBe(
     'title: "Home"\nseo: {}\n',
   );
 });
 
 test('strings are normalised so the literal block never falls back to quotes', () => {
-  const out = stringifyEntry('default', { body: 'line one\u0007  \r\n\r\nline two \n\n\n' });
+  const out = stringifyEntry({ body: 'line one\u0007  \r\n\r\nline two \n\n\n' });
   expect(out).toBe('body: |-\n  line one\n\n  line two\n');
-  expect(parseEntry('default', out)).toEqual({ body: 'line one\n\nline two' });
+  expect(parseEntry(out)).toEqual({ body: 'line one\n\nline two' });
 });
 
 test('a one-line string keeps its trailing space', () => {
-  const out = stringifyEntry('default', { before: 'Telefon: ' });
+  const out = stringifyEntry({ before: 'Telefon: ' });
   expect(out).toBe('before: "Telefon: "\n');
-  expect(parseEntry('default', out)).toEqual({ before: 'Telefon: ' });
+  expect(parseEntry(out)).toEqual({ before: 'Telefon: ' });
 });
 
 // Astro reads content with js-yaml, which stops on U+FFFE and U+FFFF inside a `|` block.
 test('U+FFFE and U+FFFF are taken out of a string before it is written', () => {
-  expect(stringifyEntry('default', { body: 'Mill\uFFFE\nHouse\uFFFF' })).toBe(
-    'body: |-\n  Mill\n  House\n',
-  );
+  expect(stringifyEntry({ body: 'Mill\uFFFE\nHouse\uFFFF' })).toBe('body: |-\n  Mill\n  House\n');
 });
 
 // js-yaml merges a `<<` key into its map, so the build would read another entry than was saved.
 test('a "<<" key is rejected at serialise time', () => {
-  expect(() => stringifyEntry('default', { title: 'Footer', links: { '<<': 'boom' } })).toThrow(
-    'links.<<',
-  );
+  expect(() => stringifyEntry({ title: 'Footer', links: { '<<': 'boom' } })).toThrow('links.<<');
 });
 
 test('an array directly inside an array is rejected at serialise time', () => {
-  expect(() =>
-    stringifyEntry('default', { blocks: [{ _id: 'a0000000', columns: [['x']] }] }),
-  ).toThrow('blocks[0].columns[0]');
+  expect(() => stringifyEntry({ blocks: [{ _id: 'a0000000', columns: [['x']] }] })).toThrow(
+    'blocks[0].columns[0]',
+  );
 });
 
 test('reserved metadata that would make saved bytes unreadable is rejected before serialising', () => {
   expect(() =>
-    stringifyEntry('default', {
+    stringifyEntry({
       title: 'Still an incomplete but valid draft',
       opaque: { imported: [{ _id: 'bad' }] },
     }),
@@ -277,11 +272,11 @@ test('duplicate row identities are rejected with both ambiguous paths named', ()
     '',
   ].join('\n');
 
-  expect(() => parseEntry('default', contents)).toThrow(
+  expect(() => parseEntry(contents)).toThrow(
     'sections[1]._id: duplicate row identity "same0001"; already used at sections[0]._id. Give each row in sections a unique _id and keep matching IDs aligned across locale files.',
   );
   expect(() =>
-    stringifyEntry('default', {
+    stringifyEntry({
       sections: [
         { _id: 'same0001', title: 'One' },
         { _id: 'same0001', title: 'Two' },
@@ -296,16 +291,17 @@ test('the same row identity remains valid in separate addressed collections', ()
     secondary: [{ _id: 'same0001', title: 'The matching row in another collection' }],
   };
 
-  expect(parseEntry('default', stringifyEntry('default', data))).toEqual(data);
+  expect(parseEntry(stringifyEntry(data))).toEqual(data);
 });
 
 test('a persisted entry must be an object while incomplete and opaque fields remain valid', () => {
-  expect(() => stringifyEntry('default', ['not', 'an', 'entry'])).toThrow(
+  expect(() => stringifyEntry(['not', 'an', 'entry'])).toThrow(
     'Entry: expected an object, got an array',
   );
-  expect(
-    parseEntry('default', stringifyEntry('default', { title: '', opaque: { kept: true } })),
-  ).toEqual({ title: '', opaque: { kept: true } });
+  expect(parseEntry(stringifyEntry({ title: '', opaque: { kept: true } }))).toEqual({
+    title: '',
+    opaque: { kept: true },
+  });
 });
 
 // A template carries no `_id`s; they are generated when an entry is created from it.
@@ -401,21 +397,21 @@ for (const [type, fixture] of Object.entries({
 })) {
   test(`${type} round-trips through its golden file`, () => {
     const golden = readFileSync(join(goldenDir, `${type}.yaml`), 'utf8');
-    const out = stringifyEntry('default', fixture);
+    const out = stringifyEntry(fixture);
     expect(out).toBe(golden);
-    expect(parseEntry('default', out)).toEqual(fixture);
+    expect(parseEntry(out)).toEqual(fixture);
   });
 }
 
 test('a save stamps _version: 1 on an entry that has none', () => {
-  expect(mergeEntry('default', { title: 'Old' }, { title: 'New' })).toEqual({
+  expect(mergeEntry({ title: 'Old' }, { title: 'New' })).toEqual({
     _version: 1,
     title: 'New',
   });
 });
 
 test('a save keeps the _version the entry already has', () => {
-  expect(mergeEntry('default', { _version: 3, title: 'Old' }, { title: 'New' })).toEqual({
+  expect(mergeEntry({ _version: 3, title: 'Old' }, { title: 'New' })).toEqual({
     _version: 3,
     title: 'New',
   });
@@ -435,7 +431,7 @@ test('a translated save of an embed writes the title and leaves the video alone'
     video: { provider: 'vimeo', id: '76979871', title: 'Rundgang durchs Haus', start: 7 },
   };
 
-  expect(mergeEntry('default', de, values, form)).toEqual({
+  expect(mergeEntry(de, values, form)).toEqual({
     _version: 1,
     video: { provider: 'youtube', id: 'dQw4w9WgXcQ', title: 'Rundgang durchs Haus', start: 42 },
   });
@@ -456,7 +452,7 @@ test('a save of a translated entry keeps the fields its form does not show', () 
   };
   const values = { title: 'Mühlenhaus am Fluss', image: { alt: 'Das Haus vom Fluss aus' } };
 
-  expect(mergeEntry('default', de, values, listing)).toEqual({
+  expect(mergeEntry(de, values, listing)).toEqual({
     _version: 1,
     title: 'Mühlenhaus am Fluss',
     price: 425000,
@@ -470,7 +466,7 @@ test('a save of a translated entry keeps the fields its form does not show', () 
   });
 });
 
-const dated = (body: string) => timestampErrors('default', 'src/content/notes/en/one.yaml', body);
+const dated = (body: string) => timestampErrors('src/content/notes/en/one.yaml', body);
 
 test.each([
   {
@@ -512,7 +508,7 @@ test.each([
 test('a translated field its form left empty goes, rather than coming back', () => {
   const de = { _version: 1, title: 'Mühlenhaus', summary: 'Am Fluss', price: 425000 };
 
-  expect(mergeEntry('default', de, { title: 'Mühlenhaus' }, listing)).toEqual({
+  expect(mergeEntry(de, { title: 'Mühlenhaus' }, listing)).toEqual({
     _version: 1,
     title: 'Mühlenhaus',
     price: 425000,
@@ -535,7 +531,7 @@ test('a duplicate value inside a block survives a translated save', () => {
     blocks: [{ _type: 'hero', _id: 'k3nf9a2p', heading: 'Herzlich willkommen', image: {} }],
   };
 
-  expect(mergeEntry('default', de, values, article)).toEqual({
+  expect(mergeEntry(de, values, article)).toEqual({
     _version: 1,
     blocks: [
       {
@@ -563,7 +559,7 @@ test('a translated save does not add, drop or reorder blocks', () => {
     ],
   };
 
-  expect(mergeEntry('default', de, values, article)).toEqual({
+  expect(mergeEntry(de, values, article)).toEqual({
     _version: 1,
     blocks: [
       { _type: 'hero', _id: 'aaaaaaaa', heading: 'Erstens' },
@@ -590,13 +586,8 @@ test('a file made from another language is written in schema order', () => {
     bio: 'Mornings on the coast.',
   };
 
-  const made = syncLocale('default', presenter, 'de', { before: en, after: en }, {});
-  const typed = mergeEntry(
-    'default',
-    made,
-    { name: 'Theo Adeyemi', bio: 'Morgens am Meer.' },
-    presenter,
-  );
+  const made = syncLocale(presenter, 'de', { before: en, after: en }, {});
+  const typed = mergeEntry(made, { name: 'Theo Adeyemi', bio: 'Morgens am Meer.' }, presenter);
 
   expect(Object.keys(typed)).toEqual(['_version', 'name', 'role', 'bio']);
 });
@@ -610,7 +601,6 @@ test('a machine-written path that a save types over stops being machine-written'
   };
 
   const saved = mergeEntry(
-    'default',
     de,
     { title: 'Mühlenhaus', summary: 'Eine restaurierte Mühle am Wehr.' },
     listing,
@@ -622,13 +612,13 @@ test('a machine-written path that a save types over stops being machine-written'
 test('a save that changes nothing leaves the machine-written paths alone', () => {
   const de = { _version: 1, _machine: ['title'], title: 'Mühlenhaus' };
 
-  expect(mergeEntry('default', de, { title: 'Mühlenhaus' }, listing)._machine).toEqual(['title']);
+  expect(mergeEntry(de, { title: 'Mühlenhaus' }, listing)._machine).toEqual(['title']);
 });
 
 test('the last machine-written path typed over takes the key out of the file', () => {
   const de = { _version: 1, _machine: ['title'], title: 'Mühlenhaus' };
 
-  expect(mergeEntry('default', de, { title: 'Mühle' }, listing)).not.toHaveProperty('_machine');
+  expect(mergeEntry(de, { title: 'Mühle' }, listing)).not.toHaveProperty('_machine');
 });
 
 // One skeleton, one label per language.
@@ -678,7 +668,7 @@ test('a translated save writes labels and moves nothing', () => {
     ],
   };
 
-  const saved = mergeEntry('default', de(), values, navigation);
+  const saved = mergeEntry(de(), values, navigation);
 
   expect(itemsOf(saved).map((i) => [i._id, i.label])).toEqual([
     ['h1o2m3e4', 'Startseite'],
@@ -691,14 +681,10 @@ test('a translated save writes labels and moves nothing', () => {
 const sourceGolden = readFileSync(join(goldenDir, 'source-marked.yaml'), 'utf8');
 
 test('withSource puts the key right after `_version`, and a write keeps it there', () => {
-  const marked = withSource(
-    'default',
-    { _i18n: { sourceLocale: 'de' }, title: 'Notice', _version: 1 },
-    'de',
-  );
+  const marked = withSource({ _i18n: { sourceLocale: 'de' }, title: 'Notice', _version: 1 }, 'de');
 
   expect(Object.keys(marked)).toEqual(['_version', '_source', '_i18n', 'title']);
-  expect(Object.keys(writtenEntry('default', marked, listing.fields))).toEqual([
+  expect(Object.keys(writtenEntry(marked, listing.fields))).toEqual([
     '_version',
     '_source',
     '_i18n',
@@ -707,18 +693,18 @@ test('withSource puts the key right after `_version`, and a write keeps it there
 });
 
 test('withSource writes the source-marked golden byte for byte', () => {
-  const { _source, ...unmarked } = parseEntry('default', sourceGolden) as Record<string, unknown>;
+  const { _source, ...unmarked } = parseEntry(sourceGolden) as Record<string, unknown>;
 
-  expect(stringifyEntry('default', withSource('default', unmarked, 'de'))).toBe(sourceGolden);
+  expect(stringifyEntry(withSource(unmarked, 'de'))).toBe(sourceGolden);
 });
 
 test('a save, a sibling sync, a change of offer and a plain write keep a file its `_source`', () => {
   const de = { _version: 1, _source: 'de', title: 'Mühlenhaus' };
   const en = { _version: 1, _source: 'de', title: 'Mill House', price: 1 };
 
-  expect(mergeEntry('default', de, { title: 'Die Mühle' }, listing)._source).toBe('de');
-  expect(syncLocale('default', listing, 'en', { before: de, after: de }, en)._source).toBe('de');
+  expect(mergeEntry(de, { title: 'Die Mühle' }, listing)._source).toBe('de');
+  expect(syncLocale(listing, 'en', { before: de, after: de }, en)._source).toBe('de');
   const offer = { offered: ['de'], locales: ['en', 'de'] };
-  expect(offeredEntry('default', de, offer)._source).toBe('de');
-  expect(writtenEntry('default', de, listing.fields)._source).toBe('de');
+  expect(offeredEntry(de, offer)._source).toBe('de');
+  expect(writtenEntry(de, listing.fields)._source).toBe('de');
 });

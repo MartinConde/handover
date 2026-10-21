@@ -56,7 +56,6 @@ type Wants = (mode: Translation) => boolean;
 
 /** The walk is the schema's, so marks like `_i18n` are never a change. */
 export function diffEntry(
-  _siteId: string,
   form: Form,
   before: Record<string, unknown>,
   after: Record<string, unknown>,
@@ -164,7 +163,7 @@ function leafIn(
     const was = readableText(str(before), '↵ ');
     const now = readableText(str(after), '↵ ');
     const parts = was === now ? undefined : wordDiff(was, now);
-    const linked = richtextLinks('', str(before)).join() !== richtextLinks('', str(after)).join();
+    const linked = richtextLinks(str(before)).join() !== richtextLinks(str(after)).join();
     found.push(
       parts
         ? { path, ...label, kind: 'words', parts }
@@ -540,7 +539,6 @@ const show = (value: unknown): string | undefined =>
 
 /** Keyed the way `_machine` addresses a field; a field only the newer source has is not stale. */
 export function sourceChanges(
-  _siteId: string,
   form: Form,
   translatedFrom: unknown,
   now: unknown,

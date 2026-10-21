@@ -15,7 +15,6 @@ export function versionOf(doc: Record<string, unknown>): number {
 
 // A second run is a no-op because each step only sees files at its `from` version.
 export function migrateDocument(
-  _siteId: string,
   doc: Record<string, unknown>,
   { steps = MIGRATIONS, to = FORMAT_VERSION }: { steps?: MigrationStep[]; to?: number } = {},
 ): Record<string, unknown> {

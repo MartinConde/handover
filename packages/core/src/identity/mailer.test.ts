@@ -21,7 +21,6 @@ function stubFetch(reply: () => Response) {
 test('Resend is called with the message, the sender and the key, and answers with its id', async () => {
   const calls = stubFetch(() => Response.json({ id: 'e1b2c3d4' }));
   const sent = await resendMailer(
-    'default',
     're_123',
     'Handover <onboarding@resend.dev>',
   )({
@@ -57,7 +56,6 @@ test("Resend's own message is what a refused send says", async () => {
   );
   await expect(
     resendMailer(
-      'default',
       're_123',
       'Handover <onboarding@resend.dev>',
     )({
@@ -71,14 +69,14 @@ test("Resend's own message is what a refused send says", async () => {
 });
 
 test('a sender with a display name is split into the two halves a binding takes apart', () => {
-  expect(senderAddress('default', 'Handover <admin@dev.martinconde.de>')).toEqual({
+  expect(senderAddress('Handover <admin@dev.martinconde.de>')).toEqual({
     name: 'Handover',
     email: 'admin@dev.martinconde.de',
   });
 });
 
 test('a sender that is only an address stays one string', () => {
-  expect(senderAddress('default', '  admin@dev.martinconde.de  ')).toBe('admin@dev.martinconde.de');
+  expect(senderAddress('  admin@dev.martinconde.de  ')).toBe('admin@dev.martinconde.de');
 });
 
 // Keep every Cloudflare binding call for assertions.
@@ -98,7 +96,6 @@ function stubBinding(reply: () => Promise<{ messageId: string }>) {
 test("Cloudflare is called with the split sender, and answers with the binding's message id", async () => {
   const { calls, binding } = stubBinding(async () => ({ messageId: 'cf-9f21' }));
   const sent = await cloudflareMailer(
-    'default',
     binding,
     'Handover <admin@cf-mail.martinconde.de>',
   )({
@@ -129,7 +126,6 @@ test("Cloudflare's own sentence is what a refused send says", async () => {
   );
   await expect(
     cloudflareMailer(
-      'default',
       binding,
       'admin@not-onboarded.example.com',
     )({ to: 'someone@example.com', subject: 'Handover test email', text: 'It works.' }),

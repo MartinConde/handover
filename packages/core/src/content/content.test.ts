@@ -15,7 +15,7 @@ const entries = [
   { id: 'english/not-a-locale', data: { title: 'Trap' } },
 ];
 
-const source = staticSource<{ listings: { title: string } }>('default', {
+const source = staticSource<{ listings: { title: string } }>({
   getEntry: async (_c, id) => entries.find((e) => e.id === id),
   getCollection: async () => entries,
 });
@@ -30,7 +30,7 @@ test('getEntry returns undefined for a missing id', async () => {
 });
 
 test('the globals of one language are keyed by file name, without the locale folder', async () => {
-  const globals = staticSource<{ globals: unknown }>('default', {
+  const globals = staticSource<{ globals: unknown }>({
     getEntry: async () => undefined,
     getCollection: async () => [
       { id: 'en/site', data: { name: 'Coastal Homes' } },
@@ -39,7 +39,7 @@ test('the globals of one language are keyed by file name, without the locale fol
     ],
   });
 
-  expect(await globalsAt('default', globals, 'de')).toEqual({
+  expect(await globalsAt(globals, 'de')).toEqual({
     site: { name: 'Coastal Homes GmbH' },
   });
 });
@@ -47,7 +47,7 @@ test('the globals of one language are keyed by file name, without the locale fol
 test('selected globals read each required name once, including nested block references', async () => {
   const getEntry = vi.fn(async (_collection: string, id: string) => ({ id, data: { id } }));
   const getCollection = vi.fn(async () => []);
-  const globals = await globalsAt('default', { getEntry, getCollection }, 'de', {
+  const globals = await globalsAt({ getEntry, getCollection }, 'de', {
     required: ['site', 'globals/site', 'navigation'],
     blocks: [
       { _ref: 'globals/cta-newsletter' },
@@ -72,7 +72,7 @@ test('selected globals read each required name once, including nested block refe
 test('an empty global selection reads no content', async () => {
   const getEntry = vi.fn(async () => undefined);
   const getCollection = vi.fn(async () => [{ id: 'en/unused', data: {} }]);
-  expect(await globalsAt('default', { getEntry, getCollection }, 'en', {})).toEqual({});
+  expect(await globalsAt({ getEntry, getCollection }, 'en', {})).toEqual({});
   expect(getEntry).not.toHaveBeenCalled();
   expect(getCollection).not.toHaveBeenCalled();
 });
@@ -85,7 +85,7 @@ test('global discovery follows Blocks: values and a ref replacement are not walk
   const getCollection = vi.fn(async () => []);
   const date = Object.assign(new Date('2026-01-01'), { _ref: 'globals/not-a-block' });
   expect(
-    await globalsAt('default', { getEntry, getCollection }, 'en', {
+    await globalsAt({ getEntry, getCollection }, 'en', {
       blocks: [null, 'text', date, { _ref: 'globals/cta', child: { _ref: 'not-walked' } }],
     }),
   ).toEqual({ cta: { _ref: 'globals/not-recursive' } });
@@ -96,7 +96,6 @@ test.each([undefined, ''])(
   'a required global absent from the build or deleted in a draft names its locale and file',
   async (contents) => {
     const source = draftSource(
-      'default',
       {
         getEntry: async () => undefined,
         getCollection: async () => [],
@@ -104,7 +103,7 @@ test.each([undefined, ''])(
       contents === undefined ? [] : [{ path: 'src/content/globals/de/site.yaml', contents }],
       (_collection, data) => data,
     );
-    await expect(globalsAt('default', source, 'de', { required: ['site'] })).rejects.toThrow(
+    await expect(globalsAt(source, 'de', { required: ['site'] })).rejects.toThrow(
       'src/content/globals/de/site.yaml: No global "site" in this language',
     );
   },
@@ -112,7 +111,7 @@ test.each([undefined, ''])(
 
 // Without `generateId` Astro's glob loader files an entry under its `slug` (F7 in 02-i18n.md).
 test('an entry filed under its address rather than its path names the loader option', async () => {
-  const misfiled = staticSource<{ pages: unknown }>('default', {
+  const misfiled = staticSource<{ pages: unknown }>({
     getEntry: async () => undefined,
     getCollection: async () => [
       { id: 'en/home', data: {} },
@@ -126,7 +125,7 @@ test('an entry filed under its address rather than its path names the loader opt
 });
 
 const refs = (body: string) =>
-  refErrors('default', 'src/content/pages/en/home.yaml', body, ['site', 'cta-newsletter']);
+  refErrors('src/content/pages/en/home.yaml', body, ['site', 'cta-newsletter']);
 
 test('a _ref naming a global the site does not declare is named with its file and its path', () => {
   expect(
@@ -164,18 +163,15 @@ const files: Record<string, unknown> = {
   'en/home': { title: 'Home' },
   'de/home': { slug: 'startseite', title: 'Startseite' },
 };
-const switcherSource = staticSource<{ listings: unknown; samples: unknown; pages: unknown }>(
-  'default',
-  {
-    getEntry: async (_c, id) => (files[id] ? { id, data: files[id] } : undefined),
-    getCollection: async () => Object.entries(files).map(([id, data]) => ({ id, data })),
-  },
-);
+const switcherSource = staticSource<{ listings: unknown; samples: unknown; pages: unknown }>({
+  getEntry: async (_c, id) => (files[id] ? { id, data: files[id] } : undefined),
+  getCollection: async () => Object.entries(files).map(([id, data]) => ({ id, data })),
+});
 
 // Astro's `getEntry` logs every miss, so the switcher asks which ids exist instead of probing.
 test('the switcher never asks by name for a language the entry has no file in', async () => {
   const asked: string[] = [];
-  const source = staticSource<{ listings: unknown }>('default', {
+  const source = staticSource<{ listings: unknown }>({
     getEntry: async (_c, id) => {
       asked.push(id);
       return files[id] ? { id, data: files[id] } : undefined;
@@ -183,7 +179,7 @@ test('the switcher never asks by name for a language the entry has no file in', 
     getCollection: async () => Object.entries(files).map(([id, data]) => ({ id, data })),
   });
 
-  expect(await getEntryLocales('default', source, site, 'listings', 'coast')).toEqual([
+  expect(await getEntryLocales(source, site, 'listings', 'coast')).toEqual([
     { locale: 'en', url: '/listings/coast' },
     { locale: 'de', url: '/de/listings/coast' },
   ]);
@@ -191,69 +187,65 @@ test('the switcher never asks by name for a language the entry has no file in', 
 });
 
 test('a hidden file is skipped', async () => {
-  expect(await getEntryLocales('default', switcherSource, site, 'listings', 'hidden')).toEqual([
+  expect(await getEntryLocales(switcherSource, site, 'listings', 'hidden')).toEqual([
     { locale: 'de', url: '/de/listings/hidden' },
   ]);
 });
 
 // A mark contradicting the files is for the CMS to report, not a page to hide.
 test('a _locales the files contradict does not take a page out of the switcher', async () => {
-  expect(await getEntryLocales('default', switcherSource, site, 'listings', 'offer')).toEqual([
+  expect(await getEntryLocales(switcherSource, site, 'listings', 'offer')).toEqual([
     { locale: 'en', url: '/listings/offer' },
     { locale: 'de', url: '/de/listings/offer' },
   ]);
 });
 
 test('a collection nothing renders has nowhere to link', async () => {
-  expect(await getEntryLocales('default', switcherSource, site, 'samples', 'coast')).toEqual([]);
+  expect(await getEntryLocales(switcherSource, site, 'samples', 'coast')).toEqual([]);
 });
 
 test('a collection without localized slugs is addressed by the file name', async () => {
-  const found = await entryAt('default', switcherSource, site, 'listings', 'en', 'coast');
+  const found = await entryAt(switcherSource, site, 'listings', 'en', 'coast');
 
   expect(found?.id).toBe('en/coast');
   // Its `slug` is a field like any other: nothing is served under it and no link points there.
-  expect(await entryAt('default', switcherSource, site, 'listings', 'en', 'kueste')).toBe(
-    undefined,
-  );
-  expect(await getEntryLocales('default', switcherSource, site, 'listings', 'coast')).toEqual([
+  expect(await entryAt(switcherSource, site, 'listings', 'en', 'kueste')).toBe(undefined);
+  expect(await getEntryLocales(switcherSource, site, 'listings', 'coast')).toEqual([
     { locale: 'en', url: '/listings/coast' },
     { locale: 'de', url: '/de/listings/coast' },
   ]);
 });
 
 test('a file with no slug of its own is served under its name', async () => {
-  const found = await entryAt('default', switcherSource, site, 'pages', 'en', 'home');
+  const found = await entryAt(switcherSource, site, 'pages', 'en', 'home');
 
   expect(found?.id).toBe('en/home');
 });
 
 // The old file name is a redirect the publish wrote, not a second live page.
 test('a file name a slug has moved off does not serve that address', async () => {
-  expect(await entryAt('default', switcherSource, site, 'pages', 'de', 'home')).toBe(undefined);
+  expect(await entryAt(switcherSource, site, 'pages', 'de', 'home')).toBe(undefined);
 });
 
 test('the address finds the file whose slug it is', async () => {
-  const found = await entryAt('default', switcherSource, site, 'pages', 'de', 'startseite');
+  const found = await entryAt(switcherSource, site, 'pages', 'de', 'startseite');
 
   expect(found?.id).toBe('de/home');
 });
 
 test('an address no file in that language has is nothing', async () => {
-  expect(await entryAt('default', switcherSource, site, 'pages', 'en', 'startseite')).toBe(
-    undefined,
-  );
+  expect(await entryAt(switcherSource, site, 'pages', 'en', 'startseite')).toBe(undefined);
 });
 
 test('the switcher links each language at the address that language serves', async () => {
-  expect(await getEntryLocales('default', switcherSource, site, 'pages', 'home')).toEqual([
+  expect(await getEntryLocales(switcherSource, site, 'pages', 'home')).toEqual([
     { locale: 'en', url: '/home' },
     { locale: 'de', url: '/de/startseite' },
   ]);
 });
 
 // The bytes go through the collection's own schema, the site's, so `validate` is passed in.
-const built = staticSource<{ listings: { title: string } }>('default', {
+const built = staticSource<{ listings: { title: string } }>({
   getEntry: async (_c, id) =>
     [
       { id: 'en/mill-house', data: { title: 'Mill House' } },
@@ -268,7 +260,7 @@ const built = staticSource<{ listings: { title: string } }>('default', {
 });
 
 const drafted = (rows: { path: string; contents: string }[]) =>
-  draftSource('default', built, rows, (_collection, data) => data);
+  draftSource(built, rows, (_collection, data) => data);
 
 test('a drafted entry is read from its row and not from the build', async () => {
   const source = drafted([
@@ -330,7 +322,6 @@ test('rows for another language, another collection or another site file are not
 
 test('a draft the collection refuses is the schema error and not half an entry', async () => {
   const source = draftSource(
-    'default',
     built,
     [{ path: 'src/content/listings/en/mill-house.yaml', contents: 'title: 3\n' }],
     (collection, _data, path) => {
@@ -345,7 +336,6 @@ test('a draft the collection refuses is the schema error and not half an entry',
 
 test('metadata overlays draft edits, additions and deletions without validating page bodies', async () => {
   const source = draftSource(
-    'default',
     built,
     [
       {
@@ -380,7 +370,7 @@ test('one draft source parses and validates each changed path once while keeping
     return data;
   });
   const rows = [{ path: 'src/content/listings/en/mill-house.yaml', contents: 'title: The Mill\n' }];
-  const first = draftSource('default', built, rows, validate);
+  const first = draftSource(built, rows, validate);
 
   expect(await first.getEntry('listings', 'en/mill-house')).toEqual({
     id: 'en/mill-house',
@@ -397,7 +387,6 @@ test('one draft source parses and validates each changed path once while keeping
   expect(validate).toHaveBeenCalledTimes(1);
 
   const second = draftSource(
-    'default',
     built,
     [
       {
@@ -418,19 +407,17 @@ test.each(['_status: hidden\ntitle: null\n', ''])(
   'metadata links still omit hidden or deleted draft entries',
   async (contents) => {
     const source = draftSource(
-      'default',
       switcherSource,
       [{ path: 'src/content/pages/en/home.yaml', contents }],
       () => {
         throw new Error('Invalid body');
       },
     );
-    expect(await getEntryLocales('default', source, site, 'pages', 'home')).toEqual([
+    expect(await getEntryLocales(source, site, 'pages', 'home')).toEqual([
       { locale: 'de', url: '/de/startseite' },
     ]);
     expect(
       await menusAt(
-        'default',
         source,
         site,
         {
@@ -445,8 +432,7 @@ test.each(['_status: hidden\ntitle: null\n', ''])(
 // The menu is resolved through the site's own routes, dropping what the language cannot show.
 const menu = (items: unknown[]) => ({ menus: [{ _id: 'm1', key: 'header', items }] });
 const item = (over: Record<string, unknown>) => ({ _id: 'i1', label: '', ...over });
-const resolved = (nav: unknown, locale: string) =>
-  menusAt('default', switcherSource, site, nav, locale);
+const resolved = (nav: unknown, locale: string) => menusAt(switcherSource, site, nav, locale);
 
 test('a menu item points at the address its own language serves', async () => {
   const nav = menu([
@@ -475,13 +461,13 @@ test('a menu item points at the address its own language serves', async () => {
 
 test("a link to the entry named index points at its collection's index page", async () => {
   const home = { id: 'en/index', data: { title: 'Home' } };
-  const source = staticSource('default', {
+  const source = staticSource({
     getEntry: async (_c, id) => (id === home.id ? home : undefined),
     getCollection: async () => [home],
   });
   const homeSite = { ...site, collections: { pages: { route: '/[slug]', index: '/' } } };
   const nav = menu([item({ link: { type: 'page', ref: 'pages/index' } })]);
-  const { header } = await menusAt('default', source, homeSite, nav, 'en');
+  const { header } = await menusAt(source, homeSite, nav, 'en');
   expect(header?.[0]?.href).toBe('/');
 });
 
@@ -573,7 +559,7 @@ test("an index item set to list its entries has the language's live entries unde
     'en/index': { title: 'All listings' },
     'de/coast': { title: 'Küste' },
   };
-  const source = staticSource<{ listings: unknown }>('default', {
+  const source = staticSource<{ listings: unknown }>({
     getEntry: async (_c, id) => (listed[id] ? { id, data: listed[id] } : undefined),
     getCollection: async () => Object.entries(listed).map(([id, data]) => ({ id, data })),
   });
@@ -586,7 +572,7 @@ test("an index item set to list its entries has the language's live entries unde
     }),
   ]);
 
-  expect((await menusAt('default', source, site, nav, 'en')).header).toStrictEqual([
+  expect((await menusAt(source, site, nav, 'en')).header).toStrictEqual([
     {
       label: 'Listings',
       href: '/listings',
@@ -605,7 +591,7 @@ test("an index item set to list its entries has the language's live entries unde
 
 // Astro's loader fills the collection in file-read order, which no one chose; the editor lists by name.
 test('the entries under an index item come by name, whatever order the source returns them in', async () => {
-  const source = staticSource<{ listings: unknown }>('default', {
+  const source = staticSource<{ listings: unknown }>({
     getEntry: async () => undefined,
     getCollection: async () =>
       ['en/zebra', 'en/apple', 'en/mango'].map((id) => ({ id, data: { title: id.slice(3) } })),
@@ -614,7 +600,7 @@ test('the entries under an index item come by name, whatever order the source re
     item({ label: 'Listings', link: { type: 'index', collection: 'listings' }, entries: true }),
   ]);
 
-  const [listing] = (await menusAt('default', source, site, nav, 'en')).header ?? [];
+  const [listing] = (await menusAt(source, site, nav, 'en')).header ?? [];
   expect(listing?.children.map((c) => c.href)).toEqual([
     '/listings/apple',
     '/listings/mango',
@@ -646,7 +632,7 @@ test("an unlabelled index item takes the collection's label in the visitor's lan
   };
   const nav = menu([item({ link: { type: 'index', collection: 'listings' } })]);
   const name = async (locale: string) =>
-    (await menusAt('default', switcherSource, labelled, nav, locale)).header?.[0]?.label;
+    (await menusAt(switcherSource, labelled, nav, locale)).header?.[0]?.label;
 
   expect(await name('en')).toBe('Homes');
   expect(await name('de')).toBe('Häuser');
@@ -662,15 +648,13 @@ test.each(['en', 'de'])(
   'public entry reads hide both named and localized pages in %s',
   async (locale) => {
     const entries = [{ id: `${locale}/home`, data: { _status: 'hidden', slug: 'welcome' } }];
-    const source = staticSource('default', {
+    const source = staticSource({
       getEntry: async () => entries[0],
       getCollection: async () => entries,
     });
-    expect(await entryAt('default', source, site, 'listings', locale, 'home')).toBeUndefined();
-    expect(await entryAt('default', source, site, 'pages', locale, 'welcome')).toBeUndefined();
-    const preview = draftSource('default', source, [], (_collection, data) => data);
-    expect((await entryAt('default', preview, site, 'pages', locale, 'welcome'))?.id).toBe(
-      `${locale}/home`,
-    );
+    expect(await entryAt(source, site, 'listings', locale, 'home')).toBeUndefined();
+    expect(await entryAt(source, site, 'pages', locale, 'welcome')).toBeUndefined();
+    const preview = draftSource(source, [], (_collection, data) => data);
+    expect((await entryAt(preview, site, 'pages', locale, 'welcome'))?.id).toBe(`${locale}/home`);
   },
 );

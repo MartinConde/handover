@@ -13,7 +13,7 @@ let binding: Awaited<ReturnType<typeof mf.getD1Database>>;
 let db: Db;
 beforeAll(async () => {
   binding = await mf.getD1Database('DB');
-  db = openDb('default', binding);
+  db = openDb(binding);
 });
 
 beforeEach(() => resetTestD1(binding));
@@ -326,7 +326,7 @@ test('the job finds a file hidden 91 days ago and not one hidden 89 days ago', a
     { [barn]: [{ sha: 'h1', date: ago(91) }], [cafe]: [{ sha: 'h2', date: ago(89) }] },
   );
 
-  expect(await findHiddenLong('default', git, NOW)).toEqual({
+  expect(await findHiddenLong(git, NOW)).toEqual({
     done: 1,
     entries: [{ path: barn, since: ago(91) }],
   });
@@ -347,9 +347,7 @@ test('an edit after the hide keeps the date of the hide', async () => {
     { [`${barn}@hide`]: hidden },
   );
 
-  expect((await findHiddenLong('default', git, NOW)).entries).toEqual([
-    { path: barn, since: ago(100) },
-  ]);
+  expect((await findHiddenLong(git, NOW)).entries).toEqual([{ path: barn, since: ago(100) }]);
 });
 
 test('a page shown and hidden again counts from the newer hide', async () => {
@@ -365,11 +363,11 @@ test('a page shown and hidden again counts from the newer hide', async () => {
     { [`${barn}@shown`]: title },
   );
 
-  expect((await findHiddenLong('default', git, NOW)).entries).toEqual([]);
+  expect((await findHiddenLong(git, NOW)).entries).toEqual([]);
 });
 
 test('a site with no repository configured has nothing for the job to read', async () => {
-  expect(await findHiddenLong('default', undefined, NOW)).toEqual({ done: 0, entries: [] });
+  expect(await findHiddenLong(undefined, NOW)).toEqual({ done: 0, entries: [] });
 });
 
 test('the drawer reads the list the job wrote this week, not an older one or a failed run', async () => {

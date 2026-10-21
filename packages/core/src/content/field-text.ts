@@ -48,11 +48,7 @@ const propAt = (value: unknown, prop: string) =>
   prop.split('.').reduce<unknown>((v, k) => (isObject(v) ? v[k] : undefined), value);
 
 /** Only leaves the second column draws: a machine's words nobody sees are never corrected. */
-export function translatableText(
-  _siteId: string,
-  form: Form,
-  data: unknown,
-): { path: string; text: string }[] {
+export function translatableText(form: Form, data: unknown): { path: string; text: string }[] {
   const found: { path: string; text: string }[] = [];
   textIn(form, form.fields, data, '', true, found);
   return found;
@@ -65,7 +61,7 @@ export interface AnsweredPaths {
 }
 
 /** Every language at once, so a build can keep it and count any pair later. */
-export function answeredPaths(_siteId: string, form: Form, data: unknown): AnsweredPaths {
+export function answeredPaths(form: Form, data: unknown): AnsweredPaths {
   const rows: Record<string, string[]> = {};
   const paths = [...answeredIn(form, form.fields, data, '', true, rows, new Map(), []).keys()];
   return Object.keys(rows).length ? { paths, rows } : { paths };
@@ -73,7 +69,6 @@ export function answeredPaths(_siteId: string, form: Form, data: unknown): Answe
 
 /** What `locale`'s file says at each answered path, and the rows it has, so a gap reads as one. */
 export function referenceText(
-  _siteId: string,
   form: Form,
   data: unknown,
   locale: string,

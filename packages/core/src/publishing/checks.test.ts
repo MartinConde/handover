@@ -101,7 +101,7 @@ let db: Db;
 beforeAll(async () => {
   const binding = await mf.getD1Database('DB');
   await migrateTestD1(binding);
-  db = openDb('default', binding);
+  db = openDb(binding);
 });
 
 const run = (

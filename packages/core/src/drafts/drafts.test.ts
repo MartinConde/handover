@@ -106,21 +106,21 @@ test('ordinary saves preserve managed values and cannot add one that is absent',
 
   await saveDraft('default', db, managedGit, PATH, { ...VALUES, slug: 'taken-address' }, options);
   expect((await only(db))?.contents).toBe(managedFile);
-  expect(parseEntry('default', (await only(db))?.contents ?? '')).toMatchObject({
+  expect(parseEntry((await only(db))?.contents ?? '')).toMatchObject({
     slug: 'mill-house',
     title: 'The Mill House',
   });
 
   await fresh();
   await saveDraft('default', db, git, PATH, { ...VALUES, slug: 'injected-address' }, options);
-  expect(parseEntry('default', (await only(db))?.contents ?? '')).not.toHaveProperty('slug');
+  expect(parseEntry((await only(db))?.contents ?? '')).not.toHaveProperty('slug');
 });
 
 test('ordinary fields named slug remain editable when they are not managed', async () => {
   const db = await fresh();
   await saveDraft('default', db, git, PATH, { ...VALUES, slug: 'editor-owned' });
 
-  expect(parseEntry('default', (await only(db))?.contents ?? '')).toMatchObject({
+  expect(parseEntry((await only(db))?.contents ?? '')).toMatchObject({
     slug: 'editor-owned',
   });
 });
@@ -285,7 +285,7 @@ test('a saved deletion can restore a sibling locale subtree in the same atomic s
   expect(rows.map((row) => row.path)).toEqual([PAGE_DE, PAGE_EN]);
   const germanRow = rows[0];
   if (!germanRow) throw new Error('Expected the German draft');
-  expect(parseEntry('default', germanRow.contents)).toEqual({
+  expect(parseEntry(germanRow.contents)).toEqual({
     _version: 1,
     title: 'Startseite',
     blocks: [
@@ -567,13 +567,10 @@ test('a stale source save rolls back its sibling changes as one batch', async ()
     ),
   ]);
   expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
-  const en = parseEntry('default', (await loadDraft('default', db, PATH))?.contents ?? '') as {
+  const en = parseEntry((await loadDraft('default', db, PATH))?.contents ?? '') as {
     price: string;
   };
-  const de = parseEntry(
-    'default',
-    (await loadDraft('default', db, LISTING_DE))?.contents ?? '',
-  ) as {
+  const de = parseEntry((await loadDraft('default', db, LISTING_DE))?.contents ?? '') as {
     price: string;
   };
   expect(de.price).toBe(en.price);

@@ -33,7 +33,7 @@ const translated = (body: { text: string[] }) =>
 
 test('DeepL is called with the texts, the languages and the key, and answers in order', async () => {
   const calls = stubFetch(translated);
-  const out = await deeplTranslate('default', 'key-123')(['One', 'Two'], 'en', 'de');
+  const out = await deeplTranslate('key-123')(['One', 'Two'], 'en', 'de');
   expect(out).toEqual(['[de] One', '[de] Two']);
   expect(calls).toHaveLength(1);
   expect(calls[0]?.url).toBe('https://api.deepl.com/v2/translate');
@@ -44,7 +44,7 @@ test('DeepL is called with the texts, the languages and the key, and answers in 
 
 test('a free key goes to the free host, and a regional code keeps its region', async () => {
   const calls = stubFetch(translated);
-  await deeplTranslate('default', 'key-123:fx')(['One'], 'en', 'pt-br');
+  await deeplTranslate('key-123:fx')(['One'], 'en', 'pt-br');
   expect(calls[0]?.url).toBe('https://api-free.deepl.com/v2/translate');
   expect(calls[0]?.body.target_lang).toBe('PT-BR');
 });
@@ -52,7 +52,7 @@ test('a free key goes to the free host, and a regional code keeps its region', a
 test('more texts than one request takes are sent in several, still in order', async () => {
   const calls = stubFetch(translated);
   const texts = Array.from({ length: 120 }, (_, i) => `Text ${i}`);
-  const out = await deeplTranslate('default', 'key')(texts, 'en', 'de');
+  const out = await deeplTranslate('key')(texts, 'en', 'de');
   expect(calls.map((c) => c.body.text.length)).toEqual([50, 50, 20]);
   expect(out).toHaveLength(120);
   expect(out[119]).toBe('[de] Text 119');
@@ -62,7 +62,7 @@ test("DeepL's own message is what a refused translation says", async () => {
   stubFetch(() =>
     Response.json({ message: 'Value for target_lang not supported.' }, { status: 400 }),
   );
-  await expect(deeplTranslate('default', 'key')(['One'], 'en', 'xx')).rejects.toThrow(
+  await expect(deeplTranslate('key')(['One'], 'en', 'xx')).rejects.toThrow(
     'DeepL refused the translation (400): Value for target_lang not supported.',
   );
 });
@@ -78,7 +78,7 @@ test('DeepL passes cancellation through to the provider request', async () => {
     ),
   );
   const controller = new AbortController();
-  const translating = deeplTranslate('default', 'key')(['One'], 'en', 'de', controller.signal);
+  const translating = deeplTranslate('key')(['One'], 'en', 'de', controller.signal);
   controller.abort(new Error('provider deadline'));
   await expect(translating).rejects.toThrow('provider deadline');
 });
@@ -92,7 +92,7 @@ const page = {
 };
 
 test('a machine fill writes the values it was given and names them in _machine', () => {
-  const filled = machineFilled('default', page, {
+  const filled = machineFilled(page, {
     title: 'Startseite',
     'blocks[_id=k3nf9a2p].heading': 'Willkommen',
   });
@@ -104,8 +104,8 @@ test('a machine fill writes the values it was given and names them in _machine',
 });
 
 test('a second fill adds to the paths a machine already wrote', () => {
-  const once = machineFilled('default', page, { title: 'Startseite' });
-  const twice = machineFilled('default', once, { 'blocks[_id=q1w2e3r4].body': 'Eine Zeile' });
+  const once = machineFilled(page, { title: 'Startseite' });
+  const twice = machineFilled(once, { 'blocks[_id=q1w2e3r4].body': 'Eine Zeile' });
   expect(twice._machine).toEqual(['title', 'blocks[_id=q1w2e3r4].body']);
 });
 
@@ -115,12 +115,12 @@ test('a path whose value a person typed over is no longer machine-written', () =
     ...page,
     blocks: [{ ...page.blocks[0], heading: 'Willkommen!' }, page.blocks[1]],
   };
-  expect(keptMachine('default', before, after)).toEqual(['title']);
+  expect(keptMachine(before, after)).toEqual(['title']);
 });
 
 test('a save that changes nothing leaves every machine-written path where it was', () => {
   const before = { ...page, _machine: ['title', 'blocks[_id=k3nf9a2p].heading'] };
-  expect(keptMachine('default', before, structuredClone(page))).toEqual([
+  expect(keptMachine(before, structuredClone(page))).toEqual([
     'title',
     'blocks[_id=k3nf9a2p].heading',
   ]);
@@ -128,18 +128,18 @@ test('a save that changes nothing leaves every machine-written path where it was
 
 test('a path whose block is gone is not kept', () => {
   const before = { ...page, _machine: ['blocks[_id=k3nf9a2p].heading'] };
-  expect(keptMachine('default', before, { ...page, blocks: [page.blocks[1]] })).toEqual([]);
+  expect(keptMachine(before, { ...page, blocks: [page.blocks[1]] })).toEqual([]);
 });
 
 test('a field is addressed by the ids of the rows above it, not by their positions', () => {
-  expect(fieldAddress('default', ['title'], page)).toBe('title');
-  expect(fieldAddress('default', ['blocks', '1', 'body'], page)).toBe('blocks[_id=q1w2e3r4].body');
+  expect(fieldAddress(['title'], page)).toBe('title');
+  expect(fieldAddress(['blocks', '1', 'body'], page)).toBe('blocks[_id=q1w2e3r4].body');
   // An array row with no `_id` — a template's blocks — is its position.
-  expect(fieldAddress('default', ['tags', '2'], { tags: ['a', 'b', 'c'] })).toBe('tags[2]');
+  expect(fieldAddress(['tags', '2'], { tags: ['a', 'b', 'c'] })).toBe('tags[2]');
 });
 
 test('a fill makes the group it needs, and names no path it could not write', () => {
-  const filled = machineFilled('default', page, {
+  const filled = machineFilled(page, {
     'seo.description': 'Ein Haus',
     'blocks[_id=nosuchid].heading': 'Nowhere',
   });
@@ -148,23 +148,15 @@ test('a fill makes the group it needs, and names no path it could not write', ()
 });
 
 test('an address is read back to where the form draws the field, wherever its row now sits', () => {
-  expect(fieldPosition('default', 'blocks[_id=q1w2e3r4].body', page)).toEqual([
-    'blocks',
-    '1',
-    'body',
-  ]);
+  expect(fieldPosition('blocks[_id=q1w2e3r4].body', page)).toEqual(['blocks', '1', 'body']);
   const moved = { ...page, blocks: [page.blocks[1], page.blocks[0]] };
-  expect(fieldPosition('default', 'blocks[_id=q1w2e3r4].body', moved)).toEqual([
-    'blocks',
-    '0',
-    'body',
-  ]);
-  expect(fieldPosition('default', 'tags[2]', { tags: ['a', 'b', 'c'] })).toEqual(['tags', '2']);
+  expect(fieldPosition('blocks[_id=q1w2e3r4].body', moved)).toEqual(['blocks', '0', 'body']);
+  expect(fieldPosition('tags[2]', { tags: ['a', 'b', 'c'] })).toEqual(['tags', '2']);
 });
 
 test('an address whose row is gone has no position', () => {
   expect(
-    fieldPosition('default', 'blocks[_id=q1w2e3r4].body', { ...page, blocks: [page.blocks[0]] }),
+    fieldPosition('blocks[_id=q1w2e3r4].body', { ...page, blocks: [page.blocks[0]] }),
   ).toBeUndefined();
 });
 
@@ -202,25 +194,20 @@ const nested = {
 };
 
 test('a schema-aware nested address survives reordering at every list level', () => {
-  const address = fieldAddress(
-    'default',
-    ['sections', '1', 'blocks', '0', 'body'],
-    nested,
-    nestedForm,
-  );
+  const address = fieldAddress(['sections', '1', 'blocks', '0', 'body'], nested, nestedForm);
   expect(address).toBe('sections[_id=section-b].blocks[_id=quote-b].body');
 
   const moved = structuredClone(nested);
   moved.sections.reverse();
   moved.sections[0]?.blocks.reverse();
-  expect(fieldPosition('default', address ?? '', moved, nestedForm)).toEqual([
+  expect(fieldPosition(address ?? '', moved, nestedForm)).toEqual([
     'sections',
     '0',
     'blocks',
     '0',
     'body',
   ]);
-  expect(resolveFieldTarget('default', nestedForm, address ?? '', moved)).toMatchObject({
+  expect(resolveFieldTarget(nestedForm, address ?? '', moved)).toMatchObject({
     ok: true,
     target: { path: ['sections', '0', 'blocks', '0', 'body'], field: { type: 'text' } },
   });
@@ -233,23 +220,22 @@ test('duplicate row ids are ambiguous rather than resolving to the first row', (
   second._id = 'section-a';
   const address = 'sections[_id=section-a].title';
 
-  expect(
-    fieldAddress('default', ['sections', '0', 'title'], duplicate, nestedForm),
-  ).toBeUndefined();
-  expect(fieldPosition('default', address, duplicate, nestedForm)).toBeUndefined();
-  expect(resolveFieldTarget('default', nestedForm, address, duplicate)).toEqual({
+  expect(fieldAddress(['sections', '0', 'title'], duplicate, nestedForm)).toBeUndefined();
+  expect(fieldPosition(address, duplicate, nestedForm)).toBeUndefined();
+  expect(resolveFieldTarget(nestedForm, address, duplicate)).toEqual({
     ok: false,
     reason: 'ambiguous',
   });
-  expect(machineFilled('default', duplicate, { [address]: 'Do not guess' })).toEqual(duplicate);
+  expect(machineFilled(duplicate, { [address]: 'Do not guess' })).toEqual(duplicate);
 });
 
 test('deleted and non-schema targets have distinct resolution failures', () => {
-  expect(resolveFieldTarget('default', nestedForm, 'sections[_id=missing].title', nested)).toEqual({
+  expect(resolveFieldTarget(nestedForm, 'sections[_id=missing].title', nested)).toEqual({
     ok: false,
     reason: 'deleted',
   });
-  expect(
-    resolveFieldTarget('default', nestedForm, 'sections[_id=section-a].unknown', nested),
-  ).toEqual({ ok: false, reason: 'schema' });
+  expect(resolveFieldTarget(nestedForm, 'sections[_id=section-a].unknown', nested)).toEqual({
+    ok: false,
+    reason: 'schema',
+  });
 });

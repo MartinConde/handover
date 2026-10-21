@@ -93,7 +93,7 @@ export async function openDraft(
 ): Promise<Draft | undefined> {
   if (file) {
     // A failed open must not leave unreadable repository bytes behind as a durable draft row.
-    if (file.contents) parseEntry(siteId, file.contents);
+    if (file.contents) parseEntry(file.contents);
     await db
       .insert(drafts)
       .values({
@@ -128,7 +128,7 @@ export async function refreshUntouched(
 ): Promise<Draft | undefined> {
   if (!row || !file || row.publishedSha || row.baseBlob === file.blob_sha) return row;
   if (await isPending(row)) return row;
-  if (file.contents) parseEntry(siteId, file.contents);
+  if (file.contents) parseEntry(file.contents);
   // A new revision, so a tab still showing the old file is refused rather than merged over it.
   await db
     .update(drafts)
@@ -230,7 +230,7 @@ export async function saveDraft(
   };
   const before = loaded.entry;
   const translated = sync?.translation ? sync.form : undefined;
-  let after = mergeEntry(siteId, before, submitted, translated);
+  let after = mergeEntry(before, submitted, translated);
   const current = (before ?? {}) as Record<string, unknown>;
   if (managed.size) {
     const currentKeys = Object.keys(current);
@@ -249,31 +249,30 @@ export async function saveDraft(
   const updatedAt = Date.now();
   // Last, so the key also keeps its place after `_version` whatever the merge reordered.
   const stamped = (data: Record<string, unknown>) =>
-    sync?.stamp ? withSource(siteId, data, sync.stamp) : data;
+    sync?.stamp ? withSource(data, sync.stamp) : data;
   let contents = stringifyEntry(
-    siteId,
-    stamped(sync && !translated ? syncLocale(siteId, sync.form, sync.locale, edit, after) : after),
+    stamped(sync && !translated ? syncLocale(sync.form, sync.locale, edit, after) : after),
   );
   if (translated && sync?.source)
-    contents = await markTranslation(siteId, translated, sync.source, contents, loaded.contents);
+    contents = await markTranslation(translated, sync.source, contents, loaded.contents);
   const stamp = { ...stampOf(by), revision };
   const writes = [upsert(db, siteId, path, contents, loaded, updatedAt, stamp)];
   // A translation changes no structure, so the other languages have nothing to follow.
   for (const [locale, sibling] of translated ? [] : siblings) {
     if (!sync) break;
-    const projection = (data: unknown) => skeleton(siteId, sync.form, locale, data);
+    const projection = (data: unknown) => skeleton(sync.form, locale, data);
     if (projection(before) === projection(after)) continue;
     const other = loadedSiblings
       ? loadedSiblings.find(([loadedLocale]) => loadedLocale === locale)?.[1]
       : await load(siteId, db, git, sibling);
     if (!other) continue;
-    const synced = syncLocale(siteId, sync.form, locale, edit, other.entry, {
+    const synced = syncLocale(sync.form, locale, edit, other.entry, {
       seeds: sync.restoration?.seeds[locale],
     });
     const siblingRevision = nextRevision(other.revision);
     revisions[locale] = siblingRevision;
     writes.push(
-      upsert(db, siteId, sibling, stringifyEntry(siteId, stamped(synced)), other, updatedAt, {
+      upsert(db, siteId, sibling, stringifyEntry(stamped(synced)), other, updatedAt, {
         ...stamp,
         revision: siblingRevision,
       }),
@@ -336,7 +335,7 @@ export async function load(
       baseSha: row.baseSha,
       baseBlob: row.baseBlob,
       contents: row.contents,
-      entry: parseEntry(siteId, row.contents),
+      entry: parseEntry(row.contents),
       redirects: row.pendingRedirects ?? [],
     };
   // Head first, then the file at it: `base_sha` and `base_blob` must describe one commit.
@@ -349,7 +348,7 @@ export async function load(
     baseSha: head,
     baseBlob: file.blob_sha,
     contents: file.contents,
-    entry: parseEntry(siteId, file.contents),
+    entry: parseEntry(file.contents),
     redirects: [] as RedirectRule[],
   };
 }
@@ -401,8 +400,8 @@ export function upsert(
 export const stampOf = (by?: string) => (by ? { updatedBy: by } : {});
 
 // Two equal skeletons mean the other languages have nothing to write.
-const skeleton = (siteId: string, form: Form, locale: string, data: unknown) =>
-  stringifyEntry(siteId, syncLocale(siteId, form, locale, { before: data, after: data }, {}));
+const skeleton = (form: Form, locale: string, data: unknown) =>
+  stringifyEntry(syncLocale(form, locale, { before: data, after: data }, {}));
 
 /** An empty base blob matches nothing in the repository, so the row is pending from the start. */
 export async function createDraft(
@@ -433,7 +432,7 @@ export async function createDrafts(
       )
     : sql`true`;
   const writes = files.map(({ path, values }, i) => {
-    const contents = stringifyEntry(siteId, values);
+    const contents = stringifyEntry(values);
     return (
       db
         .insert(drafts)
@@ -555,19 +554,12 @@ export async function saveTranslated(
   if (!loaded) return undefined;
   if (expectedRevision !== undefined && loaded.revision !== expectedRevision)
     throw new DraftRevisionError();
-  const filledEntry = machineFilled(siteId, loaded.entry, filled);
+  const filledEntry = machineFilled(loaded.entry, filled);
   let contents = stringifyEntry(
-    siteId,
-    provenance?.stamp ? withSource(siteId, filledEntry, provenance.stamp) : filledEntry,
+    provenance?.stamp ? withSource(filledEntry, provenance.stamp) : filledEntry,
   );
   if (provenance)
-    contents = await markTranslation(
-      siteId,
-      provenance.form,
-      provenance.source,
-      contents,
-      loaded.contents,
-    );
+    contents = await markTranslation(provenance.form, provenance.source, contents, loaded.contents);
   const updatedAt = Date.now();
   await db.batch([upsert(db, siteId, path, contents, loaded, updatedAt, stampOf(by))]);
   return { updated_at: updatedAt, pending: (await blobSha(contents)) !== loaded.baseBlob };

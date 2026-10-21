@@ -4,6 +4,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Helpers that never used the site id no longer take it: drop the leading `'default'` from
+  `staticSource`, `entryAt`, `filterLive`, `isLive`, `entryAddress`, `entryUrl`, `globalsAt`,
+  `menusAt` and `getEntryLocales`, and from `renameEntry`/`deleteEntry` in `@handover/core`.
+
 ## 0.1.0 — first release
 
 A git-backed CMS for Astro sites on Cloudflare Workers. Editors change content in an admin UI,

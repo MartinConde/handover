@@ -40,7 +40,7 @@ const removeAfter = (git: GitClient, name: string, paths: string[]) =>
 
 test.skipIf(!configured)('getFile reads a file from the throwaway repo', async () => {
   const [owner, repo] = (env.GITHUB_REPO ?? '').split('/');
-  const git = createGitClient('default', {
+  const git = createGitClient({
     appId: env.GITHUB_APP_ID ?? '',
     privateKey: (env.GITHUB_PRIVATE_KEY ?? '').replace(/\\n/g, '\n'),
     installationId: env.GITHUB_INSTALLATION_ID ?? '',
@@ -67,7 +67,7 @@ test.skipIf(!configured)(
       repo: repo ?? '',
       branch: env.GITHUB_BRANCH,
     };
-    const git = createGitClient('default', app);
+    const git = createGitClient(app);
     const path = 'handover-integration-test.txt';
     const base = await git.getHead();
 
@@ -102,7 +102,7 @@ test.skipIf(!configured)(
       repo: repo ?? '',
       branch: env.GITHUB_BRANCH,
     };
-    const git = createGitClient('default', app);
+    const git = createGitClient(app);
     const i18n = { locales: ['en', 'de'], defaultLocale: 'en' };
     const loc = { collection: 'listings', route: '/listings/[slug]', i18n };
     const name = `it-${(await git.getHead()).slice(0, 7)}`;
@@ -141,7 +141,7 @@ test.skipIf(!configured)(
       { base_sha: await git.getHead(), message: `Seed ${name}` },
     );
 
-    const { commit_sha: renamed } = await renameEntry('default', git, loc, name, `${name}-b`);
+    const { commit_sha: renamed } = await renameEntry(git, loc, name, `${name}-b`);
 
     expect(await compare(seeded, renamed)).toEqual({
       commits: 1,
@@ -152,7 +152,7 @@ test.skipIf(!configured)(
       newRules: 1,
     });
 
-    const { commit_sha: deleted } = await deleteEntry('default', git, loc, `${name}-b`, () => '/');
+    const { commit_sha: deleted } = await deleteEntry(git, loc, `${name}-b`, () => '/');
 
     expect(await compare(renamed, deleted)).toEqual({
       commits: 1,
@@ -175,7 +175,7 @@ test.skipIf(!configured)(
       repo: repo ?? '',
       branch: env.GITHUB_BRANCH,
     };
-    const git = createGitClient('default', app);
+    const git = createGitClient(app);
     const mf = new Miniflare({
       modules: true,
       script: 'export default {}',
@@ -188,7 +188,7 @@ test.skipIf(!configured)(
       await generateSQLiteDrizzleJson({ ...tables }),
     );
     await binding.batch(ddl.map((sql) => binding.prepare(sql)));
-    const db = openDb('default', binding);
+    const db = openDb(binding);
 
     const name = `it-${(await git.getHead()).slice(0, 7)}`;
     const paths = [1, 2].map((n) => `src/content/listings/en/${name}-${n}.yaml`);
@@ -238,7 +238,7 @@ test.skipIf(!configured)(
       repo: repo ?? '',
       branch: env.GITHUB_BRANCH,
     };
-    const git = createGitClient('default', app);
+    const git = createGitClient(app);
     const mf = new Miniflare({
       modules: true,
       script: 'export default {}',
@@ -251,7 +251,7 @@ test.skipIf(!configured)(
       await generateSQLiteDrizzleJson({ ...tables }),
     );
     await binding.batch(ddl.map((sql) => binding.prepare(sql)));
-    const db = openDb('default', binding);
+    const db = openDb(binding);
 
     const name = `it-${(await git.getHead()).slice(0, 7)}`;
     const en = `src/content/listings/en/${name}.yaml`;
@@ -262,11 +262,10 @@ test.skipIf(!configured)(
     // Both files as one commit has them: a moving branch read twice is two repositories.
     const stale = async (at: string) =>
       staleLocales(
-        'default',
         TRANSLATED,
         {
-          en: parseEntry('default', (await git.getFile(en, at))?.contents ?? ''),
-          de: parseEntry('default', (await git.getFile(de, at))?.contents ?? ''),
+          en: parseEntry((await git.getFile(en, at))?.contents ?? ''),
+          de: parseEntry((await git.getFile(de, at))?.contents ?? ''),
         },
         'en',
       );
@@ -327,7 +326,7 @@ const harness = async () => {
     repo: repo ?? '',
     branch: env.GITHUB_BRANCH,
   };
-  const git = createGitClient('default', app);
+  const git = createGitClient(app);
   const mf = new Miniflare({
     modules: true,
     script: 'export default {}',
@@ -344,7 +343,7 @@ const harness = async () => {
     const res = await git.request(`/repos/${app.owner}/${app.repo}/git/commits/${sha}`);
     return ((await res.json()) as { parents: { sha: string }[] }).parents[0]?.sha;
   };
-  return { app, git, db: openDb('default', binding), parentOf };
+  return { app, git, db: openDb(binding), parentOf };
 };
 
 const LISTING = (name: string) =>

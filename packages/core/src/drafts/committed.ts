@@ -151,10 +151,7 @@ export async function recordOffer(
 ): Promise<void> {
   const open = await loadDraft(siteId, db, path);
   if (!open) return;
-  const contents = stringifyEntry(
-    siteId,
-    offeredEntry(siteId, parseEntry(siteId, open.contents), offer),
-  );
+  const contents = stringifyEntry(offeredEntry(parseEntry(open.contents), offer));
   await db
     .update(drafts)
     .set({
@@ -177,19 +174,19 @@ export async function recordSource(
 ): Promise<void> {
   const open = await loadDraft(siteId, db, path);
   if (!open?.contents) return;
-  const data = parseEntry(siteId, open.contents);
+  const data = parseEntry(open.contents);
   if (!data || typeof data !== 'object' || Array.isArray(data)) return;
-  let entry = withSource(siteId, data, source);
+  let entry = withSource(data, source);
   if (commit) {
-    const was = parseEntry(siteId, commit.was) as Record<string, unknown> | null;
-    const now = parseEntry(siteId, commit.contents) as Record<string, unknown> | null;
+    const was = parseEntry(commit.was) as Record<string, unknown> | null;
+    const now = parseEntry(commit.contents) as Record<string, unknown> | null;
     // The commit's settled mark, unless the draft had already changed its own.
     if (JSON.stringify(entry._i18n) === JSON.stringify(was?._i18n)) {
       const { _i18n, ...rest } = entry;
       entry = now?._i18n === undefined ? rest : { ...entry, _i18n: now._i18n };
     }
   }
-  const contents = stringifyEntry(siteId, entry);
+  const contents = stringifyEntry(entry);
   await db
     .update(drafts)
     .set({

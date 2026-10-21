@@ -63,7 +63,7 @@ const TEMPLATE_PATH_SHAPE = /^src\/content\/_templates\/([^/]+)\/([^/]+)\.yaml$/
 const OTHER_PATHS = [/^src\/content\/redirects\.yaml$/, TEMPLATE_PATH];
 
 /** The build fails on these: a file the CMS cannot address would silently be off the list. */
-export function contentPathErrors(_siteId: string, paths: Iterable<string>): string[] {
+export function contentPathErrors(paths: Iterable<string>): string[] {
   const errors: string[] = [];
   for (const path of paths) {
     if (ENTRY_PATH.test(path) || OTHER_PATHS.some((p) => p.test(path))) continue;
@@ -87,11 +87,11 @@ const byId = (a: IndexEntry, b: IndexEntry) => a.id.localeCompare(b.id);
 /** Which field holds the entry's title, per collection: `titleField` in cms.config.ts. */
 export type TitleFields = Record<string, string>;
 
-function indexFile(siteId: string, { path, contents }: ContentFile, titleFields: TitleFields) {
+function indexFile({ path, contents }: ContentFile, titleFields: TitleFields) {
   const found = ENTRY_PATH.exec(path);
   if (!found) return undefined;
   const [, collection = '', locale = '', id = ''] = found;
-  const data = parseEntry(siteId, contents) as Record<string, unknown> | null;
+  const data = parseEntry(contents) as Record<string, unknown> | null;
   // Lists by filename rather than by nothing.
   const named = data?.[titleFields[collection] ?? 'title'];
   const title = typeof named === 'string' && named ? named : id;
@@ -105,13 +105,12 @@ function indexFile(siteId: string, { path, contents }: ContentFile, titleFields:
 }
 
 export function indexFrom(
-  siteId: string,
   files: Iterable<ContentFile>,
   titleFields: TitleFields = {},
 ): ContentIndex {
   const index = new Map<string, IndexEntry[]>();
   for (const file of files) {
-    const entry = indexFile(siteId, file, titleFields);
+    const entry = indexFile(file, titleFields);
     if (!entry) continue;
     const entries = index.get(entry.collection) ?? [];
     index.set(entry.collection, entries);
@@ -128,7 +127,6 @@ export function indexFrom(
 
 /** Taken once over the whole repository, so the dashboard need not read git per tile. */
 export async function staleFrom(
-  siteId: string,
   i18n: Pick<I18nRouting, 'locales' | 'defaultLocale'>,
   files: Iterable<ContentFile>,
   formFor: (collection: string, name: string) => Form | undefined,
@@ -139,7 +137,7 @@ export async function staleFrom(
     if (!parts) continue;
     const key = `${parts.collection}/${parts.name}`;
     const languages = entries.get(key) ?? {};
-    languages[parts.locale] = parseEntry(siteId, file.contents);
+    languages[parts.locale] = parseEntry(file.contents);
     entries.set(key, languages);
   }
   const stale: Record<string, string[]> = {};
@@ -147,10 +145,10 @@ export async function staleFrom(
     const [collection = '', name = ''] = key.split('/');
     const form = formFor(collection, name);
     if (!form) continue;
-    const source = entrySource(siteId, i18n, languages);
+    const source = entrySource(i18n, languages);
     // An entry whose files disagree has no source to be behind; the admin says so instead.
     if (!source || 'problem' in source) continue;
-    const behind = await staleLocales(siteId, form, languages, source.locale);
+    const behind = await staleLocales(form, languages, source.locale);
     if (behind.length) stale[key] = behind;
   }
   return stale;
@@ -166,7 +164,6 @@ export interface FileTexts extends AnsweredPaths {
 
 /** Per entry and language; nothing on a one-language site, where there is nothing to count. */
 export function textsFrom(
-  siteId: string,
   i18n: Pick<I18nRouting, 'locales'>,
   files: Iterable<ContentFile>,
   formFor: (collection: string, name: string) => Form | undefined,
@@ -177,8 +174,8 @@ export function textsFrom(
     const parts = entryParts(file.path);
     const form = parts && formFor(parts.collection, parts.name);
     if (!parts || !form) continue;
-    const data = parseEntry(siteId, file.contents) as Record<string, unknown> | null;
-    const found: FileTexts = answeredPaths(siteId, form, data);
+    const data = parseEntry(file.contents) as Record<string, unknown> | null;
+    const found: FileTexts = answeredPaths(form, data);
     if (typeof data?._source === 'string') found.source = data._source;
     if (Array.isArray(data?._machine) && data._machine.length) found.machine = true;
     const key = `${parts.collection}/${parts.name}`;
@@ -197,7 +194,6 @@ export interface TextSummary {
 
 /** The build's inventories with the drafts over them; a draft with no contents is a deletion. */
 export function textSummaries(
-  siteId: string,
   i18n: Pick<I18nRouting, 'locales' | 'defaultLocale'>,
   texts: Record<string, Record<string, FileTexts>>,
   drafts: readonly ContentFile[],
@@ -207,7 +203,6 @@ export function textSummaries(
   if (i18n.locales.length < 2) return summaries;
   const effective = { ...texts };
   const written = textsFrom(
-    siteId,
     i18n,
     drafts.filter((draft) => draft.contents),
     formFor,
@@ -224,7 +219,7 @@ export function textSummaries(
     const marks = Object.fromEntries(
       Object.entries(languages).map(([locale, file]) => [locale, { _source: file.source }]),
     );
-    const source = entrySource(siteId, i18n, marks);
+    const source = entrySource(i18n, marks);
     if (!source || 'problem' in source) continue;
     const owed = languages[source.locale] ?? { paths: [] };
     const summary: TextSummary = {};
@@ -243,7 +238,6 @@ export function textSummaries(
 
 /** A draft is what the editor last saw, so its title and status win over the built index. */
 export function collectionEntries(
-  siteId: string,
   index: ContentIndex,
   collection: string,
   drafts: readonly ContentFile[],
@@ -254,7 +248,6 @@ export function collectionEntries(
   const gone = new Set(rows.filter((r) => !r.contents).map((r) => r.path));
   const entries = (index[collection] ?? []).map((e) => ({ ...e, locales: { ...e.locales } }));
   for (const draft of indexFrom(
-    siteId,
     rows.filter((r) => r.contents),
     titleField ? { [collection]: titleField } : {},
   )[collection] ?? []) {
@@ -280,7 +273,6 @@ export const indexHasPath = (index: ContentIndex, path: string): boolean =>
 
 /** The file wins over the mark: one answer is read, and the disagreement is reported. */
 export function entryOffer(
-  _siteId: string,
   locales: string[],
   marked: unknown,
   written: string[],
@@ -308,10 +300,7 @@ export interface Template {
 }
 
 /** Read at build with everything under `src/content/`, so the admin needs no git listing. */
-export function templatesFrom(
-  siteId: string,
-  files: Iterable<ContentFile>,
-): Record<string, Template[]> {
+export function templatesFrom(files: Iterable<ContentFile>): Record<string, Template[]> {
   const found = new Map<string, Template[]>();
   for (const { path, contents } of files) {
     const parts = TEMPLATE_PATH.exec(path);
@@ -319,7 +308,7 @@ export function templatesFrom(
     const [, collection = '', name = ''] = parts;
     const list = found.get(collection) ?? [];
     found.set(collection, list);
-    list.push({ name, data: parseEntry(siteId, contents) });
+    list.push({ name, data: parseEntry(contents) });
   }
   return Object.fromEntries(
     [...found].map(([c, list]) => [c, list.sort((a, b) => a.name.localeCompare(b.name))]),

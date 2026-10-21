@@ -25,11 +25,8 @@ export async function setEntryLocales(
   const updatedAt = Date.now();
   const writes = found.flatMap((f) => {
     if (!f) return [];
-    const contents = stringifyEntry(
-      siteId,
-      offeredEntry(siteId, f.loaded.entry, { offered, locales, source }),
-    );
-    return contents === stringifyEntry(siteId, writtenEntry(siteId, f.loaded.entry))
+    const contents = stringifyEntry(offeredEntry(f.loaded.entry, { offered, locales, source }));
+    return contents === stringifyEntry(writtenEntry(f.loaded.entry))
       ? []
       : [upsert(db, siteId, f.path, contents, f.loaded, updatedAt)];
   });
@@ -53,11 +50,10 @@ export async function setEntryAddress(
   if (address) entry.slug = address;
   else delete entry.slug;
   // `slug` is a key the schema declares, so it goes where the form says.
-  const contents = stringifyEntry(siteId, writtenEntry(siteId, entry, form.fields));
+  const contents = stringifyEntry(writtenEntry(entry, form.fields));
   const updatedAt = Date.now();
   const rule = redirect
     ? redirectRule(
-        siteId,
         {
           from: redirect.from,
           to: redirect.to,
@@ -104,7 +100,6 @@ export async function setEntryStatus(
     if (hidden && file.redirect)
       rules.push(
         redirectRule(
-          siteId,
           {
             ...file.redirect,
             status: 301,
@@ -119,7 +114,7 @@ export async function setEntryStatus(
         db,
         siteId,
         file.path,
-        stringifyEntry(siteId, writtenEntry(siteId, entry, form.fields)),
+        stringifyEntry(writtenEntry(entry, form.fields)),
         file.loaded,
         updatedAt,
         { pendingRedirects: rules.length ? rules : null },
@@ -133,8 +128,8 @@ export async function setEntryStatus(
 const KEPT_ON_RESTORE = ['slug', '_status', '_locales', '_source'] as const;
 
 // A key assigned in place lands after the other `_` keys; `_source` sits right after `_version`.
-export const keptSource = (siteId: string, entry: Record<string, unknown>) =>
-  typeof entry._source === 'string' ? withSource(siteId, entry, entry._source) : entry;
+export const keptSource = (entry: Record<string, unknown>) =>
+  typeof entry._source === 'string' ? withSource(entry, entry._source) : entry;
 
 /** The base stays where it was, so the publish that follows is an ordinary forward commit. */
 export async function restoreDraft(
@@ -161,10 +156,7 @@ export async function restoreDraft(
       if (key in now) entry[key] = now[key];
       else delete entry[key];
     }
-    const contents = stringifyEntry(
-      siteId,
-      keptSource(siteId, writtenEntry(siteId, entry, form.fields)),
-    );
+    const contents = stringifyEntry(keptSource(writtenEntry(entry, form.fields)));
     return [upsert(db, siteId, file.path, contents, file.loaded, updatedAt, stampOf(by))];
   });
   await batchAll(db, writes);

@@ -27,7 +27,7 @@ const href = (site: SitemapSite, path: string) =>
   new URL(withSlash(path, site.slash), site.base).href;
 
 /** The log is newest first, so the first date a path appears under is its last change. */
-export function modifiedFrom(_siteId: string, log: string): Map<string, string> {
+export function modifiedFrom(log: string): Map<string, string> {
   const modified = new Map<string, string>();
   let date = '';
   for (const line of log.split('\n')) {
@@ -42,7 +42,6 @@ const newer = (a: string | undefined, b: string) => (!a || Date.parse(b) > Date.
 
 /** Reads the switch as `seo.noindex` by that key, so nothing has to be configured. */
 export function sitemapFrom(
-  siteId: string,
   files: Iterable<ContentFile>,
   site: SitemapSite,
   modified: Map<string, string> = new Map(),
@@ -53,12 +52,12 @@ export function sitemapFrom(
     const parts = entryParts(file.path);
     const route = parts && site.collections[parts.collection]?.route;
     if (!parts || !route) continue;
-    const data = parseEntry(siteId, file.contents) as Record<string, unknown> | null;
-    if (!isLive(siteId, data, parts.locale)) continue;
+    const data = parseEntry(file.contents) as Record<string, unknown> | null;
+    if (!isLive(data, parts.locale)) continue;
     if ((data?.seo as { noindex?: unknown } | undefined)?.noindex === true) continue;
-    const address = entryAddress(siteId, data, parts.name);
+    const address = entryAddress(data, parts.name);
     const of = site.collections[parts.collection];
-    const url = entryPageUrl(siteId, site.i18n, of, parts.name, address, parts.locale);
+    const url = entryPageUrl(site.i18n, of, parts.name, address, parts.locale);
     if (!url) continue;
     const key = `${parts.collection}/${parts.name}`;
     const locales = entries.get(key) ?? new Map<string, string>();
@@ -79,7 +78,7 @@ export function sitemapFrom(
     if (!c.index) continue;
     const locales = new Map<string, string>();
     for (const locale of site.i18n.locales) {
-      const url = entryUrl(siteId, site.i18n, c.index, '', locale);
+      const url = entryUrl(site.i18n, c.index, '', locale);
       if (!url) continue;
       locales.set(locale, href(site, url));
       const date = dates.get(`${c.index}:${locale}`);
@@ -123,7 +122,7 @@ const xmlText = (text: string) =>
     .replace(/'/g, '&apos;');
 
 /** One language's sitemap: each page, with its other languages named inside its own entry. */
-export function sitemapXml(_siteId: string, pages: SitemapPage[]): string {
+export function sitemapXml(pages: SitemapPage[]): string {
   const lines = [
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">',
@@ -142,7 +141,7 @@ export function sitemapXml(_siteId: string, pages: SitemapPage[]): string {
 }
 
 /** `sitemap-index.xml`: the one address robots.txt names, whatever languages the site has. */
-export function sitemapIndexXml(_siteId: string, locs: string[]): string {
+export function sitemapIndexXml(locs: string[]): string {
   return [
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
@@ -153,7 +152,7 @@ export function sitemapIndexXml(_siteId: string, locs: string[]): string {
 }
 
 /** Without a site address the sitemap line is dropped: a relative one is not an address. */
-export function robotsText(_siteId: string, sitemap?: string): string {
+export function robotsText(sitemap?: string): string {
   return [
     'User-agent: *',
     'Disallow: /admin',

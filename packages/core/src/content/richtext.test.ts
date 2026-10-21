@@ -34,15 +34,15 @@ const full: Record<string, string> = {
 
 for (const [name, md] of Object.entries(basic)) {
   test(`${name} is accepted by both tiers`, () => {
-    expect(richtextErrors('default', md, 'basic')).toEqual([]);
-    expect(richtextErrors('default', md, 'full')).toEqual([]);
+    expect(richtextErrors(md, 'basic')).toEqual([]);
+    expect(richtextErrors(md, 'full')).toEqual([]);
   });
 }
 
 for (const [name, md] of Object.entries(full)) {
   test(`${name} is accepted by the full tier only`, () => {
-    expect(richtextErrors('default', md, 'full')).toEqual([]);
-    expect(richtextErrors('default', md, 'basic')).toHaveLength(1);
+    expect(richtextErrors(md, 'full')).toEqual([]);
+    expect(richtextErrors(md, 'basic')).toHaveLength(1);
   });
 }
 
@@ -69,29 +69,25 @@ const rejected: Record<string, [string, string]> = {
 
 for (const [name, [md, construct]] of Object.entries(rejected)) {
   test(`${name} is rejected by the full tier as "${construct}"`, () => {
-    const errors = richtextErrors('default', md, 'full');
+    const errors = richtextErrors(md, 'full');
     expect(errors.length).toBeGreaterThan(0);
     expect(errors[0]).toContain(construct);
   });
 }
 
 test('an error names the line of the offending construct', () => {
-  expect(richtextErrors('default', 'Fine.\n\n# Not fine', 'full')).toEqual([
+  expect(richtextErrors('Fine.\n\n# Not fine', 'full')).toEqual([
     'heading level 1 is not allowed (line 3)',
   ]);
 });
 
 test('blockquote and heading errors in the basic tier say which tier allows them', () => {
-  expect(richtextErrors('default', '> Quote', 'basic')).toEqual([
-    'blockquote needs richtext: full (line 1)',
-  ]);
-  expect(richtextErrors('default', '## Head', 'basic')).toEqual([
-    'heading needs richtext: full (line 1)',
-  ]);
+  expect(richtextErrors('> Quote', 'basic')).toEqual(['blockquote needs richtext: full (line 1)']);
+  expect(richtextErrors('## Head', 'basic')).toEqual(['heading needs richtext: full (line 1)']);
 });
 
 test('a nested list is a list, not a new construct', () => {
-  expect(richtextErrors('default', '- a\n  - b\n- c', 'basic')).toEqual([]);
+  expect(richtextErrors('- a\n  - b\n- c', 'basic')).toEqual([]);
 });
 
 // Browsers ignore ASCII whitespace inside a URL, so the mangled forms are the same link.
@@ -106,12 +102,12 @@ const unsafeLinks: Record<string, string> = {
 
 for (const [name, md] of Object.entries(unsafeLinks)) {
   test(`a ${name} link is rejected by both tiers`, () => {
-    expect(richtextErrors('default', md, 'basic')).toHaveLength(1);
-    expect(richtextErrors('default', md, 'full')[0]).toMatch(/links are not allowed \(line 1\)/);
+    expect(richtextErrors(md, 'basic')).toHaveLength(1);
+    expect(richtextErrors(md, 'full')[0]).toMatch(/links are not allowed \(line 1\)/);
   });
 
   test(`a ${name} link renders as text, without an anchor`, () => {
-    expect(renderRichtext('default', md)).toBe('<p>x</p>');
+    expect(renderRichtext(md)).toBe('<p>x</p>');
   });
 }
 
@@ -128,13 +124,13 @@ const safeLinks: Record<string, string> = {
 
 for (const [name, url] of Object.entries(safeLinks)) {
   test(`a ${name} link is allowed`, () => {
-    expect(unsafeLinkScheme('default', url)).toBeUndefined();
-    expect(richtextErrors('default', `[x](${url})`, 'basic')).toEqual([]);
+    expect(unsafeLinkScheme(url)).toBeUndefined();
+    expect(richtextErrors(`[x](${url})`, 'basic')).toEqual([]);
   });
 }
 
 test('an empty string is valid in both tiers', () => {
-  expect(richtextErrors('default', '', 'basic')).toEqual([]);
+  expect(richtextErrors('', 'basic')).toEqual([]);
 });
 
 // A construct that validates but renders as nothing fails here.
@@ -154,7 +150,7 @@ const fixtures: Record<string, string> = { ...basic, ...full };
 
 for (const [name, html] of Object.entries(rendered)) {
   test(`${name} renders as ${html.split('\n')[0]}`, () => {
-    expect(renderRichtext('default', fixtures[name] ?? '')).toBe(html);
+    expect(renderRichtext(fixtures[name] ?? '')).toBe(html);
   });
 }
 
@@ -164,36 +160,32 @@ test('every allowed construct has a render fixture', () => {
 
 // The renderer is the last place raw HTML could get back in, so it escapes rather than emits.
 test('raw HTML is escaped, never emitted', () => {
-  expect(renderRichtext('default', '<script>alert(1)</script>')).not.toContain('<script>');
-  expect(renderRichtext('default', 'A <b>bold</b> claim.')).toBe(
-    '<p>A &lt;b&gt;bold&lt;/b&gt; claim.</p>',
-  );
+  expect(renderRichtext('<script>alert(1)</script>')).not.toContain('<script>');
+  expect(renderRichtext('A <b>bold</b> claim.')).toBe('<p>A &lt;b&gt;bold&lt;/b&gt; claim.</p>');
 });
 
 test('a nested list renders inside its parent item', () => {
-  expect(renderRichtext('default', '- a\n  - b\n- c')).toBe(
+  expect(renderRichtext('- a\n  - b\n- c')).toBe(
     '<ul>\n<li>a\n<ul>\n<li>b</li>\n</ul></li>\n<li>c</li>\n</ul>',
   );
 });
 
 test('a loose list keeps its paragraphs', () => {
-  expect(renderRichtext('default', '- a\n\n- b')).toBe(
-    '<ul>\n<li><p>a</p></li>\n<li><p>b</p></li>\n</ul>',
-  );
+  expect(renderRichtext('- a\n\n- b')).toBe('<ul>\n<li><p>a</p></li>\n<li><p>b</p></li>\n</ul>');
 });
 
 // The slug and the URL are editor text in an attribute, so neither may close it early.
 test('a heading and a link cannot break out of their attribute', () => {
-  expect(renderRichtext('default', '## a" onmouseover="alert(1)')).toBe(
+  expect(renderRichtext('## a" onmouseover="alert(1)')).toBe(
     '<h2 id="a-onmouseoveralert1">a" onmouseover="alert(1)</h2>',
   );
-  expect(renderRichtext('default', '[x](https://e.com/?a="><script>)')).toBe(
+  expect(renderRichtext('[x](https://e.com/?a="><script>)')).toBe(
     '<p><a href="https://e.com/?a=&quot;&gt;&lt;script&gt;">x</a></p>',
   );
 });
 
 test('two headings with the same text get different ids', () => {
-  expect(renderRichtext('default', '## The house\n\n## The house')).toBe(
+  expect(renderRichtext('## The house\n\n## The house')).toBe(
     '<h2 id="the-house">The house</h2>\n<h2 id="the-house-1">The house</h2>',
   );
 });

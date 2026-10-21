@@ -55,7 +55,7 @@ const LETTERS: Record<string, string> = {
 const MAX = 80;
 
 // The filename is the entry's id in GitHub, so never percent-encoded, never random.
-export function entryName(_siteId: string, title: string, taken: Iterable<string>): string {
+export function entryName(title: string, taken: Iterable<string>): string {
   const base =
     Array.from(title.toLowerCase())
       .map((c) => LETTERS[c] ?? c.normalize('NFD').replace(/\p{M}/gu, ''))
@@ -83,7 +83,6 @@ export interface CollectionRoutes {
 
 // Every message names the config key, and the integration throws them joined at build.
 export function checkCollections(
-  _siteId: string,
   collections: Record<string, CollectionRoutes>,
   globals: Record<string, unknown> = {},
 ): string[] {
@@ -147,7 +146,7 @@ export interface I18nConfig {
 const LOCALE = /^[a-z0-9-]+$/;
 
 /** Required even for one language: the file layout has a locale folder either way. */
-export function checkI18n(_siteId: string, i18n: I18nConfig | undefined): string[] {
+export function checkI18n(i18n: I18nConfig | undefined): string[] {
   const at = (key?: string) => `cms.config.ts › i18n${key ? `.${key}` : ''}: `;
   if (!i18n)
     return [
@@ -194,7 +193,6 @@ export const siteBase = (i18n: { base?: string }): string => (i18n.base ?? '').r
 
 /** `undefined` for a collection with no route: nothing renders it, so there is nowhere to link. */
 export function entryUrl(
-  _siteId: string,
   i18n: I18nRouting,
   route: string | undefined,
   slug: string,
@@ -207,7 +205,6 @@ export function entryUrl(
 
 /** In a collection with an `index`, the entry named `index` is that page's own copy. */
 export function entryPageUrl(
-  siteId: string,
   i18n: I18nRouting,
   collection: { route?: string; index?: string } | undefined,
   name: string,
@@ -215,13 +212,12 @@ export function entryPageUrl(
   locale: string,
 ): string | undefined {
   return collection?.index && name === 'index'
-    ? entryUrl(siteId, i18n, collection.index, '', locale)
-    : entryUrl(siteId, i18n, collection?.route, address, locale);
+    ? entryUrl(i18n, collection.index, '', locale)
+    : entryUrl(i18n, collection?.route, address, locale);
 }
 
 /** Where an entry answers in this language, and the title a link to it carries. */
 export function pageOf(
-  siteId: string,
   i18n: I18nRouting,
   collection:
     | { route?: string; index?: string; localizedSlugs?: boolean; titleField?: string }
@@ -230,10 +226,10 @@ export function pageOf(
   name: string,
   locale: string,
 ): { url: string | undefined; title: string } {
-  const address = collection?.localizedSlugs ? entryAddress(siteId, entry.data, name) : name;
+  const address = collection?.localizedSlugs ? entryAddress(entry.data, name) : name;
   const titled = isObject(entry.data) ? entry.data[collection?.titleField ?? 'title'] : undefined;
   return {
-    url: entryPageUrl(siteId, i18n, collection, name, address, locale),
+    url: entryPageUrl(i18n, collection, name, address, locale),
     title: typeof titled === 'string' ? titled : name,
   };
 }
@@ -258,7 +254,6 @@ export interface PreviewTarget {
 
 /** The allow-list in front of `/_preview`: `undefined` for any path the site could not serve. */
 export function previewTarget(
-  siteId: string,
   i18n: I18nRouting,
   collections: Record<string, { route?: string; index?: string }>,
   path: string,
@@ -289,7 +284,7 @@ export function previewTarget(
     const [head = '', tail = ''] = c.route.split('[slug]');
     if (!rest.startsWith(head) || !rest.endsWith(tail)) continue;
     const address = rest.slice(head.length, rest.length - tail.length);
-    if (!address || addressError(siteId, address)) continue;
+    if (!address || addressError(address)) continue;
     if (c.index !== undefined && address === 'index') continue;
     return { collection, locale, address };
   }
@@ -299,7 +294,7 @@ export function previewTarget(
 const ADDRESS = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 /** Empty is not a mistake; the rules are the file name's, since both fill the same URL segment. */
-export function addressError(_siteId: string, address: string): string | undefined {
+export function addressError(address: string): string | undefined {
   if (!address) return undefined;
   if (address.length > MAX) return `${JSON.stringify(address)} is longer than ${MAX} characters`;
   if (!ADDRESS.test(address))
@@ -308,7 +303,7 @@ export function addressError(_siteId: string, address: string): string | undefin
 }
 
 /** The file name never changes because an address did: it is the id across languages. */
-export function entryAddress(_siteId: string, data: unknown, name: string): string {
+export function entryAddress(data: unknown, name: string): string {
   // Read as a key: Astro's non-enumerable `slug` getter logs a warning when touched.
   const found = data ? Object.getOwnPropertyDescriptor(data, 'slug') : undefined;
   const slug = found?.enumerable ? found.value : undefined;

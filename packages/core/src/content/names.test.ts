@@ -31,12 +31,12 @@ test.each([
   ['empty title collides', '', ['untitled'], 'untitled-2'],
   ['suffix stays within the cap', 'a'.repeat(80), ['a'.repeat(80)], `${'a'.repeat(78)}-2`],
 ])('%s', (_name, title, taken, want) => {
-  expect(entryName('default', title, taken)).toBe(want);
+  expect(entryName(title, taken)).toBe(want);
 });
 
 test('valid collections produce no errors', () => {
   expect(
-    checkCollections('default', {
+    checkCollections({
       listings: { route: '/listings/[slug]', index: '/', load: 'listing' },
       pages: { route: '/[slug]' },
       globals: {},
@@ -60,17 +60,17 @@ test.each([
   ],
   ['collection name with a capital', { Posts: {} }, 'collections.Posts'],
 ])('%s is reported at its key', (_name, collections, at) => {
-  const [message, ...rest] = checkCollections('default', collections);
+  const [message, ...rest] = checkCollections(collections);
   expect(rest).toEqual([]);
   expect(message).toMatch(new RegExp(`^cms\\.config\\.ts › ${at.replace(/\./g, '\\.')}: `));
 });
 
 test('a titleField naming an ordinary field is accepted', () => {
-  expect(checkCollections('default', { presenters: { titleField: 'name' } })).toEqual([]);
+  expect(checkCollections({ presenters: { titleField: 'name' } })).toEqual([]);
 });
 
 test('the same route on two collections is reported on the second', () => {
-  const errors = checkCollections('default', {
+  const errors = checkCollections({
     posts: { route: '/[slug]' },
     pages: { route: '/[slug]' },
   });
@@ -80,18 +80,18 @@ test('the same route on two collections is reported on the second', () => {
 });
 
 test('globals keys are file names: lowercase letters, digits and dashes', () => {
-  expect(checkCollections('default', {}, { site: {}, 'cta-newsletter': {} })).toEqual([]);
-  expect(checkCollections('default', {}, { 'Site Settings': {} })).toEqual([
+  expect(checkCollections({}, { site: {}, 'cta-newsletter': {} })).toEqual([]);
+  expect(checkCollections({}, { 'Site Settings': {} })).toEqual([
     'cms.config.ts › globals.Site Settings: global keys are lowercase letters, digits and dashes (it is the file name under src/content/globals/<locale>/)',
   ]);
 });
 
 test('a valid i18n block produces no errors', () => {
-  expect(checkI18n('default', { locales: ['en', 'de'], defaultLocale: 'en' })).toEqual([]);
+  expect(checkI18n({ locales: ['en', 'de'], defaultLocale: 'en' })).toEqual([]);
   expect(
-    checkI18n('default', { locales: ['pt-br'], defaultLocale: 'pt-br', prefixDefaultLocale: true }),
+    checkI18n({ locales: ['pt-br'], defaultLocale: 'pt-br', prefixDefaultLocale: true }),
   ).toEqual([]);
-  expect(checkI18n('default', { locales: ['en'], defaultLocale: 'en', base: '/site' })).toEqual([]);
+  expect(checkI18n({ locales: ['en'], defaultLocale: 'en', base: '/site' })).toEqual([]);
 });
 
 test.each([
@@ -121,7 +121,7 @@ test.each([
     'i18n.base',
   ],
 ])('%s is reported at its key', (_name, i18n, at) => {
-  const [message, ...rest] = checkI18n('default', i18n);
+  const [message, ...rest] = checkI18n(i18n);
   expect(rest).toEqual([]);
   expect(message).toMatch(new RegExp(`^cms\\.config\\.ts › ${at.replace(/\./g, '\\.')}: `));
 });
@@ -129,32 +129,26 @@ test.each([
 const two = { locales: ['en', 'de'], defaultLocale: 'en' };
 
 test('the default language has no segment and the others do', () => {
-  expect(entryUrl('default', two, '/listings/[slug]', 'mill-house', 'en')).toBe(
-    '/listings/mill-house',
-  );
-  expect(entryUrl('default', two, '/listings/[slug]', 'mill-house', 'de')).toBe(
-    '/de/listings/mill-house',
-  );
+  expect(entryUrl(two, '/listings/[slug]', 'mill-house', 'en')).toBe('/listings/mill-house');
+  expect(entryUrl(two, '/listings/[slug]', 'mill-house', 'de')).toBe('/de/listings/mill-house');
 });
 
 test('prefixDefaultLocale gives the default language a segment too', () => {
   const prefixed = { ...two, prefixDefaultLocale: true };
-  expect(entryUrl('default', prefixed, '/[slug]', 'home', 'en')).toBe('/en/home');
+  expect(entryUrl(prefixed, '/[slug]', 'home', 'en')).toBe('/en/home');
 });
 
 test('a site under a base path has it in front of every address', () => {
   const under = { ...two, base: '/site' };
-  expect(entryUrl('default', under, '/listings/[slug]', 'mill-house', 'en')).toBe(
-    '/site/listings/mill-house',
-  );
-  expect(entryUrl('default', under, '/listings/[slug]', 'mill-house', 'de')).toBe(
+  expect(entryUrl(under, '/listings/[slug]', 'mill-house', 'en')).toBe('/site/listings/mill-house');
+  expect(entryUrl(under, '/listings/[slug]', 'mill-house', 'de')).toBe(
     '/site/de/listings/mill-house',
   );
-  expect(entryUrl('default', under, '/', '', 'en')).toBe('/site/');
+  expect(entryUrl(under, '/', '', 'en')).toBe('/site/');
 });
 
 test('a collection with no route of its own has no URL', () => {
-  expect(entryUrl('default', two, undefined, 'everything', 'de')).toBe(undefined);
+  expect(entryUrl(two, undefined, 'everything', 'de')).toBe(undefined);
 });
 
 // Preview only allows paths the site's routes can serve.
@@ -163,7 +157,7 @@ const site = {
   pages: { route: '/[slug]' },
   samples: {},
 };
-const target = (path: string, i18n = two) => previewTarget('default', i18n, site, path);
+const target = (path: string, i18n = two) => previewTarget(i18n, site, path);
 
 test('an entry path resolves to its collection, language and address', () => {
   expect(target('/listings/mill-house')).toEqual({
@@ -184,8 +178,8 @@ test("a collection's index page is a target with no address", () => {
 
 test('the entry named index is served at its index page, not under the route', () => {
   const home = { pages: { route: '/[slug]', index: '/' } };
-  expect(previewTarget('default', two, home, '/index')).toBe(undefined);
-  expect(previewTarget('default', two, home, '/')).toEqual({ collection: 'pages', locale: 'en' });
+  expect(previewTarget(two, home, '/index')).toBe(undefined);
+  expect(previewTarget(two, home, '/')).toEqual({ collection: 'pages', locale: 'en' });
 });
 
 // `/de` is both the German index and, read as a page, the slug "de" in English.
@@ -218,7 +212,7 @@ test("without it the default language's segment is not a path", () => {
 });
 
 test('a collection with neither a route nor an index is not previewable', () => {
-  expect(previewTarget('default', two, { samples: {} }, '/everything')).toBe(undefined);
+  expect(previewTarget(two, { samples: {} }, '/everything')).toBe(undefined);
 });
 
 test.each([
@@ -232,28 +226,28 @@ test.each([
 });
 
 test('a route with nothing in its slug is not the collection', () => {
-  expect(
-    previewTarget('default', two, { listings: { route: '/listings/[slug]' } }, '/listings/'),
-  ).toBe(undefined);
+  expect(previewTarget(two, { listings: { route: '/listings/[slug]' } }, '/listings/')).toBe(
+    undefined,
+  );
 });
 
 test('a web address is spelled the way a file name is', () => {
-  expect(addressError('default', 'start-seite')).toBe(undefined);
+  expect(addressError('start-seite')).toBe(undefined);
   // Empty is the fallback to the file name, not a mistake.
-  expect(addressError('default', '')).toBe(undefined);
-  expect(addressError('default', 'Start-Seite')).toMatch(/lowercase/);
-  expect(addressError('default', 'de/start')).toMatch(/lowercase/);
-  expect(addressError('default', 'gr%C3%B6sse')).toMatch(/lowercase/);
-  expect(addressError('default', 'start seite')).toMatch(/lowercase/);
-  expect(addressError('default', '-start')).toMatch(/lowercase/);
-  expect(addressError('default', 'start--seite')).toMatch(/lowercase/);
-  expect(addressError('default', 'a'.repeat(81))).toMatch(/longer than 80/);
+  expect(addressError('')).toBe(undefined);
+  expect(addressError('Start-Seite')).toMatch(/lowercase/);
+  expect(addressError('de/start')).toMatch(/lowercase/);
+  expect(addressError('gr%C3%B6sse')).toMatch(/lowercase/);
+  expect(addressError('start seite')).toMatch(/lowercase/);
+  expect(addressError('-start')).toMatch(/lowercase/);
+  expect(addressError('start--seite')).toMatch(/lowercase/);
+  expect(addressError('a'.repeat(81))).toMatch(/longer than 80/);
 });
 
 test('a file with no slug of its own is addressed by its name', () => {
-  expect(entryAddress('default', { title: 'Home' }, 'home')).toBe('home');
-  expect(entryAddress('default', { slug: '' }, 'home')).toBe('home');
-  expect(entryAddress('default', { slug: 'startseite' }, 'home')).toBe('startseite');
+  expect(entryAddress({ title: 'Home' }, 'home')).toBe('home');
+  expect(entryAddress({ slug: '' }, 'home')).toBe('home');
+  expect(entryAddress({ slug: 'startseite' }, 'home')).toBe('startseite');
 });
 
 // Astro defines one on every entry that has no `slug` of its own, to say the property is gone.
@@ -262,13 +256,13 @@ test('a warning getter Astro left behind is never read', () => {
   const read = vi.fn(() => undefined);
   Object.defineProperty(data, 'slug', { get: read, enumerable: false });
 
-  expect(entryAddress('default', data, 'home')).toBe('home');
+  expect(entryAddress(data, 'home')).toBe('home');
   expect(read).not.toHaveBeenCalled();
 });
 
 test('localizedSlugs is true or false and says so when it is not', () => {
-  expect(checkCollections('default', { pages: { localizedSlugs: true } })).toEqual([]);
-  expect(checkCollections('default', { pages: { localizedSlugs: 'yes' } })).toEqual([
+  expect(checkCollections({ pages: { localizedSlugs: true } })).toEqual([]);
+  expect(checkCollections({ pages: { localizedSlugs: 'yes' } })).toEqual([
     'cms.config.ts › collections.pages.localizedSlugs: expected true or false, got "yes"',
   ]);
 });
@@ -303,21 +297,21 @@ test.each(['', '/', '/site', '/nested/site', '/site/'])(
         blog: { index: '/blog', route: '/blog/[slug]' },
       };
       for (const locale of i18n.locales) {
-        const url = entryUrl('default', i18n, '/[slug]', 'home', locale) ?? '';
-        expect(previewTarget('default', i18n, collections, url)).toEqual({
+        const url = entryUrl(i18n, '/[slug]', 'home', locale) ?? '';
+        expect(previewTarget(i18n, collections, url)).toEqual({
           collection: 'pages',
           locale,
           address: 'home',
         });
-        const index = entryUrl('default', i18n, '/blog', '', locale) ?? '';
-        expect(previewTarget('default', i18n, collections, `${index}/`)).toEqual({
+        const index = entryUrl(i18n, '/blog', '', locale) ?? '';
+        expect(previewTarget(i18n, collections, `${index}/`)).toEqual({
           collection: 'blog',
           locale,
         });
       }
       if (base.replace(/\/+$/, '')) {
-        expect(previewTarget('default', i18n, collections, '/de/home')).toBeUndefined();
-        expect(previewTarget('default', i18n, collections, `${base}ish/de/home`)).toBeUndefined();
+        expect(previewTarget(i18n, collections, '/de/home')).toBeUndefined();
+        expect(previewTarget(i18n, collections, `${base}ish/de/home`)).toBeUndefined();
       }
     }
   },

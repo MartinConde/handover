@@ -11,7 +11,7 @@ beforeAll(async () => {
 });
 
 test('an upload key is owned, expires, and can be consumed only once', async () => {
-  const db = openDb('upload-intent', binding);
+  const db = openDb(binding);
   const intent = {
     key: `uploads/12345678-1234-1234-1234-123456789abc/media/${'a'.repeat(64)}.webp`,
     userId: 'u1',
@@ -37,7 +37,7 @@ test('an upload key is owned, expires, and can be consumed only once', async () 
 
 // An upload declared and never finished would otherwise stay in the staging bucket for good.
 test('an expired intent takes its staging object with it when the next upload is declared', async () => {
-  const db = openDb('upload-prune', binding);
+  const db = openDb(binding);
   const key = (n: string) =>
     `uploads/12345678-1234-1234-1234-12345678900${n}/media/${n.repeat(64)}.webp`;
   const declare = (n: string, now: number) => ({

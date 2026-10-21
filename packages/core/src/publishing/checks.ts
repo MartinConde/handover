@@ -139,15 +139,14 @@ export async function runChecks(
     // Every language, not only those going out: which one is the source depends on all of them.
     const parsed: Record<string, unknown> = {};
     for (const [locale, file] of Object.entries(entry.files))
-      parsed[locale] = parseEntry(siteId, file.contents);
-    const source = entrySource(siteId, input.site.i18n, parsed);
+      parsed[locale] = parseEntry(file.contents);
+    const source = entrySource(input.site.i18n, parsed);
     for (const locale of entry.publishing) {
       const file = entry.files[locale];
       if (!file) continue;
       const data = parsed[locale];
       const title = isObject(data) ? data[of.titleField ?? 'title'] : undefined;
       const walk: Walk = {
-        siteId,
         input,
         form: entry.form,
         locale,
@@ -189,7 +188,7 @@ export async function runChecks(
         ...unresolved(source),
       });
     const written = source && 'locale' in source ? source.locale : undefined;
-    const stale = written ? await staleLocales(siteId, entry.form, parsed, written) : [];
+    const stale = written ? await staleLocales(entry.form, parsed, written) : [];
     for (const locale of stale) {
       const file = entry.files[locale];
       if (!file || !entry.publishing.includes(locale)) continue;
@@ -274,7 +273,6 @@ const markedFrom = (data: unknown) =>
   String(isObject(data) && isObject(data._i18n) ? data._i18n.sourceLocale : '');
 
 interface Walk {
-  siteId: string;
   input: CheckInput;
   form: Form;
   locale: string;
@@ -360,7 +358,7 @@ function valueIn(w: Walk, field: Field, value: unknown, path: string, mode: Tran
       break;
     case 'richtext':
       if (typeof value === 'string' && INTERNAL_LINK.test(value))
-        for (const url of richtextLinks(w.siteId, value)) urlIn(w, url, path, field);
+        for (const url of richtextLinks(value)) urlIn(w, url, path, field);
       emptyIn(w, field, value, path, mode);
       break;
     case 'text':
@@ -466,7 +464,6 @@ function urlIn(w: Walk, href: string, fieldPath: string, name: Named): void {
   const label = name.label;
   if (!href.startsWith('/')) return;
   const target = previewTarget(
-    w.siteId,
     w.input.site.i18n,
     w.input.site.collections,
     href.replace(/[?#].*$/, ''),

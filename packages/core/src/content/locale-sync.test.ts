@@ -34,12 +34,11 @@ test('one-field locale projection preserves translated properties and copies sha
 });
 
 test('a duplicate value follows the source locale into the other file, nested included', () => {
-  const en = parseEntry('default', localeFile('en')) as Record<string, unknown>;
-  const de = parseEntry('default', localeFile('de'));
+  const en = parseEntry(localeFile('en')) as Record<string, unknown>;
+  const de = parseEntry(localeFile('de'));
   const image = { ...(en.image as Record<string, unknown>), src: 'media/2c40ab19.webp' };
 
   const synced = syncLocale(
-    'default',
     millHouse,
     'de',
     { before: en, after: { ...en, price: 450000, image } },
@@ -59,15 +58,9 @@ test('a duplicate value follows the source locale into the other file, nested in
 
 test('the other locale file comes back byte for byte when the source has nothing new', () => {
   const de = localeFile('de');
-  const en = parseEntry('default', localeFile('en'));
-  const synced = syncLocale(
-    'default',
-    millHouse,
-    'de',
-    { before: en, after: en },
-    parseEntry('default', de),
-  );
-  expect(stringifyEntry('default', synced)).toBe(de);
+  const en = parseEntry(localeFile('en'));
+  const synced = syncLocale(millHouse, 'de', { before: en, after: en }, parseEntry(de));
+  expect(stringifyEntry(synced)).toBe(de);
 });
 
 const blockIds = (data: Record<string, unknown>) =>
@@ -78,9 +71,9 @@ test('moving a block moves it in the other language, and a block only that langu
   const [hero, cta] = before.blocks as Record<string, unknown>[];
   const after = { ...before, blocks: [cta, hero] };
 
-  const de = syncLocale('default', page, 'de', { before, after }, drifted('de'));
+  const de = syncLocale(page, 'de', { before, after }, drifted('de'));
 
-  expect(stringifyEntry('default', de)).toBe(
+  expect(stringifyEntry(de)).toBe(
     [
       '_version: 1',
       '_i18n:',
@@ -112,9 +105,9 @@ test('moving a block moves it in the other language, and a block only that langu
 test('a save that changes no structure leaves the other language byte for byte', () => {
   const before = drifted('en');
 
-  const de = syncLocale('default', page, 'de', { before, after: before }, drifted('de'));
+  const de = syncLocale(page, 'de', { before, after: before }, drifted('de'));
 
-  expect(stringifyEntry('default', de)).toBe(driftFile('de'));
+  expect(stringifyEntry(de)).toBe(driftFile('de'));
 });
 
 test('a block added in one language arrives in the others with its shared values alone', () => {
@@ -127,7 +120,7 @@ test('a block added in one language arrives in the others with its shared values
   };
   const after = { ...before, blocks: [...(before.blocks as unknown[]), added] };
 
-  const de = syncLocale('default', page, 'de', { before, after }, drifted('de'));
+  const de = syncLocale(page, 'de', { before, after }, drifted('de'));
 
   expect(blockIds(de)).toEqual(['k3nf9a2p', 'p8xk2m4q', 'z9y8x7w6', 'q1w2e3r4', 'n5m6b7v8']);
   expect((de.blocks as Record<string, unknown>[])[4]).toEqual({
@@ -170,7 +163,7 @@ test('a restored block takes translated and opaque values from its locale seed',
   };
 
   expect(
-    syncLocale('default', page, 'de', { before, after }, target, {
+    syncLocale(page, 'de', { before, after }, target, {
       seeds: [
         {
           address: 'blocks[_id=back0001]',
@@ -251,7 +244,7 @@ test('a seed cannot overwrite a surviving row or repair a row missing through dr
   };
 
   expect(
-    syncLocale('default', page, 'de', { before, after }, target, {
+    syncLocale(page, 'de', { before, after }, target, {
       seeds: [
         {
           address: 'blocks[_id=stay0001]',
@@ -293,7 +286,6 @@ test('locale exclusions discard a seed rather than inserting its row', () => {
 
   expect(
     syncLocale(
-      'default',
       page,
       'de',
       { before, after },
@@ -327,7 +319,7 @@ test('duplicate seed addresses are ambiguous and restore nothing locale-owned', 
     value: { _type: 'hero', _id: 'back0001', heading },
   }));
 
-  expect(syncLocale('default', page, 'de', { before, after }, { blocks: [] }, { seeds })).toEqual({
+  expect(syncLocale(page, 'de', { before, after }, { blocks: [] }, { seeds })).toEqual({
     _version: 1,
     blocks: [
       {
@@ -366,7 +358,7 @@ test('only translated string markers belonging to an accepted seed are restored'
   };
 
   expect(
-    syncLocale('default', page, 'de', { before, after }, target, {
+    syncLocale(page, 'de', { before, after }, target, {
       seeds: [
         {
           address: 'blocks[_id=back0001]',
@@ -440,7 +432,6 @@ test('a duplicated nested subtree restores markers already remapped to its new i
 
   expect(
     syncLocale(
-      'default',
       nested,
       'de',
       { before, after },
@@ -492,7 +483,7 @@ test('a block deleted in one language is deleted in every language', () => {
   const before = drifted('en');
   const after = { ...before, blocks: [(before.blocks as unknown[])[0]] };
 
-  const de = syncLocale('default', page, 'de', { before, after }, drifted('de'));
+  const de = syncLocale(page, 'de', { before, after }, drifted('de'));
 
   expect(blockIds(de)).toEqual(['k3nf9a2p', 'p8xk2m4q', 'z9y8x7w6']);
 });
@@ -502,20 +493,18 @@ test('a block marked for one language is written to that file and to no other', 
   const only = { _type: 'compliance', _id: 'p8xk2m4q', _locales: ['de'], heading: 'Widerruf' };
   const after = { ...before, blocks: [...(before.blocks as unknown[]), only] };
 
-  expect(blockIds(syncLocale('default', page, 'en', { before, after }, after))).toEqual([
+  expect(blockIds(syncLocale(page, 'en', { before, after }, after))).toEqual([
     'k3nf9a2p',
     'q1w2e3r4',
   ]);
-  expect(blockIds(syncLocale('default', page, 'de', { before, after }, drifted('de')))).toContain(
-    'p8xk2m4q',
-  );
+  expect(blockIds(syncLocale(page, 'de', { before, after }, drifted('de')))).toContain('p8xk2m4q');
 });
 
 test('a language whose file has no blocks yet is given the structure, not left empty', () => {
   const before = drifted('en');
   const fr = { title: 'Accueil' };
 
-  const synced = syncLocale('default', page, 'fr', { before, after: before }, fr);
+  const synced = syncLocale(page, 'fr', { before, after: before }, fr);
 
   expect(blockIds(synced)).toEqual(['k3nf9a2p', 'q1w2e3r4']);
   expect(synced.title).toBe('Accueil');
@@ -524,7 +513,7 @@ test('a language whose file has no blocks yet is given the structure, not left e
 
 // Drift is what a save is not allowed to resolve.
 test('a block one language has without `_locales` is drift, and one with it is not', () => {
-  expect(driftReport('default', page, { en: drifted('en'), de: drifted('de') })).toEqual([
+  expect(driftReport(page, { en: drifted('en'), de: drifted('de') })).toEqual([
     {
       path: 'blocks[_id=z9y8x7w6]',
       type: 'quote',
@@ -540,7 +529,7 @@ test('an entry with a file in one language alone has nothing to have drifted fro
   // With no second file to reconcile against, a publish of a stray mark is never blocked.
   const stray = { _type: 'quote', _id: 'z9y8x7w6', _locales: ['en'], body: 'Ein seltener Fund.' };
 
-  expect(driftReport('default', page, { de: { ...de, blocks: [stray] } })).toEqual([]);
+  expect(driftReport(page, { de: { ...de, blocks: [stray] } })).toEqual([]);
 });
 
 test('a block in a language its `_locales` does not name has drifted too', () => {
@@ -548,7 +537,7 @@ test('a block in a language its `_locales` does not name has drifted too', () =>
   const compliance = (de.blocks as unknown[])[1];
   const en = { ...drifted('en'), blocks: [...(drifted('en').blocks as unknown[]), compliance] };
 
-  expect(driftReport('default', page, { en, de })).toEqual([
+  expect(driftReport(page, { en, de })).toEqual([
     {
       path: 'blocks[_id=p8xk2m4q]',
       type: 'compliance',
@@ -575,7 +564,7 @@ test('a drift row carries the words each language has for it', () => {
     blocks: [...(drifted('en').blocks as unknown[]), { ...compliance, heading: 'Right to cancel' }],
   };
 
-  expect(driftReport('default', page, { en, de })[0]?.values).toEqual({
+  expect(driftReport(page, { en, de })[0]?.values).toEqual({
     en: ['Right to cancel'],
     de: ['Widerrufsbelehrung'],
   });
@@ -617,7 +606,7 @@ test('a block inside a block is compared too', () => {
   const en = section([{ _type: 'quote', _id: 'z9y8x7w6', body: 'A rare find.' }]);
   const de = section([]);
 
-  expect(driftReport('default', nested, { en, de })).toEqual([
+  expect(driftReport(nested, { en, de })).toEqual([
     {
       path: 'blocks[_id=a1b2c3d4].blocks[_id=z9y8x7w6]',
       type: 'quote',
@@ -632,7 +621,7 @@ test('a row an array in one language has and the other does not is drift', () =>
   const en = { sidebar: { features: [{ _id: 'f1f2f3f4', label: 'Parking' }] } };
   const de = { sidebar: { features: [] } };
 
-  expect(driftReport('default', nested, { en, de })).toEqual([
+  expect(driftReport(nested, { en, de })).toEqual([
     {
       path: 'sidebar.features[_id=f1f2f3f4]',
       in: ['en'],
@@ -645,13 +634,13 @@ test('a row an array in one language has and the other does not is drift', () =>
 // An answer names the languages a row should end up in, which a save is not allowed to do.
 const QUOTE = 'blocks[_id=z9y8x7w6]';
 const answer = (locales: string[], files: Record<string, unknown>, path = QUOTE) =>
-  applyDrift('default', page, ['en', 'de'], files, [{ path, locales }]);
+  applyDrift(page, ['en', 'de'], files, [{ path, locales }]);
 
 test('a block answered with the language missing it arrives there with its shared values', () => {
   const files = answer(['en', 'de'], { en: drifted('en'), de: drifted('de') });
 
   // Behind the hero, which is the last block before it that English also has.
-  expect(stringifyEntry('default', files.en)).toBe(
+  expect(stringifyEntry(files.en)).toBe(
     [
       '_version: 1',
       'title: "Home"',
@@ -667,7 +656,7 @@ test('a block answered with the language missing it arrives there with its share
       '',
     ].join('\n'),
   );
-  expect(stringifyEntry('default', files.de)).toBe(driftFile('de'));
+  expect(stringifyEntry(files.de)).toBe(driftFile('de'));
 });
 
 test('a block answered with no language at all is taken out of every file', () => {
@@ -678,7 +667,7 @@ test('a block answered with no language at all is taken out of every file', () =
     'p8xk2m4q',
     'q1w2e3r4',
   ]);
-  expect(stringifyEntry('default', files.en)).toBe(driftFile('en'));
+  expect(stringifyEntry(files.en)).toBe(driftFile('en'));
 });
 
 test('a block answered with the languages that already have it is marked for them', () => {
@@ -690,7 +679,7 @@ test('a block answered with the languages that already have it is marked for the
     _locales: ['de'],
     body: 'Ein seltener Fund.',
   });
-  expect(stringifyEntry('default', files.en)).toBe(driftFile('en'));
+  expect(stringifyEntry(files.en)).toBe(driftFile('en'));
 });
 
 // The other shape: a block whose `_locales` the file it sits in is not named by.
@@ -708,7 +697,7 @@ test('a marked block answered with what the mark says comes out of the other fil
   const files = answer(['de'], marked(), COMPLIANCE);
 
   expect(blockIds(files.en as Record<string, unknown>)).toEqual(['k3nf9a2p', 'q1w2e3r4']);
-  expect(stringifyEntry('default', files.de)).toBe(driftFile('de'));
+  expect(stringifyEntry(files.de)).toBe(driftFile('de'));
 });
 
 test('a marked block answered with every language loses the mark rather than widening it', () => {
@@ -731,7 +720,7 @@ test('a mark naming a language the entry has no file in is left alone', () => {
     'fr',
   ];
 
-  const applied = applyDrift('default', page, ['en', 'de', 'fr'], files, [
+  const applied = applyDrift(page, ['en', 'de', 'fr'], files, [
     { path: COMPLIANCE, locales: ['de'] },
   ]);
 
@@ -745,7 +734,7 @@ test('a mark naming a language the entry has no file in is left alone', () => {
 test('a row answered inside a group arrives in a file that has neither the group nor the array', () => {
   const en = { sidebar: { features: [{ _id: 'f1f2f3f4', label: 'Parking' }] } };
 
-  const files = applyDrift('default', nested, ['en', 'de'], { en, de: {} }, [
+  const files = applyDrift(nested, ['en', 'de'], { en, de: {} }, [
     { path: 'sidebar.features[_id=f1f2f3f4]', locales: ['en', 'de'] },
   ]);
 
@@ -755,7 +744,7 @@ test('a row answered inside a group arrives in a file that has neither the group
 test('a block answered into another language takes the blocks inside it along', () => {
   const de = section([{ _type: 'quote', _id: 'z9y8x7w6', body: 'Ein seltener Fund.' }]);
 
-  const files = applyDrift('default', nested, ['en', 'de'], { en: { blocks: [] }, de }, [
+  const files = applyDrift(nested, ['en', 'de'], { en: { blocks: [] }, de }, [
     { path: 'blocks[_id=a1b2c3d4]', locales: ['en', 'de'] },
   ]);
 
@@ -802,7 +791,7 @@ test('a menu reordered in one language is reordered in the other, and its labels
   const after = tree(['Home', 'Listings', 'Impressum']);
   (after.menus[0] as Record<string, unknown>).items = [listings, home, impressum];
 
-  const synced = syncLocale('default', navigation, 'de', { before, after }, de());
+  const synced = syncLocale(navigation, 'de', { before, after }, de());
 
   expect(itemsOf(synced).map((i) => [i._id, i.label])).toEqual([
     ['l1i2s3t4', 'Angebote'],
@@ -819,7 +808,7 @@ test('what a menu item points at follows the source language; the label does not
   moved.newTab = true;
   moved.label = 'For sale';
 
-  const synced = syncLocale('default', navigation, 'de', { before, after }, de());
+  const synced = syncLocale(navigation, 'de', { before, after }, de());
 
   expect(itemsOf(synced)[1]).toMatchObject({
     label: 'Angebote',
@@ -837,7 +826,7 @@ test('an item added in one language arrives in the other with no label of its ow
     link: { type: 'entry', ref: 'pages/contact' },
   });
 
-  const synced = syncLocale('default', navigation, 'de', { before, after }, de());
+  const synced = syncLocale(navigation, 'de', { before, after }, de());
 
   expect(itemsOf(synced)[3]).toEqual({
     _id: 'c1o2n3t4',
@@ -853,7 +842,7 @@ test('a child label is the child language’s own, however deep the tree goes', 
   const target = de();
   (childrenOf(target, 1)[0] as Record<string, unknown>).label = 'Die Mühle';
 
-  const synced = syncLocale('default', navigation, 'de', { before, after }, target);
+  const synced = syncLocale(navigation, 'de', { before, after }, target);
 
   expect(childrenOf(synced, 1)[0]?.label).toBe('Die Mühle');
 });
@@ -864,7 +853,7 @@ test('a synced menu file is written in the order the format declares', () => {
   (itemsOf(after)[0] as Record<string, unknown>).newTab = true;
   (itemsOf(after)[2] as Record<string, unknown>)._locales = ['de'];
 
-  const synced = syncLocale('default', navigation, 'de', { before, after }, de());
+  const synced = syncLocale(navigation, 'de', { before, after }, de());
 
   expect(Object.keys(itemsOf(synced)[0] ?? {})).toEqual(['_id', 'label', 'link', 'newTab']);
   expect(Object.keys(itemsOf(synced)[2] ?? {})).toEqual(['_id', '_locales', 'label', 'link']);
@@ -874,7 +863,7 @@ test('a menu item one language has without `_locales` is drift like any other ro
   const short = de();
   itemsOf(short).splice(1, 1);
 
-  expect(driftReport('default', navigation, { en: en(), de: short })).toEqual([
+  expect(driftReport(navigation, { en: en(), de: short })).toEqual([
     {
       path: 'menus[_id=n1h2e3a4].items[_id=l1i2s3t4]',
       in: ['en'],

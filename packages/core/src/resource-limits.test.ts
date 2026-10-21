@@ -19,7 +19,7 @@ beforeAll(async () => {
 });
 
 test('an expired owner cannot complete a lease after a new owner takes it', async () => {
-  const db = openDb('paid-work-fence', binding);
+  const db = openDb(binding);
   const old = await claimCostlyOperation('paid-work-fence', db, 'same', 'u1', 1);
   const current = await claimCostlyOperation('paid-work-fence', db, 'same', 'u2', 5 * 60_000 + 2);
   expect(current).toMatchObject({ owner: true, token: expect.any(String) });
@@ -44,7 +44,7 @@ test('an expired owner cannot complete a lease after a new owner takes it', asyn
 });
 
 test('duplicate paid work joins one durable operation and reads its result', async () => {
-  const db = openDb('paid-work', binding);
+  const db = openDb(binding);
   const first = await claimCostlyOperation('paid-work', db, 'same', 'u1', 1);
   expect(first).toMatchObject({ owner: true, token: expect.any(String) });
   expect(await claimCostlyOperation('paid-work', db, 'same', 'u1', 2)).toMatchObject({
@@ -65,7 +65,7 @@ test('duplicate paid work joins one durable operation and reads its result', asy
 });
 
 test('a persistent fixed-window budget refuses work beyond its allowance', async () => {
-  const db = openDb('limits', binding);
+  const db = openDb(binding);
   await claimResource('limits', db, {
     subject: 'u1',
     kind: 'translation',
@@ -79,7 +79,7 @@ test('a persistent fixed-window budget refuses work beyond its allowance', async
 });
 
 test('a persistent concurrency claim is exclusive until released', async () => {
-  const db = openDb('claims', binding);
+  const db = openDb(binding);
   const first = await claimResource('claims', db, {
     subject: 'u1',
     kind: 'translate-active',

@@ -20,7 +20,7 @@ export class EntryShapeError extends Error {}
 const ID = /^[0-9a-z]{8}$/;
 const ALPHABET = '0123456789abcdefghijklmnopqrstuvwxyz';
 
-export function newId(_siteId: string): string {
+export function newId(): string {
   let id = '';
   while (id.length < 8) {
     const [byte] = crypto.getRandomValues(new Uint8Array(1));
@@ -83,8 +83,8 @@ const isStringArray = (v: unknown): v is string[] =>
   Array.isArray(v) && v.every((s) => typeof s === 'string');
 
 // Pass the same `ids` map for each locale file of an entry so the copies share one skeleton.
-export function regenerateIds<T>(siteId: string, data: T, ids = new Map<string, string>()): T {
-  const renamed = walk(siteId, data, ids) as T;
+export function regenerateIds<T>(data: T, ids = new Map<string, string>()): T {
+  const renamed = walk(data, ids) as T;
   const machine = (renamed as { _machine?: string[] })._machine;
   if (machine) {
     (renamed as { _machine: string[] })._machine = machine.map((p) =>
@@ -94,31 +94,31 @@ export function regenerateIds<T>(siteId: string, data: T, ids = new Map<string, 
   return renamed;
 }
 
-function walk(siteId: string, value: unknown, ids: Map<string, string>, at = ''): unknown {
-  if (Array.isArray(value)) return value.map((v, i) => walk(siteId, v, ids, `${at}[${i}]`));
+function walk(value: unknown, ids: Map<string, string>, at = ''): unknown {
+  if (Array.isArray(value)) return value.map((v, i) => walk(v, ids, `${at}[${i}]`));
   if (!value || typeof value !== 'object') return value;
   const copy = Object.fromEntries(
     Object.entries(value).map(([k, v]) => {
-      if (k !== '_id' || typeof v !== 'string') return [k, walk(siteId, v, ids, `${at}.${k}`)];
-      const next = ids.get(v) ?? newId(siteId);
+      if (k !== '_id' || typeof v !== 'string') return [k, walk(v, ids, `${at}.${k}`)];
+      const next = ids.get(v) ?? newId();
       ids.set(v, next);
       return [k, next];
     }),
   );
   // Keyed by position, so the languages of one copy agree on the id instead of reading as drift.
   if (at.endsWith(']') && typeof copy._id !== 'string')
-    copy._id = ids.get(at) ?? ids.set(at, newId(siteId)).get(at);
+    copy._id = ids.get(at) ?? ids.set(at, newId()).get(at);
   return copy;
 }
 
 /** `_locales` is written into every file the entry has, so whichever is read says the same. */
-export function isLive(_siteId: string, data: unknown, locale?: string): boolean {
+export function isLive(data: unknown, locale?: string): boolean {
   const entry = data as { _status?: unknown; _locales?: unknown } | null;
   if (entry?._status !== undefined) return false;
   if (locale === undefined || !Array.isArray(entry?._locales)) return true;
   return entry._locales.includes(locale);
 }
 
-export function filterLive<T>(siteId: string, entries: ContentEntry<T>[]): ContentEntry<T>[] {
-  return entries.filter((e) => isLive(siteId, e.data));
+export function filterLive<T>(entries: ContentEntry<T>[]): ContentEntry<T>[] {
+  return entries.filter((e) => isLive(e.data));
 }

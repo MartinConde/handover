@@ -26,10 +26,11 @@ export async function load(
   { locale, blocks }: { locale: string; blocks?: unknown },
 ) {
   const globals = await globalsAt(
-    'default', source, locale,
+    source,
+    locale,
     source.preview ? { required: ['site', 'navigation'], blocks } : undefined,
   );
-  const menus = await menusAt('default', source, cms, globals.navigation, locale);
+  const menus = await menusAt(source, cms, globals.navigation, locale);
   return { globals, menus, site: globals.site as Site };
 }
 ```
@@ -39,7 +40,7 @@ The page loader passes its rendered tree to this shared loader:
 result as props and renders `<Blocks blocks={data.blocks} components={components} globals={globals} />`.
 It does not fetch content itself, so preview uses the draft source throughout.
 
-The optional fourth argument selects globals: `required` names content the layout reads
+The optional third argument selects globals: `required` names content the layout reads
 directly, and `blocks` discovers `_ref` through nested arrays and plain objects. Names may be
 bare (`site`) or prefixed (`globals/site`); each is read once through `source.getEntry()`, so
 required drafts are validated. A missing selected global throws `ContentError`, naming its
@@ -127,7 +128,7 @@ async function fill(source: Source, locale: string, block: Block) {
 }
 
 export async function load(source: Source, { locale, slug }: { locale: string; slug: string }) {
-  const entry = await entryAt('default', source, cms, 'pages', locale, slug);
+  const entry = await entryAt(source, cms, 'pages', locale, slug);
   if (!entry) return undefined;
   const blocks = await Promise.all(entry.data.blocks.map((block) => fill(source, locale, block)));
   return { data: { ...entry.data, blocks } };

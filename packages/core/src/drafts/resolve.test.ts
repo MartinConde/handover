@@ -71,7 +71,7 @@ const menuItem = (id: string, label: string, href: string, children?: unknown[])
 test('a field only one side changed is merged rather than asked about', () => {
   const base = { title: 'Mill House', summary: 'A mill.', price: 450000 };
 
-  const report = conflictReport('default', listing, {
+  const report = conflictReport(listing, {
     en: {
       base,
       ours: { ...base, summary: 'A mill above the weir.' },
@@ -89,7 +89,7 @@ test('a field only one side changed is merged rather than asked about', () => {
 test('a field both sides changed is one question, and it names what both started from', () => {
   const base = { title: 'Mill House', price: 450000 };
 
-  const report = conflictReport('default', listing, {
+  const report = conflictReport(listing, {
     en: { base, ours: { ...base, price: 435000 }, theirs: { ...base, price: 440000 } },
   });
 
@@ -110,7 +110,7 @@ test('a field both sides changed the same way is not a question', () => {
   const base = { title: 'Mill House', price: 450000 };
   const both = { ...base, price: 440000 };
 
-  const report = conflictReport('default', listing, { en: { base, ours: both, theirs: both } });
+  const report = conflictReport(listing, { en: { base, ours: both, theirs: both } });
 
   expect(report.questions).toEqual([]);
   expect(report.merged.map((m) => m.label)).toEqual(['Price']);
@@ -119,7 +119,7 @@ test('a field both sides changed the same way is not a question', () => {
 test('a question about a sentence carries the words each side moved', () => {
   const base = { summary: 'A cottage above the harbour' };
 
-  const report = conflictReport('default', listing, {
+  const report = conflictReport(listing, {
     en: {
       base,
       ours: { summary: 'A cottage above the fish market' },
@@ -144,7 +144,7 @@ test('a value the languages share is one question and not one per language', () 
   const ours = (data: typeof en) => ({ ...data, price: 435000 });
   const theirs = (data: typeof en) => ({ ...data, price: 440000 });
 
-  const report = conflictReport('default', listing, {
+  const report = conflictReport(listing, {
     en: { base: en, ours: ours(en), theirs: theirs(en) },
     de: { base: de, ours: ours(de), theirs: theirs(de) },
   });
@@ -156,7 +156,7 @@ test("a question about one language's own words says which language it is", () =
   const en = { title: 'Mill House', summary: 'A mill.', price: 450000 };
   const de = { title: 'Mühlenhaus', summary: 'Eine Mühle.', price: 450000 };
 
-  const report = conflictReport('default', listing, {
+  const report = conflictReport(listing, {
     en: {
       base: en,
       ours: { ...en, summary: 'A mill above the weir.' },
@@ -171,7 +171,7 @@ test("a question about one language's own words says which language it is", () =
 test('a block one side added and a block the other side edited are both merged', () => {
   const base = { title: 'Home', blocks: [hero, gallery] };
 
-  const report = conflictReport('default', page, {
+  const report = conflictReport(page, {
     en: {
       base,
       ours: { ...base, blocks: [hero, gallery, cta] },
@@ -189,7 +189,7 @@ test('a block one side added and a block the other side edited are both merged',
 test('the same heading rewritten on both sides is a question about that block', () => {
   const base = { title: 'Home', blocks: [hero] };
 
-  const report = conflictReport('default', page, {
+  const report = conflictReport(page, {
     en: {
       base,
       ours: { ...base, blocks: [{ ...hero, heading: 'Seaview Cottage, Devon' }] },
@@ -207,7 +207,7 @@ test('a body too long to read twice is asked about whole', () => {
     Array.from({ length: 10_000 }, (_, i) => `${prefix}${i}`).join(' ');
   const base = { body: words('a') };
 
-  const report = conflictReport('default', listing, {
+  const report = conflictReport(listing, {
     en: { base, ours: { body: words('b') }, theirs: { body: words('c') } },
   });
 
@@ -220,7 +220,6 @@ test('what nobody answered takes the side that changed it', () => {
   const base = { title: 'Mill House', summary: 'A mill.', price: 450000 };
 
   const resolved = applyResolution(
-    'default',
     listing,
     {
       en: {
@@ -250,8 +249,8 @@ test('an answer decides the field it names and nothing else', () => {
   };
 
   const answer = (side: 'ours' | 'theirs') => [{ path: 'price', locale: 'en', side }] as const;
-  const mine = applyResolution('default', listing, files, [...answer('ours')]);
-  const theirs = applyResolution('default', listing, files, [...answer('theirs')]);
+  const mine = applyResolution(listing, files, [...answer('ours')]);
+  const theirs = applyResolution(listing, files, [...answer('theirs')]);
 
   expect(mine.en).toMatchObject({ price: 435000, summary: 'A mill above the weir.' });
   expect(theirs.en).toMatchObject({ price: 440000, summary: 'A mill above the weir.' });
@@ -265,7 +264,7 @@ test('an answer about a shared value is written into every language', () => {
     de: { base: de, ours: { ...de, price: 435000 }, theirs: { ...de, price: 440000 } },
   };
 
-  const resolved = applyResolution('default', listing, files, [{ path: 'price', side: 'ours' }]);
+  const resolved = applyResolution(listing, files, [{ path: 'price', side: 'ours' }]);
 
   expect([resolved.en, resolved.de]).toMatchObject([{ price: 435000 }, { price: 435000 }]);
 });
@@ -288,7 +287,7 @@ test('an automatically merged image keeps its own dimensions while alt text stay
     },
   };
 
-  const resolved = applyResolution('default', mediaPage, files, []);
+  const resolved = applyResolution(mediaPage, files, []);
 
   expect(resolved).toEqual({
     en: { title: 'Home', image: image('media/new.png', 'New front', 300, 400) },
@@ -306,7 +305,7 @@ test('an explicit image choice carries that source dimensions without taking its
     },
   };
 
-  const resolved = applyResolution('default', mediaPage, files, [
+  const resolved = applyResolution(mediaPage, files, [
     { path: 'image.src', locale: 'en', side: 'ours' },
     { path: 'image.alt', locale: 'en', side: 'theirs' },
   ]);
@@ -343,11 +342,11 @@ test('SEO image choices carry dimensions for additions and remove the whole dele
     },
   };
 
-  const chosen = applyResolution('default', mediaPage, added, [
+  const chosen = applyResolution(mediaPage, added, [
     { path: 'seo.image.src', locale: 'en', side: 'theirs' },
     { path: 'seo.image.alt', locale: 'en', side: 'ours' },
   ]);
-  const deleted = applyResolution('default', mediaPage, removed, [
+  const deleted = applyResolution(mediaPage, removed, [
     { path: 'seo.image.src', locale: 'en', side: 'ours' },
   ]);
 
@@ -365,8 +364,8 @@ test('a draft menu edit reported as merged is present in the resolved entry', ()
   const theirs = { ...base, title: 'Main navigation' };
   const files = { en: { base, ours, theirs } };
 
-  const report = conflictReport('default', navigation, files);
-  const resolved = applyResolution('default', navigation, files, []);
+  const report = conflictReport(navigation, files);
+  const resolved = applyResolution(navigation, files, []);
 
   expect(report.questions).toEqual([]);
   expect(report.merged.map((change) => [change.change.path, change.side])).toEqual([
@@ -395,8 +394,8 @@ test('menu answers independently choose nested labels and links', () => {
   ]);
   const files = { en: { base, ours, theirs } };
 
-  const report = conflictReport('default', navigation, files);
-  const resolved = applyResolution('default', navigation, files, [
+  const report = conflictReport(navigation, files);
+  const resolved = applyResolution(navigation, files, [
     {
       path: 'menus[_id=menu0001].items[_id=home0001].children[_id=team0001].label',
       locale: 'en',
@@ -429,8 +428,8 @@ test('menu additions, removals, and root and child order follow the reported dra
   const theirs = { ...base, title: 'Main navigation' };
   const files = { en: { base, ours, theirs } };
 
-  const report = conflictReport('default', navigation, files);
-  const resolved = applyResolution('default', navigation, files, []);
+  const report = conflictReport(navigation, files);
+  const resolved = applyResolution(navigation, files, []);
 
   expect(report.questions).toEqual([]);
   expect(report.merged.some((change) => change.change.kind === 'row')).toBe(true);
@@ -441,7 +440,6 @@ test('the marks a file carries are the ones the side it came from had', () => {
   const base = { _version: 1, _machine: ['summary'], title: 'Mill House' };
 
   const resolved = applyResolution(
-    'default',
     listing,
     {
       en: {
@@ -460,7 +458,6 @@ test('a block one side added stays, and one the other side removed goes', () => 
   const base = { title: 'Home', blocks: [hero, gallery] };
 
   const resolved = applyResolution(
-    'default',
     page,
     {
       en: {
@@ -482,7 +479,6 @@ test('a block added in the repository arrives where it was put', () => {
   const base = { title: 'Home', blocks: [hero, gallery] };
 
   const resolved = applyResolution(
-    'default',
     page,
     {
       en: {
@@ -506,7 +502,6 @@ test('a language nobody changed comes out of the resolution as it went in', () =
   const de = { title: 'Mühlenhaus', price: 450000 };
 
   const resolved = applyResolution(
-    'default',
     listing,
     {
       en: { base: en, ours: { ...en, title: 'The Mill House' }, theirs: en },
@@ -525,7 +520,7 @@ test('a question about a labelled field is named in every interface language', (
     ],
     blocks: {},
   };
-  const report = conflictReport('default', form, {
+  const report = conflictReport(form, {
     en: { base: { title: 'Home' }, ours: { title: 'Start' }, theirs: { title: 'Welcome' } },
   });
 
@@ -563,7 +558,7 @@ test('nested conflict and merged labels preserve localized row and group prefixe
   const data = (price: number, count: number) => ({
     body: [{ _id: 'one', _type: 'hero', details: { price, count } }],
   });
-  const report = conflictReport('default', form, {
+  const report = conflictReport(form, {
     en: { base: data(1, 1), ours: data(2, 2), theirs: data(3, 1) },
   });
   expect(report.questions[0]?.labels).toEqual({
@@ -575,19 +570,16 @@ test('nested conflict and merged labels preserve localized row and group prefixe
     de: 'Bühne · Angaben · Count',
   });
   expect(
-    applyResolution(
-      'default',
-      form,
-      { en: { base: data(1, 1), ours: data(2, 2), theirs: data(3, 1) } },
-      [{ locale: 'en', path: 'body[_id=one].details.price', side: 'theirs' }],
-    ),
+    applyResolution(form, { en: { base: data(1, 1), ours: data(2, 2), theirs: data(3, 1) } }, [
+      { locale: 'en', path: 'body[_id=one].details.price', side: 'theirs' },
+    ]),
   ).toEqual({ en: data(3, 2) });
 });
 
 test("a rewritten rich text body carries each side's text to the question", () => {
   const base = { body: 'A mill.\n\nOpen daily.' };
 
-  const report = conflictReport('default', listing, {
+  const report = conflictReport(listing, {
     en: { base, ours: { body: 'testing' }, theirs: { body: 'Closed' } },
   });
 
@@ -619,7 +611,7 @@ test('a question inside the second of two blocks of one type names its position'
   const second = { _type: 'hero', _id: 'dddd4444', heading: 'Second' };
   const base = { title: 'Home', blocks: [hero, second] };
 
-  const report = conflictReport('default', page, {
+  const report = conflictReport(page, {
     en: {
       base,
       ours: { ...base, blocks: [hero, { ...second, heading: 'Second, ours' }] },

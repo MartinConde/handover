@@ -13,13 +13,13 @@ import { entryAt, getEntryLocales } from 'astro-handover';
 import cms from '../../cms.config';
 
 export async function load(source: Source, { locale, slug }: { locale: string; slug: string }) {
-  const entry = await entryAt('default', source, cms, 'pages', locale, slug);
+  const entry = await entryAt(source, cms, 'pages', locale, slug);
   if (!entry) return undefined;
   const name = entry.id.slice(locale.length + 1);
   return {
     data: entry.data,
     locale,
-    locales: await getEntryLocales('default', source, cms, 'pages', name),
+    locales: await getEntryLocales(source, cms, 'pages', name),
   };
 }
 ```
@@ -40,7 +40,7 @@ if (!listing) throw new Error(`No listing de/${Astro.params.slug}`);
 ---
 ```
 
-`entryAddress('default', entry.data, name)` is each address — the `slug` in the file, or the
+`entryAddress(entry.data, name)` is each address — the `slug` in the file, or the
 file name. Never `entry.data.slug`: Astro puts a warning getter there on every entry without
 one, and touching it logs on every render.
 

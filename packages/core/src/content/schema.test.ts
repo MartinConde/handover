@@ -9,20 +9,20 @@ const obj = (properties: Record<string, JsonSchema>, required: string[] = []): J
 });
 
 test('top-level required strings become text fields', () => {
-  expect(fieldsFrom('default', obj({ title: { type: 'string' } }, ['title']))).toEqual([
+  expect(fieldsFrom(obj({ title: { type: 'string' } }, ['title']))).toEqual([
     { path: ['title'], label: 'Title', type: 'text', required: true },
   ]);
 });
 
 test('optional strings are text fields with required false', () => {
-  expect(fieldsFrom('default', obj({ note: { type: 'string' } }))).toEqual([
+  expect(fieldsFrom(obj({ note: { type: 'string' } }))).toEqual([
     { path: ['note'], label: 'Note', type: 'text', required: false },
   ]);
 });
 
 test('a nested object is a group whose fields are relative to it', () => {
   const schema = obj({ address: obj({ street: { type: 'string' } }, ['street']) }, ['address']);
-  expect(fieldsFrom('default', schema)).toEqual([
+  expect(fieldsFrom(schema)).toEqual([
     {
       path: ['address'],
       label: 'Address',
@@ -35,28 +35,28 @@ test('a nested object is a group whose fields are relative to it', () => {
 
 test('number and integer schemas become number fields', () => {
   const schema = obj({ area: { type: 'number' }, beds: { type: 'integer', minimum: 0 } }, ['area']);
-  expect(fieldsFrom('default', schema)).toEqual([
+  expect(fieldsFrom(schema)).toEqual([
     { path: ['area'], label: 'Area', type: 'number', required: true },
     { path: ['beds'], label: 'Beds', type: 'number', required: false },
   ]);
 });
 
 test('boolean schemas become boolean fields', () => {
-  expect(fieldsFrom('default', obj({ sold: { type: 'boolean' } }, ['sold']))).toEqual([
+  expect(fieldsFrom(obj({ sold: { type: 'boolean' } }, ['sold']))).toEqual([
     { path: ['sold'], label: 'Sold', type: 'boolean', required: true },
   ]);
 });
 
 test('a string with format date is a date field', () => {
   const schema = obj({ from: { type: 'string', format: 'date', pattern: '^x$' } }, ['from']);
-  expect(fieldsFrom('default', schema)).toEqual([
+  expect(fieldsFrom(schema)).toEqual([
     { path: ['from'], label: 'From', type: 'date', required: true },
   ]);
 });
 
 test('a string enum is a select field carrying its options', () => {
   const schema = obj({ status: { type: 'string', enum: ['sale', 'rent'] } }, ['status']);
-  expect(fieldsFrom('default', schema)).toEqual([
+  expect(fieldsFrom(schema)).toEqual([
     {
       path: ['status'],
       label: 'Status',
@@ -75,7 +75,7 @@ test('option names go onto the select as authored, and unknown values are droppe
       options: { sale: { en: 'For sale', de: 'Zu verkaufen' }, rent: 'To rent', gone: 'Gone' },
     },
   });
-  expect(fieldsFrom('default', schema)).toMatchObject([
+  expect(fieldsFrom(schema)).toMatchObject([
     {
       type: 'select',
       options: ['sale', 'rent'],
@@ -86,7 +86,7 @@ test('option names go onto the select as authored, and unknown values are droppe
 
 test('a schema tagged handover: link is a link field, whatever its shape', () => {
   const schema = obj({ button: { oneOf: [obj({ href: { type: 'string' } })], handover: 'link' } });
-  expect(fieldsFrom('default', schema)).toEqual([
+  expect(fieldsFrom(schema)).toEqual([
     { path: ['button'], label: 'Button', type: 'link', required: false },
   ]);
 });
@@ -98,7 +98,7 @@ test('schemas tagged image, file, embed and seo are fields of that type', () => 
     video: { type: 'object', properties: {}, handover: 'embed' },
     seo: { type: 'object', properties: {}, handover: 'seo' },
   });
-  expect(fieldsFrom('default', schema)).toEqual([
+  expect(fieldsFrom(schema)).toEqual([
     // A picture always has a cap, whatever the field says; a file always has a type it takes.
     { path: ['hero'], label: 'Hero', type: 'image', required: false, preset: { max: 2400 } },
     {
@@ -125,7 +125,7 @@ test('an image field carries the ratio, the cap and the floor its schema asked f
     },
     logo: { type: 'object', properties: {}, handover: 'image', ratio: '1:1', max: 512 },
   });
-  expect(fieldsFrom('default', schema)).toEqual([
+  expect(fieldsFrom(schema)).toEqual([
     {
       path: ['hero'],
       label: 'Hero',
@@ -153,7 +153,7 @@ test('a file field carries the types it was widened to', () => {
       accept: ['application/pdf', 'application/zip'],
     },
   });
-  expect(fieldsFrom('default', schema)).toEqual([
+  expect(fieldsFrom(schema)).toEqual([
     {
       path: ['plan'],
       label: 'Plan',
@@ -168,7 +168,7 @@ test('a schema tagged reference carries its collection', () => {
   const schema = obj({ agent: { type: 'string', handover: 'reference', collection: 'agents' } }, [
     'agent',
   ]);
-  expect(fieldsFrom('default', schema)).toEqual([
+  expect(fieldsFrom(schema)).toEqual([
     { path: ['agent'], label: 'Agent', type: 'reference', required: true, collection: 'agents' },
   ]);
 });
@@ -183,7 +183,7 @@ test('other leaves are marked unsupported, not rejected', () => {
     },
     ['tags', 'nick', 'when', 'title'],
   );
-  expect(fieldsFrom('default', schema)).toEqual([
+  expect(fieldsFrom(schema)).toEqual([
     { path: ['tags'], label: 'Tags', type: 'unsupported' },
     { path: ['nick'], label: 'Nick', type: 'unsupported' },
     { path: ['when'], label: 'When', type: 'unsupported' },
@@ -192,7 +192,7 @@ test('other leaves are marked unsupported, not rejected', () => {
 });
 
 test('a schema that is not an object has no fields', () => {
-  expect(fieldsFrom('default', { type: 'string' })).toEqual([]);
+  expect(fieldsFrom({ type: 'string' })).toEqual([]);
 });
 
 test('reserved _ keys are metadata, not form fields', () => {
@@ -200,7 +200,7 @@ test('reserved _ keys are metadata, not form fields', () => {
     { _version: { type: 'number' }, _status: { type: 'string' }, title: { type: 'string' } },
     ['title'],
   );
-  expect(fieldsFrom('default', schema)).toEqual([
+  expect(fieldsFrom(schema)).toEqual([
     { path: ['title'], label: 'Title', type: 'text', required: true },
   ]);
 });
@@ -215,7 +215,7 @@ test('an array of objects is an array field whose item fields have no prefix', (
     },
     ['rooms'],
   );
-  expect(fieldsFrom('default', schema)).toEqual([
+  expect(fieldsFrom(schema)).toEqual([
     {
       path: ['rooms'],
       label: 'Rooms',
@@ -231,7 +231,7 @@ test('an array of objects is an array field whose item fields have no prefix', (
 
 test('an array of scalars is an array field with one unnamed item field', () => {
   const schema = obj({ tags: { type: 'array', items: { type: 'string' } } });
-  expect(fieldsFrom('default', schema)).toEqual([
+  expect(fieldsFrom(schema)).toEqual([
     {
       path: ['tags'],
       label: 'Tags',
@@ -246,16 +246,14 @@ test('an array of arrays is unsupported, the serialiser rejects it anyway', () =
   const schema = obj({
     grid: { type: 'array', items: { type: 'array', items: { type: 'string' } } },
   });
-  expect(fieldsFrom('default', schema)).toEqual([
-    { path: ['grid'], label: 'Grid', type: 'unsupported' },
-  ]);
+  expect(fieldsFrom(schema)).toEqual([{ path: ['grid'], label: 'Grid', type: 'unsupported' }]);
 });
 
 test('a schema tagged blocks is a blocks field carrying its block types', () => {
   const schema = obj({ blocks: { type: 'array', handover: 'blocks', types: ['hero', 'cta'] } }, [
     'blocks',
   ]);
-  expect(fieldsFrom('default', schema)).toEqual([
+  expect(fieldsFrom(schema)).toEqual([
     { path: ['blocks'], label: 'Blocks', type: 'blocks', required: true, types: ['hero', 'cta'] },
   ]);
 });
@@ -268,7 +266,7 @@ test('a string tagged richtext is a richtext field carrying its tier', () => {
     },
     ['body'],
   );
-  expect(fieldsFrom('default', schema)).toEqual([
+  expect(fieldsFrom(schema)).toEqual([
     { path: ['body'], label: 'Body', type: 'richtext', required: true, tier: 'full' },
     { path: ['note'], label: 'Note', type: 'richtext', required: false, tier: 'basic' },
   ]);
@@ -276,7 +274,7 @@ test('a string tagged richtext is a richtext field carrying its tier', () => {
 
 test('a custom tagged with a scalar name is a field of that type', () => {
   const schema = obj({ when: { handover: 'date' }, count: { handover: 'number' } }, ['when']);
-  expect(fieldsFrom('default', schema)).toEqual([
+  expect(fieldsFrom(schema)).toEqual([
     { path: ['when'], label: 'When', type: 'date', required: true },
     { path: ['count'], label: 'Count', type: 'number', required: false },
   ]);
@@ -287,7 +285,7 @@ test('a $ref is resolved against the root $defs', () => {
     ...obj({ hero: { $ref: '#/$defs/__schema0' } }, ['hero']),
     $defs: { __schema0: obj({ heading: { type: 'string' } }, ['heading']) },
   };
-  expect(fieldsFrom('default', schema)).toEqual([
+  expect(fieldsFrom(schema)).toEqual([
     {
       path: ['hero'],
       label: 'Hero',
@@ -329,7 +327,7 @@ test('formOf lists each block type once with its own fields, recursion included'
       ),
     },
   };
-  expect(formOf('default', schema)).toEqual({
+  expect(formOf(schema)).toEqual({
     fields: [
       {
         path: ['blocks'],
@@ -363,7 +361,7 @@ test('formOf lists each block type once with its own fields, recursion included'
 });
 
 test('formOf of a schema without blocks has an empty block map', () => {
-  expect(formOf('default', obj({ title: { type: 'string' } }))).toEqual({
+  expect(formOf(obj({ title: { type: 'string' } }))).toEqual({
     fields: [{ path: ['title'], label: 'Title', type: 'text', required: false }],
     blocks: {},
   });
@@ -378,17 +376,17 @@ test.each([
   ['seo_title', 'Seo title'],
   ['seo-title', 'Seo title'],
 ])('the key %s is labelled %s', (key, label) => {
-  expect(fieldsFrom('default', obj({ [key]: { type: 'string' } }))[0]?.label).toBe(label);
+  expect(fieldsFrom(obj({ [key]: { type: 'string' } }))[0]?.label).toBe(label);
 });
 
 test('a label in the schema wins over the humanised key', () => {
   const schema = obj({ seo: { type: 'object', properties: {}, handover: 'seo', label: 'SEO' } });
-  expect(fieldsFrom('default', schema)[0]?.label).toBe('SEO');
+  expect(fieldsFrom(schema)[0]?.label).toBe('SEO');
 });
 
 test('a label per language keeps every language and reads English by default', () => {
   const schema = obj({ title: { type: 'string', label: { en: 'Title', de: 'Titel' } } });
-  expect(fieldsFrom('default', schema)).toEqual([
+  expect(fieldsFrom(schema)).toEqual([
     {
       path: ['title'],
       label: 'Title',
@@ -411,7 +409,7 @@ test('a block type labelled in its schema is named in the form', () => {
       items: { anyOf: [hero, cta] },
     },
   });
-  expect(formOf('default', schema).blockLabels).toEqual({ hero: { en: 'Hero', de: 'Bühne' } });
+  expect(formOf(schema).blockLabels).toEqual({ hero: { en: 'Hero', de: 'Bühne' } });
 });
 
 test('formIn names every field and block type in the language asked for', () => {
@@ -426,7 +424,7 @@ test('formIn names every field and block type in the language asked for', () => 
     body: { type: 'array', handover: 'blocks', types: ['hero'], items: { anyOf: [hero] } },
     note: { type: 'string' },
   });
-  const form = formIn(formOf('default', schema), 'de');
+  const form = formIn(formOf(schema), 'de');
   const [contact, days, body, note] = form.fields;
   expect(contact?.type === 'group' && contact.fields[0]?.label).toBe('Telefon');
   expect(days?.type === 'array' && days.item[0]?.label).toBe('Tag');
@@ -441,7 +439,7 @@ test('formIn names a block type with no label by its humanised type', () => {
   const schema = obj({
     body: { type: 'array', handover: 'blocks', types: ['faq_item'], items: { anyOf: [faq] } },
   });
-  expect(formIn(formOf('default', schema), 'de').blockLabels).toEqual({ faq_item: 'Faq item' });
+  expect(formIn(formOf(schema), 'de').blockLabels).toEqual({ faq_item: 'Faq item' });
 });
 
 test('groups, arrays, blocks and unsupported leaves are labelled too', () => {
@@ -451,7 +449,7 @@ test('groups, arrays, blocks and unsupported leaves are labelled too', () => {
     pageBlocks: { type: 'array', handover: 'blocks', types: ['hero'] },
     oddOne: { anyOf: [{ type: 'string' }, { type: 'null' }] },
   });
-  const fields = fieldsFrom('default', schema);
+  const fields = fieldsFrom(schema);
   expect(fields.map((f) => f.label)).toEqual([
     'Main contact',
     'Open days',
@@ -467,7 +465,7 @@ test('groups, arrays, blocks and unsupported leaves are labelled too', () => {
 
 test('the item of an array of scalars has no label of its own', () => {
   const schema = obj({ tags: { type: 'array', items: { type: 'string' } } });
-  const array = fieldsFrom('default', schema)[0];
+  const array = fieldsFrom(schema)[0];
   if (array?.type !== 'array') throw new Error('shape changed');
   expect(array.item[0]?.label).toBe('');
 });
@@ -479,12 +477,7 @@ test('a field says how it translates only when it is not the default', () => {
     notes: { type: 'string', i18n: false },
     tagline: { type: 'string', i18n: true },
   });
-  expect(fieldsFrom('default', schema).map((f) => f.i18n)).toEqual([
-    undefined,
-    'duplicate',
-    false,
-    true,
-  ]);
+  expect(fieldsFrom(schema).map((f) => f.i18n)).toEqual([undefined, 'duplicate', false, true]);
 });
 
 test('a nested property carries its own mode, whatever its group says', () => {
@@ -494,7 +487,7 @@ test('a nested property carries its own mode, whatever its group says', () => {
       i18n: 'duplicate',
     },
   });
-  const group = fieldsFrom('default', schema)[0];
+  const group = fieldsFrom(schema)[0];
   if (group?.type !== 'group') throw new Error('shape changed');
   expect(group.i18n).toBe('duplicate');
   expect(group.fields.map((f) => f.i18n)).toEqual([undefined, true]);
@@ -502,13 +495,12 @@ test('a nested property carries its own mode, whatever its group says', () => {
 
 test('a mode that is not one of the three is ignored', () => {
   const schema = obj({ price: { type: 'number', i18n: 'duplicated' } });
-  expect(fieldsFrom('default', schema)[0]?.i18n).toBeUndefined();
+  expect(fieldsFrom(schema)[0]?.i18n).toBeUndefined();
 });
 
 // The focal picker previews every crop the site renders, each ratio once however many ask.
 test('the site’s image ratios are collected from every depth, once each', () => {
   const listing = formOf(
-    'default',
     obj({
       hero: { handover: 'image', ratio: '16:9', max: 2400, label: 'Hero image' },
       gallery: { type: 'array', items: { handover: 'image', ratio: '4:3', max: 1600 } },
@@ -517,7 +509,7 @@ test('the site’s image ratios are collected from every depth, once each', () =
       logo: { handover: 'image', max: 800 },
     }),
   );
-  const page = formOf('default', obj({ banner: { handover: 'image', ratio: '16:9', max: 2400 } }));
+  const page = formOf(obj({ banner: { handover: 'image', ratio: '16:9', max: 2400 } }));
   expect(imagePresets([listing, page])).toEqual([
     { label: 'Hero image', preset: { ratio: '16:9', max: 2400 } },
     { label: 'Gallery', preset: { ratio: '4:3', max: 1600 } },
@@ -527,7 +519,6 @@ test('the site’s image ratios are collected from every depth, once each', () =
 
 test('an image ratio keeps the labels of the field that asked for it', () => {
   const form = formOf(
-    'default',
     obj({
       photos: {
         type: 'array',

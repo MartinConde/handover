@@ -122,7 +122,7 @@ function fakeGitHub(
 
 test('getFile returns decoded contents and the blob sha', async () => {
   const gh = fakeGitHub({ 'src/content/listings/en/mill-house.yaml': 'title: Mühlenhaus\n' });
-  const git = createGitClient('default', app, { fetch: gh.fetch });
+  const git = createGitClient(app, { fetch: gh.fetch });
 
   const file = await git.getFile('src/content/listings/en/mill-house.yaml');
 
@@ -135,7 +135,7 @@ test('getFile returns decoded contents and the blob sha', async () => {
 // A branch is a name the API answers from a cache, so reads of one are not a snapshot.
 test('getFile reads the commit it is given rather than the branch', async () => {
   const gh = fakeGitHub({ 'src/content/listings/en/mill-house.yaml': 'title: Mühlenhaus\n' });
-  const git = createGitClient('default', app, { fetch: gh.fetch });
+  const git = createGitClient(app, { fetch: gh.fetch });
 
   await git.getFile('src/content/listings/en/mill-house.yaml', 'a1b2c3d');
 
@@ -146,7 +146,7 @@ test('getFile reads the commit it is given rather than the branch', async () => 
 
 test('compareCommits asks whether the deployed head contains the published base', async () => {
   const gh = fakeGitHub({}, true, {}, {}, {}, { 'published...deployed': 'ahead' });
-  const git = createGitClient('default', app, { fetch: gh.fetch });
+  const git = createGitClient(app, { fetch: gh.fetch });
 
   expect(await git.compareCommits('published', 'deployed')).toBe('ahead');
   expect(gh.calls).toContain(
@@ -158,7 +158,7 @@ test('compareCommits asks whether the deployed head contains the published base'
 // Bytes no branch names any more, addressed by the id the translation wrote down.
 test('getBlob returns one object\u2019s text by its own id', async () => {
   const gh = fakeGitHub({}, true, {}, {}, { deadbeef: 'title: Mill House\n' });
-  const git = createGitClient('default', app, { fetch: gh.fetch });
+  const git = createGitClient(app, { fetch: gh.fetch });
 
   expect(await git.getBlob('deadbeef')).toBe('title: Mill House\n');
 });
@@ -166,21 +166,21 @@ test('getBlob returns one object\u2019s text by its own id', async () => {
 // Git collects an unreachable blob eventually; the caller draws no marker rather than an error.
 test('getBlob returns undefined for an object git no longer has', async () => {
   const gh = fakeGitHub({});
-  const git = createGitClient('default', app, { fetch: gh.fetch });
+  const git = createGitClient(app, { fetch: gh.fetch });
 
   expect(await git.getBlob('deadbeef')).toBeUndefined();
 });
 
 test('getFile returns undefined for a missing path', async () => {
   const gh = fakeGitHub({});
-  const git = createGitClient('default', app, { fetch: gh.fetch });
+  const git = createGitClient(app, { fetch: gh.fetch });
 
   expect(await git.getFile('nope.yaml')).toBeUndefined();
 });
 
 test('getFile names the repository when the App cannot see it', async () => {
   const gh = fakeGitHub({}, false);
-  const git = createGitClient('default', app, { fetch: gh.fetch });
+  const git = createGitClient(app, { fetch: gh.fetch });
 
   await expect(git.getFile('src/content/listings/en/mill-house.yaml')).rejects.toThrow(
     new RepoUnreachableError(
@@ -191,14 +191,14 @@ test('getFile names the repository when the App cannot see it', async () => {
 
 test('getHead names the repository too, rather than reporting a 404', async () => {
   const gh = fakeGitHub({}, false);
-  const git = createGitClient('default', app, { fetch: gh.fetch });
+  const git = createGitClient(app, { fetch: gh.fetch });
 
   await expect(git.getHead()).rejects.toBeInstanceOf(RepoUnreachableError);
 });
 
 test('the repository is asked for once, however many paths answer 404', async () => {
   const gh = fakeGitHub({}, false);
-  const git = createGitClient('default', app, { fetch: gh.fetch });
+  const git = createGitClient(app, { fetch: gh.fetch });
 
   await Promise.all([
     git.getFile('a.yaml').catch(() => {}),
@@ -214,7 +214,7 @@ test('the repository is asked for once, however many paths answer 404', async ()
 test('getFile throws on any other GitHub error', async () => {
   const fetch = (async () =>
     new Response('{"message":"boom"}', { status: 500 })) as typeof globalThis.fetch;
-  const git = createGitClient('default', app, { fetch });
+  const git = createGitClient(app, { fetch });
 
   await expect(git.getFile('a.yaml')).rejects.toThrow(/500/);
 });
@@ -222,8 +222,8 @@ test('getFile throws on any other GitHub error', async () => {
 test('two clients on the same GitHub share one installation token', async () => {
   const gh = fakeGitHub({ 'a.yaml': 'a' });
 
-  await createGitClient('default', app, { fetch: gh.fetch }).getFile('a.yaml');
-  await createGitClient('default', app, { fetch: gh.fetch }).getFile('a.yaml');
+  await createGitClient(app, { fetch: gh.fetch }).getFile('a.yaml');
+  await createGitClient(app, { fetch: gh.fetch }).getFile('a.yaml');
 
   expect(gh.minted()).toBe(1);
 });
@@ -252,9 +252,7 @@ function tokenOnly(status = 201) {
 test('the installation token reaches only the site repository and only its contents', async () => {
   const gh = tokenOnly();
 
-  await createGitClient('default', { ...app, repo: 'site-only' }, { fetch: gh.fetch }).getFile(
-    'a.yaml',
-  );
+  await createGitClient({ ...app, repo: 'site-only' }, { fetch: gh.fetch }).getFile('a.yaml');
 
   expect(gh.asked).toEqual([
     { repositories: ['site-only'], permissions: { contents: 'write', metadata: 'read' } },
@@ -265,9 +263,7 @@ test('a repository the installation does not hold is named when the token is ref
   const gh = tokenOnly(422);
 
   await expect(
-    createGitClient('default', { ...app, repo: 'elsewhere' }, { fetch: gh.fetch }).getFile(
-      'a.yaml',
-    ),
+    createGitClient({ ...app, repo: 'elsewhere' }, { fetch: gh.fetch }).getFile('a.yaml'),
   ).rejects.toThrow(
     new RepoUnreachableError(
       'The GitHub App cannot see acme/elsewhere. Add the repository to installation 67890, or correct the repository name.',
@@ -278,12 +274,8 @@ test('a repository the installation does not hold is named when the token is ref
 test('two repositories on one installation each get their own token', async () => {
   const gh = tokenOnly();
 
-  await createGitClient('default', { ...app, repo: 'first' }, { fetch: gh.fetch }).getFile(
-    'a.yaml',
-  );
-  await createGitClient('default', { ...app, repo: 'second' }, { fetch: gh.fetch }).getFile(
-    'a.yaml',
-  );
+  await createGitClient({ ...app, repo: 'first' }, { fetch: gh.fetch }).getFile('a.yaml');
+  await createGitClient({ ...app, repo: 'second' }, { fetch: gh.fetch }).getFile('a.yaml');
 
   expect(gh.asked).toHaveLength(2);
 });
@@ -319,14 +311,14 @@ function fakeGitData(opts: { headMovesTo?: string } = {}) {
 
 test('getHead returns the branch commit sha', async () => {
   const gh = fakeGitData();
-  const git = createGitClient('default', app, { fetch: gh.fetch });
+  const git = createGitClient(app, { fetch: gh.fetch });
 
   expect(await git.getHead()).toBe('commit-A');
 });
 
 test('publish builds the tree on base_tree, parents the commit on base_sha and never forces the ref', async () => {
   const gh = fakeGitData();
-  const git = createGitClient('default', app, { fetch: gh.fetch });
+  const git = createGitClient(app, { fetch: gh.fetch });
 
   const result = await git.publish([{ path: 'src/content/a.yaml', contents: 'title: A\n' }], {
     base_sha: 'commit-A',
@@ -352,7 +344,7 @@ test('publish builds the tree on base_tree, parents the commit on base_sha and n
 
 test('publish removes a file with a null-sha tree entry', async () => {
   const gh = fakeGitData();
-  const git = createGitClient('default', app, { fetch: gh.fetch });
+  const git = createGitClient(app, { fetch: gh.fetch });
 
   await git.publish([{ path: 'src/content/a.yaml', contents: null }], {
     base_sha: 'commit-A',
@@ -382,7 +374,7 @@ test('getHead skips a lagging ref read of heads this client has already replaced
     if (path === '/repos/acme/site/git/refs/heads%2Fmain') return Response.json({});
     return new Response('{}', { status: 404 });
   };
-  const git = createGitClient('default', app, { fetch: fetch as typeof globalThis.fetch });
+  const git = createGitClient(app, { fetch: fetch as typeof globalThis.fetch });
 
   await git.publish([{ path: 'a.yaml', contents: 'a' }], { base_sha: 'commit-A', message: 'm' });
   await git.publish([{ path: 'b.yaml', contents: 'b' }], { base_sha: 'commit-B', message: 'm' });
@@ -392,7 +384,7 @@ test('getHead skips a lagging ref read of heads this client has already replaced
 
 test('publish throws RefMovedError when the branch moved past base_sha', async () => {
   const gh = fakeGitData({ headMovesTo: 'commit-X' });
-  const git = createGitClient('default', app, { fetch: gh.fetch });
+  const git = createGitClient(app, { fetch: gh.fetch });
 
   await expect(
     git.publish([{ path: 'a.yaml', contents: 'a' }], { base_sha: 'commit-A', message: 'm' }),
@@ -423,7 +415,7 @@ test('getCommit names the parent and both names of a rename', async () => {
       ],
     },
   });
-  const git = createGitClient('default', app, { fetch: gh.fetch });
+  const git = createGitClient(app, { fetch: gh.fetch });
 
   expect(await git.getCommit('c0ffee11')).toEqual({
     sha: 'c0ffee11',
@@ -485,7 +477,7 @@ test('contentFiles reads every yaml under src/content in one request', async () 
     'src/content/_templates/listings/holiday-let.yaml': 'title: New let\n',
     'src/content/schemas.ts': 'export const x = 1\n',
   });
-  const git = createGitClient('default', app, { fetch: gh.fetch });
+  const git = createGitClient(app, { fetch: gh.fetch });
 
   const files = await git.contentFiles('deployed-sha');
 
@@ -502,7 +494,7 @@ test('contentFiles reads every yaml under src/content in one request', async () 
 // A folder the walk cannot see into is refused: a file nobody read is a file nobody counted.
 test('contentFiles refuses a folder deeper than an entry may live at', async () => {
   const gh = fakeGraphQL({ 'src/content/listings/en/deeper/nope.yaml': 'title: No\n' });
-  const git = createGitClient('default', app, { fetch: gh.fetch });
+  const git = createGitClient(app, { fetch: gh.fetch });
 
   await expect(git.contentFiles()).rejects.toThrow(/deeper/);
 });
@@ -512,7 +504,7 @@ test('contentFiles refuses a file GitHub would only answer in part', async () =>
     { 'src/content/listings/en/mill-house.yaml': 'title: The' },
     { truncated: 'src/content/listings/en/mill-house.yaml' },
   );
-  const git = createGitClient('default', app, { fetch: gh.fetch });
+  const git = createGitClient(app, { fetch: gh.fetch });
 
   await expect(git.contentFiles()).rejects.toThrow(/mill-house\.yaml/);
 });
@@ -542,7 +534,7 @@ test('fileCommits reads one path of the branch and names only a person', async (
       ],
     },
   );
-  const git = createGitClient('default', app, { fetch: gh.fetch });
+  const git = createGitClient(app, { fetch: gh.fetch });
 
   const commits = await git.fileCommits('src/content/listings/en/mill-house.yaml');
 
@@ -637,7 +629,7 @@ test('mergeFileCommits carries the old name onto its versions and wears a langua
 test('parallel reads share token creation and refresh', async () => {
   const gh = fakeGitHub({ 'a.yaml': 'a', 'b.yaml': 'b' });
   let now = Date.parse('2026-08-21T10:00:00Z');
-  const git = createGitClient('default', app, { fetch: gh.fetch, now: () => now });
+  const git = createGitClient(app, { fetch: gh.fetch, now: () => now });
   for (const expected of [1, 2]) {
     const files = await Promise.all([git.getFile('a.yaml'), git.getFile('b.yaml')]);
     expect(files.map((file) => file?.contents)).toEqual(['a', 'b']);
@@ -661,7 +653,7 @@ for (const failure of ['http', 'network', 'json']) {
       }
       return gh.fetch(url, init);
     };
-    const git = createGitClient('default', app, { fetch });
+    const git = createGitClient(app, { fetch });
     const results = await Promise.allSettled([git.getFile('a.yaml'), git.getFile('a.yaml')]);
     expect(results.map((r) => r.status)).toEqual(['rejected', 'rejected']);
     expect(attempts).toBe(1);

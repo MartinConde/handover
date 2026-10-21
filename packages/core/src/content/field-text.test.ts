@@ -2,18 +2,8 @@ import { expect, test } from 'vitest';
 import { answeredCount, answeredPaths, answeredWork, referenceText } from './field-text.js';
 import type { Form } from './schema.js';
 
-const answeredText = (
-  _siteId: string,
-  form: Form,
-  source: unknown,
-  target: unknown,
-  locale: string,
-) =>
-  answeredCount(
-    answeredPaths('default', form, source),
-    answeredPaths('default', form, target),
-    locale,
-  );
+const answeredText = (form: Form, source: unknown, target: unknown, locale: string) =>
+  answeredCount(answeredPaths(form, source), answeredPaths(form, target), locale);
 
 // Mirrors the six-language `structured` fixture in packages/ui, as plain data.
 const harbourForm: Form = {
@@ -126,14 +116,14 @@ const harbourCreated = {
 // Title, summary, caption, two room names, two features, photo alt, brochure name, video title,
 // SEO title, description and image alt, the block heading and its button label.
 test('every translated text and structured prop of the source is owed once', () => {
-  expect(answeredText('default', harbourForm, harbourEn, harbourDe, 'de')).toEqual({
+  expect(answeredText(harbourForm, harbourEn, harbourDe, 'de')).toEqual({
     written: 15,
     of: 15,
   });
 });
 
 test('a created translation with no words answers none of the source', () => {
-  expect(answeredText('default', harbourForm, harbourEn, harbourCreated, 'de')).toEqual({
+  expect(answeredText(harbourForm, harbourEn, harbourCreated, 'de')).toEqual({
     written: 0,
     of: 15,
   });
@@ -147,13 +137,13 @@ test('a moved row is matched by its id, not its position', () => {
   };
   const en = { ...harbourEn, rooms: [{ _id: 'room0001', name: 'Harbour room' }] };
 
-  expect(answeredText('default', harbourForm, en, de, 'de')).toEqual({ written: 2, of: 14 });
+  expect(answeredText(harbourForm, en, de, 'de')).toEqual({ written: 2, of: 14 });
 });
 
 test('a list of plain values has no ids, so its rows pair by position', () => {
   const de = { ...harbourCreated, features: ['Meerblick'] };
 
-  expect(answeredText('default', harbourForm, harbourEn, de, 'de')).toEqual({
+  expect(answeredText(harbourForm, harbourEn, de, 'de')).toEqual({
     written: 1,
     of: 15,
   });
@@ -168,7 +158,7 @@ test('source text that is empty or only whitespace is not owed', () => {
     seo: { title: 'Harbour House holiday let' },
   };
 
-  expect(answeredText('default', harbourForm, en, harbourDe, 'de')).toEqual({
+  expect(answeredText(harbourForm, en, harbourDe, 'de')).toEqual({
     written: 10,
     of: 10,
   });
@@ -177,7 +167,7 @@ test('source text that is empty or only whitespace is not owed', () => {
 test('a translation of only whitespace is not an answer', () => {
   const de = { ...harbourDe, title: ' \t ', seo: { ...harbourDe.seo, title: ' ' } };
 
-  expect(answeredText('default', harbourForm, harbourEn, de, 'de')).toEqual({
+  expect(answeredText(harbourForm, harbourEn, de, 'de')).toEqual({
     written: 13,
     of: 15,
   });
@@ -190,7 +180,7 @@ test('words only the translation has do not count toward the source', () => {
     rooms: [...harbourDe.rooms, { _id: 'room0003', name: 'Dachzimmer' }],
   };
 
-  expect(answeredText('default', harbourForm, harbourEn, de, 'de')).toEqual({
+  expect(answeredText(harbourForm, harbourEn, de, 'de')).toEqual({
     written: 15,
     of: 15,
   });
@@ -209,7 +199,7 @@ test.each([
 ])('rich text holding %s is not an answer', (_, empty) => {
   const de = { ...harbourDe, summary: empty };
 
-  expect(answeredText('default', harbourForm, harbourEn, de, 'de')).toEqual({
+  expect(answeredText(harbourForm, harbourEn, de, 'de')).toEqual({
     written: 14,
     of: 15,
   });
@@ -223,7 +213,7 @@ test.each([
 ])('rich text holding %s is an answer', (_, words) => {
   const de = { ...harbourCreated, summary: words };
 
-  expect(answeredText('default', harbourForm, harbourEn, de, 'de')).toEqual({
+  expect(answeredText(harbourForm, harbourEn, de, 'de')).toEqual({
     written: 1,
     of: 15,
   });
@@ -266,7 +256,7 @@ test('shared, source-only and non-text values are never owed', () => {
     cta: { type: 'url', href: 'https://example.com', label: 'Book' },
   };
 
-  expect(answeredText('default', form, en, { ...en, title: 'Haus am Hafen' }, 'de')).toEqual({
+  expect(answeredText(form, en, { ...en, title: 'Haus am Hafen' }, 'de')).toEqual({
     written: 1,
     of: 1,
   });
@@ -307,19 +297,19 @@ test("a field's own i18n outranks the mode of the group or rows around it", () =
     body: [{ _type: 'hero', _id: 'hero0001', code: 'H1', heading: 'Above the harbour' }],
   };
 
-  expect(answeredText('default', form, en, en, 'de')).toEqual({ written: 2, of: 2 });
+  expect(answeredText(form, en, en, 'de')).toEqual({ written: 2, of: 2 });
 });
 
 test('the work of a language is every owed path, and the ones its file leaves empty', () => {
   const de = { ...harbourCreated, title: 'Haus am Hafen' };
 
   const work = answeredWork(
-    answeredPaths('default', harbourForm, harbourEn),
-    answeredPaths('default', harbourForm, de),
+    answeredPaths(harbourForm, harbourEn),
+    answeredPaths(harbourForm, de),
     'de',
   );
 
-  expect(work.paths).toEqual(answeredPaths('default', harbourForm, harbourEn).paths);
+  expect(work.paths).toEqual(answeredPaths(harbourForm, harbourEn).paths);
   expect(work.unanswered[0]).toBe('summary');
   expect(work.unanswered).toHaveLength(14);
   expect(work.unanswered).not.toContain('title');
@@ -335,8 +325,8 @@ test('a row written only to other languages is no part of this one\u2019s work',
   };
 
   const work = answeredWork(
-    answeredPaths('default', harbourForm, en),
-    answeredPaths('default', harbourForm, harbourCreated),
+    answeredPaths(harbourForm, en),
+    answeredPaths(harbourForm, harbourCreated),
     'de',
   );
 
@@ -346,13 +336,13 @@ test('a row written only to other languages is no part of this one\u2019s work',
 });
 
 test('a reference reads out exactly the paths the answered count walks', () => {
-  const { values } = referenceText('default', harbourForm, harbourDe, 'de');
+  const { values } = referenceText(harbourForm, harbourDe, 'de');
 
-  expect(Object.keys(values)).toEqual(answeredPaths('default', harbourForm, harbourDe).paths);
+  expect(Object.keys(values)).toEqual(answeredPaths(harbourForm, harbourDe).paths);
 });
 
 test('a reference carries the stored alt, link label and SEO text by core path', () => {
-  const { values } = referenceText('default', harbourForm, harbourDe, 'de');
+  const { values } = referenceText(harbourForm, harbourDe, 'de');
 
   expect(values['photo.alt']).toBe('Der Hafen in der Dämmerung');
   expect(values['body[_id=cta00001].button.label']).toBe('Buchen');
@@ -371,7 +361,7 @@ test("a row whose _locales leave the reference out is not among the reference's 
     ],
   };
 
-  expect(referenceText('default', harbourForm, de, 'de').rows).toEqual([
+  expect(referenceText(harbourForm, de, 'de').rows).toEqual([
     'rooms[_id=room0001]',
     'features[0]',
     'features[1]',
@@ -385,7 +375,7 @@ test('a source with no translated text owes nothing', () => {
     blocks: {},
   };
 
-  expect(answeredText('default', form, { price: '€180' }, { price: '€180' }, 'de')).toEqual({
+  expect(answeredText(form, { price: '€180' }, { price: '€180' }, 'de')).toEqual({
     written: 0,
     of: 0,
   });

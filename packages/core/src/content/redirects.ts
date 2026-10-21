@@ -104,13 +104,12 @@ const assertRedirectRule = (rule: Pick<RedirectRule, 'from' | 'to'>, base = '') 
 
 /** One rule as the file carries it: an id of its own and when it was made. */
 export const redirectRule = (
-  siteId: string,
   rule: Omit<RedirectRule, '_id' | 'createdAt'>,
   at: number,
 ): RedirectRule => {
   assertRedirectRule(rule);
   return {
-    _id: newId(siteId),
+    _id: newId(),
     ...rule,
     createdAt: new Date(at).toISOString().replace(/\.\d{3}Z$/, 'Z'),
   };
@@ -118,7 +117,6 @@ export const redirectRule = (
 
 /** Appends in the same commit as the entry; `undefined` when there is nothing to write. */
 export async function appendRedirects(
-  siteId: string,
   git: Pick<GitClient, 'getFile'>,
   added: readonly RedirectRule[],
   /** The commit this is going into, which is the one its existing rules are read from. */
@@ -128,7 +126,7 @@ export async function appendRedirects(
 ): Promise<PublishFile | undefined> {
   const file = await git.getFile(REDIRECTS, at);
   if (!file && !added.length) return undefined;
-  const doc = (file ? parseEntry(siteId, file.contents) : { _version: 1 }) as {
+  const doc = (file ? parseEntry(file.contents) : { _version: 1 }) as {
     rules?: RedirectRule[];
   };
   const had = doc.rules ?? [];
@@ -140,7 +138,7 @@ export async function appendRedirects(
     return [{ ...rest, to: was }];
   });
   const rules = collapseRedirects(kept, added);
-  return { path: REDIRECTS, contents: stringifyEntry(siteId, { ...doc, rules }) };
+  return { path: REDIRECTS, contents: stringifyEntry({ ...doc, rules }) };
 }
 
 /** A visitor never hops twice; a hide is undone later, so a rule it re-points remembers `was`. */
@@ -186,18 +184,16 @@ export function collapseRedirects(
 
 /** The rules `redirects.yaml` holds, or none where the site has never written one. */
 export async function readRedirects(
-  siteId: string,
   git: Pick<GitClient, 'getFile'>,
   at?: string,
 ): Promise<RedirectRule[]> {
   const file = await git.getFile(REDIRECTS, at);
   if (!file) return [];
-  return ((parseEntry(siteId, file.contents) as { rules?: RedirectRule[] }).rules ?? []).slice();
+  return ((parseEntry(file.contents) as { rules?: RedirectRule[] }).rules ?? []).slice();
 }
 
 /** Commits on its own: the file never gets a draft row, so a rule has nowhere to wait. */
 export async function editRedirects(
-  siteId: string,
   git: GitClient,
   message: string,
   change: (rules: RedirectRule[]) => RedirectRule[],
@@ -205,10 +201,10 @@ export async function editRedirects(
 ): Promise<{ commit_sha: string }> {
   const base_sha = deps.baseSha ?? (await git.getHead());
   const file = await git.getFile(REDIRECTS, base_sha);
-  const doc = (file ? parseEntry(siteId, file.contents) : { _version: 1 }) as {
+  const doc = (file ? parseEntry(file.contents) : { _version: 1 }) as {
     rules?: RedirectRule[];
   };
-  const contents = stringifyEntry(siteId, { ...doc, rules: change(doc.rules ?? []) });
+  const contents = stringifyEntry({ ...doc, rules: change(doc.rules ?? []) });
   return git.publish([{ path: REDIRECTS, contents }], {
     base_sha,
     message: deps.operationId ? operationMessage(message, deps.operationId) : message,
@@ -234,7 +230,6 @@ export interface RedirectProblem {
 
 /** Said as the consequence: nobody diagnoses a shadowed page from a 404; `field` is its box. */
 export function redirectError(
-  _siteId: string,
   rule: { from: string; to: string },
   site: RedirectSite,
   /** The rule being changed, whose own `from` is not a clash with itself. */
@@ -309,12 +304,7 @@ export function redirectError(
 }
 
 /** Static Assets matches `from` exactly, so each is written with and without a trailing slash. */
-export const redirectsText = (
-  _siteId: string,
-  rules: RedirectRule[],
-  slash: boolean,
-  base = '',
-): string => {
+export const redirectsText = (rules: RedirectRule[], slash: boolean, base = ''): string => {
   for (const rule of rules) assertRedirectRule(rule, base);
   return rules
     .flatMap((r) => {

@@ -19,7 +19,7 @@ const listing = (locale: string, name: string, body: string) =>
   file(`src/content/listings/${locale}/${name}.yaml`, body);
 
 test('an entry is one row with a locale per file', () => {
-  const index = indexFrom('default', [
+  const index = indexFrom([
     listing('en', 'mill-house', 'title: "The Mill House"\n'),
     listing('de', 'mill-house', 'title: "Das Mühlenhaus"\n'),
     listing('en', 'seaview-cottage', 'title: "Seaview Cottage"\n'),
@@ -45,7 +45,7 @@ test('an entry is one row with a locale per file', () => {
 
 // A language turned off has no file, so `offered` is read off the files the entry does have.
 test('an entry carries the languages it is offered in when it is not offered in all of them', () => {
-  const index = indexFrom('default', [
+  const index = indexFrom([
     listing('en', 'mill-house', '_locales:\n  - "en"\ntitle: "The Mill House"\n'),
     listing('en', 'seaview-cottage', 'title: "Seaview Cottage"\n'),
   ]);
@@ -54,13 +54,12 @@ test('an entry carries the languages it is offered in when it is not offered in 
 });
 
 test('an entry with no title is listed under its filename', () => {
-  const index = indexFrom('default', [listing('en', 'mill-house', 'name: "The Mill House"\n')]);
+  const index = indexFrom([listing('en', 'mill-house', 'name: "The Mill House"\n')]);
   expect(index.listings?.[0]?.locales.en?.title).toBe('mill-house');
 });
 
 test('a collection keyed on another field is listed by that field', () => {
   const index = indexFrom(
-    'default',
     [
       listing('en', 'rosa-hale', 'name: "Rosa Hale"\n'),
       listing('en', 'theo-adeyemi', 'title: "Theo Adeyemi"\n'),
@@ -71,7 +70,7 @@ test('a collection keyed on another field is listed by that field', () => {
 });
 
 test('a hidden entry carries its status and a live one has no status key', () => {
-  const index = indexFrom('default', [
+  const index = indexFrom([
     listing('en', 'mill-house', '_status: "hidden"\ntitle: "The Mill House"\n'),
     listing('en', 'seaview-cottage', 'title: "Seaview Cottage"\n'),
   ]);
@@ -85,7 +84,7 @@ test('a hidden entry carries its status and a live one has no status key', () =>
 
 test('the entry layout is the only one accepted, and the site files with it', () => {
   expect(
-    contentPathErrors('default', [
+    contentPathErrors([
       'src/content/listings/en/mill-house.yaml',
       'src/content/globals/en/site.yaml',
       'src/content/redirects.yaml',
@@ -96,10 +95,7 @@ test('the entry layout is the only one accepted, and the site files with it', ()
 
 test('a content file below the locale folder fails rather than going missing', () => {
   expect(
-    contentPathErrors('default', [
-      'src/content/listings/en/devon/mill-house.yaml',
-      'src/content/loose.yaml',
-    ]),
+    contentPathErrors(['src/content/listings/en/devon/mill-house.yaml', 'src/content/loose.yaml']),
   ).toEqual([
     'src/content/listings/en/devon/mill-house.yaml: an entry is src/content/<collection>/<locale>/<name>.yaml, one folder per locale and no folders below it',
     'src/content/loose.yaml: an entry is src/content/<collection>/<locale>/<name>.yaml, one folder per locale and no folders below it',
@@ -108,7 +104,7 @@ test('a content file below the locale folder fails rather than going missing', (
 
 test('entry and template path segments use the API addressability grammar', () => {
   expect(
-    contentPathErrors('default', [
+    contentPathErrors([
       'src/content/pages/en/about_us-2.yaml',
       'src/content/pages/pt-br/About_Us.yaml',
       'src/content/_templates/pages/landing_2.yaml',
@@ -124,7 +120,7 @@ test('entry and template path segments use the API addressability grammar', () =
     'src/content/pages/en%2Fde/about.yaml',
     'src/content/_templates/pages/landing.page.yaml',
   ];
-  const errors = contentPathErrors('default', rejected);
+  const errors = contentPathErrors(rejected);
   expect(errors).toHaveLength(rejected.length);
   for (const [at, path] of rejected.entries()) {
     expect(errors[at]).toContain(`${path}: `);
@@ -134,7 +130,7 @@ test('entry and template path segments use the API addressability grammar', () =
 
 test('templates and redirects are not entries', () => {
   expect(
-    indexFrom('default', [
+    indexFrom([
       file('src/content/_templates/listings/house.yaml', 'title: "New listing"\n'),
       file('src/content/redirects.yaml', 'rules: []\n'),
     ]),
@@ -144,7 +140,7 @@ test('templates and redirects are not entries', () => {
 // The files the index throws away are the ones the New entry dialog offers.
 test('the starters under _templates are listed per collection, by name', () => {
   expect(
-    templatesFrom('default', [
+    templatesFrom([
       file('src/content/_templates/listings/house.yaml', 'title: "New listing"\n'),
       file('src/content/_templates/pages/landing.yaml', 'title: "New page"\n'),
       file('src/content/_templates/listings/flat.yaml', 'title: "New flat"\n'),
@@ -163,7 +159,7 @@ test('the starters under _templates are listed per collection, by name', () => {
 // A global has no title field, so it lists by key.
 test('a global is an entry of the globals collection, named by its file', () => {
   expect(
-    indexFrom('default', [file('src/content/globals/en/site.yaml', 'name: "Handover"\n')]).globals,
+    indexFrom([file('src/content/globals/en/site.yaml', 'name: "Handover"\n')]).globals,
   ).toEqual([
     {
       id: 'site',
@@ -172,13 +168,13 @@ test('a global is an entry of the globals collection, named by its file', () => 
   ]);
 });
 
-const index = indexFrom('default', [
+const index = indexFrom([
   listing('en', 'mill-house', 'title: "The Mill House"\n'),
   listing('en', 'seaview-cottage', 'title: "Seaview Cottage"\n'),
 ]);
 
 test('a draft title wins over the one the index was built from', () => {
-  const entries = collectionEntries('default', index, 'listings', [
+  const entries = collectionEntries(index, 'listings', [
     listing('en', 'mill-house', 'title: "The Mill House, renamed"\n'),
   ]);
   expect(entries.map((e) => e.locales.en?.title)).toEqual([
@@ -188,7 +184,7 @@ test('a draft title wins over the one the index was built from', () => {
 });
 
 test('a draft that hides an entry wins over the live file', () => {
-  const entries = collectionEntries('default', index, 'listings', [
+  const entries = collectionEntries(index, 'listings', [
     listing('en', 'mill-house', '_status: "hidden"\ntitle: "The Mill House"\n'),
   ]);
   expect(entries[0]?.locales.en?.status).toBe('hidden');
@@ -196,7 +192,6 @@ test('a draft that hides an entry wins over the live file', () => {
 
 test('a draft in a collection keyed on another field is listed by that field too', () => {
   const entries = collectionEntries(
-    'default',
     index,
     'listings',
     [listing('en', 'rosa-hale', 'name: "Rosa Hale"\n')],
@@ -206,35 +201,35 @@ test('a draft in a collection keyed on another field is listed by that field too
 });
 
 test('an entry that exists only as a draft is in the list', () => {
-  const entries = collectionEntries('default', index, 'listings', [
+  const entries = collectionEntries(index, 'listings', [
     listing('en', 'barn-conversion', 'title: "The Barn"\n'),
   ]);
   expect(entries.map((e) => e.id)).toEqual(['barn-conversion', 'mill-house', 'seaview-cottage']);
 });
 
 test('drafts of another collection are not in the list', () => {
-  const entries = collectionEntries('default', index, 'listings', [
+  const entries = collectionEntries(index, 'listings', [
     file('src/content/pages/en/home.yaml', 'title: "Home, drafted"\n'),
   ]);
   expect(entries.map((e) => e.id)).toEqual(['mill-house', 'seaview-cottage']);
 });
 
 test('the built index is not mutated by the overlay', () => {
-  collectionEntries('default', index, 'listings', [
+  collectionEntries(index, 'listings', [
     listing('en', 'mill-house', 'title: "The Mill House, renamed"\n'),
   ]);
   expect(index.listings?.[0]?.locales.en?.title).toBe('The Mill House');
 });
 
 test('a row saying the file is gone takes the entry out of the list', () => {
-  const entries = collectionEntries('default', index, 'listings', [
+  const entries = collectionEntries(index, 'listings', [
     { path: 'src/content/listings/en/mill-house.yaml', contents: '' },
   ]);
   expect(entries.map((e) => e.id)).toEqual(['seaview-cottage']);
 });
 
 test('a renamed entry is listed under its new name before the build catches up', () => {
-  const entries = collectionEntries('default', index, 'listings', [
+  const entries = collectionEntries(index, 'listings', [
     { path: 'src/content/listings/en/mill-house.yaml', contents: '' },
     listing('en', 'the-old-mill', 'title: "The Mill House"\n'),
   ]);
@@ -246,7 +241,7 @@ test('a renamed entry is listed under its new name before the build catches up',
 
 // A `_locales` mark that disagrees with the files is a hand edit or a bad merge.
 test('the languages an entry has a file in are offered whatever the mark says', () => {
-  const { offered, problems } = entryOffer('default', ['en', 'de'], ['en'], ['en', 'de']);
+  const { offered, problems } = entryOffer(['en', 'de'], ['en'], ['en', 'de']);
   expect(offered).toEqual(['en', 'de']);
   expect(problems).toEqual([
     '_locales says this entry is not offered in de, and it has a file in de',
@@ -254,7 +249,7 @@ test('the languages an entry has a file in are offered whatever the mark says', 
 });
 
 test('a language the site does not declare is named rather than silently dropped', () => {
-  const { offered, problems } = entryOffer('default', ['en', 'de'], ['en', 'fr'], ['en']);
+  const { offered, problems } = entryOffer(['en', 'de'], ['en', 'fr'], ['en']);
   expect(offered).toEqual(['en']);
   expect(problems).toEqual([
     '_locales names "fr", which is not one of the languages this site declares: en, de',
@@ -262,11 +257,11 @@ test('a language the site does not declare is named rather than silently dropped
 });
 
 test('a mark that agrees with the files reports nothing', () => {
-  expect(entryOffer('default', ['en', 'de'], ['en'], ['en'])).toEqual({
+  expect(entryOffer(['en', 'de'], ['en'], ['en'])).toEqual({
     offered: ['en'],
     problems: [],
   });
-  expect(entryOffer('default', ['en', 'de'], undefined, ['en'])).toEqual({
+  expect(entryOffer(['en', 'de'], undefined, ['en'])).toEqual({
     offered: ['en', 'de'],
     problems: [],
   });
@@ -278,7 +273,6 @@ const title: Form = {
 };
 const translated = (en: string, de: string) =>
   markTranslation(
-    'default',
     title,
     { locale: 'en', contents: `_version: 1\ntitle: "${en}"\n`, blob_sha: 'e4a1c9b0'.repeat(5) },
     `_version: 1\ntitle: "${de}"\n`,
@@ -290,7 +284,6 @@ test('a translation made from a source that has moved on since is stale at build
 
   expect(
     await staleFrom(
-      'default',
       { locales: ['en', 'de'], defaultLocale: 'en' },
       [
         listing('en', 'mill-house', 'title: "The Mill House"\n'),
@@ -306,7 +299,6 @@ test('an entry whose source has not moved is not in the map at all', async () =>
 
   expect(
     await staleFrom(
-      'default',
       { locales: ['en', 'de'], defaultLocale: 'en' },
       [
         listing('en', 'mill-house', 'title: "Mill House"\n'),
@@ -326,7 +318,6 @@ test('a German-written entry is judged against German, not the default language'
 
   expect(
     await staleFrom(
-      'default',
       { locales: ['en', 'de'], defaultLocale: 'en' },
       [
         listing('en', 'mill-house', 'title: "The Mill House"\n'),
@@ -345,7 +336,6 @@ test('an entry whose files disagree about their source is left out', async () =>
 
   expect(
     await staleFrom(
-      'default',
       { locales: ['en', 'de'], defaultLocale: 'en' },
       [
         listing('en', 'mill-house', '_source: en\ntitle: "The Mill House"\n'),
@@ -362,7 +352,6 @@ test('a file that is not an entry, and a collection with no form, are left alone
 
   expect(
     await staleFrom(
-      'default',
       { locales: ['en', 'de'], defaultLocale: 'en' },
       [
         file('src/content/redirects.yaml', 'rules: []\n'),
@@ -393,7 +382,6 @@ const SIX = { locales: ['en', 'de', 'fr', 'it', 'es', 'nl'] };
 test('each file of an entry keeps its answered paths, source mark and machine flag', () => {
   expect(
     textsFrom(
-      'default',
       SIX,
       [
         listing(
@@ -422,7 +410,6 @@ test('each file of an entry keeps its answered paths, source mark and machine fl
 test('a row written to some languages is owed only in those', () => {
   const { en, fr } =
     textsFrom(
-      'default',
       SIX,
       [
         listing(
@@ -454,8 +441,8 @@ test('a file with no form, and every file of a one-language site, are not counte
   ];
   const form = (collection: string) => (collection === 'posts' ? undefined : rooms);
 
-  expect(Object.keys(textsFrom('default', SIX, files, form))).toEqual(['listings/mill-house']);
-  expect(textsFrom('default', { locales: ['en'] }, files, form)).toEqual({});
+  expect(Object.keys(textsFrom(SIX, files, form))).toEqual(['listings/mill-house']);
+  expect(textsFrom({ locales: ['en'] }, files, form)).toEqual({});
 });
 
 const SIX_EN = { ...SIX, defaultLocale: 'en' };
@@ -463,9 +450,8 @@ const MILL = 'listings/mill-house';
 // What the build kept of these files, then the drafts laid over it.
 const summaries = (published: ContentFile[], drafts: ContentFile[]) =>
   textSummaries(
-    'default',
     SIX_EN,
-    textsFrom('default', SIX, published, () => rooms),
+    textsFrom(SIX, published, () => rooms),
     drafts,
     () => rooms,
   );

@@ -50,7 +50,7 @@ const fresh = draftDb(() => binding);
 const MILL_DE = 'src/content/listings/de/mill-house.yaml';
 const OFFER = { offered: ['en'], locales: ['en', 'de'] };
 const withoutGerman = (contents: string) =>
-  stringifyEntry('default', offeredEntry('default', parseEntry('default', contents), OFFER));
+  stringifyEntry(offeredEntry(parseEntry(contents), OFFER));
 
 test('reverting a publish puts the files back and leaves the changes unpublished', async () => {
   const db = await fresh();
@@ -215,7 +215,7 @@ test('restoring a turn-off re-offers the language in the draft that was open', a
   await restoreCommit('default', db, repo, off.commit_sha);
 
   const row = (await db.select().from(drafts)).find((r) => r.path === PATH);
-  const entry = parseEntry('default', row?.contents ?? '') as Record<string, unknown>;
+  const entry = parseEntry(row?.contents ?? '') as Record<string, unknown>;
   // Absent is what says every language is offered, so the mark goes rather than being rewritten.
   expect(entry._locales).toBe(undefined);
   expect(entry.rooms).toBe(4);
@@ -407,7 +407,6 @@ test('chunked cleanup preserves a newer save and lock that arrive between chunks
 
 const undoRules = (before: RedirectRule[], after: RedirectRule[], head: RedirectRule[]) =>
   revertRedirects(
-    'default',
     {
       getFile: async (_path, at) => ({
         contents: JSON.stringify({

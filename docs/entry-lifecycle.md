@@ -151,9 +151,9 @@ From code, `renameEntry` and `deleteEntry` in `@handover/core` do this through t
 ```ts
 const i18n = { locales: ['en', 'de'], defaultLocale: 'en' };
 const listings = { collection: 'listings', route: '/listings/[slug]', index: '/', i18n };
-await renameEntry('default', git, listings, 'seaview-cottage', 'seaview-cottage-devon');
+await renameEntry(git, listings, 'seaview-cottage', 'seaview-cottage-devon');
 // Where each language's readers go; `undefined` for a language, or for the argument, is nowhere.
-await deleteEntry('default', git, listings, 'mill-house', (locale) =>
+await deleteEntry(git, listings, 'mill-house', (locale) =>
   locale === 'en' ? '/listings' : `/${locale}/listings`,
 );
 ```

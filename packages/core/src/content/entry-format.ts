@@ -3,15 +3,14 @@ import { checkReserved, EntryShapeError, RESERVED_KEYS } from './reserved.js';
 import { type Field, type FieldsOf, type Form, rowFields, type Translation } from './schema.js';
 import { keptMachine } from './translate.js';
 
-export function parseEntry(_siteId: string, contents: string): unknown {
+export function parseEntry(contents: string): unknown {
   const data: unknown = parse(contents);
   checkReserved(data);
   return data;
 }
 
 /** The file as Astro's loader reads it, `<<` merged, for the build's checks. */
-export const loadedEntry = (_siteId: string, contents: string): unknown =>
-  parse(contents, { merge: true });
+export const loadedEntry = (contents: string): unknown => parse(contents, { merge: true });
 
 // Copied from js-yaml's timestamp.js: a plain scalar matching these is a Date to Astro's loader.
 const YAML_DATE = /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/;
@@ -22,7 +21,7 @@ const YAML_TIMESTAMP =
 const QUOTED = ['QUOTE_DOUBLE', 'QUOTE_SINGLE', 'BLOCK_LITERAL', 'BLOCK_FOLDED'];
 
 /** Every unquoted date, checked before Astro's loader whose own message never mentions quotes. */
-export function timestampErrors(_siteId: string, path: string, contents: string): string[] {
+export function timestampErrors(path: string, contents: string): string[] {
   const errors: string[] = [];
   const walk = (node: unknown, at: string): void => {
     if (isSeq(node))
@@ -54,7 +53,7 @@ const NON_PRINTABLE =
   /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x84\x86-\x9F\uFFFE\uFFFF]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:[^\uD800-\uDBFF]|^)[\uDC00-\uDFFF]/;
 
 /** What Astro's js-yaml stops on or merges, where this package's parser reads it as plain data. */
-export function yamlErrors(_siteId: string, path: string, contents: string): string[] {
+export function yamlErrors(path: string, contents: string): string[] {
   const errors = NON_PRINTABLE.test(contents)
     ? [`${path}: holds a character Astro's YAML loader cannot read, such as U+FFFE`]
     : [];
@@ -99,7 +98,6 @@ function ordered(
 
 /** Every non-editor write stamps `_version` and the canonical key order. */
 export function writtenEntry(
-  _siteId: string,
   entry: unknown,
   fields: readonly Field[] = [],
 ): Record<string, unknown> {
@@ -108,20 +106,18 @@ export function writtenEntry(
 
 /** An `_i18n` mark against a language that has gone stays, and reads stale until retranslated. */
 export function offeredEntry(
-  siteId: string,
   entry: unknown,
   offer: { offered: string[]; locales: string[]; source?: string },
 ): Record<string, unknown> {
-  const written = writtenEntry(siteId, entry);
+  const written = writtenEntry(entry);
   const kept = offer.locales.filter((locale) => offer.offered.includes(locale));
   if (kept.length === offer.locales.length) delete written._locales;
   else written._locales = kept;
-  return offer.source ? withSource(siteId, written, offer.source) : written;
+  return offer.source ? withSource(written, offer.source) : written;
 }
 
 // Undeclared keys, `_` keys and fields this locale's form never drew survive a save (decap#6978).
 export function mergeEntry(
-  _siteId: string,
   entry: unknown,
   values: Record<string, unknown>,
   translated?: Form,
@@ -138,18 +134,14 @@ export function mergeEntry(
     ...merged,
   };
   // Typing over a machine value takes its badge off, and only the save can notice.
-  const machine = keptMachine(_siteId, entry, out);
+  const machine = keptMachine(entry, out);
   if (machine.length) out._machine = machine;
   else delete out._machine;
   return out;
 }
 
 // `ordered()` ranks every `_` key alike, so the position is pinned here.
-export function withSource(
-  _siteId: string,
-  data: unknown,
-  locale: string,
-): Record<string, unknown> {
+export function withSource(data: unknown, locale: string): Record<string, unknown> {
   const { _version, _source, ...rest } = isObject(data) ? data : {};
   return { _version: _version ?? FORMAT_VERSION, _source: locale, ...rest };
 }
@@ -246,7 +238,7 @@ export function overlay(
   return ordered(fields, out);
 }
 
-export function stringifyEntry(_siteId: string, data: unknown): string {
+export function stringifyEntry(data: unknown): string {
   if (!data || typeof data !== 'object' || Array.isArray(data)) {
     const kind = Array.isArray(data) ? 'an array' : data === null ? 'null' : typeof data;
     throw new EntryShapeError(`Entry: expected an object, got ${kind}`);

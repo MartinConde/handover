@@ -65,7 +65,7 @@ page of its own: [Search and sharing](seo.md).
 ## Hidden entries
 
 An entry with `_status: hidden` in its file stays in the repo but must not render.
-`filterLive` drops those entries from a `getCollection` result; `isLive(siteId, data)`
+`filterLive` drops those entries from a `getCollection` result; `isLive(data)`
 is the same check for one entry. Use them in loaders and in `getStaticPaths`, so a hidden
 entry 404s instead of being reachable by URL.
 
@@ -75,16 +75,16 @@ it, and a plain `z.object` drops the keys it does not declare — so the schema 
 ([Template convention](template-convention.md#contentconfigts)). Without that every helper here
 reads `_status: undefined` and a hidden entry renders.
 
-`isLive(siteId, data, locale)` asks the same of one language: a hidden file is not live in any,
+`isLive(data, locale)` asks the same of one language: a hidden file is not live in any,
 and neither is a language the entry's `_locales` does not offer it in. The switcher does not
-need the third argument — it holds the language's own file, and a language an entry is not
+need the second argument — it holds the language's own file, and a language an entry is not
 offered in has no file. Pass it when what you hold is an entry rather than a file.
 
 ```ts
 import { filterLive } from 'astro-handover';
 
 export async function list(source: Source, locale: string) {
-  return filterLive('default', await source.getCollection('listings', locale));
+  return filterLive(await source.getCollection('listings', locale));
 }
 ```
 
