@@ -36,8 +36,8 @@ import {
   readSetting,
   refreshUntouched,
 } from '@handover/core';
+import { entryForm, formSchema } from '../../config.js';
 import type { RequestContext } from '../../environment.js';
-import { entryForm, formSchema } from '../../index.js';
 import { codedError } from './respond.js';
 
 /** The pasted key wins; a site with neither never needs `HANDOVER_SETTINGS_KEY`. */

@@ -23,7 +23,7 @@ import {
   readyDrafts,
   state,
 } from '../../../test/harness.fixture.js';
-import { formSchema } from '../../index.js';
+import { formSchema } from '../../config.js';
 import { GET, POST } from '../api.js';
 
 const { workerMailerMock, configMock, indexMock, cloudflareMock, authMock, coreMock } =

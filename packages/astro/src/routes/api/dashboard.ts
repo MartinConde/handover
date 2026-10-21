@@ -18,8 +18,8 @@ import {
   publishedEntries,
   textSummaries,
 } from '@handover/core';
+import { entryForm } from '../../config.js';
 import type { RequestContext } from '../../environment.js';
-import { entryForm } from '../../index.js';
 import { ENTRY_FILE, entryHref, globalLabel, neverPublished, pickable } from './content.js';
 import { notFound } from './respond.js';
 import { templateNames } from './templates.js';

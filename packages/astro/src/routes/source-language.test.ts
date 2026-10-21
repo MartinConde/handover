@@ -15,7 +15,7 @@ import { z } from 'astro/zod';
 import { beforeAll, beforeEach, expect, test, vi } from 'vitest';
 import { migrateTestD1, newTestD1 } from '../../../core/src/db.fixture.js';
 import * as tables from '../../../core/src/tables.js';
-import { formSchema } from '../index.js';
+import { formSchema } from '../config.js';
 import { onRequest } from '../middleware.js';
 import { DELETE, GET, POST, PUT } from './api.js';
 

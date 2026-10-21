@@ -3,7 +3,9 @@ import {
   type CheckName,
   checkCollections,
   checkI18n,
+  type Form,
   fieldsFrom,
+  formOf,
   type JsonSchema,
   type Labels,
   type Mailer,
@@ -329,6 +331,17 @@ export function formSchema(schema: z.ZodType): JsonSchema {
         Object.assign(jsonSchema, { type: 'string', format: 'date' });
     },
   }) as JsonSchema;
+}
+
+/** Built the same way in the build and the Worker; a localized `slug` stays out of the hash. */
+export function entryForm(cms: HandoverConfig, collection: string, name: string): Form | undefined {
+  const schema =
+    (collection === 'globals' ? cms.globals?.[name] : undefined) ??
+    cms.collections[collection]?.schema;
+  if (!schema) return undefined;
+  const form = formOf(formSchema(schema));
+  if (!cms.collections[collection]?.localizedSlugs) return form;
+  return { ...form, fields: form.fields.filter((f) => f.path[0] !== 'slug') };
 }
 
 export function defineConfig(config: HandoverConfig): HandoverConfig {

@@ -9,21 +9,18 @@ import type { HookParameters } from 'astro';
 import { glob } from 'astro/loaders';
 import { z } from 'astro/zod';
 import { beforeEach, expect, test, vi } from 'vitest';
-import { link } from './config.js';
-import handover, {
+import {
   buildIndex,
   contentErrors,
   contentFiles,
   emitRedirects,
   emitSitemap,
   inlineScripts,
-  loadersModule,
   modifiedAt,
-  NO_ADAPTER_MESSAGE,
-  screensModule,
-  uiAssetsModule,
-  uiDir,
-} from './integration.js';
+} from './build-checks.js';
+import { loadersModule, screensModule, uiAssetsModule, uiDir } from './build-modules.js';
+import { link } from './config.js';
+import handover, { NO_ADAPTER_MESSAGE } from './integration.js';
 
 type Setup = HookParameters<'astro:config:setup'>;
 

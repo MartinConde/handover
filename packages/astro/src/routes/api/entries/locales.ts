@@ -34,8 +34,8 @@ import {
   sourceOnlyConflicts,
   stringifyEntry,
 } from '@handover/core';
+import { formSchema } from '../../../config.js';
 import type { RequestContext } from '../../../environment.js';
-import { formSchema } from '../../../index.js';
 import { entryProblems } from '../../../problems.js';
 import { readJson } from '../body.js';
 import {

@@ -33,4 +33,4 @@ export type {
 } from './canvas.js';
 export { createEditContext, isCanvas } from './canvas.js';
 export * from './config.js';
-export { default, entryForm } from './integration.js';
+export { default } from './integration.js';
