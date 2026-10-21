@@ -400,7 +400,7 @@ async function remove() {
             {m.members_editing_before(
               {},
               options,
-            )}{#each target.editing as name, i}{#if i > 0}{i === target.editing.length - 1
+            )}{#each target.editing as name, i (i)}{#if i > 0}{i === target.editing.length - 1
                   ? m.members_list_and({}, options)
                   : ', '}{/if}<strong>{name}</strong>{/each}{target.editing.length === 1
               ? m.members_editing_after_one({}, options)
