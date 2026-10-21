@@ -1,6 +1,13 @@
 {
   "name": "@handover/cli",
   "version": "0.0.0",
+  "description": "The handover command: init, migrate and db generate for Handover sites.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MartinConde/handover.git",
+    "directory": "packages/cli"
+  },
   "private": true,
   "type": "module",
   "files": [

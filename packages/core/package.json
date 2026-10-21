@@ -1,6 +1,13 @@
 {
   "name": "@handover/core",
   "version": "0.0.0",
+  "description": "Content, publishing, media and identity logic for Handover.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MartinConde/handover.git",
+    "directory": "packages/core"
+  },
   "private": true,
   "type": "module",
   "files": [

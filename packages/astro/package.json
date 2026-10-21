@@ -1,6 +1,13 @@
 {
   "name": "astro-handover",
   "version": "0.0.0",
+  "description": "Git-backed CMS for Astro sites on Cloudflare Workers: admin, content schemas and rendering components.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MartinConde/handover.git",
+    "directory": "packages/astro"
+  },
   "private": true,
   "type": "module",
   "files": [

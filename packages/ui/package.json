@@ -1,6 +1,13 @@
 {
   "name": "@handover/ui",
   "version": "0.0.0",
+  "description": "Svelte admin interface for Handover, built into the astro-handover integration.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MartinConde/handover.git",
+    "directory": "packages/ui"
+  },
   "private": true,
   "type": "module",
   "files": [
