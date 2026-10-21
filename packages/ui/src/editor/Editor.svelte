@@ -14,7 +14,6 @@ import {
   answeredCount,
   answeredPaths,
   answeredWork,
-  entryName,
   entryPageUrl,
   entryUrl,
   fieldPosition,
@@ -62,6 +61,7 @@ import Fields from './fields/Fields.svelte';
 import type { EditorEntry } from './entry-payload';
 import SourceChange from './SourceChange.svelte';
 import { classifyDraftSaveRefusal } from './save';
+import { createEntryActions } from './entry-actions.svelte';
 import { createEntryLock } from './entry-lock.svelte';
 import { createEntryPublish } from './entry-publish.svelte';
 import { drawn, focusField, land, revealField } from './field-reveal';
@@ -170,7 +170,6 @@ const pendingByLocale = $state<Record<string, boolean>>(
 const saving = $derived(saveState.phase === 'saving');
 const saveFailed = $derived(saveState.phase === 'failed');
 let saveError = $state<UiMessage>();
-let held = $state(untrack(() => entry.held === true));
 const schemaProblems = $derived(entrySession.positionalProblems(entry.sourceLocale, uiLocale));
 const entryPublish = untrack(() =>
   createEntryPublish({
@@ -364,30 +363,6 @@ async function loadQueue() {
     next = { at: 'failed' };
   }
 }
-let busy = $state(false);
-const actionBusy = $derived(busy || entrySession.persistedActionPending());
-
-// Both change which files the entry has, so the screen is read again rather than patched.
-async function ask(url: string, body: unknown) {
-  if (!(await flush())) return false;
-  busy = true;
-  const res = await postJson(url, body);
-  busy = false;
-  if (res.ok) {
-    await announceCommit(res);
-    onchanged();
-  } else actionFailed = await retainedFailure(res, 'ENTRY_ACTION_FAILED');
-  return res.ok;
-}
-
-async function announceCommit(res: Response) {
-  const body = (await res
-    .clone()
-    .json()
-    .catch(() => ({}))) as { commit_sha?: unknown };
-  if (typeof body.commit_sha === 'string' && body.commit_sha) await oncommitted?.();
-}
-
 // The turn-off this language can be brought back from, when the CMS is what turned it off.
 let putBack = $state<{ commit_sha: string; at: number }>();
 $effect(() => {
@@ -433,10 +408,10 @@ async function createLanguage(of: string, fill: boolean) {
 }
 async function createInPane(of: string, fill: boolean) {
   if (!(await flush())) return;
-  busy = true;
+  entryActions.busy = true;
   localeFailure = undefined;
   const { made, refused, step } = await createLanguage(of, fill);
-  busy = false;
+  entryActions.busy = false;
   if (refused) {
     localeFailure = {
       locale: of,
@@ -446,7 +421,7 @@ async function createInPane(of: string, fill: boolean) {
     };
     return;
   }
-  if (!fill) await announceCommit(made);
+  if (!fill) await entryActions.announceCommit(made);
   onchanged();
 }
 // Offered languages with no file, in configured order; the source always has one.
@@ -487,20 +462,6 @@ async function createAll(fill: boolean) {
   else if (outcome.reason === 'reload' || outcome.reason === 'uncertain')
     createAllFailure = { code: 'CREATE_ALL_RELOAD_FAILED' };
   else createAllFailure = { code: 'ENTRY_ACTION_FAILED' };
-}
-// Through `act`: a refused turn-off answers with a sentence the screen shows.
-async function offer(of: string, on: boolean, redirect?: Target) {
-  const res = await act(`/admin/api/entries/${collection}/${slug}/locales`, {
-    locales: on
-      ? entry.locales.filter((l) => l === of || !off(l))
-      : entry.offered.filter((l) => l !== of),
-    ...(redirect ? { redirect } : {}),
-  });
-  if (res) {
-    await announceCommit(res);
-    onchanged();
-  }
-  return res !== undefined;
 }
 
 const sourceUnsaved = $derived(entrySession.unsaved(entry.sourceLocale));
@@ -563,6 +524,24 @@ const entryLock = untrack(() =>
     failure: retainedFailure,
   }),
 );
+const entryActions = untrack(() =>
+  createEntryActions({
+    collection,
+    slug,
+    queueTail,
+    entry: () => entry,
+    session: entrySession,
+    lock: entryLock,
+    present: () => present,
+    hidden: entry.hidden === true,
+    held: entry.held === true,
+    reload,
+    onchanged: () => onchanged(),
+    oncommitted: () => oncommitted?.(),
+    onsourcechanged: (to) => onsourcechanged?.(to),
+  }),
+);
+const actionBusy = $derived(entryActions.busy || entrySession.persistedActionPending());
 let takeTrigger = $state<HTMLButtonElement>();
 const canPublish = $derived(dirty && !saving && !missing.length && !drifted && !entryLock.locked && !actionBusy);
 
@@ -672,91 +651,7 @@ onMount(() => {
   };
 });
 
-let hidden = $state(untrack(() => entry.hidden === true));
 let publishMenu = $state(false);
-let hiding = $state(false);
-let statusFailed = $state<UiMessage>();
-
-async function setStatus(next: boolean, redirect?: Target) {
-  busy = true;
-  statusFailed = undefined;
-  // Everything on screen goes into the rows first: this write rewrites the same files.
-  if (!(await flush())) {
-    busy = false;
-    return;
-  }
-  const res = await postJson(`/admin/api/status/${collection}`, { entries: [slug], hidden: next, redirect });
-  busy = false;
-  if (!res.ok) {
-    statusFailed = await retainedFailure(res, 'ENTRY_ACTION_FAILED');
-    return;
-  }
-  hidden = next;
-  hiding = false;
-  onchanged();
-}
-
-// A rename navigates to the new name and a delete to the list, so neither refreshes this screen.
-let renaming = $state(false);
-let deleting = $state(false);
-let actionTrigger = $state<HTMLElement>();
-let newName = $state('');
-let actionFailed = $state<UiMessage>();
-let holdFailed = $state<UiMessage>();
-const willBe = $derived(entryName(newName, []));
-
-function openRename() {
-  rememberActionTrigger();
-  newName = slug;
-  actionFailed = undefined;
-  renaming = true;
-}
-
-function rememberActionTrigger() {
-  const here = document.activeElement as HTMLElement | null;
-  const anchor = here?.closest('.pop-anchor');
-  actionTrigger = anchor?.querySelector<HTMLElement>('[aria-haspopup="menu"]') ?? anchor?.querySelector('button') ?? here ?? undefined;
-}
-
-function startHiding() {
-  rememberActionTrigger();
-  hiding = true;
-}
-
-function startDeleting() {
-  rememberActionTrigger();
-  actionFailed = undefined;
-  deleting = true;
-}
-
-let discarding = $state(false);
-let discardBusy = $state(false);
-
-function startDiscarding() {
-  rememberActionTrigger();
-  actionFailed = undefined;
-  discarding = true;
-}
-
-// Authoritative like a restore: the draft rows are gone, so the form must be read again.
-async function discardDraft() {
-  discardBusy = true;
-  actionFailed = undefined;
-  const outcome = await entrySession.authoritativeChange(
-    async () => {
-      const res = await fetch(`/admin/api/drafts/${collection}/${slug}`, { method: 'DELETE' });
-      if (uncertainResponse(res)) throw new TypeError('The discard response was not confirmed.');
-      if (!res.ok) actionFailed = await retainedFailure(res, 'PENDING_DISCARD_FAILED');
-      return res.ok;
-    },
-    reload,
-  );
-  discardBusy = false;
-  if (outcome.ok) return;
-  if (outcome.reason === 'save') actionFailed = { code: 'PENDING_DISCARD_SAVE_FAILED' };
-  else if (outcome.reason === 'refused') actionFailed ??= { code: 'PENDING_DISCARD_FAILED' };
-  else actionFailed = { code: 'PENDING_DISCARD_UNCONFIRMED' };
-}
 
 // Every language with a file: the source always, the rest once loaded.
 const present = $derived(
@@ -770,105 +665,6 @@ const sourceBlocked = $derived(
       ? m.editor_change_source_unsaved({}, options)
       : undefined,
 );
-let changingSource = $state(false);
-let sendingSource = $state(false);
-let sourceFailure = $state<UiMessage>();
-let sourceFiles = $state<Record<string, Data>>({});
-
-function openSourceChange() {
-  rememberActionTrigger();
-  sourceFailure = undefined;
-  sourceFiles = Object.fromEntries(
-    present.map((of) => [of, $state.snapshot(entrySession.snapshot(of))]),
-  );
-  changingSource = true;
-}
-
-async function changeSourceTo(to: string) {
-  sendingSource = true;
-  sourceFailure = undefined;
-  let res: Response | undefined;
-  const outcome = await entrySession.authoritativeChange(
-    async () => {
-      // Read after the drain, which is what moves each language's revision on.
-      const revisions = Object.fromEntries(
-        entry.locales.flatMap((of) => {
-          const revision = entrySession.revision(of);
-          return revision ? [[of, revision]] : [];
-        }),
-      );
-      res = await postJson(`/admin/api/entries/${collection}/${slug}/source`, { locale: to, tab: entryLock.tab, revisions });
-      if (uncertainResponse(res))
-        throw new TypeError('The source change response was not confirmed.');
-      return res.ok;
-    },
-    async (outcome) => {
-      // Unconfirmed: this session stays closed and only the dialog's Reload goes on from here.
-      if (outcome === 'uncertain') return;
-      onsourcechanged?.(to);
-      await reload();
-    },
-  );
-  sendingSource = false;
-  if (outcome.ok) return;
-  if (outcome.reason === 'save') sourceFailure = { code: 'SOURCE_CHANGE_SAVE_FAILED' };
-  else if (outcome.reason === 'uncertain') sourceFailure = { code: 'SOURCE_CHANGE_RESPONSE_LOST' };
-  else if (outcome.reason === 'reload') sourceFailure = { code: 'SOURCE_CHANGE_RELOAD_FAILED' };
-  else if (res && !res.ok) {
-    const refusal = await classifyDraftSaveRefusal(res.clone());
-    if (refusal.kind === 'lock') {
-      changingSource = false;
-      entryLock.lose(refusal.lock);
-    } else sourceFailure = await retainedFailure(res, 'ENTRY_ACTION_FAILED');
-  } else sourceFailure = { code: 'ENTRY_ACTION_FAILED' };
-}
-
-// A 409 body is the server's own sentence, which reads better than a generic one.
-async function act(url: string, body: unknown, method = 'POST') {
-  if (!(await flush())) return undefined;
-  busy = true;
-  actionFailed = undefined;
-  const res = await postJson(url, body, method);
-  busy = false;
-  if (res.ok) return res;
-  actionFailed = await retainedFailure(res, 'ENTRY_ACTION_FAILED');
-  return undefined;
-}
-
-async function rename(event: Event) {
-  event.preventDefault();
-  const res = await act(`/admin/api/entries/${collection}/${slug}/rename`, { to: newName });
-  if (!res) return;
-  await announceCommit(res);
-  const { slug: to } = (await res.json()) as { slug: string };
-  invalidateEntryDirectory();
-  navigate(`/admin/c/${collection}/${to}${queueTail}`);
-}
-
-async function remove(redirect: Target) {
-  const res = await act(`/admin/api/entries/${collection}/${slug}`, { redirect }, 'DELETE');
-  if (res) {
-    await announceCommit(res);
-    invalidateEntryDirectory();
-    navigate(`/admin/c/${collection}`);
-  }
-}
-
-// The flag lives on the draft rows, so the form is stored first or the hold outruns the words.
-async function toggleHold() {
-  const next = !held;
-  busy = true;
-  holdFailed = undefined;
-  if (!(await flush())) {
-    busy = false;
-    return;
-  }
-  const res = await postJson(`/admin/api/hold/${collection}/${slug}`, { hold: next });
-  busy = false;
-  if (res.ok) held = ((await res.json()) as { held: unknown }).held === true;
-  else holdFailed = await retainedFailure(res, 'EDITOR_HOLD_FAILED');
-}
-
 async function goTo(path: string | undefined) {
   const field = drawn('f', path);
   // A field on the other tab is not on screen: go to that tab, then look for it once only.
@@ -1039,13 +835,6 @@ const url = $derived(
 // The part in front of the address, so what is being typed reads as the URL it will be.
 const before = $derived(entryUrl(routing, entry.route, '', locale) ?? '');
 
-// Deletes the file, so it asks where that language's readers go; a refusal stays in the dialog.
-let offing = $state<string>();
-async function turnOff(of: string, target: Target) {
-  if (!(await flush())) return;
-  if (await offer(of, false, target)) offing = undefined;
-}
-
 // What the Turn-off dialog names; no index when the collection has no page above it.
 const localeUrl = (of: string) =>
   entryPageUrl(routing, entry, slug, entry.addresses?.[of] || slug, of) ?? undefined;
@@ -1108,22 +897,22 @@ function addressKeydown(event: KeyboardEvent) {
   if (event.isComposing) return;
   if (event.key === 'Enter') {
     event.preventDefault();
-    if (!busy) void saveAddress();
+    if (!entryActions.busy) void saveAddress();
   } else if (event.key === 'Escape') {
     event.preventDefault();
-    if (!busy) void cancelAddress();
+    if (!entryActions.busy) void cancelAddress();
   }
 }
 
 // The screen is read again afterwards so both columns get the address the server settled on.
 async function saveAddress() {
-  busy = true;
+  entryActions.busy = true;
   if (!(await flush())) {
-    busy = false;
+    entryActions.busy = false;
     return;
   }
   const res = await postJson(`/admin/api/entries/${collection}/${slug}/address/${locale}`, { address: typed.trim() });
-  busy = false;
+  entryActions.busy = false;
   if (!res.ok) {
     addressFailed = await retainedFailure(res, 'ENTRY_ACTION_FAILED');
     return;
@@ -1285,7 +1074,7 @@ async function saveAddress() {
             type="button"
             aria-label={m.editor_address_save({}, options)}
             title={m.editor_address_save({}, options)}
-            disabled={busy}
+            disabled={entryActions.busy}
             onclick={saveAddress}
           >
             <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m4 10.3 3.5 3.5L16 5.7" /></svg>
@@ -1295,7 +1084,7 @@ async function saveAddress() {
             type="button"
             aria-label={m.editor_address_cancel({}, options)}
             title={m.editor_address_cancel({}, options)}
-            disabled={busy}
+            disabled={entryActions.busy}
             onclick={cancelAddress}
           >
             <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 5 10 10m0-10L5 15" /></svg>
@@ -1321,7 +1110,7 @@ async function saveAddress() {
             class="btn-link slug-rename"
             type="button"
             disabled={entryLock.locked || actionBusy}
-            onclick={openRename}>{m.editor_change_file_name({}, options)}</button
+            onclick={entryActions.openRename}>{m.editor_change_file_name({}, options)}</button
           >{/if}
       {/if}
     </div>
@@ -1329,7 +1118,7 @@ async function saveAddress() {
 {/snippet}
 
 {#snippet topbarLead()}
-  {#if hidden && !entry.singleton}<span class="badge">{m.editor_status_hidden({}, options)}</span>{/if}
+  {#if entryActions.hidden && !entry.singleton}<span class="badge">{m.editor_status_hidden({}, options)}</span>{/if}
   {#if entryPublish.conflicted}<span class="badge badge-danger">{m.pending_changed_repository({}, options)}</span>{/if}
 {/snippet}
 
@@ -1365,7 +1154,7 @@ async function saveAddress() {
       aria-label={m.editor_ready_to_publish({}, options)}
       disabled={entryLock.locked ||
         actionBusy ||
-        (entry.singleton && (entryLock.lost || (!dirty && !held)))}
+        (entry.singleton && (entryLock.lost || (!dirty && !entryActions.held)))}
       onclick={() => (publishMenu = !publishMenu)}
       ><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4.5 6 3.5 3.5L11.5 6" /></svg></button
     >
@@ -1378,19 +1167,19 @@ async function saveAddress() {
         <button
           type="button"
           role="menuitemcheckbox"
-          aria-checked={!held}
-          aria-describedby={dirty || held ? undefined : 'hold-unavailable'}
-          disabled={entryLock.lost || (!dirty && !held)}
+          aria-checked={!entryActions.held}
+          aria-describedby={dirty || entryActions.held ? undefined : 'hold-unavailable'}
+          disabled={entryLock.lost || (!dirty && !entryActions.held)}
           onclick={() => {
             publishMenu = false;
-            void toggleHold();
+            void entryActions.toggleHold();
           }}
         >
           <span class="check" aria-hidden="true"
             ><svg viewBox="0 0 20 20"><path d="m4 10.3 3.5 3.5L16 5.7" /></svg></span
           >
           {m.editor_ready_to_publish({}, options)}
-          {#if !dirty && !held}<span class="sub" id="hold-unavailable"
+          {#if !dirty && !entryActions.held}<span class="sub" id="hold-unavailable"
               >{m.editor_hold_unavailable({}, options)}</span
             >{/if}
         </button>
@@ -1401,16 +1190,16 @@ async function saveAddress() {
             role="menuitem"
             onclick={() => {
               publishMenu = false;
-              if (hidden) setStatus(false);
-              else startHiding();
+              if (entryActions.hidden) entryActions.setStatus(false);
+              else entryActions.startHiding();
             }}
           >
             <span class="check" aria-hidden="true"></span>
-            {hidden ? m.editor_show_on_site({}, options) : m.editor_hide_from_site({}, options)}
+            {entryActions.hidden ? m.editor_show_on_site({}, options) : m.editor_hide_from_site({}, options)}
           </button>
         {/if}
         {#if hasPending()}
-          <button type="button" role="menuitem" onclick={() => { publishMenu = false; startDiscarding(); }}>
+          <button type="button" role="menuitem" onclick={() => { publishMenu = false; entryActions.startDiscarding(); }}>
             <span class="check" aria-hidden="true"></span>
             {m.editor_discard_changes({}, options)}
           </button>
@@ -1425,7 +1214,7 @@ async function saveAddress() {
       aria-label={m.editor_delete({}, options)}
       title={m.editor_delete({}, options)}
       disabled={entryLock.locked || actionBusy}
-      onclick={startDeleting}
+      onclick={entryActions.startDeleting}
       ><svg viewBox="0 0 24 24" aria-hidden="true"
         ><path
           d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"
@@ -1439,14 +1228,14 @@ async function saveAddress() {
   class={['main main-editor', { 'is-canvas-fullscreen': mode === 'canvas' }]}
   style:--entry-header-h={`calc(var(--topbar-stuck, 0px) + ${headerHeight}px)`}
 >
-  {#if actionFailed && !renaming && !deleting && !offing && !discarding}<p
+  {#if entryActions.actionFailed && !entryActions.renaming && !entryActions.deleting && !entryActions.offing && !entryActions.discarding}<p
       class="notice notice-danger"
       role="alert"
     >
-      {@render feedback(actionFailed)}
+      {@render feedback(entryActions.actionFailed)}
     </p>{/if}
-  {#if holdFailed}<p class="notice notice-danger" role="alert">
-      {@render feedback(holdFailed)}
+  {#if entryActions.holdFailed}<p class="notice notice-danger" role="alert">
+      {@render feedback(entryActions.holdFailed)}
     </p>{/if}
   {#if saveError}<p class="notice notice-danger" role="alert">
       {@render feedback(saveError)}
@@ -1469,21 +1258,21 @@ async function saveAddress() {
     {oncreatedall}
     {feedback}
   />
-  <header class={['entry-header', { 'is-held': held }]} bind:offsetHeight={headerHeight}>
+  <header class={['entry-header', { 'is-held': entryActions.held }]} bind:offsetHeight={headerHeight}>
     <h1 class="visually-hidden">{title}</h1>
     {#if entryPublish.conflicted}
       <p class="subline">{m.editor_conflict_guidance({}, options)}</p>
     {/if}
-    {#if held}
+    {#if entryActions.held}
       <p class="subline">{m.editor_hold_active({}, options)}</p>
     {/if}
-    {#if hidden}
+    {#if entryActions.hidden}
       {@const hiddenRedirect = entry.redirects?.[locale]}
       <p class="subline">
         {#if hiddenRedirect}{m.editor_hidden_redirecting({ address: hiddenRedirect }, options)}{:else}{m.editor_hidden_not_found({}, options)}{/if}
       </p>
     {/if}
-    {#if statusFailed}<p class="subline is-bad" role="alert">{@render feedback(statusFailed)}</p>{/if}
+    {#if entryActions.statusFailed}<p class="subline is-bad" role="alert">{@render feedback(entryActions.statusFailed)}</p>{/if}
     <div class="workspace-toolbar">
       <div class="toolbar-start">
         <!-- A global has no SEO or versions of its own: no dead section controls. -->
@@ -1672,7 +1461,7 @@ async function saveAddress() {
                         { language: language(entry.sourceLocale) },
                         options,
                       )}
-                    onclick={openSourceChange}>{m.editor_change_source({}, options)}</button
+                    onclick={entryActions.openSourceChange}>{m.editor_change_source({}, options)}</button
                   >
                 {/if}
               </span>
@@ -1735,7 +1524,7 @@ async function saveAddress() {
                       class="btn btn-primary"
                       type="button"
                       disabled={actionBusy || entryLock.locked}
-                      onclick={() => ask('/admin/api/restore', { commit_sha: putBack?.commit_sha })}
+                      onclick={() => entryActions.ask('/admin/api/restore', { commit_sha: putBack?.commit_sha })}
                     >
                       {m.editor_restore_words({ language: language(shown) }, options)}
                     </button>
@@ -1745,7 +1534,7 @@ async function saveAddress() {
                         class="btn-link"
                         type="button"
                         disabled={actionBusy || entryLock.locked}
-                        onclick={() => offer(shown, true)}
+                        onclick={() => entryActions.offer(shown, true)}
                         >{m.editor_restore_empty({ language: language(shown) }, options)}</button
                       >.
                     </p>
@@ -1754,7 +1543,7 @@ async function saveAddress() {
                       class="btn"
                       type="button"
                       disabled={actionBusy || entryLock.locked}
-                      onclick={() => offer(shown, true)}
+                      onclick={() => entryActions.offer(shown, true)}
                     >
                       {m.editor_turn_back_on({ language: language(shown) }, options)}
                     </button>
@@ -1815,7 +1604,7 @@ async function saveAddress() {
                         class="btn-link"
                         type="button"
                         disabled={actionBusy || entryLock.locked}
-                        onclick={() => offer(shown, false)}
+                        onclick={() => entryActions.offer(shown, false)}
                         >{m.editor_do_not_offer({ language: language(shown) }, options)}</button
                       >
                       {m.editor_no_file_written({}, options)}
@@ -1823,8 +1612,8 @@ async function saveAddress() {
                   {/if}
                 </div>
               {/if}
-              {#if actionFailed}
-                <div class="notice notice-danger" role="alert">{@render feedback(actionFailed)}</div
+              {#if entryActions.actionFailed}
+                <div class="notice notice-danger" role="alert">{@render feedback(entryActions.actionFailed)}</div
                 >
               {/if}
               {#if createAllFailure}
@@ -1877,7 +1666,7 @@ async function saveAddress() {
                 onjump={jumpTo}
                 onreveal={(path) => revealPreview(path, shown)}
                 translator={entry.translator}
-                actionBlocked={busy || entryPublish.sending}
+                actionBlocked={entryActions.busy || entryPublish.sending}
                 url={localeUrl(shown)}
                 {site}
                 {uiLocale}
@@ -1897,11 +1686,7 @@ async function saveAddress() {
                 onclose={side ? () => leaving(() => setBeside('none')) : undefined}
                 onturnoff={entry.singleton
                   ? undefined
-                  : () => {
-                      rememberActionTrigger();
-                      actionFailed = undefined;
-                      offing = shown;
-                    }}
+                  : () => entryActions.startOffing(shown)}
               />
             </div>
           {/key}
@@ -1960,87 +1745,87 @@ async function saveAddress() {
       pending={() => entrySession.persistedActionPending()}
     />
   {/if}
-  {#if hiding}
+  {#if entryActions.hiding}
     <OffsiteDialog
       action="hide"
       what={title}
       {collection}
       index={entryUrl(routing, entry.index, '', locale) ?? undefined}
-      {busy}
+      busy={entryActions.busy}
       {uiLocale}
-      error={statusFailed}
-      returnTo={actionTrigger}
-      onconfirm={(target: Target) => setStatus(true, target)}
-      onclose={() => (hiding = false)}
+      error={entryActions.statusFailed}
+      returnTo={entryActions.actionTrigger}
+      onconfirm={(target: Target) => entryActions.setStatus(true, target)}
+      onclose={() => (entryActions.hiding = false)}
     />
   {/if}
-  {#if changingSource}
+  {#if entryActions.changingSource}
     <SourceChange
       locales={entry.locales}
       source={entry.sourceLocale}
-      files={sourceFiles}
+      files={entryActions.sourceFiles}
       offered={entry.offered}
       stale={entry.stale}
       fields={shownForm.fields}
       blocks={shownForm.blocks}
       {uiLocale}
-      sending={sendingSource}
-      failure={sourceFailure}
-      returnTo={actionTrigger}
-      onconfirm={changeSourceTo}
-      onclose={() => (changingSource = false)}
+      sending={entryActions.sendingSource}
+      failure={entryActions.sourceFailure}
+      returnTo={entryActions.actionTrigger}
+      onconfirm={entryActions.changeSourceTo}
+      onclose={() => (entryActions.changingSource = false)}
       onreload={() => void reload()}
     />
   {/if}
-  {#if renaming}
-    <Modal labelledby="rename-h" initialFocus="#rename-to" returnTo={actionTrigger} dismissible={!busy} onclose={() => (renaming = false)}>
+  {#if entryActions.renaming}
+    <Modal labelledby="rename-h" initialFocus="#rename-to" returnTo={entryActions.actionTrigger} dismissible={!entryActions.busy} onclose={() => (entryActions.renaming = false)}>
         <h2 id="rename-h">{m.entry_list_rename_question({ title }, options)}</h2>
-        <form onsubmit={rename}>
+        <form onsubmit={entryActions.rename}>
           <div class="field">
             <div class="label-row"><label for="rename-to">{m.entry_list_file_name({}, options)}</label></div>
-            <input class="input filename" id="rename-to" type="text" bind:value={newName} aria-describedby="rename-hint" />
+            <input class="input filename" id="rename-to" type="text" bind:value={entryActions.newName} aria-describedby="rename-hint" />
             <p class="hint" id="rename-hint">
-              {m.entry_list_saved_as({}, options)} <span class="filename">{willBe}</span>. {m.entry_list_rename_hint({}, options)}
+              {m.entry_list_saved_as({}, options)} <span class="filename">{entryActions.willBe}</span>. {m.entry_list_rename_hint({}, options)}
             </p>
           </div>
-          {#if actionFailed}<div class="notice notice-danger" role="alert">{@render feedback(actionFailed)}</div>{/if}
+          {#if entryActions.actionFailed}<div class="notice notice-danger" role="alert">{@render feedback(entryActions.actionFailed)}</div>{/if}
           <div class="actions">
-            <button class="btn" type="button" disabled={busy} onclick={() => (renaming = false)}>{m.common_cancel({}, options)}</button>
-            <button class="btn btn-primary" type="submit" disabled={busy}>{busy ? m.entry_list_renaming({}, options) : m.editor_rename({}, options)}</button>
+            <button class="btn" type="button" disabled={entryActions.busy} onclick={() => (entryActions.renaming = false)}>{m.common_cancel({}, options)}</button>
+            <button class="btn btn-primary" type="submit" disabled={entryActions.busy}>{entryActions.busy ? m.entry_list_renaming({}, options) : m.editor_rename({}, options)}</button>
           </div>
         </form>
     </Modal>
   {/if}
-  {#if deleting}
+  {#if entryActions.deleting}
     <OffsiteDialog
       action="delete"
       what={title}
       {collection}
       index={entryUrl(routing, entry.index, '', locale) ?? undefined}
-      {busy}
+      busy={entryActions.busy}
       {uiLocale}
-      error={actionFailed}
-      returnTo={actionTrigger}
-      onconfirm={remove}
-      onhide={() => { deleting = false; hiding = true; }}
-      onclose={() => (deleting = false)}
+      error={entryActions.actionFailed}
+      returnTo={entryActions.actionTrigger}
+      onconfirm={entryActions.remove}
+      onhide={() => { entryActions.deleting = false; entryActions.hiding = true; }}
+      onclose={() => (entryActions.deleting = false)}
     />
   {/if}
-  {#if discarding}
-    <Modal labelledby="discard-h" returnTo={actionTrigger} dismissible={!discardBusy} onclose={() => (discarding = false)}>
+  {#if entryActions.discarding}
+    <Modal labelledby="discard-h" returnTo={entryActions.actionTrigger} dismissible={!entryActions.discardBusy} onclose={() => (entryActions.discarding = false)}>
         <h2 id="discard-h">{m.pending_discard_question({ title }, options)}</h2>
         <p>{entry.published.length ? m.pending_discard_explanation({}, options) : m.pending_discard_created({}, options)}</p>
-        {#if actionFailed}<div class="notice notice-danger" role="alert">{@render feedback(actionFailed)}</div>{/if}
+        {#if entryActions.actionFailed}<div class="notice notice-danger" role="alert">{@render feedback(entryActions.actionFailed)}</div>{/if}
         <div class="actions">
-          <button class="btn" type="button" disabled={discardBusy} onclick={() => (discarding = false)}>{m.common_cancel({}, options)}</button>
-          <button class="btn btn-danger" type="button" disabled={discardBusy} onclick={discardDraft}>
-            {discardBusy ? m.pending_discarding({}, options) : m.pending_discard_changes({}, options)}
+          <button class="btn" type="button" disabled={entryActions.discardBusy} onclick={() => (entryActions.discarding = false)}>{m.common_cancel({}, options)}</button>
+          <button class="btn btn-danger" type="button" disabled={entryActions.discardBusy} onclick={entryActions.discardDraft}>
+            {entryActions.discardBusy ? m.pending_discarding({}, options) : m.pending_discard_changes({}, options)}
           </button>
         </div>
     </Modal>
   {/if}
-  {#if offing}
-    {@const going = offing}
+  {#if entryActions.offing}
+    {@const going = entryActions.offing}
     <OffsiteDialog
       action="off"
       language={language(going)}
@@ -2048,12 +1833,12 @@ async function saveAddress() {
       served={localeUrl(going)}
       {collection}
       index={localeIndex(going)}
-      {busy}
+      busy={entryActions.busy}
       {uiLocale}
-      error={actionFailed}
-      returnTo={actionTrigger}
-      onconfirm={(target: Target) => turnOff(going, target)}
-      onclose={() => (offing = undefined)}
+      error={entryActions.actionFailed}
+      returnTo={entryActions.actionTrigger}
+      onconfirm={(target: Target) => entryActions.turnOff(going, target)}
+      onclose={() => (entryActions.offing = undefined)}
     />
   {/if}
   {#if entryLock.taking}
