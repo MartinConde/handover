@@ -272,6 +272,22 @@ test('a refusal is shown under the box the server names', async () => {
   expect(committed).not.toHaveBeenCalled();
 });
 
+test("an uncoded refusal says the save failed and keeps the server's text as detail", async () => {
+  refusal = { status: 500, body: { error: 'D1_ERROR: database is locked' } };
+  await show();
+  click('.list-toolbar .btn-primary');
+  type('#rd-from', '/summer-offer');
+  q<HTMLFormElement>('.dialog form').requestSubmit();
+  await settle();
+
+  expect(q('#rd-from-e').firstChild?.textContent?.trim()).toBe(
+    'That redirect was not saved (500).',
+  );
+  expect(q('#rd-from-e .technical-detail').textContent).toBe(
+    'Technical detail: D1_ERROR: database is locked',
+  );
+});
+
 test('a rule already pointing at the address being claimed is named before it is rewritten', async () => {
   rules = [rule({ _id: 'a', from: '/listings/seaview-cottage', to: '/summer-offer' })];
   await show();

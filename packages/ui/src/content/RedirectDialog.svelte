@@ -1,7 +1,7 @@
 <script lang="ts">
 import { untrack } from 'svelte';
 import type { Pickable } from '../entry-directory.js';
-import { messageText, type UiMessage } from '../errors.js';
+import { messageDetail, messageText, type UiMessage } from '../errors.js';
 import { messageOptions, type UiLocale } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
 import { postJson } from '../request.js';
@@ -148,7 +148,9 @@ async function save() {
       />
       {#if bad?.field === 'from'}
         <p class="error" id="rd-from-e">
-          {bad.message.detail ?? messageText(bad.message, uiLocale)}
+          {messageText(bad.message, uiLocale)}{#if bad.message.detail}<span class="technical-detail"
+              >{messageDetail(bad.message, uiLocale)}</span
+            >{/if}
         </p>
       {:else}
         <p class="hint" id="rd-from-hint">
@@ -201,7 +203,9 @@ async function save() {
         {m.redirect_visitors_go_to({ destination: writing.to || '…' }, options)}
       </p>
       {#if bad?.field === 'to'}<p class="error" id="rd-to-e">
-          {bad.message.detail ?? messageText(bad.message, uiLocale)}
+          {messageText(bad.message, uiLocale)}{#if bad.message.detail}<span class="technical-detail"
+              >{messageDetail(bad.message, uiLocale)}</span
+            >{/if}
         </p>{/if}
     </fieldset>
     <!-- A fieldset: a <label> naming no control is a label a screen reader drops. -->
