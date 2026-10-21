@@ -15,7 +15,8 @@ English and German, independently of the language being edited. Pre-1.0: the fil
 pnpm add --save-prod link:../handover/packages/astro
 ```
 
-It is not on npm yet. Build the checkout before linking it, or install the three private
-package archives using the [getting-started recipe](docs/getting-started.md#install-the-unpublished-package).
+It is not on npm yet. Build the checkout before linking it, or install the four private
+package archives as described in [Install from archives](docs/unpublished-install.md).
 
-Docs: [Getting started](docs/getting-started.md) · [Interface language](docs/interface-language.md) · [Setting a site up](docs/init.md) · [Template convention](docs/template-convention.md) · [Canvas editing](docs/canvas.md) · [Deploy](docs/deploy.md) · [How it works](docs/how-it-works.md)
+Docs: the [index](docs/README.md) lists every page, from installing and configuring to deploying and
+how it works.

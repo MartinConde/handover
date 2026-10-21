@@ -20,8 +20,8 @@ pnpm add --save-prod link:../handover/packages/astro
 
 The link is convenient for local development and must keep the Handover checkout available.
 For a build machine that cannot see it, follow [Install from archives](unpublished-install.md):
-the install needs `astro-handover`, `@handover/core`, and `@handover/cli`, not only the first
-tarball.
+the install needs `astro-handover`, `@handover/core`, `@handover/cli`, and `@handover/ui`, not
+only the first archive.
 
 ## 1. Add the integration
 

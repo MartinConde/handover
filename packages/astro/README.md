@@ -5,13 +5,14 @@ the admin routes and UI, content schemas, rendering components, and the `handove
 
 This package is private and not published to npm yet. For development from a checkout,
 build the Handover workspace first and link this package into the site. For an install
-that does not retain the checkout, pack and install all three private packages:
+that does not retain the checkout, pack and install all four private packages:
 
 - `astro-handover`
 - `@handover/core`
 - `@handover/cli`
+- `@handover/ui`
 
-The consumer must override the latter two names to their local archives because the
+The consumer must override the latter three names to their local archives because the
 `astro-handover` archive records them as version `0.0.0`; they cannot be resolved from
 the public registry.
 
