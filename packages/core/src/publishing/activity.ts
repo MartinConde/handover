@@ -37,7 +37,7 @@ export interface ActivityQuery {
   cursor?: string;
 }
 
-/** Transcribed from `docs/features/activity-log.md`, so a kind with no caller yet is here too. */
+/** Every kind the log can hold, including ones nothing emits yet. */
 export const ACTIVITY_GROUPS = {
   Accounts: ['login', 'invite', 'role-change', 'member-removed', 'password-set'],
   Publishing: [

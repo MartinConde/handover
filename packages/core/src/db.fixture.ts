@@ -252,7 +252,7 @@ export const bilingual = () =>
 
 // The redirect an address owes cannot be committed until the entry is published.
 export const REDIRECT = { from: '/de/home', to: '/de/startseite', entry: 'pages/home' };
-// The address goes where the schema puts `slug`, not at the end of the file (F4 in 02-i18n.md).
+// The address goes where the schema puts `slug`, not at the end of the file.
 export const ADDRESSED: Form = {
   ...PAGE_FORM,
   fields: [
