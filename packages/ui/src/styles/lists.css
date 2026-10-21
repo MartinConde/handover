@@ -78,7 +78,7 @@ select.filter.is-on { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
 .test-pop .verdict.is-wait { color: var(--info-ink); }
 .test-pop .verdict.is-unknown { color: var(--info-ink); }
 .test-pop .verdict.is-bad { color: var(--danger-ink); }
-.test-pop .actions { display: flex; gap: var(--s-2); margin-top: var(--s-1); }
+.test-pop .actions { display: flex; flex-wrap: wrap; gap: var(--s-2); margin-top: var(--s-1); }
 
 /* The reason a row cannot be restored, under the row it is about. */
 .table .row.row-note .td { grid-column: 1 / -1; }

@@ -17,6 +17,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   whatever its status, as other editor actions do, not only for `409` and `503`.
 - Error notices show the technical detail on its own line in every screen, and who holds an
   entry as part of the sentence.
+- On a phone, a redirect's test result wraps its buttons instead of running past its card.
 
 ## 0.1.0 — first release
 
