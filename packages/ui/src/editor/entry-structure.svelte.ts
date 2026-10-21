@@ -7,6 +7,7 @@ import {
   resolveFieldTarget,
   syncLocale,
 } from '@handover/core';
+import { isRecord } from '../request.js';
 import type { createEntryHistory, StructuralHistoryTransaction } from './entry-history.svelte';
 import {
   addInsertedMachinePaths,
@@ -33,7 +34,6 @@ import type {
   ListOperation,
   StructuralSaveEnvelope,
 } from './entry-session.svelte';
-import { object } from './required-fields';
 
 type PendingStructure = {
   container: string;
@@ -46,7 +46,7 @@ const validListIndex = (index: number, length: number, insert = false) =>
 
 const validInsertedRow = (field: Field, value: unknown) => {
   if (field.type === 'blocks') {
-    if (!object(value) || typeof value._id !== 'string' || typeof value._type !== 'string')
+    if (!isRecord(value) || typeof value._id !== 'string' || typeof value._type !== 'string')
       return false;
     return field.types.includes(value._type);
   }
@@ -56,7 +56,7 @@ const validInsertedRow = (field: Field, value: unknown) => {
 const duplicateRowId = (rows: readonly unknown[]) => {
   const seen = new Set<string>();
   for (const row of rows) {
-    if (!object(row) || typeof row._id !== 'string') continue;
+    if (!isRecord(row) || typeof row._id !== 'string') continue;
     if (seen.has(row._id)) return true;
     seen.add(row._id);
   }
@@ -71,8 +71,8 @@ const insertRow = (
   rows: unknown[],
   operation: Extract<ListOperation, { type: 'insert' }>,
 ): FieldCommandFailure | undefined => {
-  const insertedId = object(operation.value) ? operation.value._id : undefined;
-  if (typeof insertedId === 'string' && rows.some((row) => object(row) && row._id === insertedId))
+  const insertedId = isRecord(operation.value) ? operation.value._id : undefined;
+  if (typeof insertedId === 'string' && rows.some((row) => isRecord(row) && row._id === insertedId))
     return 'ambiguous';
   if (
     !validListIndex(operation.index, rows.length, true) ||
@@ -90,10 +90,12 @@ const replaceRow = (
 ): FieldCommandFailure | undefined => {
   if (!validListIndex(operation.index, rows.length) || !validInsertedRow(field, operation.value))
     return 'schema';
-  const replacementId = object(operation.value) ? operation.value._id : undefined;
+  const replacementId = isRecord(operation.value) ? operation.value._id : undefined;
   if (
     typeof replacementId === 'string' &&
-    rows.some((row, index) => index !== operation.index && object(row) && row._id === replacementId)
+    rows.some(
+      (row, index) => index !== operation.index && isRecord(row) && row._id === replacementId,
+    )
   )
     return 'ambiguous';
   rows.splice(operation.index, 1, operation.value);
@@ -163,7 +165,7 @@ export function createEntryStructure({
       if (!snapshot || !target) continue;
       captured[locale] = target.rows.flatMap((row) => {
         const id = rowId(row);
-        if (!id || !object(row)) return [];
+        if (!id || !isRecord(row)) return [];
         const at = rowAddress(address, id);
         const machine = scopedMachine(snapshot, at);
         return [
@@ -241,7 +243,7 @@ export function createEntryStructure({
     if (!validListIndex(operation.index, rows.length)) return 'deleted';
     const original = rows[operation.index];
     const originalId = rowId(original);
-    if (!originalId || !object(original)) return 'schema';
+    if (!originalId || !isRecord(original)) return 'schema';
     const ids = new Map<string, string>();
     const copy = regenerateIds(original, ids);
     const copyId = rowId(copy);
@@ -252,7 +254,7 @@ export function createEntryStructure({
       const snapshot = snapshots()[locale];
       const target = snapshot && listTarget(snapshot, address);
       const localeRow = target?.rows.find((row) => rowId(row) === originalId);
-      if (!snapshot || !localeRow || !object(localeRow)) continue;
+      if (!snapshot || !localeRow || !isRecord(localeRow)) continue;
       const localeCopy = regenerateIds(localeRow, ids);
       const localeCopyId = rowId(localeCopy);
       if (!localeCopyId) continue;

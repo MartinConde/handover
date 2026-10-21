@@ -1,5 +1,6 @@
 import { isUiLocale, type RichtextTier, type UiLocale } from '@handover/core';
 import type { FieldCommandFailure } from '../editor/entry-session.svelte';
+import { isRecord } from '../request.js';
 import { sameCanvasDocument } from './canvas-target';
 
 export const CANVAS_PROTOCOL = 1 as const;
@@ -221,8 +222,6 @@ const REFUSALS = new Set<CanvasCommandRefusal>([
   'structural',
 ]);
 export const BASE = ['protocol', 'requestId', 'epoch', 'entry', 'locale', 'contentVersion'];
-export const record = (value: unknown): value is Record<string, unknown> =>
-  value !== null && typeof value === 'object' && !Array.isArray(value);
 export const keys = (
   value: Record<string, unknown>,
   required: readonly string[],
@@ -237,15 +236,15 @@ const count = (value: unknown): value is number =>
 export const address = (value: unknown): value is string =>
   typeof value === 'string' && value.length > 0 && value.length <= CANVAS_ADDRESS_LIMIT;
 const documentIdentity = (value: unknown): value is CanvasDocumentIdentity =>
-  record(value) && keys(value, ['collection', 'id']) && id(value.collection) && id(value.id);
+  isRecord(value) && keys(value, ['collection', 'id']) && id(value.collection) && id(value.id);
 const location = (value: unknown): value is CanvasLocation =>
-  record(value) &&
+  isRecord(value) &&
   keys(value, ['document', 'locale', 'address']) &&
   documentIdentity(value.document) &&
   id(value.locale) &&
   address(value.address);
 export const isCanvasTarget = (value: unknown): value is CanvasTarget =>
-  record(value) &&
+  isRecord(value) &&
   keys(value, ['document', 'locale', 'address'], ['occurrence']) &&
   documentIdentity(value.document) &&
   id(value.locale) &&
@@ -269,12 +268,12 @@ export const blockAction = (value: unknown): value is CanvasBlockAction =>
   value === 'undo' ||
   value === 'replace';
 export const selection = (value: unknown): value is CanvasSelection =>
-  record(value) &&
+  isRecord(value) &&
   keys(value, ['kind', 'target']) &&
   annotationKind(value.kind) &&
   isCanvasTarget(value.target);
 const structureNode = (value: unknown): value is CanvasStructureNode =>
-  record(value) &&
+  isRecord(value) &&
   keys(
     value,
     ['id', 'kind', 'target', 'label', 'depth', 'position', 'setSize', 'occurrences'],
@@ -335,13 +334,13 @@ const wireValue = (value: unknown, seen = new Set<object>()): boolean => {
   return valid;
 };
 const textSelection = (value: unknown): value is CanvasTextSelection =>
-  record(value) &&
+  isRecord(value) &&
   keys(value, ['anchor', 'head'], ['kind']) &&
   (value.kind === undefined || value.kind === 'node' || value.kind === 'text') &&
   count(value.anchor) &&
   count(value.head);
 const textHistory = (value: unknown): value is CanvasTextHistory =>
-  record(value) &&
+  isRecord(value) &&
   keys(value, ['kind'], ['group', 'before', 'after']) &&
   (value.kind === 'composition' ||
     value.kind === 'format' ||
@@ -351,12 +350,12 @@ const textHistory = (value: unknown): value is CanvasTextHistory =>
   (value.before === undefined || textSelection(value.before)) &&
   (value.after === undefined || textSelection(value.after));
 const textUpdate = (value: unknown): value is CanvasTextUpdate =>
-  record(value) &&
+  isRecord(value) &&
   keys(value, ['value'], ['selection']) &&
   typeof value.value === 'string' &&
   (value.selection === undefined || textSelection(value.selection));
 const linkValue = (value: unknown): value is CanvasLinkValue =>
-  record(value) &&
+  isRecord(value) &&
   keys(value, ['type', 'ref', 'href', 'label', 'newTab']) &&
   (value.type === 'entry' || value.type === 'url') &&
   typeof value.ref === 'string' &&
@@ -364,7 +363,7 @@ const linkValue = (value: unknown): value is CanvasLinkValue =>
   typeof value.label === 'string' &&
   typeof value.newTab === 'boolean';
 const textField = (value: unknown): value is CanvasTextField =>
-  record(value) &&
+  isRecord(value) &&
   keys(value, ['kind', 'target', 'value'], ['tier']) &&
   isCanvasTarget(value.target) &&
   (value.kind === 'link'
@@ -374,7 +373,7 @@ const textField = (value: unknown): value is CanvasTextField =>
         ? value.tier === undefined
         : value.kind === 'richtext' && (value.tier === 'basic' || value.tier === 'full')));
 const editingState = (value: unknown): value is CanvasEditingState =>
-  record(value) &&
+  isRecord(value) &&
   keys(value, ['inlineEditing', 'composing'], ['dragging']) &&
   typeof value.inlineEditing === 'boolean' &&
   typeof value.composing === 'boolean' &&
@@ -390,7 +389,7 @@ const absoluteUrl = (value: unknown): value is string => {
   }
 };
 const mutation = (value: unknown): value is CanvasMutation => {
-  if (!record(value)) return false;
+  if (!isRecord(value)) return false;
   if (value.type === 'history')
     return (
       keys(value, ['type', 'direction']) &&
@@ -402,7 +401,7 @@ const mutation = (value: unknown): value is CanvasMutation => {
     Array.isArray(value.changes) &&
     value.changes.every(
       (change) =>
-        record(change) &&
+        isRecord(change) &&
         keys(change, ['value'], ['path']) &&
         (change.path === undefined ||
           (Array.isArray(change.path) && change.path.every((part) => typeof part === 'string'))) &&
@@ -412,7 +411,7 @@ const mutation = (value: unknown): value is CanvasMutation => {
   );
 };
 export const canvasAnchor = (value: unknown): value is CanvasAnchor =>
-  record(value) &&
+  isRecord(value) &&
   keys(value, ['left', 'top', 'width', 'height']) &&
   Object.values(value).every((part) => typeof part === 'number' && Number.isFinite(part)) &&
   (value.width as number) >= 0 &&
@@ -451,7 +450,7 @@ const envelope = <T extends { type: string }>(
   valid: (value: Record<string, unknown>) => boolean,
 ): T | undefined => {
   if (
-    record(value) &&
+    isRecord(value) &&
     value.type === type &&
     keys(value, ['type', ...BASE, ...required], optional) &&
     identity(value) &&
@@ -592,7 +591,7 @@ export const uiLocaleMessage = (value: unknown) =>
   );
 
 export const childMessage = (value: unknown) => {
-  switch (record(value) && value.type) {
+  switch (isRecord(value) && value.type) {
     case 'handover:canvas:ready':
       return ready(value);
     case 'handover:canvas:command':
@@ -670,7 +669,7 @@ export function readCanvasResultManifest(
   const element = root.querySelector('[data-handover-canvas-manifest]');
   try {
     const value = JSON.parse(element?.textContent ?? '') as unknown;
-    if (!record(value) || value.mode !== 'canvas' || value.protocol !== CANVAS_PROTOCOL) return;
+    if (!isRecord(value) || value.mode !== 'canvas' || value.protocol !== CANVAS_PROTOCOL) return;
     const successKeys =
       value.entryDirectory === undefined
         ? ['mode', 'status', ...BASE]
@@ -685,7 +684,7 @@ export function readCanvasResultManifest(
           value.entryDirectory.endsWith('/admin/api/entries')))
     )
       return value as unknown as CanvasSuccessManifest;
-    if (value.status !== 'error' || !record(value.error)) return;
+    if (value.status !== 'error' || !isRecord(value.error)) return;
     const correlated =
       value.requestId !== undefined ||
       value.epoch !== undefined ||

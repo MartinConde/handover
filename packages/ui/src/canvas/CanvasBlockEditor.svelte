@@ -1,11 +1,9 @@
 <script lang="ts" module>
 import type { Field } from '@handover/core';
 import { requiredFieldProblems } from '../editor/required-fields';
+import { isRecord } from '../request.js';
 
 type Data = Record<string, unknown>;
-
-const object = (value: unknown): value is Data =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 export function canvasBlockDraft(type: string, id: string, fields: readonly Field[]) {
   const draft: Data = { _type: type, _id: id };
@@ -24,7 +22,7 @@ export function canvasBlockDraft(type: string, id: string, fields: readonly Fiel
     if (value === undefined) continue;
     let node = draft;
     for (const key of field.path.slice(0, -1)) {
-      if (!object(node[key])) node[key] = {};
+      if (!isRecord(node[key])) node[key] = {};
       node = node[key] as Data;
     }
     node[field.path.at(-1) as string] = value;

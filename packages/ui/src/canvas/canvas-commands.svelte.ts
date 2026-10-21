@@ -1,6 +1,7 @@
 import { richtextErrors } from '@handover/core';
 import type { LogicalSelection } from '../editor/entry-history.svelte';
 import type { EntrySession } from '../editor/entry-session.svelte';
+import { isRecord } from '../request.js';
 import type {
   CanvasBlockAction,
   CanvasCommandMessage,
@@ -23,9 +24,6 @@ type CanvasCommandDeps = {
   blocks: () => Record<string, import('@handover/core').Field[]>;
 };
 
-const isRow = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
-
 export const read = (root: Record<string, unknown>, path: readonly string[]) =>
   path.reduce<unknown>((node, key) => {
     if (Array.isArray(node)) return node[Number(key)];
@@ -43,12 +41,12 @@ function parseBlockAddress(address: string) {
 }
 
 function findBlockRow(rows: unknown[], id: string) {
-  const index = rows.findIndex((row) => isRow(row) && row._id === id);
+  const index = rows.findIndex((row) => isRecord(row) && row._id === id);
   if (index < 0) return;
   return { index, row: rows[index] };
 }
 
-const rowType = (row: unknown) => (isRow(row) ? String(row._type ?? '') : undefined);
+const rowType = (row: unknown) => (isRecord(row) ? String(row._type ?? '') : undefined);
 
 const equal = (left: unknown, right: unknown): boolean => {
   if (Object.is(left, right)) return true;
@@ -59,7 +57,7 @@ const equal = (left: unknown, right: unknown): boolean => {
       left.length === right.length &&
       left.every((value, index) => equal(value, right[index]))
     );
-  if (!isRow(left) || !isRow(right)) return false;
+  if (!isRecord(left) || !isRecord(right)) return false;
   const keys = Object.keys(left);
   return (
     keys.length === Object.keys(right).length &&
@@ -86,7 +84,7 @@ export function resolveStagedBlockIndex(
 
   const id = target.mode === 'replace' ? target.targetId : target.anchorId;
   const matches = rows
-    .map((row, index) => (isRow(row) && row._id === id ? index : -1))
+    .map((row, index) => (isRecord(row) && row._id === id ? index : -1))
     .filter((index) => index >= 0);
   if (!matches.length) return { ok: false, reason: 'deleted' };
   if (matches.length > 1) return { ok: false, reason: 'ambiguous' };
@@ -264,7 +262,7 @@ export function createCanvasCommands(deps: CanvasCommandDeps) {
       return;
     const current = read(session().snapshot(locale()), resolved.target.path);
     if (resolved.target.field.type === 'link') {
-      if (current !== undefined && !isRow(current)) return;
+      if (current !== undefined && !isRecord(current)) return;
       const link = current ?? {};
       const label = link.label;
       if (label !== undefined && typeof label !== 'string') return;
@@ -313,7 +311,7 @@ export function createCanvasCommands(deps: CanvasCommandDeps) {
     if (!resolved.ok || !['text', 'richtext', 'link'].includes(resolved.target.field.type)) return;
     const value = read(session().snapshot(target.locale), resolved.target.path);
     const text =
-      resolved.target.field.type === 'link' ? (isRow(value) ? value.label : undefined) : value;
+      resolved.target.field.type === 'link' ? (isRecord(value) ? value.label : undefined) : value;
     if (text !== undefined && typeof text !== 'string') return;
     const matches =
       selection?.document === session().documentIdentity() &&

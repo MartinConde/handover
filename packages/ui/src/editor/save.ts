@@ -1,4 +1,4 @@
-import { object } from './required-fields';
+import { isRecord } from '../request.js';
 
 const AUTOSAVE_DELAY_MS = 2000;
 
@@ -16,11 +16,11 @@ export type DraftSaveRefusal =
   | { kind: 'other' };
 
 const lockRefusal = (value: unknown): value is DraftSaveLock => {
-  if (!object(value) || value.mine !== false) return false;
+  if (!isRecord(value) || value.mine !== false) return false;
   const holder = value.held_by;
   return (
     (holder === null ||
-      (object(holder) &&
+      (isRecord(holder) &&
         typeof holder.id === 'string' &&
         (typeof holder.name === 'string' || holder.name === null))) &&
     (typeof value.expires_at === 'number' || value.expires_at === null)
@@ -31,7 +31,7 @@ const lockRefusal = (value: unknown): value is DraftSaveLock => {
 export async function classifyDraftSaveRefusal(response: Response): Promise<DraftSaveRefusal> {
   if (response.status !== 409) return { kind: 'other' };
   const body = (await response.json().catch(() => undefined)) as unknown;
-  if (object(body) && body.reason === 'revision')
+  if (isRecord(body) && body.reason === 'revision')
     return {
       kind: 'revision',
       ...(typeof body.error === 'string' ? { error: body.error } : {}),

@@ -1,5 +1,5 @@
 import type { Field, Form, LocaleSeed } from '@handover/core';
-import { object } from './required-fields';
+import { isRecord } from '../request.js';
 
 export type EntryData = Record<string, unknown>;
 
@@ -18,7 +18,7 @@ export const equal = (a: unknown, b: unknown): boolean => {
       a.length === b.length &&
       a.every((v, i) => equal(v, b[i]))
     );
-  if (!object(a) || !object(b)) return false;
+  if (!isRecord(a) || !isRecord(b)) return false;
   const keys = Object.keys(a);
   return (
     keys.length === Object.keys(b).length &&
@@ -28,7 +28,7 @@ export const equal = (a: unknown, b: unknown): boolean => {
 
 export const clone = <T>(value: T): T => {
   if (Array.isArray(value)) return value.map((item) => clone(item)) as T;
-  if (object(value))
+  if (isRecord(value))
     return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, clone(item)])) as T;
   return value;
 };
@@ -44,7 +44,7 @@ export const read = (root: unknown, path: readonly string[]) =>
     (node, key) =>
       Array.isArray(node)
         ? node[indexOf(key, node.length) ?? -1]
-        : object(node)
+        : isRecord(node)
           ? node[key]
           : undefined,
     root,
@@ -66,7 +66,7 @@ export function fieldContext(
       if (!field.path.every((key, i) => path[offset + i] === key)) continue;
       const after = offset + field.path.length;
       const value = field.path.reduce<unknown>(
-        (parent, key) => (object(parent) ? parent[key] : undefined),
+        (parent, key) => (isRecord(parent) ? parent[key] : undefined),
         node,
       );
       const mode = field.i18n ?? inherited;
@@ -78,7 +78,7 @@ export function fieldContext(
         if (row === undefined) return undefined;
         if (after + 1 >= path.length) return { field, mode, path: [...path.slice(0, after)] };
         const item = value[row];
-        const type = object(item) && typeof item._type === 'string' ? item._type : '';
+        const type = isRecord(item) && typeof item._type === 'string' ? item._type : '';
         const nested = form.blocks[type];
         return nested ? walk(nested, after + 1, item, mode) : undefined;
       }
@@ -105,7 +105,7 @@ export function write(root: EntryData, path: readonly string[], value: unknown):
   let node: Record<string, unknown> = root;
   for (const key of path.slice(0, -1)) {
     const current = node[key];
-    if (!object(current) && !Array.isArray(current)) node[key] = {};
+    if (!isRecord(current) && !Array.isArray(current)) node[key] = {};
     node = node[key] as Record<string, unknown>;
   }
   const key = path.at(-1);
@@ -117,10 +117,10 @@ export function write(root: EntryData, path: readonly string[], value: unknown):
 export const inReferencedBlock = (root: unknown, path: readonly string[]) => {
   let node: unknown = root;
   for (const key of path) {
-    if (object(node) && typeof node._ref === 'string') return true;
+    if (isRecord(node) && typeof node._ref === 'string') return true;
     node = Array.isArray(node)
       ? node[indexOf(key, node.length) ?? -1]
-      : object(node)
+      : isRecord(node)
         ? node[key]
         : undefined;
   }
@@ -128,7 +128,7 @@ export const inReferencedBlock = (root: unknown, path: readonly string[]) => {
 };
 
 export const rowId = (row: unknown): string | undefined =>
-  object(row) && typeof row._id === 'string' ? row._id : undefined;
+  isRecord(row) && typeof row._id === 'string' ? row._id : undefined;
 
 export const rowAddress = (container: string, id: string) => `${container}[_id=${id}]`;
 

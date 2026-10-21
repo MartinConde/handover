@@ -2,13 +2,11 @@ import type { Field } from '@handover/core';
 import type { UiLocale } from '../i18n.js';
 import { messageOptions } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
-
-export const object = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
+import { isRecord } from '../request.js';
 
 // Editing readiness only. The server remains authoritative for schema validation and publishing.
 const read = (root: unknown, path: readonly string[]) =>
-  path.reduce<unknown>((value, key) => (object(value) ? value[key] : undefined), root);
+  path.reduce<unknown>((value, key) => (isRecord(value) ? value[key] : undefined), root);
 
 const filled = (value: unknown) => typeof value === 'string' && value.trim().length > 0;
 
@@ -33,7 +31,7 @@ export function requiredFieldProblems(
           problems,
           requiredFieldProblems(
             field.fields,
-            object(value) ? value : {},
+            isRecord(value) ? value : {},
             blocks,
             path,
             translating,
@@ -44,7 +42,7 @@ export function requiredFieldProblems(
     }
     if ((field.type === 'array' || field.type === 'blocks') && Array.isArray(value)) {
       value.forEach((row, index) => {
-        if (!object(row) || (field.type === 'blocks' && typeof row._ref === 'string')) return;
+        if (!isRecord(row) || (field.type === 'blocks' && typeof row._ref === 'string')) return;
         const children = field.type === 'array' ? field.item : (blocks[String(row._type)] ?? []);
         Object.assign(
           problems,
@@ -74,12 +72,12 @@ export function requiredFieldProblems(
                 : field.type === 'array' || field.type === 'blocks' || field.type === 'menus'
                   ? Array.isArray(value)
                   : field.type === 'image' || field.type === 'file'
-                    ? object(value) && filled(value.src)
+                    ? isRecord(value) && filled(value.src)
                     : field.type === 'link'
-                      ? object(value) &&
+                      ? isRecord(value) &&
                         ((value.type === 'entry' && filled(value.ref)) ||
                           (value.type === 'url' && filled(value.href)))
-                      : object(value);
+                      : isRecord(value);
     if (!present)
       problems[path.join('.')] = m.validation_required_field(
         { field: field.label || m.validation_this_field({}, messageOptions(uiLocale)) },
