@@ -41,7 +41,6 @@ export function createShellStatus() {
   let build = $state<Build | null>(null);
   let buildStatus = $state<'loading' | 'ready' | 'error'>('loading');
   let pendingRequest = 0;
-  /** A publish redeploys the Worker, so this tab may be reloaded before the build finishes. */
   let buildRequest = 0;
 
   async function loadPending() {
@@ -101,6 +100,7 @@ export function createShellStatus() {
   // A boolean, not the object: an effect reading `build` would be rebuilt by every poll.
   const building = $derived(build?.state === 'building');
   // A finished build does not start on its own, and the next publish loads it.
+  // A publish redeploys the Worker, so this tab may be reloaded before the build finishes.
   $effect(() => {
     if (!building) return;
     const poll = setInterval(() => void loadBuild(), 10_000);

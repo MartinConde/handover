@@ -216,7 +216,6 @@ export async function publishDrafts(
     released,
   };
   if (operation) await markOperationCommitted(siteId, db, operation.id, commit_sha, result);
-  // Await the blobs first: a drizzle statement is thenable and would run outside the batch.
   const finalizedRows = operation
     ? written.map((file) => {
         const currentRow = rows.find((row) => row.path === file.path);
@@ -226,6 +225,7 @@ export async function publishDrafts(
         return { ...currentRow, revision, baseSha, baseBlob };
       })
     : rows;
+  // Await the blobs first: a drizzle statement is thenable and would run outside the batch.
   const seeded = await Promise.all(
     written.map(async (file) => ({ ...file, blob: await blobSha(file.contents) })),
   );
