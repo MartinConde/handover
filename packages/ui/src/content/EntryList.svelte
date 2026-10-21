@@ -284,6 +284,45 @@ async function rename(event: Event) {
   await announceCommit(res);
 }
 
+// The three name dialogs share one form; only these words, ids and the handler differ.
+const formFor = (kind: 'rename' | 'template' | 'duplicate') => {
+  const title = titleOf(target as Entry);
+  return {
+    rename: {
+      id: 'rename-to',
+      hintId: 'rename-hint',
+      question: m.entry_list_rename_question({ title }, options),
+      label: m.entry_list_file_name({}, options),
+      hint: m.entry_list_rename_hint({}, options),
+      submit: rename,
+      busy: m.entry_list_renaming({}, options),
+      idle: m.entry_list_rename({}, options),
+    },
+    template: {
+      id: 'template-to',
+      hintId: 'template-hint',
+      question: m.entry_list_template_question({ title }, options),
+      label: m.entry_list_template_name({}, options),
+      hint: m.entry_list_template_hint({ collection: plural }, options),
+      submit: saveTemplate,
+      busy: m.entry_list_saving_template({}, options),
+      idle: m.entry_list_save_template({}, options),
+    },
+    duplicate: {
+      id: 'copy-to',
+      hintId: 'copy-hint',
+      question: m.entry_list_duplicate_question({ title }, options),
+      label: m.entry_list_file_name({}, options),
+      hint: many
+        ? m.entry_list_duplicate_hint_many({}, options)
+        : m.entry_list_duplicate_hint_one({}, options),
+      submit: duplicate,
+      busy: m.entry_list_duplicating({}, options),
+      idle: m.entry_list_duplicate({}, options),
+    },
+  }[kind];
+};
+
 // A delete commits now, so the redirect rules ride in that commit, not a later publish.
 async function remove(id: string, redirect: Target) {
   const url = `/admin/api/entries/${collection}/${id}`;
@@ -616,6 +655,14 @@ async function done() {
   {/if}
 </main>
 
+{#snippet failure()}
+  {#if error}<div class="notice notice-danger" role="alert">
+      {textOf(error)}{#if error.detail}<span class="technical-detail"
+          >{messageDetail(error, uiLocale)}</span
+        >{/if}
+    </div>{/if}
+{/snippet}
+
 {#if putting}
   {@const row = putting}
   <Modal labelledby="restore-h" returnTo={trigger} dismissible={!busy} onclose={close}>
@@ -636,11 +683,7 @@ async function done() {
       <li>{m.entry_list_restore_redirect({}, options)}</li>
     </ul>
     <p class="hint">{m.entry_list_restore_pictures({}, options)}</p>
-    {#if error}<div class="notice notice-danger" role="alert">
-        {textOf(error)}{#if error.detail}<span class="technical-detail"
-            >{messageDetail(error, uiLocale)}</span
-          >{/if}
-      </div>{/if}
+    {@render failure()}
     <div class="actions">
       <button class="btn" type="button" disabled={busy} onclick={close}
         >{m.common_cancel({}, options)}</button
@@ -682,124 +725,41 @@ async function done() {
     dismissible={!busy}
     onclose={close}
   >
-    {#if dialog === 'rename'}
-      <h2 id="entry-dialog-h">
-        {m.entry_list_rename_question({ title: titleOf(target as Entry) }, options)}
-      </h2>
-      <form onsubmit={rename}>
-        <div class="field">
-          <div class="label-row">
-            <label for="rename-to">{m.entry_list_file_name({}, options)}</label>
-          </div>
-          <input
-            class="input filename"
-            id="rename-to"
-            type="text"
-            bind:value={text}
-            aria-describedby="rename-hint"
-          />
-          <p class="hint" id="rename-hint">
-            {m.entry_list_saved_as({}, options)} <span class="filename">{preview}</span>. {m.entry_list_rename_hint(
-              {},
-              options,
-            )}
-          </p>
+    {@const form = formFor(dialog)}
+    <h2 id="entry-dialog-h">
+      {form.question}
+    </h2>
+    <form onsubmit={form.submit}>
+      <div class="field">
+        <div class="label-row">
+          <label for={form.id}>{form.label}</label>
         </div>
-        {#if error}<div class="notice notice-danger" role="alert">
-            {textOf(error)}{#if error.detail}<span class="technical-detail"
-                >{messageDetail(error, uiLocale)}</span
-              >{/if}
-          </div>{/if}
-        <div class="actions">
-          <button class="btn" type="button" disabled={busy} onclick={close}
-            >{m.common_cancel({}, options)}</button
-          >
-          <button class="btn btn-primary" type="submit" disabled={busy}>
-            {busy ? m.entry_list_renaming({}, options) : m.entry_list_rename({}, options)}
-          </button>
-        </div>
-      </form>
-    {:else if dialog === 'template'}
-      <h2 id="entry-dialog-h">
-        {m.entry_list_template_question({ title: titleOf(target as Entry) }, options)}
-      </h2>
-      <form onsubmit={saveTemplate}>
-        <div class="field">
-          <div class="label-row">
-            <label for="template-to">{m.entry_list_template_name({}, options)}</label>
-          </div>
-          <input
-            class="input filename"
-            id="template-to"
-            type="text"
-            bind:value={text}
-            aria-describedby="template-hint"
-          />
-          <p class="hint" id="template-hint">
-            {m.entry_list_saved_as({}, options)} <span class="filename">{preview}</span>. {m.entry_list_template_hint(
-              { collection: plural },
-              options,
-            )}
-          </p>
-        </div>
-        {#if error}<div class="notice notice-danger" role="alert">
-            {textOf(error)}{#if error.detail}<span class="technical-detail"
-                >{messageDetail(error, uiLocale)}</span
-              >{/if}
-          </div>{/if}
-        <div class="actions">
-          <button class="btn" type="button" disabled={busy} onclick={close}
-            >{m.common_cancel({}, options)}</button
-          >
-          <button class="btn btn-primary" type="submit" disabled={busy}>
-            {busy
-              ? m.entry_list_saving_template({}, options)
-              : m.entry_list_save_template({}, options)}
-          </button>
-        </div>
-      </form>
-    {:else}
-      <h2 id="entry-dialog-h">
-        {m.entry_list_duplicate_question({ title: titleOf(target as Entry) }, options)}
-      </h2>
-      <form onsubmit={duplicate}>
-        <div class="field">
-          <div class="label-row">
-            <label for="copy-to">{m.entry_list_file_name({}, options)}</label>
-          </div>
-          <input
-            class="input filename"
-            id="copy-to"
-            type="text"
-            bind:value={text}
-            aria-describedby="copy-hint"
-          />
-          <p class="hint" id="copy-hint">
-            {m.entry_list_saved_as({}, options)} <span class="filename">{preview}</span>. {many
-              ? m.entry_list_duplicate_hint_many({}, options)
-              : m.entry_list_duplicate_hint_one({}, options)}
-          </p>
-        </div>
-        {#if target?.pending}
-          <label class="choice">
-            <input type="checkbox" bind:checked={withDrafts} />
-            {m.entry_list_duplicate_drafts({}, options)}
-          </label>
-        {/if}
-        {#if error}<div class="notice notice-danger" role="alert">
-            {textOf(error)}{#if error.detail}<span class="technical-detail"
-                >{messageDetail(error, uiLocale)}</span
-              >{/if}
-          </div>{/if}
-        <div class="actions">
-          <button class="btn" type="button" disabled={busy} onclick={close}
-            >{m.common_cancel({}, options)}</button
-          >
-          <button class="btn btn-primary" type="submit" disabled={busy}>
-            {busy ? m.entry_list_duplicating({}, options) : m.entry_list_duplicate({}, options)}
-          </button>
-        </div>
-      </form>
-    {/if}
+        <input
+          class="input filename"
+          id={form.id}
+          type="text"
+          bind:value={text}
+          aria-describedby={form.hintId}
+        />
+        <p class="hint" id={form.hintId}>
+          {m.entry_list_saved_as({}, options)} <span class="filename">{preview}</span>. {form.hint}
+        </p>
+      </div>
+      {#if dialog === 'duplicate' && target?.pending}
+        <label class="choice">
+          <input type="checkbox" bind:checked={withDrafts} />
+          {m.entry_list_duplicate_drafts({}, options)}
+        </label>
+      {/if}
+      {@render failure()}
+      <div class="actions">
+        <button class="btn" type="button" disabled={busy} onclick={close}
+          >{m.common_cancel({}, options)}</button
+        >
+        <button class="btn btn-primary" type="submit" disabled={busy}>
+          {busy ? form.busy : form.idle}
+        </button>
+      </div>
+    </form>
   </Modal>
 {/if}
